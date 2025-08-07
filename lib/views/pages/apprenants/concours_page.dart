@@ -68,7 +68,7 @@ class _ConcoursPageState extends State<ConcoursPage> {
             .toList();
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF6F9FB),
+      backgroundColor: const Color(0xFF3498db),
       appBar: YekiAppBar(
         title: 'Prépa Concours',
         subtitle: "Excellence & Réussite assurée",

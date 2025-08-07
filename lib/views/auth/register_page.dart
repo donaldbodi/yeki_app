@@ -1,7 +1,9 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
-import 'dart:developer';
+//import 'dart:developer';
 import 'login_page.dart';
+
+
 
 class RegisterPage extends StatefulWidget {
   const RegisterPage({super.key});
@@ -11,7 +13,7 @@ class RegisterPage extends StatefulWidget {
 }
 
 class _RegisterPageState extends State<RegisterPage> {
-  final _formKey = GlobalKey<FormState>();
+  //final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _usernameController = TextEditingController(); // 👈 Nouveau champ
   final _emailController = TextEditingController();
@@ -134,42 +136,60 @@ class _RegisterPageState extends State<RegisterPage> {
 
   @override
   Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+
     return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Color(0xFF008080), Color(0xFF00BFA5), Color(0xFFFF5722)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-        ),
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: Container(
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(18),
-                boxShadow: const [
-                  BoxShadow(color: Colors.black26, blurRadius: 10)
+      backgroundColor: Colors.white,
+      body: SingleChildScrollView(
+        child: Column(
+          children: [
+            // HEADER BLEU
+            Container(
+              height: size.height * 0.35,
+              width: double.infinity,
+              decoration: const BoxDecoration(
+                color: Color(0xFF3498db),
+                borderRadius: BorderRadius.only(
+                  bottomLeft: Radius.circular(40),
+                  bottomRight: Radius.circular(40),
+                ),
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: const [
+                  SizedBox(height: 20),
+                  Image(
+                    image: AssetImage("assets/images/yeki_logo.png"),
+                    width: 80,
+                    height: 80,
+                  ),
+                  SizedBox(height: 12),
+                  Text(
+                    "Creation d'un nouveau compte",
+                    style: TextStyle(
+                      color: Colors.white70,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w400,
+                    ),
+                  ),
                 ],
               ),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  children: [
-                    const Icon(Icons.person_add,
-                        size: 60, color: Color(0xFF008080)),
-                    const SizedBox(height: 16),
-                    const Text(
-                      "Créer un compte Yéki",
-                      style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF008080)),
-                    ),
-                    const SizedBox(height: 24),
+            ),
+
+            // FORMULAIRE
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 20, 24, 40),
+              child: Material(
+                elevation: 20,
+                borderRadius: BorderRadius.circular(24),
+                child: Container(
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(24),
+                  ),
+                  child: Column(
+                    children: [
                     TextFormField(
                       controller: _nameController,
                       decoration: InputDecoration(
@@ -446,10 +466,11 @@ class _RegisterPageState extends State<RegisterPage> {
                           style: TextStyle(color: Color(0xFF008080))),
                     ),
                   ],
+                  ),
                 ),
               ),
             ),
-          ),
+          ],
         ),
       ),
     );

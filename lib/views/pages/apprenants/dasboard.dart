@@ -60,7 +60,7 @@ class _DashboardState extends State<Dashboard> {
           backgroundColor: Colors.transparent,
           elevation: 0,
           type: BottomNavigationBarType.fixed,
-          selectedItemColor: Colors.orange,
+          selectedItemColor: Color(0xff3498db),
           unselectedItemColor: Color(0xff404040).withOpacity(0.6),
           selectedFontSize: 12,
           unselectedFontSize: 11,
