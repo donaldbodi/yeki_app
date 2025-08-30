@@ -1,246 +1,177 @@
 import 'package:flutter/material.dart';
-import 'package:pull_to_refresh/pull_to_refresh.dart';
-import 'package:yeki/widgets/api_service.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 
-class AdminGeneralPage extends StatefulWidget {
-  const AdminGeneralPage({super.key});
+class AdminGeneralDashboard extends StatefulWidget {
+  const AdminGeneralDashboard({super.key});
+
   @override
-  State<AdminGeneralPage> createState() => _AdminGeneralPageState();
+  State<AdminGeneralDashboard> createState() => _AdminGeneralDashboardState();
 }
 
-class _AdminGeneralPageState extends State<AdminGeneralPage> {
-  final RefreshController _refreshCtrl = RefreshController(initialRefresh: false);
+class _AdminGeneralDashboardState extends State<AdminGeneralDashboard> {
+  List parcoursList = [];
+  bool loading = true;
 
-  List<dynamic> enseignants = [];
-  List<dynamic> parcours = [];
-  Map<String, dynamic>? stats;
-
-  void _refresh() async {
-  try {
-    final data = await Future.wait([
-      ApiService.getParcours(),
-      ApiService.getEnseignants(),
-      ApiService.getStatistiquesGlobales(),
-    ]);
-    setState(() {
-      parcours = data[0] as List<dynamic>;
-      enseignants = data[1] as List<dynamic>;
-      stats = data[2] as Map<String, dynamic>?;
-    });
-  } catch (e) {
-    print("Erreur lors du chargement: $e");
+  @override
+  void initState() {
+    super.initState();
+    fetchParcours();
   }
-  _refreshCtrl.refreshCompleted();
-}
 
-@override
-void initState() {
-  super.initState();
-  _refresh();
-}
+  Future<void> fetchParcours() async {
+    final response = await http.get(Uri.parse("https://yekiapp.pythonanywhere.com/api/parcours/"));
+    if (response.statusCode == 200) {
+      setState(() {
+        parcoursList = json.decode(response.body);
+        loading = false;
+      });
+    }
+  }
 
-  void _changerAdmin(int index) {
-  showModalBottomSheet(
-    context: context,
-    isScrollControlled: true,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-    ),
-    builder: (_) {
-      return Container(
-        padding: const EdgeInsets.all(16),
-        height: MediaQuery.of(context).size.height * 0.6,
-        child: Column(
-          children: [
-            const Text("Choisir un nouvel administrateur",
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 10),
-            Expanded(
-              child: ListView.separated(
-                itemCount: enseignants.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 12),
-                itemBuilder: (ctx, i) {
-                  var e = enseignants[i];
-                  return GestureDetector(
-                    onTap: () async {
-                      bool success = await ApiService.changerAdmin(
-                        parcours[index]['id'],
-                        e['id'],
-                      );
-                      if (success) {
-                        setState(() {
-                          parcours[index]['admin'] = e;
-                        });
-                        Navigator.pop(context);
-                      } else {
-                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                          content: Text("Échec de la modification."),
-                        ));
-                      }
-                    },
-                    child: Card(
-                      elevation: 2,
-                      margin: EdgeInsets.zero,
-                      child: Padding(
-                        padding: const EdgeInsets.all(10),
-                        child: Row(children: [
-                          CircleAvatar(
-                            backgroundColor: Colors.teal,
-                            child: Text(e['name'][0].toUpperCase()),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(e['name'],
-                                      style: const TextStyle(
-                                          fontWeight: FontWeight.w600, fontSize: 14)),
-                                  const SizedBox(height: 4),
-                                  Text(e['email'] ?? "",
-                                      style: const TextStyle(fontSize: 12, color: Colors.black87)),
-                                  Text(e['user_type'],
-                                      style: const TextStyle(fontSize: 11, color: Colors.grey)),
-                                ]),
-                          )
-                        ]),
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
-          ],
+  Future<void> createParcours(String nom) async {
+    final response = await http.post(
+      Uri.parse("https://yekiapp.pythonanywhere.com/api/parcours/"),
+      headers: {"Content-Type": "application/json"},
+      body: json.encode({"nom": nom}),
+    );
+    if (response.statusCode == 201) {
+      fetchParcours();
+    }
+  }
+
+  Future<void> assignAdmin(int parcoursId, int adminId) async {
+    final response = await http.put(
+      Uri.parse("https://yekiapp.pythonanywhere.com/api/parcours/$parcoursId/assign-admin/"),
+      headers: {"Content-Type": "application/json"},
+      body: json.encode({"admin_id": adminId}),
+    );
+    if (response.statusCode == 200) {
+      fetchParcours();
+    }
+  }
+
+  Future<Map<String, dynamic>> fetchStats(int adminId) async {
+    final response = await http.get(Uri.parse("https://yekiapp.pythonanywhere.com/api/stats/enseignant-admin/$adminId/"));
+    if (response.statusCode == 200) {
+      return json.decode(response.body);
+    }
+    return {};
+  }
+
+  void showCreateParcoursDialog() {
+    final TextEditingController _controller = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text("Créer un parcours"),
+        content: TextField(
+          controller: _controller,
+          decoration: InputDecoration(hintText: "Nom du parcours"),
         ),
-      );
-    },
-  );
-}
+        actions: [
+          TextButton(
+            onPressed: () {
+              createParcours(_controller.text);
+              Navigator.pop(ctx);
+            },
+            child: Text("Créer"),
+          )
+        ],
+      ),
+    );
+  }
+
+  void showAssignAdminDialog(int parcoursId) {
+    final TextEditingController _controller = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text("Assigner un enseignant_admin"),
+        content: TextField(
+          controller: _controller,
+          decoration: InputDecoration(hintText: "ID de l'enseignant_admin"),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              assignAdmin(parcoursId, int.parse(_controller.text));
+              Navigator.pop(ctx);
+            },
+            child: Text("Assigner"),
+          )
+        ],
+      ),
+    );
+  }
+
+  void showStatsDialog(int adminId) async {
+    final stats = await fetchStats(adminId);
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text("Statistiques"),
+        content: stats.isEmpty
+            ? Text("Aucune statistique disponible")
+            : Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text("Départements: ${stats['departements']}"),
+                  Text("Cours: ${stats['cours']}"),
+                  Text("Leçons: ${stats['lecons']}"),
+                ],
+              ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text("Fermer"),
+          )
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey.shade100,
       appBar: AppBar(
-        title: const Text("Tableau de bord Admin Général",
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-        backgroundColor: const Color(0xFF008080),
-        centerTitle: true,
+        title: Text("Dashboard Admin Général"),
+        backgroundColor: Colors.blue[900],
       ),
-      body: SmartRefresher(
-        controller: _refreshCtrl,
-        onRefresh: _refresh,
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            children: [
-              _buildStatGlobalCard(),
-              const SizedBox(height: 16),
-              ..._buildParcoursCards(),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildStatGlobalCard() {
-  if (stats == null) return const SizedBox.shrink();
-  return Card(
-    elevation: 3,
-    shape: _cardShape(),
-    margin: const EdgeInsets.symmetric(vertical: 8),
-    child: Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: const [
-            Text("Statistiques globales",
-                style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Color(0xFF008080))),
-            Icon(Icons.analytics_outlined, color: Color(0xFF008080)),
-          ],
-        ),
-        const SizedBox(height: 10),
-        Wrap(
-          spacing: 16,
-          runSpacing: 8,
-          children: [
-            _StatInfo(icon: Icons.person, text: "Apprenants : ${stats!['total_apprenants']}"),
-            _StatInfo(icon: Icons.book, text: "Cours : ${stats!['total_cours']}"),
-            _StatInfo(icon: Icons.show_chart, text: "Moyenne : ${stats!['moyenne_globale']} /20"),
-          ],
-        )
-      ]),
-    ),
-  );
-}
-
-
-  List<Widget> _buildParcoursCards() {
-    return List.generate(parcours.length, (i) => _carteParcours(parcours[i], i));
-  }
-
-  Widget _carteParcours(Map<String, dynamic> p, int index) {
-    return Card(
-      elevation: 3,
-      shape: _cardShape(),
-      margin: const EdgeInsets.symmetric(vertical: 8),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(p['nom'],
-                  style: const TextStyle(
-                      fontSize: 17,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF008080))),
-              IconButton(
-                icon: const Icon(Icons.edit, color: Color(0xFF008080)),
-                onPressed: () => _changerAdmin(index),
-                tooltip: "Changer l’administrateur",
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Wrap(spacing: 16, runSpacing: 8, children: [
-            _infoItem(Icons.person, "Admin: ${p['admin']['name']}"),
-            _infoItem(Icons.book, "Cours: ${p['cours']}"),
-            _infoItem(Icons.group, "Apprenants: ${p['apprenants']}"),
-            _infoItem(Icons.show_chart, "Moyenne: ${p['moyenne']}"),
-          ]),
-        ]),
+      body: loading
+          ? Center(child: CircularProgressIndicator())
+          : ListView.builder(
+              itemCount: parcoursList.length,
+              itemBuilder: (ctx, i) {
+                final parcours = parcoursList[i];
+                return Card(
+                  margin: EdgeInsets.all(8),
+                  child: ListTile(
+                    title: Text(parcours['nom']),
+                    subtitle: Text("Admin: ${parcours['admin']?['name'] ?? 'Non assigné'}"),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: Icon(Icons.person_add),
+                          onPressed: () => showAssignAdminDialog(parcours['id']),
+                        ),
+                        if (parcours['admin'] != null)
+                          IconButton(
+                            icon: Icon(Icons.bar_chart),
+                            onPressed: () => showStatsDialog(parcours['admin']['id']),
+                          ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: showCreateParcoursDialog,
+        child: Icon(Icons.add),
+        backgroundColor: Colors.orange,
       ),
     );
-  }
-
-  ShapeBorder _cardShape() =>
-      RoundedRectangleBorder(borderRadius: BorderRadius.circular(12));
-
-  Widget _infoItem(IconData icon, String text) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 18, color: const Color(0xFF008080)),
-        const SizedBox(width: 6),
-        Text(text, style: const TextStyle(fontSize: 14)),
-      ],
-    );
-  }
-}
-
-class _StatInfo extends StatelessWidget {
-  final IconData icon;
-  final String text;
-  const _StatInfo({required this.icon, required this.text});
-  @override
-  Widget build(BuildContext context) {
-    return Row(mainAxisSize: MainAxisSize.min, children: [
-      Icon(icon, size: 18, color: Color(0xFF008080)),
-      SizedBox(width: 6),
-      Text(text, style: TextStyle(fontSize: 14)),
-    ]);
   }
 }

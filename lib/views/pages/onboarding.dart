@@ -100,7 +100,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
                               style: const TextStyle(
                                 fontSize: 28,
                                 fontWeight: FontWeight.w700,
-                                color: Color(0xFF3498db),
+                                color: Color(0xFF1f9cf0),
                                 fontFamily: 'Roboto',
                               ),
                             ),
@@ -125,7 +125,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
                   ),
                 ),
 
-                const SizedBox(height: 30),
+                const SizedBox(height: 25),
 
                 // Indicateurs
                 Row(
@@ -139,7 +139,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
                       height: 10,
                       decoration: BoxDecoration(
                         color: _currentPage == index
-                            ? const Color(0xFF3498db)
+                            ? const Color(0xFF1f9cf0)
                             : Colors.grey[300],
                         borderRadius: BorderRadius.circular(50),
                       ),
@@ -147,19 +147,19 @@ class _OnboardingPageState extends State<OnboardingPage> {
                   ),
                 ),
 
-                const SizedBox(height: 30),
+                const SizedBox(height: 25),
 
                 // Bouton principal
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: ElevatedButton(
                     onPressed: _onNext,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF3498db),
+                      backgroundColor: const Color(0xFF1f9cf0),
                       foregroundColor: Colors.white,
                       elevation: 6,
                       shadowColor: const Color(0xff2c3e50),
-                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(50),
                       ),
@@ -182,6 +182,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
                     ),
                   ),
                 ),
+                const SizedBox(height: 10),
               ],
             ),
           ],

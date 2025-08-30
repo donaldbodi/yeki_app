@@ -14,16 +14,20 @@ import 'profil_enseignant_page.dart';
 enum RoleEnseignant {
   administrateurGeneral,
   enseignantAdministrateur,
+  enseignantCadre,
   enseignantPrincipal,
   enseignantSecondaire,
 }
 
-String parcours = '';
+// Variables globales
+List<dynamic> parcours = [];
+List<dynamic> departements = [];
+List<dynamic> cours = [];
 String nom = '';
 
 Future<RoleEnseignant> fetchUserRole() async {
   final prefs = await SharedPreferences.getInstance();
-  final token = prefs.getString('token'); // Récupération du token stocké
+  final token = prefs.getString('token');
 
   if (token == null) {
     throw Exception('Token non trouvé');
@@ -33,7 +37,7 @@ Future<RoleEnseignant> fetchUserRole() async {
     Uri.parse('https://yekiapp.pythonanywhere.com/api/enseignant/dashboard/'),
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': 'Token $token', // Ajout du token ici
+      'Authorization': 'Token $token',
     },
   );
 
@@ -41,14 +45,29 @@ Future<RoleEnseignant> fetchUserRole() async {
 
   if (response.statusCode == 200) {
     final role = data['role'] ?? '';
-    final parcours = data['parcours'] as List<dynamic>;
     nom = data['nom'] ?? '';
+
+    // ✅ Reset des listes avant d'affecter
+    parcours = [];
+    departements = [];
+    cours = [];
+    if (data.containsKey('parcours')) {
+      parcours = data['parcours'] ?? [];
+    }
+    if (data.containsKey('departements')) {
+      departements = data['departements'] ?? [];
+    }
+    if (data.containsKey('cours')) {
+      cours = data['cours'] ?? [];
+    }
 
     switch (role) {
       case 'admin':
         return RoleEnseignant.administrateurGeneral;
       case 'enseignant_admin':
         return RoleEnseignant.enseignantAdministrateur;
+      case 'enseignant_cadre':
+        return RoleEnseignant.enseignantCadre;
       case 'enseignant_principal':
         return RoleEnseignant.enseignantPrincipal;
       case 'enseignant':
@@ -91,7 +110,7 @@ class _EnseignantHomePageState extends State<EnseignantHomePage> {
       setState(() {
         _pages = [
           _getDashboardPage(role),
-          MesCoursPage(typeEnseignant: TypeEnseignantCours.principal),
+          MesCoursPage(role: role),
           const HistoriquePage(),
           const ProfilEnseignantPage(),
         ];
@@ -117,18 +136,30 @@ class _EnseignantHomePageState extends State<EnseignantHomePage> {
   Widget _getDashboardPage(RoleEnseignant role) {
     switch (role) {
       case RoleEnseignant.administrateurGeneral:
-        return const AdminGeneralPage();
+        return const AdminGeneralDashboard();
+
       case RoleEnseignant.enseignantAdministrateur:
-        return AdminEnseignantDashboardPage(parcours: parcours[0]);
+        return EnseignantAdminPage(parcoursId: 1); // a changer
+
+      case RoleEnseignant.enseignantCadre:
+        return DashboardEnseignantPage(
+          role: role,
+          nomEnseignant: nom,
+          extraInfo: departements, // tu peux afficher ses départements ici
+        );
+
       case RoleEnseignant.enseignantPrincipal:
         return DashboardEnseignantPage(
-          isPrincipal: true,
+          role: role,
           nomEnseignant: nom,
+          extraInfo: cours, // il voit ses cours
         );
+
       case RoleEnseignant.enseignantSecondaire:
         return DashboardEnseignantPage(
-          isPrincipal: false,
+          role: role,
           nomEnseignant: nom,
+          extraInfo: cours, // il voit les cours où il est affecté
         );
     }
   }
@@ -182,7 +213,7 @@ class _EnseignantHomePageState extends State<EnseignantHomePage> {
           items: [
             _buildNavItem(
               Icons.dashboard_rounded,
-              'Dashboard',
+              'Mon interface',
               _selectedIndex == 0,
             ),
             _buildNavItem(

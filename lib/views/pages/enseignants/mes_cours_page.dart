@@ -1,13 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:yeki/views/pages/enseignants/interface_enseignant_page.dart';
 import 'ajout_enseignant_page.dart';
 import 'detail_cours_enseignant.dart';
-
-enum TypeEnseignantCours {
-  enseignant,
-  principal,
-  administrateur,
-  administrateurGeneral,
-}
 
 class Cours {
   final String nom;
@@ -34,9 +28,9 @@ class Cours {
 }
 
 class MesCoursPage extends StatefulWidget {
-  final TypeEnseignantCours typeEnseignant;
+  final RoleEnseignant role;
 
-  const MesCoursPage({super.key, required this.typeEnseignant});
+  const MesCoursPage({super.key, required this.role});
 
   @override
   State<MesCoursPage> createState() => _MesCoursPageState();
@@ -50,10 +44,10 @@ class _MesCoursPageState extends State<MesCoursPage> {
   @override
   void initState() {
     super.initState();
-    coursFiltres = _getCoursSelonRole(widget.typeEnseignant);
+    coursFiltres = _getCoursSelonRole(widget.role);
   }
 
-  List<Cours> _getCoursSelonRole(TypeEnseignantCours role) {
+  List<Cours> _getCoursSelonRole(RoleEnseignant role) {
     const tous = [
       Cours(
         nom: "Mathématiques Terminale",
@@ -90,13 +84,16 @@ class _MesCoursPageState extends State<MesCoursPage> {
       ),
     ];
 
-    if (role == TypeEnseignantCours.administrateurGeneral) return tous;
-
-    if (role == TypeEnseignantCours.administrateur) {
-      return tous.where((c) => c.parcours == "Prépas").toList();
+    switch (role) {
+      case RoleEnseignant.administrateurGeneral:
+        return tous;
+      case RoleEnseignant.enseignantAdministrateur:
+        return tous.where((c) => c.parcours == "Prépas").toList();
+      case RoleEnseignant.enseignantCadre:
+      case RoleEnseignant.enseignantPrincipal:
+      case RoleEnseignant.enseignantSecondaire:
+        return tous.where((c) => c.estAttribue).toList();
     }
-
-    return tous.where((c) => c.estAttribue).toList();
   }
 
   @override
@@ -144,6 +141,7 @@ class _MesCoursPageState extends State<MesCoursPage> {
           ],
         ),
       ),
+      floatingActionButton: _buildFabSelonRole(widget.role),
     );
   }
 
@@ -192,13 +190,13 @@ class _MesCoursPageState extends State<MesCoursPage> {
                   'matiere': cours.matiereOuConcoursOuDepartement,
                   'nbEnseignants': cours.nbEnseignants,
                   'nbApprenants': cours.nbApprenants,
-                  'lecons': [],        // liste des leçons
-                  'enseignants': [],   // liste des enseignants
-                  'exercices': [],     // liste des exercices
-                  'devoirs': [],       // liste des devoirs
+                  'lecons': [],        // à charger depuis backend
+                  'enseignants': [],   // idem
+                  'exercices': [],
+                  'devoirs': [],
                 },
                 estEnseignantPrincipal:
-                    widget.typeEnseignant == TypeEnseignantCours.principal,
+                    widget.role == RoleEnseignant.enseignantPrincipal,
               ),
             ),
           );
@@ -255,7 +253,7 @@ class _MesCoursPageState extends State<MesCoursPage> {
                     ),
                   ),
                 const SizedBox(height: 6),
-                if (_peutAjouterEnseignant(widget.typeEnseignant))
+                if (_peutAjouterEnseignant(widget.role))
                   Align(
                     alignment: Alignment.centerRight,
                     child: ElevatedButton.icon(
@@ -282,8 +280,7 @@ class _MesCoursPageState extends State<MesCoursPage> {
               ],
             ),
           ),
-        ) // ta carte du cours
-        );
+        ));
   }
 
   Widget _buildInfoIcon(IconData icon, String text) {
@@ -297,10 +294,32 @@ class _MesCoursPageState extends State<MesCoursPage> {
     );
   }
 
-  bool _peutAjouterEnseignant(TypeEnseignantCours type) {
-    return type == TypeEnseignantCours.principal ||
-        type == TypeEnseignantCours.administrateur ||
-        type == TypeEnseignantCours.administrateurGeneral;
+  bool _peutAjouterEnseignant(RoleEnseignant role) {
+    return role == RoleEnseignant.enseignantPrincipal ||
+        role == RoleEnseignant.administrateurGeneral ||
+        role == RoleEnseignant.enseignantAdministrateur;
+  }
+
+  Widget? _buildFabSelonRole(RoleEnseignant role) {
+    if (role == RoleEnseignant.enseignantCadre) {
+      return FloatingActionButton.extended(
+        icon: const Icon(Icons.add),
+        label: const Text("Créer un cours"),
+        onPressed: () {
+          // TODO: ouvrir la page création cours
+        },
+      );
+    }
+    if (role == RoleEnseignant.enseignantPrincipal) {
+      return FloatingActionButton.extended(
+        icon: const Icon(Icons.menu_book),
+        label: const Text("Créer une leçon"),
+        onPressed: () {
+          // TODO: ouvrir la page création leçon
+        },
+      );
+    }
+    return null;
   }
 
   String _getLabelCours(Cours cours) {

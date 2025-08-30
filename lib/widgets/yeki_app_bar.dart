@@ -19,7 +19,7 @@ class YekiAppBar extends StatelessWidget implements PreferredSizeWidget {
   @override
   Widget build(BuildContext context) {
     return AppBar(
-      backgroundColor: Colors.transparent,
+      backgroundColor: Color(0xFF1f9cf0),
       elevation: 0,
       toolbarHeight: 80,
       automaticallyImplyLeading: false,
@@ -35,7 +35,7 @@ class YekiAppBar extends StatelessWidget implements PreferredSizeWidget {
                 style: const TextStyle(
                   fontSize: 22,
                   fontWeight: FontWeight.bold,
-                  color: Color(0xFF008080),
+                  color: Color(0xFFFFFFFF),
                 ),
               ),
             ],
@@ -45,7 +45,7 @@ class YekiAppBar extends StatelessWidget implements PreferredSizeWidget {
             subtitle,
             style: const TextStyle(
               fontSize: 13,
-              color: Color(0xFF008080),
+              color: Color(0xFFFFFFFF),
               fontWeight: FontWeight.w400,
             ),
           ),
@@ -53,7 +53,7 @@ class YekiAppBar extends StatelessWidget implements PreferredSizeWidget {
       ),
       actions: [
         IconButton(
-          icon: const Icon(Icons.notifications_none_outlined, color: Color(0xFF008080)),
+          icon: const Icon(Icons.notifications_none_outlined, color: Color(0xFFFFFFFF)),
           onPressed: () {
             Navigator.push(
               context,

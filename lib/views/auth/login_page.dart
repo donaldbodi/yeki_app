@@ -46,7 +46,7 @@ class _LoginPageState extends State<LoginPage> {
         await prefs.setString('token', token);
         await prefs.setString('role', role);
 
-        if (role.contains('enseignant')) {
+        if (role.contains('enseignant') || role == 'admin') {
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(builder: (_) => EnseignantHomePage()),
@@ -63,7 +63,7 @@ class _LoginPageState extends State<LoginPage> {
         setState(() => _error = data['detail'] ?? "Échec de la connexion.");
       }
     } catch (_) {
-      setState(() => _error = "Erreur réseau ou serveur.");
+      setState(() => _error = "Vérifier votre connexion internet");
     }
 
     setState(() => _isLoading = false);
@@ -83,7 +83,7 @@ class _LoginPageState extends State<LoginPage> {
               height: size.height * 0.35,
               width: double.infinity,
               decoration: const BoxDecoration(
-                color: Color(0xFF3498db),
+                color: Color(0xFF1f9cf0),
                 borderRadius: BorderRadius.only(
                   bottomLeft: Radius.circular(40),
                   bottomRight: Radius.circular(40),
@@ -177,20 +177,20 @@ class _LoginPageState extends State<LoginPage> {
                       const SizedBox(height: 6),
                       _isLoading
                           ? const CircularProgressIndicator(
-                              color: Color(0xFF3498db),
+                              color: Color(0xFF1f9cf0),
                             )
                           : SizedBox(
                               width: double.infinity,
                               child: ElevatedButton(
                                 onPressed: _login,
                                 style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFF3498db),
+                                  backgroundColor: const Color(0xFF1f9cf0),
                                   foregroundColor: Colors.white,
                                   padding: const EdgeInsets.symmetric(
                                     vertical: 16,
                                   ),
                                   shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
+                                    borderRadius: BorderRadius.circular(50),
                                   ),
                                 ),
                                 child: const Text(
@@ -216,15 +216,15 @@ class _LoginPageState extends State<LoginPage> {
                           },
                           style: OutlinedButton.styleFrom(
                             padding: const EdgeInsets.symmetric(vertical: 14),
-                            side: const BorderSide(color: Color(0xFF3498db)),
+                            side: const BorderSide(color: Color(0xFF1f9cf0)),
                             shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
+                              borderRadius: BorderRadius.circular(50),
                             ),
                           ),
                           child: const Text(
                             "Créer un compte",
                             style: TextStyle(
-                              color: Color(0xFF3498db),
+                              color: Color(0xFF1f9cf0),
                               fontSize: 16,
                               fontWeight: FontWeight.w600,
                             ),

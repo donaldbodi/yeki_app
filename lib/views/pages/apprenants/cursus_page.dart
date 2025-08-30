@@ -47,7 +47,7 @@ class CursusPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF3498db),
+      backgroundColor: const Color(0xFFFFFFFF),
       appBar: const YekiAppBar(
         title: "Yéki - Mon Cursus",
         subtitle: "Vos matières principales",

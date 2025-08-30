@@ -165,7 +165,7 @@ class _RegisterPageState extends State<RegisterPage> {
                   ),
                   SizedBox(height: 12),
                   Text(
-                    "Creation d'un nouveau compte",
+                    "Création d'un nouveau compte",
                     style: TextStyle(
                       color: Colors.white70,
                       fontSize: 18,
@@ -435,7 +435,7 @@ class _RegisterPageState extends State<RegisterPage> {
                     ElevatedButton(
                       onPressed: _submitRegistration,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF008080),
+                        backgroundColor: const Color(0xFF1f9cf0),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(50),
                           side: const BorderSide(
@@ -458,12 +458,12 @@ class _RegisterPageState extends State<RegisterPage> {
                       },
                       style: OutlinedButton.styleFrom(
                         minimumSize: const Size(double.infinity, 48),
-                        side: const BorderSide(color: Color(0xFF008080)),
+                        side: const BorderSide(color: Color(0xFF1f9cf0)),
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(50)),
                       ),
                       child: const Text("Connectez-vous",
-                          style: TextStyle(color: Color(0xFF008080))),
+                          style: TextStyle(color: Color(0xFF1f9cf0))),
                     ),
                   ],
                   ),

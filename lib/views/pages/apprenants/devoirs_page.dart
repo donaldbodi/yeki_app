@@ -44,7 +44,7 @@ class _DevoirsPageState extends State<DevoirsPage> {
     }).toList();
 
     return Scaffold(
-      backgroundColor: const Color(0xFF3498db),
+      backgroundColor: const Color(0xFFFFFFFF),
       appBar: const YekiAppBar(
         title: "Yéki - Mes devoirs",
         subtitle: "Travaillez vos devoirs et rendez les attent",
