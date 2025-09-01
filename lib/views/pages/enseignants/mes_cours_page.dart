@@ -1,31 +1,10 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:yeki/views/pages/enseignants/interface_enseignant_page.dart';
 import 'ajout_enseignant_page.dart';
 import 'detail_cours_enseignant.dart';
-
-class Cours {
-  final String nom;
-  final String parcours;
-  final String niveau;
-  final String matiereOuConcoursOuDepartement;
-  final String? description;
-  final int nbLecons;
-  final int nbApprenants;
-  final int nbEnseignants;
-  final bool estAttribue;
-
-  const Cours({
-    required this.nom,
-    required this.parcours,
-    required this.niveau,
-    required this.matiereOuConcoursOuDepartement,
-    this.description,
-    required this.nbLecons,
-    required this.nbApprenants,
-    required this.nbEnseignants,
-    this.estAttribue = false,
-  });
-}
 
 class MesCoursPage extends StatefulWidget {
   final RoleEnseignant role;
@@ -37,91 +16,262 @@ class MesCoursPage extends StatefulWidget {
 }
 
 class _MesCoursPageState extends State<MesCoursPage> {
-  late List<Cours> coursFiltres;
+  // now a list of maps with dynamic values
+  List<Map<String, dynamic>> coursFiltres = [];
+  List<Map<String, dynamic>> parcours = [];
   String? niveauFiltre;
   String? parcoursFiltre;
+
+  final String baseUrl = "https://yekiapp.pythonanywhere.com/api";
+
+  Future<Map<String, String>> _authHeaders() async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('token');
+    return {
+      'Content-Type': 'application/json',
+      if (token != null) 'Authorization': 'Token $token',
+    };
+  }
 
   @override
   void initState() {
     super.initState();
-    coursFiltres = _getCoursSelonRole(widget.role);
+    _fetchCours();
   }
 
-  List<Cours> _getCoursSelonRole(RoleEnseignant role) {
-    const tous = [
-      Cours(
-        nom: "Mathématiques Terminale",
-        parcours: "Secondaire Francophone",
-        niveau: "Terminale",
-        matiereOuConcoursOuDepartement: "Mathématiques",
-        nbLecons: 12,
-        nbApprenants: 35,
-        nbEnseignants: 2,
-        description: "Cours de préparation aux concours mathématiques.",
-        estAttribue: true,
-      ),
-      Cours(
-        nom: "Physique MINES",
-        parcours: "Prépas",
-        niveau: "Concours MINES",
-        matiereOuConcoursOuDepartement: "Physique MINES",
-        nbLecons: 10,
-        nbApprenants: 30,
-        nbEnseignants: 3,
-        description: "Préparation au concours MINES.",
-        estAttribue: false,
-      ),
-      Cours(
-        nom: "Analyse L2",
-        parcours: "Supérieur",
-        niveau: "L2",
-        matiereOuConcoursOuDepartement: "Mathématiques",
-        nbLecons: 14,
-        nbApprenants: 25,
-        nbEnseignants: 1,
-        description: "Analyse réelle en L2.",
-        estAttribue: true,
-      ),
-    ];
-
-    switch (role) {
-      case RoleEnseignant.administrateurGeneral:
-        return tous;
-      case RoleEnseignant.enseignantAdministrateur:
-        return tous.where((c) => c.parcours == "Prépas").toList();
-      case RoleEnseignant.enseignantCadre:
-      case RoleEnseignant.enseignantPrincipal:
-      case RoleEnseignant.enseignantSecondaire:
-        return tous.where((c) => c.estAttribue).toList();
+  /// Récupère les données de l'API pour l'enseignant connecté.
+  /// Essaie de lire `data['cours']` ou la racine si l'API renvoie directement la liste.
+  Future<void> _fetchCours() async {
+    try {
+      final headers = await _authHeaders();
+      final response = await http.get(
+        Uri.parse("$baseUrl/enseignant/dashboard/"),
+        headers: headers,
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        // data peut être { 'cours': [...] , ... } ou directement [...]
+        List<dynamic> rawCours = [];
+        List<dynamic> rawParcours = [];
+        if (data is Map && data.containsKey('cours')) {
+          rawCours = data['cours'] ?? [];
+        } else if (data.containsKey('parcours')) {
+          rawParcours = data['parcours'] ?? [];
+        } else if (data is List) {
+          rawCours = data;
+        }
+        setState(() {
+          coursFiltres = rawCours
+              .where((e) => e is Map)
+              .map<Map<String, dynamic>>(
+                (e) => Map<String, dynamic>.from(e as Map<dynamic, dynamic>),
+              )
+              .toList();
+          parcours = rawParcours.where((e) => e is Map)
+              .map<Map<String, dynamic>>(
+                (e) => Map<String, dynamic>.from(e as Map<dynamic, dynamic>),
+              )
+              .toList();
+        });
+      } else {
+        debugPrint(
+          "Erreur fetch cours: ${response.statusCode} ${response.body}",
+        );
+        // optionally show snackbar
+      }
+    } catch (e) {
+      debugPrint("Exception fetch cours: $e");
     }
   }
 
+  // ======= CREER COURS (pour enseignant cadre) =======
+  Future<void> _creerCours() async {
+    final titreCtrl = TextEditingController();
+    final niveauCtrl = TextEditingController();
+    int? departementId; // si tu veux ajouter la sélection
+
+    await showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text("Créer un cours"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: titreCtrl,
+              decoration: const InputDecoration(labelText: "Titre du cours"),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: niveauCtrl,
+              decoration: const InputDecoration(
+                labelText: "Niveau (optionnel)",
+              ),
+            ),
+            // tu peux ajouter ici un Dropdown pour choisir departement si nécessaire
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Annuler"),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final titre = titreCtrl.text.trim();
+              final niveau = niveauCtrl.text.trim();
+              if (titre.isEmpty) return;
+              final headers = await _authHeaders();
+              final body = {
+                'titre': titre,
+                if (niveau.isNotEmpty) 'niveau': niveau,
+                if (departementId != null) 'departement': departementId,
+              };
+              final res = await http.post(
+                Uri.parse("$baseUrl/cours/"),
+                headers: headers,
+                body: jsonEncode(body),
+              );
+              if (res.statusCode == 201 || res.statusCode == 200) {
+                Navigator.pop(context);
+                await _fetchCours();
+                ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(const SnackBar(content: Text('Cours créé.')));
+              } else {
+                debugPrint(
+                  "Erreur création cours: ${res.statusCode} ${res.body}",
+                );
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Erreur création (${res.statusCode})'),
+                  ),
+                );
+              }
+            },
+            child: const Text("Créer"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ======= CREER LEÇON (pour enseignant principal) =======
+  Future<void> _creerLecon(int coursId) async {
+    final titreController = TextEditingController();
+    final contenuController = TextEditingController();
+
+    await showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text("Créer une leçon"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: titreController,
+              decoration: const InputDecoration(labelText: "Titre"),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: contenuController,
+              decoration: const InputDecoration(labelText: "Contenu"),
+              maxLines: 3,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Annuler"),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final titre = titreController.text.trim();
+              final contenu = contenuController.text.trim();
+              if (titre.isEmpty || contenu.isEmpty) return;
+              final headers = await _authHeaders();
+              // endpoint: /api/cours/{id}/lecons/  (adapter si différent)
+              final res = await http.post(
+                Uri.parse("$baseUrl/cours/$coursId/lecons/"),
+                headers: headers,
+                body: jsonEncode({
+                  'titre': titre,
+                  'contenu': contenu,
+                  'cours': coursId,
+                }),
+              );
+              if (res.statusCode == 201 || res.statusCode == 200) {
+                Navigator.pop(context);
+                await _fetchCours();
+                ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(const SnackBar(content: Text('Leçon ajoutée.')));
+              } else {
+                debugPrint(
+                  "Erreur création leçon: ${res.statusCode} ${res.body}",
+                );
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Erreur création leçon (${res.statusCode})'),
+                  ),
+                );
+              }
+            },
+            child: const Text("Créer"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // UTIL: safe read title/description etc. backend peut renvoyer 'titre' ou 'nom'
+  String _safeTitle(Map<String, dynamic> m) {
+    return (m['titre'] ?? m['nom'] ?? '').toString();
+  }
+
+  String _safeDescription(Map<String, dynamic> m) {
+    return (m['description'] ?? m['desc'] ?? '').toString();
+  }
+
+  int _safeInt(dynamic v) {
+    if (v == null) return 0;
+    if (v is int) return v;
+    if (v is double) return v.toInt();
+    if (v is String) return int.tryParse(v) ?? 0;
+    return 0;
+  }
+
+  int _computeLeconsCount(Map<String, dynamic> c) {
+    if (c.containsKey('lecons_count')) return _safeInt(c['lecons_count']);
+    if (c.containsKey('lecons') && c['lecons'] is List)
+      return (c['lecons'] as List).length;
+    return 0;
+  }
+
+  // BUILD ---------------------------------------------------------------------
   @override
   Widget build(BuildContext context) {
     final coursAffiches = coursFiltres.where((cours) {
-      final filtreNiveau = niveauFiltre == null || cours.niveau == niveauFiltre;
+      final filtreNiveau =
+          niveauFiltre == null || (cours['niveau']?.toString() == niveauFiltre);
       final filtreParcours =
-          parcoursFiltre == null || cours.parcours == parcoursFiltre;
+          parcoursFiltre == null ||
+          (cours['parcours']?.toString() == parcoursFiltre);
       return filtreNiveau && filtreParcours;
     }).toList();
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Mes Cours",
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20)),
+        title: const Text(
+          "Mes Cours",
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
+        ),
         backgroundColor: Colors.white,
         elevation: 2,
         foregroundColor: Colors.black,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: () {
-              setState(() {
-                niveauFiltre = null;
-                parcoursFiltre = null;
-              });
-            },
-          )
+          IconButton(icon: const Icon(Icons.refresh), onPressed: _fetchCours),
         ],
       ),
       body: Container(
@@ -146,8 +296,16 @@ class _MesCoursPageState extends State<MesCoursPage> {
   }
 
   Widget _buildFiltres() {
-    final niveaux = coursFiltres.map((c) => c.niveau).toSet().toList();
-    final parcours = coursFiltres.map((c) => c.parcours).toSet().toList();
+    final niveaux = coursFiltres
+        .map((c) => (c['niveau']?.toString() ?? ''))
+        .where((s) => s.isNotEmpty)
+        .toSet()
+        .toList();
+    final parcours = coursFiltres
+        .map((c) => (c['parcours']?.toString() ?? ''))
+        .where((s) => s.isNotEmpty)
+        .toSet()
+        .toList();
 
     return Padding(
       padding: const EdgeInsets.all(12),
@@ -176,111 +334,76 @@ class _MesCoursPageState extends State<MesCoursPage> {
     );
   }
 
-  Widget _buildCarteCours(Cours cours) {
+  Widget _buildCarteCours(Map<String, dynamic> cours) {
+    final title = _safeTitle(cours);
+    final description = _safeDescription(cours);
+    final leconsCount = _computeLeconsCount(cours);
+    final nbApprenants = _safeInt(
+      cours['nb_apprenants'] ?? cours['nbApprenants'],
+    );
+    final nbEnseignants = _safeInt(
+      cours['nb_enseignants'] ?? cours['nbEnseignants'],
+    );
+
     return InkWell(
-        onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => DetailCoursEnseignantPage(
-                cours: {
-                  'titre': cours.nom,
-                  'niveau': cours.niveau,
-                  'description': cours.description,
-                  'matiere': cours.matiereOuConcoursOuDepartement,
-                  'nbEnseignants': cours.nbEnseignants,
-                  'nbApprenants': cours.nbApprenants,
-                  'lecons': [],        // à charger depuis backend
-                  'enseignants': [],   // idem
-                  'exercices': [],
-                  'devoirs': [],
-                },
-                estEnseignantPrincipal:
-                    widget.role == RoleEnseignant.enseignantPrincipal,
-              ),
-            ),
-          );
-        },
-        child: Card(
-          elevation: 6,
-          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(cours.nom,
-                    style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF03224C))),
-                const SizedBox(height: 6),
-                Text(cours.description ?? "Aucune description",
-                    style: const TextStyle(color: Colors.grey)),
-                const SizedBox(height: 10),
-                Wrap(
-                  spacing: 12,
-                  runSpacing: 8,
-                  children: [
-                    _buildInfoIcon(
-                        Icons.school, "Parcours : ${cours.parcours}"),
-                    _buildInfoIcon(Icons.grade, "Niveau : ${cours.niveau}"),
-                    _buildInfoIcon(Icons.category, _getLabelCours(cours)),
-                    _buildInfoIcon(Icons.menu_book, "${cours.nbLecons} leçons"),
-                    _buildInfoIcon(
-                        Icons.people, "${cours.nbApprenants} apprenants"),
-                    _buildInfoIcon(
-                        Icons.person, "${cours.nbEnseignants} enseignants"),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                if (cours.estAttribue)
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: Colors.green.shade100,
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: const Text("✅ Attribué",
-                          style: TextStyle(
-                              color: Colors.green,
-                              fontWeight: FontWeight.w500)),
-                    ),
-                  ),
-                const SizedBox(height: 6),
-                if (_peutAjouterEnseignant(widget.role))
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: ElevatedButton.icon(
-                      icon: const Icon(Icons.person_add),
-                      label: const Text("Ajouter un enseignant"),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF008080),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10)),
-                      ),
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => AjoutEnseignantPage(
-                              roleUtilisateur: 'enseignant principal',
-                              nomCours: cours.nom,
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-              ],
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => DetailCoursEnseignantPage(
+              cours: cours,
+              estEnseignantPrincipal:
+                  widget.role == RoleEnseignant.enseignantPrincipal,
             ),
           ),
-        ));
+        );
+      },
+      child: Card(
+        elevation: 6,
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF03224C),
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                description.isEmpty ? "Aucune description" : description,
+                style: const TextStyle(color: Colors.grey),
+              ),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 12,
+                runSpacing: 8,
+                children: [
+                  _buildInfoIcon(
+                    Icons.school,
+                    "Parcours : ${cours['parcours'] ?? '-'}",
+                  ),
+                  _buildInfoIcon(
+                    Icons.grade,
+                    "Niveau : ${cours['niveau'] ?? '-'}",
+                  ),
+                  _buildInfoIcon(Icons.category, _getLabelCours(cours)),
+                  _buildInfoIcon(Icons.menu_book, "$leconsCount leçons"),
+                  _buildInfoIcon(Icons.people, "$nbApprenants apprenants"),
+                  _buildInfoIcon(Icons.person, "$nbEnseignants enseignants"),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   Widget _buildInfoIcon(IconData icon, String text) {
@@ -294,20 +417,12 @@ class _MesCoursPageState extends State<MesCoursPage> {
     );
   }
 
-  bool _peutAjouterEnseignant(RoleEnseignant role) {
-    return role == RoleEnseignant.enseignantPrincipal ||
-        role == RoleEnseignant.administrateurGeneral ||
-        role == RoleEnseignant.enseignantAdministrateur;
-  }
-
   Widget? _buildFabSelonRole(RoleEnseignant role) {
     if (role == RoleEnseignant.enseignantCadre) {
       return FloatingActionButton.extended(
         icon: const Icon(Icons.add),
         label: const Text("Créer un cours"),
-        onPressed: () {
-          // TODO: ouvrir la page création cours
-        },
+        onPressed: _creerCours,
       );
     }
     if (role == RoleEnseignant.enseignantPrincipal) {
@@ -315,20 +430,44 @@ class _MesCoursPageState extends State<MesCoursPage> {
         icon: const Icon(Icons.menu_book),
         label: const Text("Créer une leçon"),
         onPressed: () {
-          // TODO: ouvrir la page création leçon
+          if (coursFiltres.isNotEmpty) {
+            final first = coursFiltres.first;
+            final idVal = first['id'];
+            int? id;
+            if (idVal is int)
+              id = idVal;
+            else if (idVal is String)
+              id = int.tryParse(idVal);
+            if (id != null)
+              _creerLecon(id);
+            else {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Impossible de déterminer l\'id du cours'),
+                ),
+              );
+            }
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Aucun cours disponible')),
+            );
+          }
         },
       );
     }
     return null;
   }
 
-  String _getLabelCours(Cours cours) {
-    if (cours.parcours == "Prépas") {
-      return "Concours : ${cours.matiereOuConcoursOuDepartement}";
-    } else if (cours.parcours == "Supérieur") {
-      return "Département : ${cours.matiereOuConcoursOuDepartement}";
-    } else {
-      return "Matière : ${cours.matiereOuConcoursOuDepartement}";
-    }
+  String _getLabelCours(Map<String, dynamic> cours) {
+    final parcours = (cours['parcours'] ?? '').toString();
+    final field =
+        cours['matiere'] ??
+        cours['concours'] ??
+        cours['departement'] ??
+        cours['matiereOuConcoursOuDepartement'];
+    final value = field?.toString() ?? '';
+    if (parcours == "Prépas") return "Concours : $value";
+    if (parcours == "Supérieur") return "Département : $value";
+    return "Matière : $value";
   }
 }
