@@ -1,4 +1,4 @@
-import 'dart:convert';
+import 'dart:convert'; 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -16,7 +16,6 @@ class MesCoursPage extends StatefulWidget {
 }
 
 class _MesCoursPageState extends State<MesCoursPage> {
-  // now a list of maps with dynamic values
   List<Map<String, dynamic>> coursFiltres = [];
   List<Map<String, dynamic>> parcours = [];
   String? niveauFiltre;
@@ -39,8 +38,6 @@ class _MesCoursPageState extends State<MesCoursPage> {
     _fetchCours();
   }
 
-  /// Récupère les données de l'API pour l'enseignant connecté.
-  /// Essaie de lire `data['cours']` ou la racine si l'API renvoie directement la liste.
   Future<void> _fetchCours() async {
     try {
       final headers = await _authHeaders();
@@ -50,7 +47,6 @@ class _MesCoursPageState extends State<MesCoursPage> {
       );
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        // data peut être { 'cours': [...] , ... } ou directement [...]
         List<dynamic> rawCours = [];
         List<dynamic> rawParcours = [];
         if (data is Map && data.containsKey('cours')) {
@@ -77,7 +73,6 @@ class _MesCoursPageState extends State<MesCoursPage> {
         debugPrint(
           "Erreur fetch cours: ${response.statusCode} ${response.body}",
         );
-        // optionally show snackbar
       }
     } catch (e) {
       debugPrint("Exception fetch cours: $e");
@@ -88,7 +83,7 @@ class _MesCoursPageState extends State<MesCoursPage> {
   Future<void> _creerCours() async {
     final titreCtrl = TextEditingController();
     final niveauCtrl = TextEditingController();
-    int? departementId; // si tu veux ajouter la sélection
+    int? departementId;
 
     await showDialog(
       context: context,
@@ -108,7 +103,6 @@ class _MesCoursPageState extends State<MesCoursPage> {
                 labelText: "Niveau (optionnel)",
               ),
             ),
-            // tu peux ajouter ici un Dropdown pour choisir departement si nécessaire
           ],
         ),
         actions: [
@@ -156,76 +150,6 @@ class _MesCoursPageState extends State<MesCoursPage> {
     );
   }
 
-  // ======= CREER LEÇON (pour enseignant principal) =======
-  Future<void> _creerLecon(int coursId) async {
-    final titreController = TextEditingController();
-    final contenuController = TextEditingController();
-
-    await showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text("Créer une leçon"),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: titreController,
-              decoration: const InputDecoration(labelText: "Titre"),
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: contenuController,
-              decoration: const InputDecoration(labelText: "Contenu"),
-              maxLines: 3,
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("Annuler"),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              final titre = titreController.text.trim();
-              final contenu = contenuController.text.trim();
-              if (titre.isEmpty || contenu.isEmpty) return;
-              final headers = await _authHeaders();
-              // endpoint: /api/cours/{id}/lecons/  (adapter si différent)
-              final res = await http.post(
-                Uri.parse("$baseUrl/cours/$coursId/lecons/"),
-                headers: headers,
-                body: jsonEncode({
-                  'titre': titre,
-                  'contenu': contenu,
-                  'cours': coursId,
-                }),
-              );
-              if (res.statusCode == 201 || res.statusCode == 200) {
-                Navigator.pop(context);
-                await _fetchCours();
-                ScaffoldMessenger.of(
-                  context,
-                ).showSnackBar(const SnackBar(content: Text('Leçon ajoutée.')));
-              } else {
-                debugPrint(
-                  "Erreur création leçon: ${res.statusCode} ${res.body}",
-                );
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Erreur création leçon (${res.statusCode})'),
-                  ),
-                );
-              }
-            },
-            child: const Text("Créer"),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // UTIL: safe read title/description etc. backend peut renvoyer 'titre' ou 'nom'
   String _safeTitle(Map<String, dynamic> m) {
     return (m['titre'] ?? m['nom'] ?? '').toString();
   }
@@ -249,7 +173,6 @@ class _MesCoursPageState extends State<MesCoursPage> {
     return 0;
   }
 
-  // BUILD ---------------------------------------------------------------------
   @override
   Widget build(BuildContext context) {
     final coursAffiches = coursFiltres.where((cours) {
@@ -425,37 +348,7 @@ class _MesCoursPageState extends State<MesCoursPage> {
         onPressed: _creerCours,
       );
     }
-    if (role == RoleEnseignant.enseignantPrincipal) {
-      return FloatingActionButton.extended(
-        icon: const Icon(Icons.menu_book),
-        label: const Text("Créer une leçon"),
-        onPressed: () {
-          if (coursFiltres.isNotEmpty) {
-            final first = coursFiltres.first;
-            final idVal = first['id'];
-            int? id;
-            if (idVal is int)
-              id = idVal;
-            else if (idVal is String)
-              id = int.tryParse(idVal);
-            if (id != null)
-              _creerLecon(id);
-            else {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Impossible de déterminer l\'id du cours'),
-                ),
-              );
-            }
-          } else {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Aucun cours disponible')),
-            );
-          }
-        },
-      );
-    }
-    return null;
+    return null; // ✅ la création de leçon sera gérée ailleurs
   }
 
   String _getLabelCours(Map<String, dynamic> cours) {

@@ -106,7 +106,44 @@ class DetailCoursEnseignantPage extends StatefulWidget {
   final Map<String, dynamic> cours;
   final bool estEnseignantPrincipal;
 
-  List<Enseignant> enseignants = [
+  DetailCoursEnseignantPage({
+    super.key,
+    required this.cours,
+    required this.estEnseignantPrincipal,
+  });
+
+  @override
+  State<DetailCoursEnseignantPage> createState() => _DetailCoursEnseignantPageState();
+}
+
+class _DetailCoursEnseignantPageState extends State<DetailCoursEnseignantPage> with TickerProviderStateMixin {
+  late TabController _tabController;
+  List<Devoir> devoirs = [
+  Devoir(
+    titre: "Devoir maison : Chapitre 1",
+    dateLimite: "2025-07-20",
+    exercices: [
+      ExerciceDevoir(
+        titre: "Exercice 1",
+        enonce: "Résolvez les équations suivantes...",
+        questions: [
+          Question(
+              enonce: "x² - 4 = 0",
+              correction: "x = ±2",
+              points: 2,
+              estQCM: false),
+          Question(
+              enonce: "x² + 2x + 1 = 0",
+              correction: "x = -1",
+              points: 3,
+              estQCM: false),
+        ],
+      ),
+    ],
+  ),
+];
+
+List<Enseignant> enseignants = [
   Enseignant(
     id: 1,
     nom: 'Mme. Aissatou Ndongo',
@@ -152,43 +189,6 @@ List<Lecon> lecons = [
     contenu: 'Contenu sur les angles',
     dateCreation: '2025-06-05',
     auteur: 'Mme Dupont',
-  ),
-];
-
-  DetailCoursEnseignantPage({
-    super.key,
-    required this.cours,
-    required this.estEnseignantPrincipal,
-  });
-
-  @override
-  State<DetailCoursEnseignantPage> createState() => _DetailCoursEnseignantPageState();
-}
-
-class _DetailCoursEnseignantPageState extends State<DetailCoursEnseignantPage> with TickerProviderStateMixin {
-  late TabController _tabController;
-  List<Devoir> devoirs = [
-  Devoir(
-    titre: "Devoir maison : Chapitre 1",
-    dateLimite: "2025-07-20",
-    exercices: [
-      ExerciceDevoir(
-        titre: "Exercice 1",
-        enonce: "Résolvez les équations suivantes...",
-        questions: [
-          Question(
-              enonce: "x² - 4 = 0",
-              correction: "x = ±2",
-              points: 2,
-              estQCM: false),
-          Question(
-              enonce: "x² + 2x + 1 = 0",
-              correction: "x = -1",
-              points: 3,
-              estQCM: false),
-        ],
-      ),
-    ],
   ),
 ];
 
@@ -343,52 +343,112 @@ final FlutterSoundRecorder _recorder = FlutterSoundRecorder();
   void _ajouterLecon(BuildContext context) {
   if (!widget.estEnseignantPrincipal) return;
 
-  showDialog(
-    context: context,
-    builder: (context) {
-      final TextEditingController titreCtrl = TextEditingController();
-      final TextEditingController resumeCtrl = TextEditingController();
-      final TextEditingController dureeCtrl = TextEditingController();
+  final TextEditingController titreCtrl = TextEditingController();
+  final TextEditingController descriptionCtrl = TextEditingController();
+  XFile? contenuFile;
+  XFile? videoFile;
 
-      return AlertDialog(
-        title: const Text("Ajouter une nouvelle leçon"),
-        content: SingleChildScrollView(
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+    ),
+    builder: (ctx) {
+      return Padding(
+        padding: EdgeInsets.only(
+            bottom: MediaQuery.of(ctx).viewInsets.bottom, top: 16, left: 16, right: 16),
+        child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              const Text(
+                "Créer une nouvelle leçon",
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 12),
               TextField(
                 controller: titreCtrl,
-                decoration: const InputDecoration(labelText: "Titre de la leçon"),
+                decoration: const InputDecoration(
+                  labelText: "Titre de la leçon",
+                  border: OutlineInputBorder(),
+                ),
               ),
+              const SizedBox(height: 12),
               TextField(
-                controller: resumeCtrl,
-                decoration: const InputDecoration(labelText: "Résumé"),
+                controller: descriptionCtrl,
+                maxLines: 3,
+                decoration: const InputDecoration(
+                  labelText: "Description",
+                  border: OutlineInputBorder(),
+                ),
               ),
-              TextField(
-                controller: dureeCtrl,
-                decoration: const InputDecoration(labelText: "Durée (ex: 45 min)"),
+              const SizedBox(height: 12),
+              ElevatedButton.icon(
+                icon: const Icon(Icons.upload_file),
+                label: Text(contenuFile == null ? "Uploader fichier Word" : "Fichier sélectionné"),
+                onPressed: () async {
+                  final picker = ImagePicker();
+                  final file = await picker.pickImage(source: ImageSource.gallery); // ou filePicker pour vrai Word
+                  if (file != null) {
+                    contenuFile = file;
+                  }
+                },
               ),
+              const SizedBox(height: 8),
+              ElevatedButton.icon(
+                icon: const Icon(Icons.video_collection),
+                label: Text(videoFile == null ? "Uploader vidéo" : "Vidéo sélectionnée"),
+                onPressed: () async {
+                  final picker = ImagePicker();
+                  final file = await picker.pickVideo(source: ImageSource.gallery);
+                  if (file != null) {
+                    videoFile = file;
+                  }
+                },
+              ),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    child: const Text("Annuler"),
+                  ),
+                  const SizedBox(width: 12),
+                  ElevatedButton(
+                    onPressed: () {
+                      if (titreCtrl.text.isNotEmpty && descriptionCtrl.text.isNotEmpty) {
+                        setState(() {
+                          lecons.add(
+                            Lecon(
+                              id: "lecon${lecons.length + 1}",
+                              titre: titreCtrl.text,
+                              resume: descriptionCtrl.text,
+                              duree: "N/A",
+                              estActive: true,
+                              contenu: contenuFile?.path ?? "",
+                              dateCreation: DateTime.now().toIso8601String(),
+                              auteur: "Enseignant",
+                            ),
+                          );
+                        });
+                        Navigator.pop(ctx);
+                      }
+                    },
+                    child: const Text("Ajouter"),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
             ],
           ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("Annuler"),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              // Ajouter la logique pour insérer la leçon dans la base ou l’état
-              print("Nouvelle leçon : ${titreCtrl.text}, ${resumeCtrl.text}, ${dureeCtrl.text}");
-              Navigator.pop(context);
-            },
-            child: const Text("Ajouter"),
-          ),
-        ],
       );
     },
   );
 }
+
 
 void _modifierDevoir(int index) {
   final devoir = devoirs[index];
@@ -447,10 +507,10 @@ void _modifierLecon(BuildContext context, Lecon lecon) {
         TextButton(onPressed: () => Navigator.pop(context), child: const Text("Annuler")),
         ElevatedButton(
           onPressed: () {
-            final index = widget.lecons.indexWhere((l) => l.id == lecon.id);
+            final index = lecons.indexWhere((l) => l.id == lecon.id);
             if (index != -1) {
               setState(() {
-                widget.lecons[index] = Lecon(
+                lecons[index] = Lecon(
                   id: lecon.id,
                   titre: titreController.text,
                   resume: resumeController.text,
@@ -503,7 +563,7 @@ void _modifierLecon(BuildContext context, Lecon lecon) {
           onPressed: () {
             if (titreController.text.isNotEmpty && nbQuestionsController.text.isNotEmpty) {
               setState(() {
-                widget.exercices.add(
+                exercices.add(
                   Exercice(
                     titre: titreController.text,
                     nbQuestions: int.tryParse(nbQuestionsController.text) ?? 0,
@@ -786,7 +846,7 @@ void _supprimerDevoir(int index) async {
   if (confirmation == true) {
     // 🔄 Traitement : appel API ou suppression locale
     setState(() {
-      widget.enseignants.removeWhere((e) => e.id == enseignant.id);
+      enseignants.removeWhere((e) => e.id == enseignant.id);
     });
 
     ScaffoldMessenger.of(context).showSnackBar(
@@ -805,7 +865,7 @@ Widget _champFiltreDevoirs() {
         border: OutlineInputBorder(),
       ),
       onChanged: (val) {
-        setState(() => widget.filtreDevoir = val.toLowerCase());
+        setState(() => filtreDevoir = val.toLowerCase());
       },
     ),
   );
@@ -835,12 +895,12 @@ Widget _ongletExercices(bool estEnseignantPrincipal) {
         ),
       const SizedBox(height: 10),
       Expanded(
-        child: widget.exercices.isEmpty
+        child: exercices.isEmpty
             ? const Center(child: Text("Aucun exercice disponible."))
             : ListView.builder(
-                itemCount: widget.exercices.length,
+                itemCount: exercices.length,
                 itemBuilder: (_, index) {
-                  final exo = widget.exercices[index];
+                  final exo = exercices[index];
                   return Card(
                     elevation: 4,
                     margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -914,10 +974,10 @@ Widget _buildCarteEnseignant(Enseignant enseignant) {
       padding: const EdgeInsets.all(16),
       children: [
         const Text("📘 Leçons du cours", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-        ...widget.lecons.map((Lecon lecon) => _buildCarteLecon(lecon)).toList(),
+        ...lecons.map((Lecon lecon) => _buildCarteLecon(lecon)).toList(),
         const Divider(),
         const Text("👩‍🏫 Enseignants secondaires", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-        ...widget.enseignants.map((Enseignant ens) => _buildCarteEnseignant(ens)).toList(),
+        ...enseignants.map((Enseignant ens) => _buildCarteEnseignant(ens)).toList(),
         if (widget.estEnseignantPrincipal)
           ElevatedButton.icon(
             icon: const Icon(Icons.add),
@@ -976,8 +1036,8 @@ Widget _buildCarteEnseignant(Enseignant enseignant) {
                 itemBuilder: (_, index) {
                   final d = devoirs[index];
                   final devoirsFiltres = devoirs.where((d) =>
-                  d.titre.toLowerCase().contains(widget.filtreDevoir) ||
-                  d.dateLimite.toLowerCase().contains(widget.filtreDevoir)).toList();
+                  d.titre.toLowerCase().contains(filtreDevoir) ||
+                  d.dateLimite.toLowerCase().contains(filtreDevoir)).toList();
                   return Card(
                     elevation: 4,
                     margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
