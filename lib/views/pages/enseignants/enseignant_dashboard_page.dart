@@ -1,13 +1,17 @@
 import 'dart:convert';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:yeki/views/pages/enseignants/interface_enseignant_page.dart';
 
+import '../../../widgets/yeki_app_bar.dart';
+
 
 class DashboardEnseignantPage extends StatefulWidget {
   final RoleEnseignant role;
   final String nomEnseignant;
+  final String roleEnseignant;
 
   /// Données minimales:
   /// - role Cadre  -> List<Departement> : [{id, nom, cours:[{id, titre, enseignant_principal:{id, name}?}]}]
@@ -18,6 +22,7 @@ class DashboardEnseignantPage extends StatefulWidget {
     super.key,
     required this.role,
     required this.nomEnseignant,
+    required this.roleEnseignant,
     this.extraInfo,
   });
 
@@ -28,10 +33,49 @@ class DashboardEnseignantPage extends StatefulWidget {
 class _DashboardEnseignantPageState extends State<DashboardEnseignantPage> {
   static const String baseUrl = 'https://yekiapp.pythonanywhere.com';
   bool _creatingCourse = false;
+  final List<String> _colors = [
+  '#4F46E5', // indigo
+  '#16A34A', // green
+  '#DC2626', // red
+  '#EA580C', // orange
+  '#0EA5E9', // sky
+];
+
+final Map<String, IconData> _icons = {
+  'book': Icons.menu_book,
+  'science': Icons.science,
+  'code': Icons.code,
+  'calculate': Icons.calculate,
+  'history': Icons.history_edu,
+};
+
   final TextEditingController _titreCoursCtrl = TextEditingController();
   final TextEditingController _niveauCtrl = TextEditingController();
+  // ====== AJOUT MODULE ======
+final TextEditingController _titreModuleCtrl = TextEditingController();
+final TextEditingController _descriptionModuleCtrl = TextEditingController();
+
+bool _addingModule = false;
+
+  // ====== AJOUT LEÇON ======
+final TextEditingController _titreLeconCtrl = TextEditingController();
+final TextEditingController _descriptionLeconCtrl = TextEditingController();
+
+int? _moduleId; // module sélectionné
+
+FilePickerResult? _pdfFile;
+FilePickerResult? _videoFile;
+
+bool _addingLecon = false;
+
   int? _depSelectionneId;
   int? _principalSelectionneId;
+  final bool isSubscribed = true;
+  final TextEditingController _descriptionCtrl = TextEditingController();
+
+  String _selectedColor = '#4F46E5'; // couleur par défaut
+  String _selectedIcon = 'book';
+
 
   // listes pour sélecteurs (chargées selon le rôle)
   List<Map<String, dynamic>> _enseignantsPrincipaux = [];   // pour Cadre
@@ -67,11 +111,478 @@ class _DashboardEnseignantPageState extends State<DashboardEnseignantPage> {
     }
   }
 
-  // Fetch lists for pickers ----------------------------------------------------
+  void _ouvrirFormulaireAjoutModule(int coursId) {
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+    ),
+    builder: (_) {
+      return Padding(
+        padding: MediaQuery.of(context).viewInsets.add(
+          const EdgeInsets.all(16),
+        ),
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Center(
+                child: Text(
+                  "Créer un module",
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              TextField(
+                controller: _titreModuleCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Titre du module',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              TextField(
+                controller: _descriptionModuleCtrl,
+                maxLines: 3,
+                decoration: const InputDecoration(
+                  labelText: 'Description (optionnelle)',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  icon: _addingModule
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.add_box),
+                  label: const Text("Créer le module"),
+                  onPressed: _addingModule
+                      ? null
+                      : () async {
+                          await _creerModule(coursId);
+                          if (context.mounted) Navigator.pop(context);
+                        },
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
+}
+
+  void _ouvrirFormulaireCreationCours() {
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+    ),
+    builder: (_) {
+      return StatefulBuilder(
+        builder: (context, setModalState) {
+          final deps = _asListOfMap(_localExtraInfo);
+
+          return Padding(
+            padding: MediaQuery.of(context).viewInsets.add(
+              const EdgeInsets.all(16),
+            ),
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Center(
+                    child: Text(
+                      "Créer un cours",
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  TextField(
+                    controller: _titreCoursCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Titre du cours',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+
+                  TextField(
+                    controller: _niveauCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Niveau',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+
+                  TextField(
+                    controller: _descriptionCtrl,
+                    maxLines: 2,
+                    decoration: const InputDecoration(
+                      labelText: 'Description courte',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+
+                  /// 🎨 COULEURS
+                  const Text('Couleur du cours'),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    children: _colors.map((c) {
+                      return GestureDetector(
+                        onTap: () {
+                          setModalState(() {
+                            _selectedColor = c;
+                          });
+                        },
+                        child: Container(
+                          width: 36,
+                          height: 36,
+                          decoration: BoxDecoration(
+                            color: Color(int.parse(c.replaceFirst('#', '0xff'))),
+                            shape: BoxShape.circle,
+                            border: _selectedColor == c
+                                ? Border.all(width: 3, color: Colors.black)
+                                : null,
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 12),
+
+                  /// 🧩 ICONES
+                  const Text('Icône du cours'),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    children: _icons.entries.map((entry) {
+                      return ChoiceChip(
+                        label: Icon(entry.value),
+                        selected: _selectedIcon == entry.key,
+                        onSelected: (_) {
+                          setModalState(() {
+                            _selectedIcon = entry.key;
+                          });
+                        },
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 20),
+
+                  DropdownButtonFormField<int>(
+                    value: _depSelectionneId,
+                    items: deps
+                        .map((d) => DropdownMenuItem<int>(
+                              value: d['id'] as int,
+                              child: Text(d['nom'] ?? ''),
+                            ))
+                        .toList(),
+                    onChanged: (v) => setModalState(() => _depSelectionneId = v),
+                    decoration: const InputDecoration(
+                      labelText: 'Département',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+
+                  DropdownButtonFormField<int>(
+                    value: _principalSelectionneId,
+                    items: _enseignantsPrincipaux
+                        .map((e) => DropdownMenuItem<int>(
+                              value: e['id'] as int,
+                              child: Text(e['user']['username'].toString()),
+                            ))
+                        .toList(),
+                    onChanged: (v) =>
+                        setModalState(() => _principalSelectionneId = v),
+                    decoration: const InputDecoration(
+                      labelText: 'Enseignant principal',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      icon: _creatingCourse
+                          ? const SizedBox(
+                              height: 18,
+                              width: 18,
+                              child:
+                                  CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.check),
+                      label: const Text("Créer le cours"),
+                      onPressed: _creatingCourse
+                          ? null
+                          : () async {
+                              await _creerCours();
+                              if (context.mounted) Navigator.pop(context);
+                            },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      );
+    },
+  );
+}
+
+void _ouvrirFormulaireAjoutLecon(int coursId, List<dynamic> modules) {
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+    ),
+    builder: (_) {
+      return Padding(
+        padding: MediaQuery.of(context).viewInsets.add(
+          const EdgeInsets.all(16),
+        ),
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Center(
+                child: Text(
+                  "Ajouter une leçon",
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              TextField(
+                controller: _titreLeconCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Titre de la leçon',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              TextField(
+                controller: _descriptionLeconCtrl,
+                maxLines: 3,
+                decoration: const InputDecoration(
+                  labelText: 'Brève description',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              /// MODULE
+              DropdownButtonFormField<int>(
+                value: _moduleId,
+                items: modules
+                    .map(
+                      (m) => DropdownMenuItem<int>(
+                        value: m['id'],
+                        child: Text(m['titre']),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (v) => setState(() => _moduleId = v),
+                decoration: const InputDecoration(
+                  labelText: 'Module',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              /// PDF
+              ElevatedButton.icon(
+                icon: const Icon(Icons.picture_as_pdf),
+                label: Text(
+                  _pdfFile == null
+                      ? "Choisir le PDF"
+                      : _pdfFile!.files.single.name,
+                ),
+                onPressed: _pickPdf,
+              ),
+
+              const SizedBox(height: 8),
+
+              /// VIDEO
+              ElevatedButton.icon(
+                icon: const Icon(Icons.video_file),
+                label: Text(
+                  _videoFile == null
+                      ? "Choisir la vidéo (optionnel)"
+                      : _videoFile!.files.single.name,
+                ),
+                onPressed: _pickVideo,
+              ),
+
+              const SizedBox(height: 20),
+
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: _addingLecon
+                      ? null
+                      : () async {
+                          await _envoyerLecon(coursId);
+                          if (context.mounted) Navigator.pop(context);
+                        },
+                  child: _addingLecon
+                      ? const CircularProgressIndicator()
+                      : const Text("Ajouter la leçon"),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
+}
+
+Future<void> _creerModule(int coursId) async {
+  final titre = _titreModuleCtrl.text.trim();
+
+  if (titre.isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("Le titre du module est obligatoire")),
+    );
+    return;
+  }
+
+  setState(() => _addingModule = true);
+
+  try {
+    final headers = await _authHeaders();
+
+    final res = await http.post(
+      Uri.parse('$baseUrl/api/cours/$coursId/modules/'),
+      headers: headers,
+      body: jsonEncode({
+        'titre': titre,
+        'description': _descriptionModuleCtrl.text.trim(),
+      }),
+    );
+
+    if (res.statusCode == 201) {
+      final module = jsonDecode(res.body);
+
+      // 🔁 Mise à jour locale
+      final coursList = _asListOfMap(_localExtraInfo);
+      for (final c in coursList) {
+        if (c['id'] == coursId) {
+          final List modules = (c['modules'] as List?) ?? [];
+          modules.add(module);
+          c['modules'] = modules;
+          break;
+        }
+      }
+
+      _titreModuleCtrl.clear();
+      _descriptionModuleCtrl.clear();
+
+      setState(() {});
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Module créé avec succès")),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Erreur (${res.statusCode})")),
+      );
+    }
+  } catch (e) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text("Erreur: $e")),
+    );
+  } finally {
+    setState(() => _addingModule = false);
+  }
+}
+
+Future<void> _envoyerLecon(int coursId) async {
+  if (_pdfFile == null || _moduleId == null) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("PDF et module obligatoires")),
+    );
+    return;
+  }
+
+  setState(() => _addingLecon = true);
+
+  try {
+    final headers = await _authHeaders();
+    final request = http.MultipartRequest(
+      'POST',
+      Uri.parse('$baseUrl/api/cours/$coursId/lecons/'),
+    );
+
+    request.headers.addAll(headers);
+
+    request.fields['titre'] = _titreLeconCtrl.text;
+    request.fields['description'] = _descriptionLeconCtrl.text;
+    request.fields['module'] = _moduleId.toString();
+
+    request.files.add(
+      await http.MultipartFile.fromPath(
+        'fichier_pdf',
+        _pdfFile!.files.single.path!,
+      ),
+    );
+
+    if (_videoFile != null) {
+      request.files.add(
+        await http.MultipartFile.fromPath(
+          'video',
+          _videoFile!.files.single.path!,
+        ),
+      );
+    }
+
+    final response = await request.send();
+
+    if (response.statusCode == 201) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Leçon ajoutée avec succès")),
+      );
+      _titreLeconCtrl.clear();
+      _descriptionLeconCtrl.clear();
+      _pdfFile = null;
+      _videoFile = null;
+      _moduleId = null;
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Erreur (${response.statusCode})")),
+      );
+    }
+  } finally {
+    setState(() => _addingLecon = false);
+  }
+}
+
+
+  // Fetch lists for pickers ---------------------------------------------------- bien gerer le token
   Future<void> _fetchEnseignantsPrincipaux() async {
     try {
       final headers = await _authHeaders();
-      final res = await http.get(Uri.parse('$baseUrl/api/enseignants/'), headers: headers);
+      final res = await http.get(Uri.parse('$baseUrl/api/enseignants_principaux/'), headers: headers);
       if (res.statusCode == 200) {
         final body = jsonDecode(res.body);
         setState(() {
@@ -80,6 +591,70 @@ class _DashboardEnseignantPageState extends State<DashboardEnseignantPage> {
       }
     } catch (_) {}
   }
+
+  Future<void> _pickPdf() async {
+  final result = await FilePicker.platform.pickFiles(
+    type: FileType.custom,
+    allowedExtensions: ['pdf'],
+  );
+
+  if (result != null) {
+    setState(() {
+      _pdfFile = result;
+    });
+  }
+}
+
+Future<void> _pickVideo() async {
+  final result = await FilePicker.platform.pickFiles(
+    type: FileType.video,
+  );
+
+  if (result != null) {
+    setState(() {
+      _videoFile = result;
+    });
+  }
+}
+
+
+  /*Future<void> ajouterLecon(int coursId) async {
+  final request = http.MultipartRequest(
+    'POST',
+    Uri.parse('$baseUrl/api/cours/$coursId/lecons/'),
+  );
+
+  request.headers.addAll(await _authHeaders());
+
+  request.fields['titre'] = titreCtrl.text;
+  request.fields['description'] = descriptionCtrl.text;
+  request.fields['module'] = moduleId.toString();
+
+  request.files.add(
+    await http.MultipartFile.fromPath(
+      'fichier_pdf',
+      pdfFile!.path!,
+    ),
+  );
+
+  if (videoFile != null) {
+    request.files.add(
+      await http.MultipartFile.fromPath(
+        'video',
+        videoFile!.path!,
+      ),
+    );
+  }
+
+  final res = await request.send();
+
+  if (res.statusCode == 201) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Leçon ajoutée')),
+    );
+  }
+}*/
+
 
   Future<void> _fetchEnseignantsSecondaires() async {
     try {
@@ -112,7 +687,11 @@ class _DashboardEnseignantPageState extends State<DashboardEnseignantPage> {
         'titre': titre,
         'niveau': niveau,
         'departement': _depSelectionneId,
-        if (_principalSelectionneId != null) 'enseignant_principal': _principalSelectionneId,
+        'description_brief': _descriptionCtrl.text.trim(),
+        'color_code': _selectedColor,
+        'icon_name': _selectedIcon,
+        if (_principalSelectionneId != null)
+          'enseignant_principal': _principalSelectionneId,
       };
       final res = await http.post(Uri.parse('$baseUrl/api/cours/create/'),
           headers: headers, body: jsonEncode(body));
@@ -133,6 +712,10 @@ class _DashboardEnseignantPageState extends State<DashboardEnseignantPage> {
           });
         }
         _titreCoursCtrl.clear();
+        _niveauCtrl.clear();
+        _descriptionCtrl.clear();
+        _selectedColor = '#4F46E5';
+        _selectedIcon = 'book';
         _principalSelectionneId = null;
         _depSelectionneId = null;
         ScaffoldMessenger.of(context).showSnackBar(
@@ -185,69 +768,7 @@ class _DashboardEnseignantPageState extends State<DashboardEnseignantPage> {
   }
 
   // Actions PRINCIPAL ----------------------------------------------------------
-  final Set<int> _addingLessonFor = {};
-  Future<void> _ajouterLecon(int coursId) async {
-    final ctrl = TextEditingController();
-    await showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Ajouter une leçon'),
-        content: TextField(
-          controller: ctrl,
-          decoration: const InputDecoration(labelText: 'Titre de la leçon'),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Annuler')),
-          StatefulBuilder(
-            builder: (context, setSB) => ElevatedButton(
-              onPressed: _addingLessonFor.contains(coursId)
-                  ? null
-                  : () async {
-                      final titre = ctrl.text.trim();
-                      if (titre.isEmpty) return;
-                      setState(() => _addingLessonFor.add(coursId));
-                      try {
-                        final headers = await _authHeaders();
-                        final res = await http.post(
-                          Uri.parse('$baseUrl/api/cours/$coursId/lessons/'),
-                          headers: headers,
-                          body: jsonEncode({'titre': titre}),
-                        );
-                        if (res.statusCode == 201) {
-                          // incrémente localement le compteur si présent
-                          final cours = _asListOfMap(_localExtraInfo);
-                          for (final c in cours) {
-                            if (c['id'] == coursId) {
-                              final current = (c['lecons_count'] as int?) ?? 0;
-                              c['lecons_count'] = current + 1;
-                              break;
-                            }
-                          }
-                          setState(() {});
-                          if (context.mounted) Navigator.pop(context);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Leçon ajoutée.')),
-                          );
-                        } else {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Erreur (${res.statusCode})')),
-                          );
-                        }
-                      } catch (e) {
-                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erreur: $e')));
-                      } finally {
-                        setState(() => _addingLessonFor.remove(coursId));
-                      }
-                    },
-              child: _addingLessonFor.contains(coursId)
-                  ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Text('Ajouter'),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+
 
   Future<void> _ajouterEnseignantSecondaire(int coursId) async {
     int? enseignantId;
@@ -271,7 +792,7 @@ class _DashboardEnseignantPageState extends State<DashboardEnseignantPage> {
               const SizedBox(height: 12),
               DropdownButtonFormField<int>(
                 items: candidats
-                    .map((e) => DropdownMenuItem<int>(value: e['id'] as int, child: Text(e['name']?.toString() ?? '')))
+                    .map((e) => DropdownMenuItem<int>(value: e['id'] as int, child: Text(e['user']['username']?.toString() ?? '')))
                     .toList(),
                 onChanged: (v) => enseignantId = v,
                 decoration: const InputDecoration(labelText: 'Sélectionner un enseignant'),
@@ -282,7 +803,7 @@ class _DashboardEnseignantPageState extends State<DashboardEnseignantPage> {
                   if (enseignantId == null) return;
                   final headers = await _authHeaders();
                   final res = await http.post(
-                    Uri.parse('$baseUrl/api/cours/$coursId/enseignants-secondaires/'),
+                    Uri.parse('$baseUrl/api/cours/$coursId/add-enseignant/'),
                     headers: headers,
                     body: jsonEncode({'enseignant_id': enseignantId}),
                   );
@@ -347,10 +868,24 @@ class _DashboardEnseignantPageState extends State<DashboardEnseignantPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text('Bienvenue ${widget.nomEnseignant}'),
-        backgroundColor: Colors.indigo,
+      appBar: YekiHeader(
+        unreadNotifications: 3,
+        isSubscribed: isSubscribed,
+        userRole: widget.roleEnseignant,
+        username: widget.nomEnseignant,
+        avatarUrl: null,
+        onNotifications: () {},
+        onSettings: () {},
+        onLogout: () {},
       ),
+      floatingActionButton: widget.role == RoleEnseignant.enseignantCadre
+      ? FloatingActionButton.extended(
+          icon: const Icon(Icons.add),
+          label: const Text("Créer un cours"),
+          onPressed: _ouvrirFormulaireCreationCours,
+        )
+      : null,
+
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: _buildByRole(),
@@ -414,63 +949,6 @@ class _DashboardEnseignantPageState extends State<DashboardEnseignantPage> {
     final deps = _asListOfMap(_localExtraInfo);
     return ListView(
       children: [
-        // Formulaire création cours
-        Card(
-          elevation: 2,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              const Text('Créer un cours', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _titreCoursCtrl,
-                decoration: const InputDecoration(labelText: 'Titre du cours', border: OutlineInputBorder()),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _niveauCtrl,
-                decoration: const InputDecoration(labelText: 'Niveau', border: OutlineInputBorder()),
-              ),
-              const SizedBox(height: 12),
-              DropdownButtonFormField<int>(
-                value: _depSelectionneId,
-                items: deps
-                    .map((d) => DropdownMenuItem<int>(value: d['id'] as int, child: Text(d['nom']?.toString() ?? '')))
-                    .toList(),
-                onChanged: (v) => setState(() => _depSelectionneId = v),
-                decoration:
-                    const InputDecoration(labelText: 'Département', border: OutlineInputBorder()),
-              ),
-              const SizedBox(height: 12),
-              DropdownButtonFormField<int>(
-                value: _principalSelectionneId,
-                items: _enseignantsPrincipaux
-                    .map((e) => DropdownMenuItem<int>(
-                          value: e['id'] as int,
-                          child: Text(e['name']?.toString() ?? ''),
-                        ))
-                    .toList(),
-                onChanged: (v) => setState(() => _principalSelectionneId = v),
-                decoration: const InputDecoration(
-                    labelText: 'Enseignant principal (optionnel)', border: OutlineInputBorder()),
-              ),
-              const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  icon: _creatingCourse
-                      ? const SizedBox(
-                          height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                      : const Icon(Icons.add),
-                  onPressed: _creatingCourse ? null : _creerCours,
-                  label: const Text('Créer'),
-                ),
-              ),
-            ]),
-          ),
-        ),
-        const SizedBox(height: 16),
 
         // Liste départements + cours
         const Text('Mes départements', style: TextStyle(fontWeight: FontWeight.bold)),
@@ -488,7 +966,7 @@ class _DashboardEnseignantPageState extends State<DashboardEnseignantPage> {
                       .map((c) => ListTile(
                             title: Text(c['titre']?.toString() ?? ''),
                             subtitle: Text(
-                              'Principal: ${((c['enseignant_principal'] as Map?)?['name']?.toString() ?? 'Aucun')}',
+                              'Principal: ${((c['enseignant_principal'] as Map?)?['user']['username']?.toString() ?? 'Aucun')}',
                             ),
                             trailing: PopupMenuButton<int>(
                               icon: const Icon(Icons.edit),
@@ -534,7 +1012,15 @@ class _DashboardEnseignantPageState extends State<DashboardEnseignantPage> {
                   children: [
                     Expanded(child: Text('Leçons: $leconsCount')),
                     TextButton.icon(
-                      onPressed: () => _ajouterLecon(c['id'] as int),
+                      onPressed: () => _ouvrirFormulaireAjoutModule(c['id'] as int),
+                      icon: const Icon(Icons.view_module),
+                      label: const Text("Créer un module"),
+                    ),
+                    TextButton.icon(
+                      onPressed: () => _ouvrirFormulaireAjoutLecon(
+                        c['id'] as int,
+                        (c['modules'] as List?) ?? [],
+                      ),
                       icon: const Icon(Icons.add_circle),
                       label: const Text('Ajouter une leçon'),
                     ),

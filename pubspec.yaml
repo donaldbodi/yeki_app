@@ -59,6 +59,8 @@ dependencies:
   google_sign_in: ^7.1.1
   dio: ^5.4.0
   flutter_secure_storage: ^9.2.4
+  syncfusion_flutter_pdfviewer: ^31.1.19
+
 
 flutter_launcher_icons:
   android: true
@@ -91,6 +93,10 @@ flutter:
   # assets:
   #   - images/a_dot_burr.jpeg
   #   - images/a_dot_ham.jpeg
+  fonts:
+    - family: FredokaOne
+      fonts:
+        - asset: assets/fonts/Fredoka-Regular.ttf
   assets:
     - assets/images/banner.jpeg
     - assets/images/user.jpg

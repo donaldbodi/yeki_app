@@ -1,3 +1,6 @@
+// Nouvelle version améliorée de OnboardingPage
+// (code complet remis à neuf)
+
 import 'package:flutter/material.dart';
 import 'package:yeki/views/pages/mise_a_jour.dart';
 import '../auth/login_page.dart';
@@ -40,8 +43,8 @@ class _OnboardingPageState extends State<OnboardingPage> {
   void _onNext() {
     if (_currentPage < _onboardData.length - 1) {
       _pageController.nextPage(
-        duration: const Duration(milliseconds: 350),
-        curve: Curves.easeInOut,
+        duration: const Duration(milliseconds: 450),
+        curve: Curves.easeOutExpo,
       );
     } else {
       Navigator.pushReplacement(
@@ -54,111 +57,127 @@ class _OnboardingPageState extends State<OnboardingPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
-      body: SafeArea(
-        child: Stack(
-          children: [
-            // Décoration géométrique
-            Positioned(
-              top: -30,
-              right: -30,
-              child: Icon(
-                Icons.school_rounded,
-                size: 150,
-                color: const Color(0x1A1f9cf0), // Couleur avec opacité
+      body: Stack(
+        children: [
+          // Background dégradé haut niveau
+          Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Color(0xFF008080),
+                  Color(0xFF00E6E6),
+                  Colors.white,
+                ],
               ),
             ),
-            Column(
-              children: [
-                const SizedBox(height: 30),
+          ),
 
-                // PageView
+          // Effet glass blur
+          Positioned.fill(
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+  colors: [
+    Color(0x2200E6E6),
+    Color(0x22008080),
+  ],
+  begin: Alignment.topLeft,
+  end: Alignment.bottomRight,
+),
+
+              ),
+            ),
+          ),
+
+          SafeArea(
+            child: Column(
+              children: [
                 Expanded(
                   child: PageView.builder(
                     controller: _pageController,
-                    onPageChanged: (index) =>
-                        setState(() => _currentPage = index),
+                    onPageChanged: (i) => setState(() => _currentPage = i),
                     itemCount: _onboardData.length,
                     itemBuilder: (context, index) {
                       final item = _onboardData[index];
                       return Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 24),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            // Image sans fond
-                            SizedBox(
-                              height: 260,
-                              child: Image.asset(item['image']!),
-                            ),
-                            const SizedBox(height: 40),
-
-                            // Titre
-                            Text(
-                              item['title']!,
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(
-                                fontSize: 28,
-                                fontWeight: FontWeight.w700,
-                                color: Color(0xFF1f9cf0),
-                                fontFamily: 'Roboto',
+                        padding: const EdgeInsets.symmetric(horizontal: 26),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 300),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              AnimatedOpacity(
+                                opacity: _currentPage == index ? 1 : 0.3,
+                                duration: const Duration(milliseconds: 600),
+                                curve: Curves.easeInOut,
+                                child: SizedBox(
+                                  height: 260,
+                                  child: Image.asset(item['image']!),
+                                ),
                               ),
-                            ),
-
-                            const SizedBox(height: 20),
-
-                            // Description
-                            Text(
-                              item['desc']!,
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(
-                                fontSize: 17,
-                                color: Color(0xFF444444),
-                                height: 1.6,
-                                fontWeight: FontWeight.w400,
+                              const SizedBox(height: 45),
+                              Text(
+                                item['title']!,
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  fontSize: 30,
+                                  fontFamily: 'Roboto',
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
                               ),
-                            ),
-                          ],
+                              const SizedBox(height: 20),
+                              Text(
+                                item['desc']!,
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: 17,
+                                  color: Colors.white.withOpacity(0.85),
+                                  height: 1.6,
+                                  fontWeight: FontWeight.w400,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       );
                     },
                   ),
                 ),
 
-                const SizedBox(height: 25),
+                const SizedBox(height: 20),
 
-                // Indicateurs
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: List.generate(
                     _onboardData.length,
                     (index) => AnimatedContainer(
-                      duration: const Duration(milliseconds: 300),
+                      duration: const Duration(milliseconds: 350),
+                      curve: Curves.easeInOut,
                       margin: const EdgeInsets.symmetric(horizontal: 5),
-                      width: _currentPage == index ? 30 : 10,
+                      width: _currentPage == index ? 32 : 10,
                       height: 10,
                       decoration: BoxDecoration(
-                        color: _currentPage == index
-                            ? const Color(0xFF1f9cf0)
-                            : Colors.grey[300],
+                        color: _currentPage == index ? Colors.white : Colors.white.withOpacity(0.3),
                         borderRadius: BorderRadius.circular(50),
                       ),
                     ),
                   ),
                 ),
 
-                const SizedBox(height: 25),
+                const SizedBox(height: 20),
 
-                // Bouton principal
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  padding: const EdgeInsets.symmetric(horizontal: 25),
                   child: ElevatedButton(
                     onPressed: _onNext,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF1f9cf0),
-                      foregroundColor: Colors.white,
-                      elevation: 6,
-                      shadowColor: const Color(0xff2c3e50),
+                      backgroundColor: Colors.white,
+                      foregroundColor: const Color(0xFF008080),
+                      elevation: 8,
+                      shadowColor: Colors.black26,
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(50),
@@ -177,16 +196,16 @@ class _OnboardingPageState extends State<OnboardingPage> {
                           ),
                         ),
                         const SizedBox(width: 10),
-                        const Icon(Icons.arrow_forward_ios_rounded, size: 18)
+                        const Icon(Icons.arrow_forward_ios_rounded, size: 18),
                       ],
                     ),
                   ),
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 18),
               ],
             ),
-          ],
-        ),
+          )
+        ],
       ),
     );
   }

@@ -18,21 +18,21 @@ class _DashboardState extends State<Dashboard> {
     CursusPage(),
     ConcoursPage(),
     DevoirsPage(),
-    ProfilPage(),
+    //ProfilPage(),
   ];
 
   final List<IconData> _icons = [
     Icons.menu_book_rounded,
     Icons.emoji_events_rounded,
     Icons.assignment_rounded,
-    Icons.person_rounded,
+    //Icons.person_rounded,
   ];
 
   final List<String> _labels = [
     'Cursus',
     'Prépa',
     'Devoirs',
-    'Profil',
+    //'Profil',
   ];
 
   @override
@@ -57,11 +57,11 @@ class _DashboardState extends State<Dashboard> {
         ),
         child: BottomNavigationBar(
           currentIndex: _currentIndex,
-          backgroundColor: Colors.transparent,
-          elevation: 0,
+          backgroundColor: Colors.white,
+          elevation: 1,
           type: BottomNavigationBarType.fixed,
-          selectedItemColor: Color(0xff3498db),
-          unselectedItemColor: Color(0xff404040).withOpacity(0.6),
+          selectedItemColor: Color(0xff008085),
+          unselectedItemColor: Color(0xff303030),
           selectedFontSize: 12,
           unselectedFontSize: 11,
           showUnselectedLabels: true,

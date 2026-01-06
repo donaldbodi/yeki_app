@@ -61,6 +61,7 @@ Future<RoleEnseignant> fetchUserRole() async {
       cours = data['cours'] ?? [];
     }
 
+
     switch (role) {
       case 'admin':
         return RoleEnseignant.administrateurGeneral;
@@ -95,8 +96,22 @@ class _EnseignantHomePageState extends State<EnseignantHomePage> {
   bool _isLoading = true;
   List<Widget> _pages = [];
 
-  static const Color primaryColor = Color(0xFF03224c);
-  static const Color selectedColor = Colors.orange;
+  static const Color primaryColor = Color(0xFF008088);
+  static const Color selectedColor = Color(0xFFffb800);
+  String getSimpleRoleLabel(RoleEnseignant backendRole) {
+  switch (backendRole) {
+    case RoleEnseignant.administrateurGeneral:
+      return 'Administrateur';
+    case RoleEnseignant.enseignantAdministrateur:
+      return 'Coordonnateur';
+    case RoleEnseignant.enseignantCadre:
+      return 'Cadre';
+    case RoleEnseignant.enseignantPrincipal:
+      return 'Principal';
+    default:
+      return 'Enseignant';
+  }
+}
 
   @override
   void initState() {
@@ -139,11 +154,13 @@ class _EnseignantHomePageState extends State<EnseignantHomePage> {
         return const AdminGeneralDashboard();
 
       case RoleEnseignant.enseignantAdministrateur:
-        return EnseignantAdminPage(parcoursId: 1); // a changer
+        final int parcoursId = parcours.first["id"];
+        return EnseignantAdminPage(parcoursId: parcoursId, role: getSimpleRoleLabel(role), nomUser:nom); // a changer
 
       case RoleEnseignant.enseignantCadre:
         return DashboardEnseignantPage(
           role: role,
+          roleEnseignant: getSimpleRoleLabel(role),
           nomEnseignant: nom,
           extraInfo: departements, // tu peux afficher ses départements ici
         );
@@ -152,6 +169,7 @@ class _EnseignantHomePageState extends State<EnseignantHomePage> {
         return DashboardEnseignantPage(
           role: role,
           nomEnseignant: nom,
+          roleEnseignant: getSimpleRoleLabel(role),
           extraInfo: cours, // il voit ses cours
         );
 
@@ -159,6 +177,7 @@ class _EnseignantHomePageState extends State<EnseignantHomePage> {
         return DashboardEnseignantPage(
           role: role,
           nomEnseignant: nom,
+          roleEnseignant: getSimpleRoleLabel(role),
           extraInfo: cours, // il voit les cours où il est affecté
         );
     }

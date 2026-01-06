@@ -63,7 +63,7 @@ class _LoginPageState extends State<LoginPage> {
         setState(() => _error = data['detail'] ?? "Échec de la connexion.");
       }
     } catch (_) {
-      setState(() => _error = "Vérifier votre connexion internet");
+      setState(() => _error = "Vérifiez votre connexion internet");
     }
 
     setState(() => _isLoading = false);
@@ -74,64 +74,78 @@ class _LoginPageState extends State<LoginPage> {
     final size = MediaQuery.of(context).size;
 
     return Scaffold(
-      backgroundColor: Colors.white,
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            // HEADER BLEU
-            Container(
-              height: size.height * 0.35,
-              width: double.infinity,
-              decoration: const BoxDecoration(
-                color: Color(0xFF1f9cf0),
-                borderRadius: BorderRadius.only(
-                  bottomLeft: Radius.circular(40),
-                  bottomRight: Radius.circular(40),
-                ),
-              ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
+      body: Container(
+        width: double.infinity,
+        height: double.infinity,
+
+        /// 🎨 Dégradé moderne
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              Color(0xFF008080),
+              Color(0xFF00E6E6),
+            ],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+          ),
+        ),
+
+        child: SingleChildScrollView(
+          child: Column(
+            children: [
+              SizedBox(height: size.height * 0.10),
+
+              /// Logo et title
+              Column(
                 children: const [
-                  SizedBox(height: 20),
                   Image(
                     image: AssetImage("assets/images/yeki_logo.png"),
-                    width: 80,
-                    height: 80,
+                    width: 95,
+                    height: 95,
                   ),
                   SizedBox(height: 12),
                   Text(
-                    "Connexion à votre espace",
+                    "Connexion",
                     style: TextStyle(
-                      color: Colors.white70,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w400,
+                      color: Colors.white,
+                      fontSize: 28,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1,
                     ),
                   ),
                 ],
               ),
-            ),
 
-            // FORMULAIRE
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 20, 24, 40),
-              child: Material(
-                elevation: 20,
-                borderRadius: BorderRadius.circular(24),
+              const SizedBox(height: 35),
+
+              /// 🎯 Card style moderne
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: Container(
                   padding: const EdgeInsets.all(24),
                   decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(24),
+                    color: Colors.white.withOpacity(.92),
+                    borderRadius: BorderRadius.circular(22),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(.12),
+                        blurRadius: 12,
+                        offset: const Offset(0, 6),
+                      ),
+                    ],
                   ),
                   child: Column(
                     children: [
                       TextField(
                         controller: _emailOrUsernameController,
                         decoration: InputDecoration(
-                          labelText: "Email ou nom d'utilisateur",
+                          hintText: "Email ou nom d'utilisateur",
+                          filled: true,
+                          fillColor: Colors.grey.shade100,
                           prefixIcon: const Icon(Icons.person_outline),
                           border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(14),
+                            borderSide: BorderSide.none,
                           ),
                         ),
                       ),
@@ -140,29 +154,32 @@ class _LoginPageState extends State<LoginPage> {
                         controller: _passwordController,
                         obscureText: true,
                         decoration: InputDecoration(
-                          labelText: "Mot de passe",
+                          hintText: "Mot de passe",
+                          filled: true,
+                          fillColor: Colors.grey.shade100,
                           prefixIcon: const Icon(Icons.lock_outline),
                           border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(14),
+                            borderSide: BorderSide.none,
                           ),
                         ),
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 14),
+
                       Align(
                         alignment: Alignment.centerRight,
                         child: TextButton(
-                          onPressed: () {
-                            // TODO: reset mot de passe
-                          },
+                          onPressed: () {},
                           child: const Text(
                             "Mot de passe oublié ?",
                             style: TextStyle(
-                              color: Color(0xff2c3e50),
+                              color: Colors.teal,
                               fontWeight: FontWeight.w500,
                             ),
                           ),
                         ),
                       ),
+
                       if (_error.isNotEmpty)
                         Padding(
                           padding: const EdgeInsets.only(bottom: 10),
@@ -170,24 +187,23 @@ class _LoginPageState extends State<LoginPage> {
                             _error,
                             style: const TextStyle(
                               color: Colors.red,
-                              fontWeight: FontWeight.w500,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                         ),
-                      const SizedBox(height: 6),
+
+                      const SizedBox(height: 8),
+
                       _isLoading
-                          ? const CircularProgressIndicator(
-                              color: Color(0xFF1f9cf0),
-                            )
+                          ? const CircularProgressIndicator(color: Colors.teal)
                           : SizedBox(
                               width: double.infinity,
                               child: ElevatedButton(
                                 onPressed: _login,
                                 style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFF1f9cf0),
-                                  foregroundColor: Colors.white,
+                                  backgroundColor: Colors.teal.shade700,
                                   padding: const EdgeInsets.symmetric(
-                                    vertical: 16,
+                                    vertical: 15,
                                   ),
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(50),
@@ -196,13 +212,16 @@ class _LoginPageState extends State<LoginPage> {
                                 child: const Text(
                                   "Se connecter",
                                   style: TextStyle(
-                                    fontSize: 16,
+                                    fontSize: 17,
                                     fontWeight: FontWeight.w600,
+                                    color: Color(0xFFFFFFFF),
                                   ),
                                 ),
                               ),
                             ),
+
                       const SizedBox(height: 14),
+
                       SizedBox(
                         width: double.infinity,
                         child: OutlinedButton(
@@ -216,7 +235,10 @@ class _LoginPageState extends State<LoginPage> {
                           },
                           style: OutlinedButton.styleFrom(
                             padding: const EdgeInsets.symmetric(vertical: 14),
-                            side: const BorderSide(color: Color(0xFF1f9cf0)),
+                            side: const BorderSide(
+                              color: Colors.teal,
+                              width: 1.8,
+                            ),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(50),
                             ),
@@ -224,9 +246,9 @@ class _LoginPageState extends State<LoginPage> {
                           child: const Text(
                             "Créer un compte",
                             style: TextStyle(
-                              color: Color(0xFF1f9cf0),
+                              color: Colors.teal,
                               fontSize: 16,
-                              fontWeight: FontWeight.w600,
+                              fontWeight: FontWeight.w700,
                             ),
                           ),
                         ),
@@ -235,8 +257,10 @@ class _LoginPageState extends State<LoginPage> {
                   ),
                 ),
               ),
-            ),
-          ],
+
+              const SizedBox(height: 30),
+            ],
+          ),
         ),
       ),
     );

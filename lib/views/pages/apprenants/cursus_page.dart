@@ -2,10 +2,19 @@ import 'package:flutter/material.dart';
 import '../../../../widgets/yeki_app_bar.dart';
 import 'cours_detail_page.dart';
 
-class CursusPage extends StatelessWidget {
-  final bool isSubscribed = true; // ← Change cette valeur pour simuler l’abonnement
+class CursusPage extends StatefulWidget {
+  const CursusPage({super.key});
 
-  final List<Map<String, dynamic>> cursusList = [
+  @override
+  State<CursusPage> createState() => _CursusPageState();
+}
+
+class _CursusPageState extends State<CursusPage> {
+  final bool isSubscribed = true;
+
+  final TextEditingController _searchController = TextEditingController();
+
+  final List<Map<String, dynamic>> _allCursus = [
     {
       'title': 'Mathématiques',
       'description': 'Analyse, Algèbre, Géométrie et plus',
@@ -44,69 +53,80 @@ class CursusPage extends StatelessWidget {
     },
   ];
 
+  late List<Map<String, dynamic>> _filteredCursus;
+
+  @override
+  void initState() {
+    super.initState();
+    _filteredCursus = List.from(_allCursus);
+  }
+
+  void _filterCursus(String query) {
+    setState(() {
+      if (query.isEmpty) {
+        _filteredCursus = List.from(_allCursus);
+      } else {
+        final lowerQuery = query.toLowerCase();
+        _filteredCursus = _allCursus.where((cursus) {
+          return cursus['title'].toLowerCase().contains(lowerQuery) ||
+              cursus['description'].toLowerCase().contains(lowerQuery) ||
+              cursus['teacher'].toLowerCase().contains(lowerQuery);
+        }).toList();
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFFFFFFF),
-      appBar: const YekiAppBar(
-        title: "Yéki - Mon Cursus",
-        subtitle: "Vos matières principales",
-        icon: Icons.menu_book_rounded,
+      backgroundColor: Colors.white,
+
+      appBar: YekiHeader(
+        unreadNotifications: 3,
+        isSubscribed: isSubscribed,
+        userRole: "Apprenant",
+        username: "Bodi Donald",
+        avatarUrl: null,
+        onNotifications: () {},
+        onSettings: () {},
+        onLogout: () {},
       ),
+
       body: ListView.separated(
         padding: const EdgeInsets.all(16),
-        itemCount: cursusList.length + 1,
+        itemCount: _filteredCursus.length + 1,
         separatorBuilder: (_, __) => const SizedBox(height: 16),
         itemBuilder: (context, index) {
+          /// 🔍 BARRE DE RECHERCHE
           if (index == 0) {
-            // Section abonnement
             return Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               decoration: BoxDecoration(
                 color: Colors.white,
-                border: Border.all(color: Colors.teal.withOpacity(0.2), width: 1),
                 borderRadius: BorderRadius.circular(12),
                 boxShadow: const [
-                BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2)),
-              ],
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.workspace_premium_rounded,
-                    color: isSubscribed ? Colors.orange : Colors.redAccent,
-                    size: 20,
+                  BoxShadow(
+                    color: Colors.black12,
+                    blurRadius: 6,
+                    offset: Offset(0, 2),
                   ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      isSubscribed
-                          ? 'Abonnement actif jusqu\'au 31 Déc. 2025'
-                          : 'Aucun abonnement actif',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: const Color(0xFF333333),
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                  isSubscribed
-                      ? const Icon(Icons.check_circle, color: Colors.teal, size: 18)
-                      : TextButton(
-                          onPressed: () {
-                            // TODO: Ajouter la logique de souscription
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text("Fonctionnalité d'abonnement à venir")),
-                            );
-                          },
-                          child: const Text("S'abonner", style: TextStyle(color: Colors.redAccent),),
-                        ),
                 ],
+              ),
+              child: TextField(
+                controller: _searchController,
+                onChanged: _filterCursus,
+                decoration: const InputDecoration(
+                  prefixIcon: Icon(Icons.search, color: Colors.black54),
+                  hintText: "Rechercher un cours, professeur...",
+                  border: InputBorder.none,
+                ),
               ),
             );
           }
 
-          final cursus = cursusList[index - 1];
+          /// 📚 CARTES DES COURS
+          final cursus = _filteredCursus[index - 1];
+
           return InkWell(
             onTap: () {
               Navigator.push(
@@ -118,14 +138,17 @@ class CursusPage extends StatelessWidget {
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: Colors.white,
+                borderRadius: BorderRadius.circular(14),
                 border: Border.all(
-                  width: 1,
                   color: cursus['gradient'].first.withOpacity(0.4),
                 ),
-                borderRadius: BorderRadius.circular(14),
                 boxShadow: const [
-                BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2)),
-              ],
+                  BoxShadow(
+                    color: Colors.black12,
+                    blurRadius: 4,
+                    offset: Offset(0, 2),
+                  ),
+                ],
               ),
               child: Row(
                 children: [
@@ -154,7 +177,6 @@ class CursusPage extends StatelessWidget {
                         Text(
                           cursus['title'],
                           style: const TextStyle(
-                            color: Color(0xFF1A1A1A),
                             fontSize: 18,
                             fontWeight: FontWeight.w600,
                           ),
@@ -170,10 +192,7 @@ class CursusPage extends StatelessWidget {
                         const SizedBox(height: 4),
                         Text(
                           'Prof : ${cursus['teacher']}',
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: Colors.black87,
-                          ),
+                          style: const TextStyle(fontSize: 12),
                         ),
                         Text(
                           '${cursus['lessons']} leçons • ${cursus['assignments']} devoirs',
