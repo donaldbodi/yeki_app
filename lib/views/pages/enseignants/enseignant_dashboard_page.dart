@@ -54,6 +54,8 @@ final Map<String, IconData> _icons = {
   // ====== AJOUT MODULE ======
 final TextEditingController _titreModuleCtrl = TextEditingController();
 final TextEditingController _descriptionModuleCtrl = TextEditingController();
+List<Map<String, dynamic>> _modulesDuCours = [];
+bool _loadingModules = false;
 
 bool _addingModule = false;
 
@@ -457,6 +459,40 @@ void _ouvrirFormulaireAjoutLecon(int coursId, List<dynamic> modules) {
     },
   );
 }
+
+Future<void> _fetchModules(int coursId) async {
+  setState(() {
+    _loadingModules = true;
+    _modulesDuCours = [];
+  });
+
+  try {
+    final headers = await _authHeaders();
+    final res = await http.get(
+      Uri.parse('$baseUrl/api/cours/$coursId/liste-modules/'),
+      headers: headers,
+    );
+
+    if (res.statusCode == 200) {
+      final data = jsonDecode(res.body) as List;
+      setState(() {
+        _modulesDuCours =
+            data.map((e) => Map<String, dynamic>.from(e)).toList();
+      });
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Erreur chargement modules (${res.statusCode})")),
+      );
+    }
+  } catch (e) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text("Erreur: $e")),
+    );
+  } finally {
+    setState(() => _loadingModules = false);
+  }
+}
+
 
 Future<void> _creerModule(int coursId) async {
   final titre = _titreModuleCtrl.text.trim();
