@@ -1053,10 +1053,12 @@ Future<void> _pickVideo() async {
                       label: const Text("Créer un module"),
                     ),
                     TextButton.icon(
-                      onPressed: () => _ouvrirFormulaireAjoutLecon(
-                        c['id'] as int,
-                        (c['modules'] as List?) ?? [],
-                      ),
+                      onPressed: () async {
+                        await _fetchModules(c['id'] as int);
+                        if (context.mounted) {
+                          _ouvrirFormulaireAjoutLecon(c['id'] as int, _modulesDuCours);
+                        }
+                      },
                       icon: const Icon(Icons.add_circle),
                       label: const Text('Ajouter une leçon'),
                     ),
