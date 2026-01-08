@@ -54,6 +54,8 @@ final Map<String, IconData> _icons = {
   // ====== AJOUT MODULE ======
 final TextEditingController _titreModuleCtrl = TextEditingController();
 final TextEditingController _descriptionModuleCtrl = TextEditingController();
+final TextEditingController _ordreModuleCtrl = TextEditingController();
+
 List<Map<String, dynamic>> _modulesDuCours = [];
 bool _loadingModules = false;
 
@@ -144,6 +146,19 @@ bool _addingLecon = false;
                   border: OutlineInputBorder(),
                 ),
               ),
+
+              const SizedBox(height: 12),
+
+              TextField(
+                controller: _ordreModuleCtrl,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'Ordre du module',
+                  hintText: 'Ex: 1, 2, 3...',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+
               const SizedBox(height: 12),
 
               TextField(
@@ -497,6 +512,16 @@ Future<void> _fetchModules(int coursId) async {
 Future<void> _creerModule(int coursId) async {
   final titre = _titreModuleCtrl.text.trim();
 
+  final ordre = int.tryParse(_ordreModuleCtrl.text.trim());
+
+  if (ordre == null || ordre <= 0) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("L'ordre du module est obligatoire")),
+    );
+    setState(() => _addingModule = false);
+    return;
+  }
+
   if (titre.isEmpty) {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text("Le titre du module est obligatoire")),
@@ -515,6 +540,7 @@ Future<void> _creerModule(int coursId) async {
       body: jsonEncode({
         'titre': titre,
         'description': _descriptionModuleCtrl.text.trim(),
+        'ordre': ordre,
       }),
     );
 
@@ -534,6 +560,7 @@ Future<void> _creerModule(int coursId) async {
 
       _titreModuleCtrl.clear();
       _descriptionModuleCtrl.clear();
+      _ordreModuleCtrl.clear();
 
       setState(() {});
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1044,26 +1071,7 @@ Future<void> _pickVideo() async {
                 Text('📘 ${c['titre'] ?? ''}',
                     style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                 const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Expanded(child: Text('Leçons: $leconsCount')),
-                    TextButton.icon(
-                      onPressed: () => _ouvrirFormulaireAjoutModule(c['id'] as int),
-                      icon: const Icon(Icons.view_module),
-                      label: const Text("Créer un module"),
-                    ),
-                    TextButton.icon(
-                      onPressed: () async {
-                        await _fetchModules(c['id'] as int);
-                        if (context.mounted) {
-                          _ouvrirFormulaireAjoutLecon(c['id'] as int, _modulesDuCours);
-                        }
-                      },
-                      icon: const Icon(Icons.add_circle),
-                      label: const Text('Ajouter une leçon'),
-                    ),
-                  ],
-                ),
+                Text('Leçons: $leconsCount'),
                 const Divider(),
                 const Text('👥 Enseignants secondaires',
                     style: TextStyle(fontWeight: FontWeight.bold)),
@@ -1090,7 +1098,36 @@ Future<void> _pickVideo() async {
                     icon: const Icon(Icons.person_add),
                     label: const Text('Ajouter un enseignant secondaire'),
                   ),
-                )
+                ),
+                const Divider(),
+
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        icon: const Icon(Icons.view_module),
+                        label: const Text("Créer un module"),
+                        onPressed: () => _ouvrirFormulaireAjoutModule(c['id'] as int),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.indigo,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        icon: const Icon(Icons.add_circle),
+                        label: const Text("Ajouter une leçon"),
+                        onPressed: () async {
+                          await _fetchModules(c['id'] as int);
+                          if (context.mounted) {
+                            _ouvrirFormulaireAjoutLecon(c['id'] as int, _modulesDuCours);
+                          }
+                        },
+                      ),
+                    ),
+                  ],
+                ),
               ]),
             ),
           );
