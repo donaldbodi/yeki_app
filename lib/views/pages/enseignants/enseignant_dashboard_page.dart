@@ -87,13 +87,21 @@ bool _addingLecon = false;
 
   // Helpers --------------------------------------------------------------------
   Future<Map<String, String>> _authHeaders() async {
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('token');
-    return {
-      'Content-Type': 'application/json',
-      if (token != null) 'Authorization': 'Token $token',
-    };
-  }
+  final prefs = await SharedPreferences.getInstance();
+  final token = prefs.getString('token');
+  return {
+    'Content-Type': 'application/json',
+    if (token != null) 'Authorization': 'Token $token',
+  };
+}
+
+Future<Map<String, String>> _authHeadersMultipart() async {
+  final prefs = await SharedPreferences.getInstance();
+  final token = prefs.getString('token');
+  return {
+    if (token != null) 'Authorization': 'Token $token',
+  };
+}
 
   List<Map<String, dynamic>> _asListOfMap(List<dynamic>? raw) {
     if (raw == null) return [];
@@ -365,7 +373,14 @@ bool _addingLecon = false;
   );
 }
 
-void _ouvrirFormulaireAjoutLecon(int coursId, List<dynamic> modules) {
+
+void _ouvrirFormulaireAjoutLecon(int coursId) {
+  _titreLeconCtrl.clear();
+  _descriptionLeconCtrl.clear();
+  _pdfFile = null;
+  _videoFile = null;
+  _moduleId = null;
+
   showModalBottomSheet(
     context: context,
     isScrollControlled: true,
@@ -373,138 +388,162 @@ void _ouvrirFormulaireAjoutLecon(int coursId, List<dynamic> modules) {
       borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
     ),
     builder: (_) {
-      return Padding(
-        padding: MediaQuery.of(context).viewInsets.add(
-          const EdgeInsets.all(16),
-        ),
-        child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Center(
-                child: Text(
-                  "Ajouter une leçon",
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-              ),
-              const SizedBox(height: 16),
+      bool loading = true;
+      String? erreur;
+      List<Map<String, dynamic>> modules = [];
 
-              TextField(
-                controller: _titreLeconCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'Titre de la leçon',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 12),
+      return StatefulBuilder(
+        builder: (context, modalSetState) {
+          /// chargement UNE SEULE FOIS
+          if (loading && modules.isEmpty && erreur == null) {
+            _chargerModules(coursId).then((data) {
+              modalSetState(() {
+                modules = data;
+                loading = false;
+              });
+            }).catchError((e) {
+              modalSetState(() {
+                erreur = e.toString();
+                loading = false;
+              });
+            });
+          }
 
-              TextField(
-                controller: _descriptionLeconCtrl,
-                maxLines: 3,
-                decoration: const InputDecoration(
-                  labelText: 'Brève description',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 12),
+          return Padding(
+            padding: MediaQuery.of(context).viewInsets.add(
+              const EdgeInsets.all(16),
+            ),
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Center(
+                    child: Text(
+                      "Ajouter une leçon",
+                      style:
+                          TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
 
-              /// MODULE
-              DropdownButtonFormField<int>(
-                value: _moduleId,
-                items: modules
-                    .map(
-                      (m) => DropdownMenuItem<int>(
-                        value: m['id'],
-                        child: Text(m['titre']),
-                      ),
+                  /// TITRE
+                  TextField(
+                    controller: _titreLeconCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Titre de la leçon',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+
+                  /// DESCRIPTION
+                  TextField(
+                    controller: _descriptionLeconCtrl,
+                    maxLines: 3,
+                    decoration: const InputDecoration(
+                      labelText: 'Brève description',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+
+                  /// MODULE
+                  if (loading)
+                    const Center(child: CircularProgressIndicator())
+                  else if (erreur != null)
+                    Text(
+                      "Erreur : $erreur",
+                      style: const TextStyle(color: Colors.red),
                     )
-                    .toList(),
-                onChanged: (v) => setState(() => _moduleId = v),
-                decoration: const InputDecoration(
-                  labelText: 'Module',
-                  border: OutlineInputBorder(),
-                ),
+                  else if (modules.isEmpty)
+                    const Text(
+                      "Aucun module disponible. Créez d'abord un module.",
+                      style: TextStyle(color: Colors.orange),
+                    )
+                  else
+                    DropdownButtonFormField<int>(
+                      value: _moduleId,
+                      items: modules
+                          .map(
+                            (m) => DropdownMenuItem<int>(
+                              value: m['id'],
+                              child: Text(m['titre']),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (v) =>
+                          modalSetState(() => _moduleId = v),
+                      decoration: const InputDecoration(
+                        labelText: 'Module',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+
+                  const SizedBox(height: 12),
+
+                  /// PDF
+                  ElevatedButton.icon(
+                    icon: const Icon(Icons.picture_as_pdf),
+                    label: Text(
+                      _pdfFile == null
+                          ? "Choisir le PDF"
+                          : _pdfFile!.files.single.name,
+                    ),
+                    onPressed: _pickPdf,
+                  ),
+
+                  const SizedBox(height: 8),
+
+                  /// VIDEO
+                  ElevatedButton.icon(
+                    icon: const Icon(Icons.video_file),
+                    label: Text(
+                      _videoFile == null
+                          ? "Choisir la vidéo (optionnel)"
+                          : _videoFile!.files.single.name,
+                    ),
+                    onPressed: _pickVideo,
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  /// VALIDATION
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: _addingLecon
+                          ? null
+                          : () async {
+                              await _envoyerLecon(coursId);
+                              if (context.mounted) Navigator.pop(context);
+                            },
+                      child: _addingLecon
+                          ? const CircularProgressIndicator()
+                          : const Text("Ajouter la leçon"),
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 12),
-
-              /// PDF
-              ElevatedButton.icon(
-                icon: const Icon(Icons.picture_as_pdf),
-                label: Text(
-                  _pdfFile == null
-                      ? "Choisir le PDF"
-                      : _pdfFile!.files.single.name,
-                ),
-                onPressed: _pickPdf,
-              ),
-
-              const SizedBox(height: 8),
-
-              /// VIDEO
-              ElevatedButton.icon(
-                icon: const Icon(Icons.video_file),
-                label: Text(
-                  _videoFile == null
-                      ? "Choisir la vidéo (optionnel)"
-                      : _videoFile!.files.single.name,
-                ),
-                onPressed: _pickVideo,
-              ),
-
-              const SizedBox(height: 20),
-
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: _addingLecon
-                      ? null
-                      : () async {
-                          await _envoyerLecon(coursId);
-                          if (context.mounted) Navigator.pop(context);
-                        },
-                  child: _addingLecon
-                      ? const CircularProgressIndicator()
-                      : const Text("Ajouter la leçon"),
-                ),
-              ),
-            ],
-          ),
-        ),
+            ),
+          );
+        },
       );
     },
   );
 }
 
-Future<void> _fetchModules(int coursId) async {
-  setState(() {
-    _loadingModules = true;
-    _modulesDuCours = [];
-  });
+Future<List<Map<String, dynamic>>> _chargerModules(int coursId) async {
+  final headers = await _authHeaders();
+  final response = await http.get(
+    Uri.parse('$baseUrl/api/cours/$coursId/liste-modules/'),
+    headers: headers,
+  );
 
-  try {
-    final headers = await _authHeaders();
-    final res = await http.get(
-      Uri.parse('$baseUrl/api/cours/$coursId/liste-modules/'),
-      headers: headers,
-    );
-
-    if (res.statusCode == 200) {
-      final data = jsonDecode(res.body) as List;
-      setState(() {
-        _modulesDuCours =
-            data.map((e) => Map<String, dynamic>.from(e)).toList();
-      });
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Erreur chargement modules (${res.statusCode})")),
-      );
-    }
-  } catch (e) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text("Erreur: $e")),
-    );
-  } finally {
-    setState(() => _loadingModules = false);
+  if (response.statusCode == 200) {
+    final List decoded = jsonDecode(response.body);
+    return decoded.map((e) => Map<String, dynamic>.from(e)).toList();
+  } else {
+    throw Exception("Erreur chargement modules");
   }
 }
 
@@ -581,9 +620,16 @@ Future<void> _creerModule(int coursId) async {
 }
 
 Future<void> _envoyerLecon(int coursId) async {
-  if (_pdfFile == null || _moduleId == null) {
+  if (_pdfFile == null) {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("PDF et module obligatoires")),
+      const SnackBar(content: Text("Le PDF est obligatoire")),
+    );
+    return;
+  }
+
+  if (_moduleId == null) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("Veuillez sélectionner un module")),
     );
     return;
   }
@@ -591,7 +637,8 @@ Future<void> _envoyerLecon(int coursId) async {
   setState(() => _addingLecon = true);
 
   try {
-    final headers = await _authHeaders();
+    final headers = await _authHeadersMultipart();
+
     final request = http.MultipartRequest(
       'POST',
       Uri.parse('$baseUrl/api/cours/$coursId/lecons/'),
@@ -599,10 +646,12 @@ Future<void> _envoyerLecon(int coursId) async {
 
     request.headers.addAll(headers);
 
-    request.fields['titre'] = _titreLeconCtrl.text;
-    request.fields['description'] = _descriptionLeconCtrl.text;
-    request.fields['module'] = _moduleId.toString();
+    /// 🔹 Champs texte
+    request.fields['titre'] = _titreLeconCtrl.text.trim();
+    request.fields['description'] = _descriptionLeconCtrl.text.trim();
+    request.fields['module'] = _moduleId.toString(); // ⚠️ adapter si backend = module_id
 
+    /// 🔹 PDF obligatoire
     request.files.add(
       await http.MultipartFile.fromPath(
         'fichier_pdf',
@@ -610,6 +659,7 @@ Future<void> _envoyerLecon(int coursId) async {
       ),
     );
 
+    /// 🔹 Vidéo optionnelle
     if (_videoFile != null) {
       request.files.add(
         await http.MultipartFile.fromPath(
@@ -620,26 +670,33 @@ Future<void> _envoyerLecon(int coursId) async {
     }
 
     final response = await request.send();
+    final responseBody = await response.stream.bytesToString();
 
     if (response.statusCode == 201) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Leçon ajoutée avec succès")),
       );
+
       _titreLeconCtrl.clear();
       _descriptionLeconCtrl.clear();
       _pdfFile = null;
       _videoFile = null;
       _moduleId = null;
     } else {
+      debugPrint("❌ ${response.statusCode} → $responseBody");
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Erreur (${response.statusCode})")),
+        SnackBar(content: Text("Erreur ${response.statusCode}")),
       );
     }
+  } catch (e) {
+    debugPrint("Erreur: $e");
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text("Erreur: $e")),
+    );
   } finally {
     setState(() => _addingLecon = false);
   }
 }
-
 
   // Fetch lists for pickers ---------------------------------------------------- bien gerer le token
   Future<void> _fetchEnseignantsPrincipaux() async {
@@ -679,44 +736,6 @@ Future<void> _pickVideo() async {
     });
   }
 }
-
-
-  /*Future<void> ajouterLecon(int coursId) async {
-  final request = http.MultipartRequest(
-    'POST',
-    Uri.parse('$baseUrl/api/cours/$coursId/lecons/'),
-  );
-
-  request.headers.addAll(await _authHeaders());
-
-  request.fields['titre'] = titreCtrl.text;
-  request.fields['description'] = descriptionCtrl.text;
-  request.fields['module'] = moduleId.toString();
-
-  request.files.add(
-    await http.MultipartFile.fromPath(
-      'fichier_pdf',
-      pdfFile!.path!,
-    ),
-  );
-
-  if (videoFile != null) {
-    request.files.add(
-      await http.MultipartFile.fromPath(
-        'video',
-        videoFile!.path!,
-      ),
-    );
-  }
-
-  final res = await request.send();
-
-  if (res.statusCode == 201) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Leçon ajoutée')),
-    );
-  }
-}*/
 
 
   Future<void> _fetchEnseignantsSecondaires() async {
@@ -1100,7 +1119,6 @@ Future<void> _pickVideo() async {
                   ),
                 ),
                 const Divider(),
-
                 Row(
                   children: [
                     Expanded(
@@ -1118,11 +1136,8 @@ Future<void> _pickVideo() async {
                       child: ElevatedButton.icon(
                         icon: const Icon(Icons.add_circle),
                         label: const Text("Ajouter une leçon"),
-                        onPressed: () async {
-                          await _fetchModules(c['id'] as int);
-                          if (context.mounted) {
-                            _ouvrirFormulaireAjoutLecon(c['id'] as int, _modulesDuCours);
-                          }
+                        onPressed: () {
+                          _ouvrirFormulaireAjoutLecon(c['id'] as int);
                         },
                       ),
                     ),
