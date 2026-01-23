@@ -19,6 +19,13 @@ class _LectureLeconPageState extends State<LectureLeconPage> {
   final PdfViewerController _pdfController = PdfViewerController();
   int currentPage = 1;
 
+  String get fullPdfUrl {
+    if (widget.pdfUrl.startsWith("http")) {
+      return widget.pdfUrl;
+    }
+    return "https://yekiapp.pythonanywhere.com${widget.pdfUrl}";
+  }
+
   // ================= QUESTION CONTEXTUELLE =================
   void _showQuestionModal() {
     final controller = TextEditingController();
@@ -32,7 +39,7 @@ class _LectureLeconPageState extends State<LectureLeconPage> {
       ),
       builder: (_) {
         return StatefulBuilder(
-          builder: (context, setState) {
+          builder: (context, setModalState) {
             return Padding(
               padding: EdgeInsets.only(
                 bottom: MediaQuery.of(context).viewInsets.bottom,
@@ -72,12 +79,19 @@ class _LectureLeconPageState extends State<LectureLeconPage> {
                     child: ElevatedButton(
                       onPressed: () async {
                         if (controller.text.trim().isEmpty) return;
-                        setState(() => isSending = true);
+                        setModalState(() => isSending = true);
+
+                        // TODO : appel API question contextuelle
                         await Future.delayed(const Duration(seconds: 1));
-                        Navigator.pop(context);
+
+                        if (mounted) Navigator.pop(context);
                       },
                       child: isSending
-                          ? const CircularProgressIndicator()
+                          ? const SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
                           : const Text("Envoyer"),
                     ),
                   ),
@@ -96,6 +110,9 @@ class _LectureLeconPageState extends State<LectureLeconPage> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
       builder: (_) => Padding(
         padding: const EdgeInsets.all(20),
         child: Column(
@@ -106,17 +123,21 @@ class _LectureLeconPageState extends State<LectureLeconPage> {
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             Text(
-              "Aide basée sur la page $currentPage",
+              "Page $currentPage",
               style: const TextStyle(color: Colors.grey),
             ),
             const SizedBox(height: 12),
             const Text(
-              "💡 Je peux t'expliquer cette page, te résumer le contenu ou répondre à tes questions.",
+              "Je peux t'expliquer cette page, te la résumer ou répondre à tes questions.",
+              textAlign: TextAlign.center,
             ),
             const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: () {},
-              child: const Text("Demander une explication"),
+            ElevatedButton.icon(
+              onPressed: () {
+                // TODO : appel IA
+              },
+              icon: const Icon(Icons.psychology),
+              label: const Text("Expliquer cette page"),
             ),
           ],
         ),
@@ -127,31 +148,35 @@ class _LectureLeconPageState extends State<LectureLeconPage> {
   // ================= UI =================
   @override
   Widget build(BuildContext context) {
+    if (widget.pdfUrl.isEmpty) {
+      return const Scaffold(
+        body: Center(child: Text("Aucun document disponible")),
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.titre,
-          style: TextStyle(
-                  fontSize: 18,
-                  color: Colors.white70,
-                ),),
+        title: Text(
+          widget.titre,
+          style: const TextStyle(fontSize: 18, color: Colors.white),
+        ),
         backgroundColor: const Color(0xFF008080),
       ),
-
       body: Stack(
         children: [
-          SfPdfViewer.asset(
-            widget.pdfUrl,
+          SfPdfViewer.network(
+            fullPdfUrl,
             controller: _pdfController,
             onPageChanged: (details) {
               setState(() => currentPage = details.newPageNumber);
             },
           ),
 
-          // 🔒 FILIGRANE ANTI-COPIE
+          // 🔒 FILIGRANE
           IgnorePointer(
             child: Center(
               child: Opacity(
-                opacity: 0.06,
+                opacity: 0.05,
                 child: Transform.rotate(
                   angle: -0.4,
                   child: const Text(
@@ -167,7 +192,6 @@ class _LectureLeconPageState extends State<LectureLeconPage> {
           ),
         ],
       ),
-
       floatingActionButton: Column(
         mainAxisSize: MainAxisSize.min,
         children: [

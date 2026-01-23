@@ -1,55 +1,78 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
-import 'detail_lecon_page.dart';
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
+
 import 'lecture_lecon_page.dart';
 
-class LeconsCoursPage extends StatelessWidget {
-  LeconsCoursPage({super.key});
+/// 🔹 Modèle Leçon (simple et suffisant)
+class Lecon {
+  final String id;
+  final String titre;
+  final String resume;
+  final String videoUrl;
+  final String documentUrl;
 
-  final modules = [
-  {
-    "titre": "Module 1 : Notions fondamentales",
-    "description": "Introduction progressive aux fonctions.",
-    "lecons": [
-      {
-        "titre": "Introduction aux fonctions",
-        "statut": "fait",
-        "resume": "Les bases de l'électricité en physique.",
-        "videoUrl":
-            "https://sample-videos.com/video123/mp4/720/big_buck_bunny_720p_1mb.mp4",
-        "documentUrl": "assets/pdfs/Chap1.pdf",
-      },
-      {
-        "titre": "Fonctions affines",
-        "statut": "en cours",
-        "resume": "Les bases de l'électricité en physique.",
-        "videoUrl":
-            "https://sample-videos.com/video123/mp4/720/big_buck_bunny_720p_1mb.mp4",
-        "documentUrl": "assets/pdfs/Chap2.pdf",
-      },
-    ],
-  },
-  {
-    "titre": "Module 2 : Fonctions polynomiales",
-    "description": "Analyse et applications des fonctions polynomiales.",
-    "lecons": [
-      {
-        "titre": "Fonctions polynômes",
-        "statut": "à faire",
-        "resume": "Les bases de l'électricité en physique.",
-        "videoUrl":
-            "https://sample-videos.com/video123/mp4/720/big_buck_bunny_720p_1mb.mp4",
-        "documentUrl": "assets/pdfs/Chap1.pdf",
-      },
-    ],
-  },
-];
- // 👈 colle ici les modules ci-dessus
+  Lecon({
+    required this.id,
+    required this.titre,
+    required this.resume,
+    required this.videoUrl,
+    required this.documentUrl,
+  });
+}
+
+class LeconsCoursPage extends StatefulWidget {
+  final String coursId;
+
+  const LeconsCoursPage({super.key, required this.coursId});
+
+  @override
+  State<LeconsCoursPage> createState() => _LeconsCoursPageState();
+}
+
+class _LeconsCoursPageState extends State<LeconsCoursPage> {
+  bool loading = true;
+  List modules = [];
 
   final List<Map<String, String>> enseignants = const [
     {"nom": "Mr. Talla Jean", "role": "Principal"},
     {"nom": "Mme Carole Ndongo", "role": "Assistant"},
     {"nom": "M. Jules Kamtchoum", "role": "Assistant"},
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    fetchLecons();
+  }
+
+  Future<void> fetchLecons() async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('token');
+
+    if (token == null) {
+      setState(() => loading = false);
+      return;
+    }
+
+    final res = await http.get(
+      Uri.parse(
+        'https://yekiapp.pythonanywhere.com/api/cours/${widget.coursId}/modules-avec-lecons/',
+      ),
+      headers: {'Authorization': 'Token $token'},
+    );
+
+    if (res.statusCode == 200) {
+      setState(() {
+        modules = jsonDecode(res.body);
+        loading = false;
+      });
+    } else {
+      setState(() => loading = false);
+    }
+  }
 
   Color _statutColor(String statut) {
     switch (statut) {
@@ -64,6 +87,14 @@ class LeconsCoursPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (loading) {
+      return const Center(child: CircularProgressIndicator(color: Colors.teal));
+    }
+
+    if (modules.isEmpty) {
+      return const Center(child: Text("Aucune leçon disponible"));
+    }
+
     return Container(
       color: const Color(0xfffafafa),
       child: ListView(
@@ -81,11 +112,13 @@ class LeconsCoursPage extends StatelessWidget {
 
           /// 📘 MODULES
           ...modules.map((module) {
+            final List lecons = module["lecons"] ?? [];
+
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  module["titre"].toString(),
+                  module["titre"] ?? "",
                   style: const TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w600,
@@ -93,51 +126,23 @@ class LeconsCoursPage extends StatelessWidget {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  module["description"].toString(),
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: Colors.grey[700],
-                  ),
+                  module["description"] ?? "",
+                  style: TextStyle(fontSize: 13, color: Colors.grey[700]),
                 ),
                 const SizedBox(height: 18),
 
                 /// 📖 LEÇONS
-                ...(module["lecons"] as List).map((lecon) {
-                  final statut = lecon["statut"];
-                  final color = _statutColor(statut);
-
-                  final autresLecons = (module["lecons"] as List)
-                      .map(
-                        (map) => Lecon(
-                          id: 'id',
-                          titre: map["titre"],
-                          resume: map["resume"],
-                          videoUrl: map["videoUrl"],
-                          documentUrl: map["documentUrl"],
-                        ),
-                      )
-                      .toList();
-
+                ...lecons.map((lecon) {
+                  final color = _statutColor(lecon["statut"] ?? "");
+                  debugPrint(lecon["fichier_pdf"]);
                   return InkWell(
                     onTap: () {
                       Navigator.push(
                         context,
-                        /*MaterialPageRoute(
-                          builder: (_) => DetailLeconPage(
-                            leconActuelle: Lecon(
-                              id: '5',
-                              titre: lecon["titre"],
-                              resume: lecon["resume"],
-                              videoUrl: lecon["videoUrl"],
-                              documentUrl: lecon["documentUrl"],
-                            ),
-                            autresLecons: autresLecons,
-                          ),
-                        ),*/
                         MaterialPageRoute(
                           builder: (_) => LectureLeconPage(
-                            titre: lecon["titre"],
-                            pdfUrl: lecon["documentUrl"],
+                            titre: lecon["titre"] ?? "",
+                            pdfUrl: lecon["fichier_pdf"] ?? "",
                           ),
                         ),
                       );
@@ -149,8 +154,7 @@ class LeconsCoursPage extends StatelessWidget {
                           Container(
                             width: 3,
                             height: 44,
-                            margin:
-                                const EdgeInsets.only(right: 14, top: 4),
+                            margin: const EdgeInsets.only(right: 14, top: 4),
                             decoration: BoxDecoration(
                               color: color,
                               borderRadius: BorderRadius.circular(2),
@@ -161,7 +165,7 @@ class LeconsCoursPage extends StatelessWidget {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  lecon["titre"],
+                                  lecon["titre"] ?? "",
                                   style: const TextStyle(
                                     fontSize: 15.5,
                                     fontWeight: FontWeight.w600,
@@ -169,7 +173,7 @@ class LeconsCoursPage extends StatelessWidget {
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
-                                  lecon["resume"],
+                                  lecon["resume"] ?? "",
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
@@ -180,10 +184,7 @@ class LeconsCoursPage extends StatelessWidget {
                               ],
                             ),
                           ),
-                          const Icon(
-                            Icons.chevron_right,
-                            color: Colors.grey,
-                          ),
+                          const Icon(Icons.chevron_right, color: Colors.grey),
                         ],
                       ),
                     ),
@@ -233,14 +234,13 @@ class LeconsCoursPage extends StatelessWidget {
                     children: [
                       const CircleAvatar(
                         radius: 24,
-                        backgroundImage:
-                            AssetImage("assets/avatar.png"),
+                        backgroundImage: AssetImage("assets/avatar.png"),
                       ),
                       const SizedBox(height: 8),
                       Text(
                         ens["nom"]!,
                         maxLines: 2,
-                        overflow: TextOverflow.ellipsis, // ✅ overflow corrigé
+                        overflow: TextOverflow.ellipsis,
                         textAlign: TextAlign.center,
                         style: const TextStyle(
                           fontSize: 14,
@@ -250,9 +250,7 @@ class LeconsCoursPage extends StatelessWidget {
                       const SizedBox(height: 6),
                       Text(
                         ens["role"]!,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis, // ✅ overflow corrigé
-                        style: TextStyle(
+                        style: const TextStyle(
                           fontSize: 12,
                           color: Colors.teal,
                         ),

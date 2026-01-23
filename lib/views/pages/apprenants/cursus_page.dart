@@ -56,7 +56,7 @@ class _CursusPageState extends State<CursusPage> {
             'id': cursus['id'],
             'title': cursus['title'],
             'description': cursus['description'] ?? '',
-            'teacher': cursus['teacher_name'] ?? '—',
+            'teacher': cursus['enseignant_principal'] ?? '—',
             'lessons': cursus['lessons_count'] ?? 0,
             'assignments': cursus['assignments_count'] ?? 0,
             'icon': Icons.school_rounded,
@@ -158,14 +158,14 @@ class _CursusPageState extends State<CursusPage> {
 
                 return InkWell(
                   onTap: () {
-                    /*Navigator.push(
+                    Navigator.push(
                           context,
                           MaterialPageRoute(
                             builder: (_) => CoursDetailTabs(
-                              cursusId: cursus['id'],
+                              coursId: cursus['id'].toString(), titre:cursus['title'],
                             ),
                           ),
-                        );*/
+                        );
                   },
                   child: Container(
                     padding: const EdgeInsets.all(16),

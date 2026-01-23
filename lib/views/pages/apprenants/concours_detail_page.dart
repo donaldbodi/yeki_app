@@ -194,12 +194,12 @@ class DetailConcoursPage extends StatelessWidget {
                           ),
                           trailing: const Icon(Icons.arrow_forward_ios, size: 18),
                           onTap: () {
-                            Navigator.push(
+                            /*Navigator.push(
                               context,
                               MaterialPageRoute(
                                 builder: (_) => const CoursDetailTabs(),
                               ),
-                            );
+                            );*/
                           },
                         ),
                       );

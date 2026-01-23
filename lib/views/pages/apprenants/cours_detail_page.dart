@@ -6,7 +6,14 @@ import 'devoirs_cours.dart';
 import 'forum.dart';
 
 class CoursDetailTabs extends StatefulWidget {
-  const CoursDetailTabs({super.key});
+  final String coursId;
+  final String titre;
+
+  const CoursDetailTabs({
+    super.key,
+    required this.coursId,
+    required this.titre,
+  });
 
   @override
   State<CoursDetailTabs> createState() => _DetailsCoursPageState();
@@ -35,8 +42,8 @@ class _DetailsCoursPageState extends State<CoursDetailTabs>
         headerSliverBuilder: (context, innerBoxIsScrolled) {
           return [
             SliverAppBar(
-              title: const Text(
-                "Détail du cours",
+              title: Text(
+                widget.titre,
                 style: TextStyle(
                   fontSize: 18,
                   color: Colors.white,
@@ -78,7 +85,7 @@ class _DetailsCoursPageState extends State<CoursDetailTabs>
         body: TabBarView(
           controller: _tabController,
           children: [
-            LeconsCoursPage(),
+            LeconsCoursPage(coursId: widget.coursId),
             ExercicesCoursPage(),
             DevoirsCoursPage(),
             ForumCoursPage(),
