@@ -59,7 +59,7 @@ class _LeconsCoursPageState extends State<LeconsCoursPage> {
 
     final res = await http.get(
       Uri.parse(
-        'https://yekiapp.pythonanywhere.com/api/cours/${widget.coursId}/modules-avec-lecons/',
+        'https://yekiapp.pythonanywhere.com/api/cours/${widget.coursId}/liste-modules/',
       ),
       headers: {'Authorization': 'Token $token'},
     );
