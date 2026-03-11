@@ -356,7 +356,7 @@ String filtreDevoir = "";
                 itemCount: devoirs.length,
                 itemBuilder: (_, index) {
                   final d = devoirs[index];
-                  final devoirsFiltres = devoirs.where((d) =>
+                  devoirs.where((d) =>
                   d.titre.toLowerCase().contains(filtreDevoir) ||
                   d.dateLimite.toLowerCase().contains(filtreDevoir)).toList();
                   return Card(

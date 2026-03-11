@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:yeki/views/pages/enseignants/interface_enseignant_page.dart';
-import 'ajout_enseignant_page.dart';
 import 'detail_cours_enseignant.dart';
 
 class MesCoursPage extends StatefulWidget {
@@ -63,9 +62,9 @@ class _MesCoursPageState extends State<MesCoursPage> {
         }
         setState(() {
           coursFiltres = rawCours
-              .where((e) => e is Map)
+              .whereType<Map>()
               .map<Map<String, dynamic>>(
-                (e) => Map<String, dynamic>.from(e as Map),
+                (e) => Map<String, dynamic>.from(e),
               )
               .toList();
         });
@@ -214,6 +213,7 @@ class _MesCoursPageState extends State<MesCoursPage> {
               top: -20,
               child: CircleAvatar(
                 radius: 50,
+                // ignore: deprecated_member_use
                 backgroundColor: accentColor.withOpacity(0.05),
               ),
             ),
@@ -336,23 +336,6 @@ Widget _badgeIcon(IconData icon, String label) {
   );
 }
 
-  Widget _badge(IconData icon, String label, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14, color: color),
-          const SizedBox(width: 6),
-          Text(label, style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.bold)),
-        ],
-      ),
-    );
-  }
 
   Widget _buildEmptyState() {
     return Center(
@@ -396,7 +379,6 @@ Widget _badgeIcon(IconData icon, String label) {
   Future<void> _creerCours() async {
     final titreCtrl = TextEditingController();
     final niveauCtrl = TextEditingController();
-    int? departementId;
 
     await showDialog(
       context: context,
@@ -432,7 +414,6 @@ Widget _badgeIcon(IconData icon, String label) {
               final body = {
                 'titre': titre,
                 if (niveau.isNotEmpty) 'niveau': niveau,
-                if (departementId != null) 'departement': departementId,
               };
               final res = await http.post(
                 Uri.parse("$baseUrl/cours/"),

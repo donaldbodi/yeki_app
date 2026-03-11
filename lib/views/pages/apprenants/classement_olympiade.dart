@@ -4,7 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
 
-const String _baseO = 'https://yekiapp.pythonanywhere.com/api';
+const String _baseO = 'https://yeki.pythonanywhere.com/api';
 
 // ─── Palette ────────────────────────────────────────────────────
 const Color _olymp  = Color(0xFF7B2FBE);

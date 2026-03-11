@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:yeki/views/pages/apprenants/profil_page.dart';
-import 'package:yeki/views/pages/enseignants/admin_enseignant_dashboard_page.dart';
+import 'package:yeki/views/pages/enseignants/admin_corbeille.dart';
 
 // Screens
 import 'admin_general_page.dart';
@@ -118,7 +118,7 @@ class _EnseignantHomePageState extends State<EnseignantHomePage> {
       case RoleEnseignant.administrateurGeneral:
         return const AdminGeneralPage();
       case RoleEnseignant.enseignantAdministrateur:
-        return AdminEnseignantDashboardPage();
+        return AdminEnseignantDashboardPage(parcours: '',);
       default:
         return DashboardEnseignantPage(
           role: role,

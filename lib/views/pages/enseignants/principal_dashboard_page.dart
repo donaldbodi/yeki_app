@@ -239,15 +239,6 @@ class _DashboardPrincipalPageState extends State<DashboardPrincipalPage> {
     );
   }
 
-  Widget _buildHeader() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text("Ravi de vous revoir,", style: TextStyle(color: Colors.grey[600], fontSize: 14)),
-        Text(widget.nomEnseignant, style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: textDark)),
-      ],
-    );
-  }
 
   Widget _buildKPISection() {
     return Row(
