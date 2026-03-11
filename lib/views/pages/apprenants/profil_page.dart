@@ -1,304 +1,559 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'edit_profil_page.dart';
-import 'settings_page.dart';
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
-class ProfilPage extends StatelessWidget {
-  ProfilPage({super.key});
+/// Page de profil unifiée pour apprenant ET enseignant
+class ProfilPage extends StatefulWidget {
+  const ProfilPage({super.key});
 
-  final Color primaryColor = const Color(0xFF008080);
-  final Color accentColor = Color(0xFFFF5722);
-  final Color textColor = Color(0xFF03224C);
+  @override
+  State<ProfilPage> createState() => _ProfilPageState();
+}
+
+class _ProfilPageState extends State<ProfilPage> {
+  static const String _base = 'https://yekiapp.pythonanywhere.com/api';
+
+  final Color primaryColor = const Color(0xFF2884A0);
+  final Color goldAccent = const Color(0xFFD4AF37);
+  final Color backgroundColor = const Color(0xFFF8FAFB);
+  final Color darkBlue = const Color(0xFF1A1C1E);
+
+  bool _loading = true;
+  Map<String, dynamic> _profil = {};
+  Map<String, dynamic> _stats = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAll();
+  }
+
+  Future<String?> _token() async {
+    final p = await SharedPreferences.getInstance();
+    return p.getString('token');
+  }
+
+  Future<void> _loadAll() async {
+    setState(() => _loading = true);
+    await Future.wait([_fetchProfil(), _fetchStats()]);
+    setState(() => _loading = false);
+  }
+
+  Future<void> _fetchProfil() async {
+    final token = await _token();
+    if (token == null) return;
+    try {
+      final res = await http.get(
+        Uri.parse('$_base/profil/me/'),
+        headers: {'Authorization': 'Token $token'},
+      );
+      if (res.statusCode == 200) {
+        setState(() => _profil = jsonDecode(res.body));
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _fetchStats() async {
+    final token = await _token();
+    if (token == null) return;
+    try {
+      final res = await http.get(
+        Uri.parse('$_base/profil/stats/'),
+        headers: {'Authorization': 'Token $token'},
+      );
+      if (res.statusCode == 200) {
+        setState(() => _stats = jsonDecode(res.body));
+      }
+    } catch (_) {}
+  }
+
+  bool _isEnseignant() {
+    final role = _profil['role']?.toString().toLowerCase() ?? '';
+    return role.contains('enseignant') || 
+           role.contains('admin') || 
+           role.contains('cadre') || 
+           role.contains('principal') ||
+           role.contains('secondaire');
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF2F6FF),
-      body: ListView(
-        children: [
-          // --- Bannière + Avatar ---
-          Stack(
-            clipBehavior: Clip.none,
-            children: [
-              Container(
-                height: 180,
-                decoration: const BoxDecoration(
-                  image: DecorationImage(
-                    image: AssetImage('assets/images/banner.jpeg'),
-                    fit: BoxFit.cover,
+      backgroundColor: backgroundColor,
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : CustomScrollView(
+              slivers: [
+                _buildAppBar(),
+                SliverToBoxAdapter(
+                  child: Column(
+                    children: [
+                      _buildProfileSection(),
+                      const SizedBox(height: 24),
+                      _isEnseignant()
+                          ? _buildEnseignantStats()
+                          : _buildApprenantStats(),
+                      const SizedBox(height: 24),
+                      _buildActionButtons(),
+                      const SizedBox(height: 24),
+                    ],
                   ),
                 ),
-              ),
-              Container(
-                height: 180,
-                color: Colors.black.withOpacity(0.3),
-              ),
-              Positioned(
-                bottom: -50,
-                left: 20,
-                child: Stack(
-                  children: [
-                    const CircleAvatar(
-                      radius: 50,
-                      backgroundColor: Colors.white,
-                      child: CircleAvatar(
-                        radius: 47,
-                        backgroundImage: AssetImage('assets/images/user.jpg'),
-                      ),
+              ],
+            ),
+    );
+  }
+
+  Widget _buildAppBar() {
+    return SliverAppBar(
+      expandedHeight: 120,
+      backgroundColor: primaryColor,
+      flexibleSpace: FlexibleSpaceBar(
+        background: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [primaryColor, primaryColor.withOpacity(0.7)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+          child: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                CircleAvatar(
+                  radius: 40,
+                  backgroundColor: Colors.white.withOpacity(0.3),
+                  child: Text(
+                    (_profil['user']?['username']?[0] ?? '?')
+                        .toUpperCase(),
+                    style: const TextStyle(
+                      fontSize: 32,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
                     ),
-                    Positioned(
-                      bottom: 0,
-                      right: 0,
-                      child: CircleAvatar(
-                        radius: 14,
-                        backgroundColor: Color(0xFFFF5722),
-                        child: const Icon(Icons.edit, size: 14, color: Colors.white),
-                      ),
-                    )
-                  ],
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  _profil['user']?['username'] ?? 'Utilisateur',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildProfileSection() {
+    return Container(
+      margin: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 10,
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildInfoRow('Email', _profil['user']?['email'] ?? 'N/A'),
+          const SizedBox(height: 12),
+          if (_profil['phone'] != null)
+            _buildInfoRow('Téléphone', _profil['phone']),
+          const SizedBox(height: 12),
+          if (_isEnseignant()) ...[
+            _buildInfoRow(
+              'Type',
+              _profil['type_enseignant']?.toString().toUpperCase() ?? 'Enseignant',
+            ),
+            const SizedBox(height: 12),
+            if (_profil['specialite'] != null)
+              _buildInfoRow('Spécialité', _profil['specialite']),
+            const SizedBox(height: 12),
+            if (_profil['departement'] != null)
+              _buildInfoRow('Département', _profil['departement']),
+            const SizedBox(height: 12),
+            if (_profil['parcours'] != null)
+              _buildInfoRow('Parcours', _profil['parcours']),
+          ] else ...[
+            _buildInfoRow(
+              'Niveau',
+              _profil['niveau_etudes']?.toString() ?? 'N/A',
+            ),
+            const SizedBox(height: 12),
+            if (_profil['classe'] != null)
+              _buildInfoRow('Classe', _profil['classe']),
+            const SizedBox(height: 12),
+            if (_profil['date_inscription'] != null)
+              _buildInfoRow(
+                'Inscrit depuis',
+                _formatDate(_profil['date_inscription']),
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoRow(String label, String value) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 13,
+            color: Colors.grey[600],
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        Text(
+          value,
+          style: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF1A1C1E),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildEnseignantStats() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 10),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Statistiques',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: _statCard(
+                  icon: Icons.school_outlined,
+                  label: 'Cours',
+                  value: '${_stats['total_courses'] ?? 0}',
+                  color: Colors.blue,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _statCard(
+                  icon: Icons.people_outline,
+                  label: 'Élèves',
+                  value: '${_stats['total_students'] ?? 0}',
+                  color: Colors.green,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _statCard(
+                  icon: Icons.trending_up,
+                  label: 'Moyenne',
+                  value: '${(_stats['average_grade'] as num?)?.toStringAsFixed(1) ?? 'N/A'}/20',
+                  color: Colors.orange,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 70),
-          const Center(
-            child: Text("Donald Bodi",
-                style: TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF03224C))),
-          ),
-          const Center(
-              child: Text("Apprenant — Licence Informatique",
-                  style: TextStyle(color: Colors.grey, fontSize: 14))),
-          const SizedBox(height: 24),
-
-          // --- Statistiques élargies ---
-          _sectionTitle("Statistiques"),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              children: [
-                _statCard("Cours", "12", Colors.orange),
-                _statCard("Devoirs", "8", Colors.blue),
-                _statCard("Questions", "21", Colors.green),
-                _statCard("Heures", "45h", Colors.deepPurple),
-                _statCard("Moyenne", "14.7", Colors.teal),
-              ],
+          if (_stats['courses'] != null) ...[
+            const SizedBox(height: 20),
+            const Text(
+              'Cours assignés',
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
             ),
-          ),
-
-          const SizedBox(height: 32),
-
-          // --- Infos personnelles étendues ---
-          _sectionTitle("Informations personnelles"),
-          _infoCard([
-            _infoRow(Icons.school, "Filière", "Informatique"),
-            _infoRow(Icons.grade, "Niveau", "Licence 1"),
-            _infoRow(Icons.language, "Langue", "Francophone"),
-            _infoRow(Icons.menu_book, "Système", "LMD"),
-            _infoRow(Icons.apartment, "Établissement", "Université de Douala"),
-            _infoRow(Icons.calendar_today, "Naissance", "03/06/2002"),
-            _infoRow(Icons.person, "Sexe", "Masculin"),
-            _infoRow(Icons.phone, "Téléphone", "+237 690 12 34 56"),
-            _infoRow(Icons.email, "Email", "donald.bodi@example.com"),
-          ]),
-
-          const SizedBox(height: 24),
-
-          // --- Biographie ---
-          _sectionTitle("Biographie"),
-          _textCard(
-              "Étudiant passionné d'informatique, curieux, ambitieux et rigoureux. J’aime apprendre de nouvelles technologies et contribuer à des projets innovants."),
-
-          const SizedBox(height: 24),
-
-          // --- Réseaux sociaux ---
-          _sectionTitle("Réseaux sociaux"),
-          _infoCard([
-            _infoRow(Icons.facebook, "Facebook", "facebook.com/donald.bodi", link: true),
-            _infoRow(Icons.business_center, "LinkedIn", "linkedin.com/in/donaldbodi", link: true),
-            _infoRow(Icons.alternate_email, "Twitter / X", "@donald_bodi", link: true),
-          ]),
-
-          const SizedBox(height: 24),
-
-          // --- Matières principales ---
-          _sectionTitle("Matières principales"),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                _subjectChip("Analyse 1"),
-                _subjectChip("Algorithmique"),
-                _subjectChip("Physique MPSI"),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 32),
-
-          // --- Boutons d'action ---
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Row(
-              children: [
-                Expanded(
-                  child: ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: primaryColor,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+            const SizedBox(height: 8),
+            ...((_stats['courses'] as List?) ?? [])
+                .take(5)
+                .map((course) => Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 4,
+                            height: 20,
+                            decoration: BoxDecoration(
+                              color: primaryColor,
+                              borderRadius: BorderRadius.circular(2),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              course['titre'] ?? 'Cours',
+                              style: const TextStyle(fontSize: 12),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
                       ),
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                    ),
-                    icon: const Icon(Icons.edit, color: Colors.white),
-                    label: const Text("Modifier", style: TextStyle(color: Colors.white)),
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => const EditProfilePage()),
-                      );
-                    },
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: OutlinedButton.icon(
-                    style: OutlinedButton.styleFrom(
-                      side: BorderSide(color: primaryColor),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                    ),
-                    icon: Icon(Icons.settings, color: primaryColor),
-                    label: Text("Paramètres", style: TextStyle(color: primaryColor)),
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => const SettingsPage()),
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 40),
+                    ))
+                .toList(),
+          ],
         ],
       ),
     );
   }
 
-  // --- Composants réutilisables ---
-  Widget _statCard(String label, String value, Color color) {
+  Widget _buildApprenantStats() {
     return Container(
-      width: 100,
-      padding: const EdgeInsets.symmetric(vertical: 14),
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 8)],
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 10),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Progression',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: _statCard(
+                  icon: Icons.assignment_turned_in,
+                  label: 'Devoirs',
+                  value: '${_stats['homework_submitted'] ?? 0}/${_stats['total_homework'] ?? 0}',
+                  color: Colors.green,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _statCard(
+                  icon: Icons.quiz,
+                  label: 'Exercices',
+                  value: '${_stats['exercises_done'] ?? 0}/${_stats['total_exercises'] ?? 0}',
+                  color: Colors.purple,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _statCard(
+                  icon: Icons.stars,
+                  label: 'Moyenne',
+                  value: '${(_stats['average_grade'] as num?)?.toStringAsFixed(1) ?? 'N/A'}/20',
+                  color: Colors.orange,
+                ),
+              ),
+            ],
+          ),
+          if (_stats['formations'] != null) ...[
+            const SizedBox(height: 20),
+            const Text(
+              'Formations suivies',
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 8),
+            ...((_stats['formations'] as List?) ?? [])
+                .take(3)
+                .map((formation) => Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 4,
+                            height: 20,
+                            decoration: BoxDecoration(
+                              color: primaryColor,
+                              borderRadius: BorderRadius.circular(2),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              formation['titre'] ?? 'Formation',
+                              style: const TextStyle(fontSize: 12),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ))
+                .toList(),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _statCard({
+    required IconData icon,
+    required String label,
+    required String value,
+    required Color color,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withOpacity(0.3)),
       ),
       child: Column(
         children: [
-          Text(value,
-              style: TextStyle(
-                  fontWeight: FontWeight.bold, fontSize: 18, color: color)),
-          const SizedBox(height: 4),
-          Text(label, style: const TextStyle(color: Colors.grey)),
-        ],
-      ),
-    );
-  }
-
-  Widget _sectionTitle(String title) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-      child: Text(title,
-          style: const TextStyle(
-              fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF03224C))),
-    );
-  }
-
-  Widget _infoRow(IconData icon, String label, String value, {bool link = false}) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Row(
-        children: [
-          Icon(icon, color: Colors.orangeAccent, size: 20),
-          const SizedBox(width: 12),
-          Text("$label : ",
-              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
-          Expanded(
-            child: Text(
-              value,
-              style: TextStyle(
-                fontSize: 15,
-                color: link ? Colors.blue : Colors.black87,
-                decoration: link ? TextDecoration.underline : TextDecoration.none,
-              ),
-              overflow: TextOverflow.ellipsis,
+          Icon(icon, color: color, size: 20),
+          const SizedBox(height: 8),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              color: color,
             ),
+            textAlign: TextAlign.center,
+          ),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 10,
+              color: Colors.grey[600],
+            ),
+            textAlign: TextAlign.center,
           ),
         ],
       ),
     );
   }
 
-  Widget _infoCard(List<Widget> children) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: const [
-            BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(2, 5))
-          ],
+  Widget _buildActionButtons() {
+    return Column(
+      children: [
+        Container(
+          margin: const EdgeInsets.symmetric(horizontal: 16),
+          child: Row(
+            children: [
+              Expanded(
+                child: _actionButton(
+                  icon: Icons.edit,
+                  label: 'Éditer',
+                  onPressed: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Navigation vers édition')),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _actionButton(
+                  icon: Icons.settings,
+                  label: 'Paramètres',
+                  onPressed: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Navigation vers paramètres')),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
         ),
-        child: Column(children: children),
-      ),
+        const SizedBox(height: 12),
+        Container(
+          margin: const EdgeInsets.symmetric(horizontal: 16),
+          child: _actionButton(
+            icon: Icons.logout,
+            label: 'Se déconnecter',
+            color: Colors.red,
+            onPressed: () {
+              _handleLogout();
+            },
+          ),
+        ),
+      ],
     );
   }
 
-  Widget _textCard(String text) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: const [
-            BoxShadow(color: Colors.black12, blurRadius: 10, offset: Offset(2, 5))
-          ],
-        ),
-        child: Text(text, style: const TextStyle(fontSize: 15)),
+  Widget _actionButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback onPressed,
+    Color color = Colors.white,
+    Color textColor = Colors.white,
+  }) {
+    return ElevatedButton.icon(
+      icon: Icon(icon),
+      label: Text(label),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: color,
+        foregroundColor: textColor,
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
+      onPressed: onPressed,
     );
   }
 
-  Widget _subjectChip(String label) {
-    return Chip(
-      label: Text(label,
-          style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 14)),
-      backgroundColor: Colors.white,
-      elevation: 2,
-      shadowColor: Colors.orangeAccent.withOpacity(0.2),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: Colors.orangeAccent.withOpacity(0.3)),
+  Future<void> _handleLogout() async {
+    final bool? confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Déconnexion'),
+        content: const Text('Êtes-vous sûr de vouloir vous déconnecter ?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Annuler'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Se déconnecter'),
+          ),
+        ],
       ),
-      avatar: const Icon(Icons.book_outlined, size: 18, color: Colors.orange),
     );
+
+    if (confirm == true) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('token');
+      if (mounted) {
+        Navigator.of(context).pushNamedAndRemoveUntil('/', (_) => false);
+      }
+    }
+  }
+
+  String _formatDate(String? date) {
+    if (date == null) return 'N/A';
+    try {
+      final parsed = DateTime.parse(date);
+      return '${parsed.day}/${parsed.month}/${parsed.year}';
+    } catch (_) {
+      return date;
+    }
   }
 }

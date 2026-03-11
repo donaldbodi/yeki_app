@@ -1,14 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:yeki/views/auth/login_page.dart';
-import 'package:dio/dio.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 class YekiHeader extends StatelessWidget implements PreferredSizeWidget {
+
   final int unreadNotifications;
   final bool isSubscribed;
   final String username;
   final String userRole;
   final String? avatarUrl;
+
   final VoidCallback onLogout;
   final VoidCallback onSettings;
   final VoidCallback onNotifications;
@@ -26,218 +25,174 @@ class YekiHeader extends StatelessWidget implements PreferredSizeWidget {
   });
 
   @override
-  Size get preferredSize => const Size.fromHeight(60);
+  Size get preferredSize => const Size.fromHeight(80);
 
   @override
   Widget build(BuildContext context) {
-    Future<void> handleLogout(BuildContext context) async {
-  final dio = Dio();
-  try {
-    // Récupérer le token JWT ou token depuis SharedPreferences
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('token') ?? '';
 
-    final response = await dio.post(
-      'https://yekiapp.pythonanywhere.com/api/auth/logout/',
-      options: Options(
-        headers: {
-          "Authorization": "Token $token",
-          "Accept": "application/json",
-        },
-      ),
-    );
-
-    if (response.statusCode == 200) {
-      // Supprimer le token local
-      await prefs.remove('token');
-
-      // Rediriger vers la page de connexion
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(builder: (_) => const LoginPage()),
-        (route) => false,
-      );
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Déconnecté avec succès")),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Erreur lors de la déconnexion")),
-      );
-    }
-  } catch (e) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text("Erreur : $e")),
-    );
-  }
-}
     return AppBar(
-      backgroundColor: Colors.white,
-      elevation: 1,
-      automaticallyImplyLeading: false,
-      titleSpacing: 16,
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+
+      flexibleSpace: Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+        ),
+      ),
 
       title: Row(
         children: [
-          // ===== LOGO TEXTE =====
-          RichText(
-            text: const TextSpan(
-              children: [
-                TextSpan(
-                  text: "Yéki",
-                  style: TextStyle(
-                    color: Color(0xFF008088),
-                    fontSize: 26,
-                    fontFamily: "FredokaOne",
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 2, // + large
-                  ),
-                ),
-              ],
+
+          /// LOGO
+          ShaderMask(
+            shaderCallback: (bounds) => const LinearGradient(
+              colors: [Color(0xFF2884A0), Color(0xFF6e91a1)],
+            ).createShader(bounds),
+            child: const Text(
+              "Yéki",
+              style: TextStyle(
+                fontSize: 28,
+                fontFamily: "FredokaOne",
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
             ),
           ),
 
           const Spacer(),
 
-          // ===== NOTIFICATIONS =====
-          Stack(
-            children: [
-              IconButton(
-                icon: const Icon(
-                  Icons.notifications_none_rounded,
-                  color: Colors.black87,
-                ),
-                onPressed: onNotifications,
-              ),
-              if (unreadNotifications > 0)
-                Positioned(
-                  right: 8,
-                  top: 8,
-                  child: Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: const BoxDecoration(
-                      color: Colors.redAccent,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Text(
-                      unreadNotifications.toString(),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ),
-            ],
-          ),
+          /// STREAK
+          _buildStatChip(Icons.local_fire_department_rounded, "5", Colors.orange),
 
-          // ===== MENU 3 POINTS =====
-          PopupMenuButton<int>(
-            icon: const Icon(Icons.more_vert, color: Colors.black87),
+          const SizedBox(width: 8),
+
+          /// NOTIFICATIONS
+          _buildNotificationIcon(),
+
+          /// MENU PROFIL
+          PopupMenuButton<String>(
+            offset: const Offset(0, 45),
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(15),
             ),
-            itemBuilder: (_) => <PopupMenuEntry<int>>[
-              // ===== PROFIL =====
-              PopupMenuItem<int>(
-                enabled: false,
-                child: Row(
-                  children: [
-                    CircleAvatar(
-                      radius: 18,
-                      backgroundImage: avatarUrl != null
-                          ? NetworkImage(avatarUrl!)
-                          : const AssetImage(
-                              'assets/images/avatar_default.png',
-                            ) as ImageProvider,
-                    ),
-                    const SizedBox(width: 10),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          username,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        Text(
-                          userRole, // 👈 rôle remis
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
 
-              const PopupMenuDivider(),
-
-              // ===== ABONNEMENT =====
-              PopupMenuItem<int>(
-                value: 1,
-                child: Row(
-                  children: [
-                    const Icon(Icons.workspace_premium, size: 18),
-                    const SizedBox(width: 10),
-                    Text(
-                      isSubscribed
-                          ? "Abonnement actif"
-                          : "Aucun abonnement",
-                    ),
-                  ],
-                ),
-              ),
-
-              // ===== PARAMÈTRES =====
-              PopupMenuItem<int>(
-                value: 2,
-                child: Row(
-                  children: const [
-                    Icon(Icons.settings, size: 18),
-                    SizedBox(width: 10),
-                    Text("Paramètres"),
-                  ],
-                ),
-              ),
-
-              const PopupMenuDivider(),
-
-              // ===== DÉCONNEXION =====
-              PopupMenuItem<int>(
-                value: 3,
-                child: Row(
-                  children: const [
-                    Icon(Icons.logout, size: 18, color: Colors.red),
-                    SizedBox(width: 10),
-                    Text(
-                      "Déconnexion",
-                      style: TextStyle(color: Colors.red),
-                    ),
-                  ],
-                ),
-              ),
-            ],
             onSelected: (value) {
-              switch (value) {
-                case 1:
-                  break;
-                case 2:
-                  onSettings();
-                  break;
-                case 3:
-                  handleLogout(context);
-                  break;
+
+              if (value == "profil") {
+                onSettings();
+              }
+
+              if (value == "logout") {
+                onLogout();
               }
             },
+
+            itemBuilder: (context) => [
+
+              PopupMenuItem(
+                value: "profil",
+                child: Row(
+                  children: const [
+                    Icon(Icons.person_outline),
+                    SizedBox(width: 10),
+                    Text("Profil"),
+                  ],
+                ),
+              ),
+
+              PopupMenuItem(
+                value: "logout",
+                child: Row(
+                  children: const [
+                    Icon(Icons.logout, color: Colors.redAccent),
+                    SizedBox(width: 10),
+                    Text("Déconnexion"),
+                  ],
+                ),
+              ),
+            ],
+
+            child: Container(
+              padding: const EdgeInsets.all(2),
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: LinearGradient(
+                  colors: [Color(0xFF2884A0), Color(0xFF235768)],
+                ),
+              ),
+
+              child: CircleAvatar(
+                radius: 18,
+                backgroundImage: avatarUrl != null
+                    ? NetworkImage(avatarUrl!)
+                    : const AssetImage('assets/images/avatar_default.jpg')
+                        as ImageProvider,
+              ),
+            ),
           ),
         ],
       ),
+    );
+  }
+
+  /// CHIP STREAK
+  Widget _buildStatChip(IconData icon, String text, Color color) {
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.15),
+        borderRadius: BorderRadius.circular(20),
+      ),
+
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: color),
+          const SizedBox(width: 4),
+          Text(
+            text,
+            style: TextStyle(
+              color: color,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// NOTIFICATIONS
+  Widget _buildNotificationIcon() {
+
+    return Stack(
+      children: [
+
+        IconButton(
+          icon: const Icon(
+            Icons.notifications_none_rounded,
+            color: Colors.black87,
+          ),
+          onPressed: onNotifications,
+        ),
+
+        if (unreadNotifications > 0)
+          Positioned(
+            right: 12,
+            top: 12,
+            child: Container(
+              height: 10,
+              width: 10,
+              decoration: BoxDecoration(
+                color: Colors.redAccent,
+                shape: BoxShape.circle,
+                border: Border.all(
+                    color: Colors.white,
+                    width: 2),
+              ),
+            ),
+          ),
+      ],
     );
   }
 }

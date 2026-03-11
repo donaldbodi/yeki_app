@@ -48,9 +48,9 @@ class YekiApp extends StatelessWidget {
 
     if (token != null && token.isNotEmpty) {
       // L'utilisateur est connecté
-      if (role.contains('enseignant')) {
+      if (role.contains('Enseignant')) {
         return const EnseignantHomePage();
-      } else if (role == 'apprenant') {
+      } else if (role == 'Apprenant') {
         return const Dashboard();
       } else {
         return const OnboardingPage();

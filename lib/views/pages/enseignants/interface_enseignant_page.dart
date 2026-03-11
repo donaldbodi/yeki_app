@@ -2,14 +2,14 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:yeki/views/pages/apprenants/profil_page.dart';
+import 'package:yeki/views/pages/enseignants/admin_enseignant_dashboard_page.dart';
 
 // Screens
-import 'admin_enseignant_dashboard_page.dart';
 import 'admin_general_page.dart';
 import 'enseignant_dashboard_page.dart';
 import 'historique_page.dart';
 import 'mes_cours_page.dart';
-import 'profil_enseignant_page.dart';
 
 enum RoleEnseignant {
   administrateurGeneral,
@@ -19,70 +19,10 @@ enum RoleEnseignant {
   enseignantSecondaire,
 }
 
-// Variables globales
 List<dynamic> parcours = [];
 List<dynamic> departements = [];
 List<dynamic> cours = [];
 String nom = '';
-
-Future<RoleEnseignant> fetchUserRole() async {
-  final prefs = await SharedPreferences.getInstance();
-  final token = prefs.getString('token');
-
-  if (token == null) {
-    throw Exception('Token non trouvé');
-  }
-
-  final response = await http.get(
-    Uri.parse('https://yekiapp.pythonanywhere.com/api/enseignant/dashboard/'),
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': 'Token $token',
-    },
-  );
-
-  final data = jsonDecode(response.body);
-
-  if (response.statusCode == 200) {
-    final role = data['role'] ?? '';
-    nom = data['nom'] ?? '';
-
-    // ✅ Reset des listes avant d'affecter
-    parcours = [];
-    departements = [];
-    cours = [];
-    if (data.containsKey('parcours')) {
-      parcours = data['parcours'] ?? [];
-    }
-    if (data.containsKey('departements')) {
-      departements = data['departements'] ?? [];
-    }
-    if (data.containsKey('cours')) {
-      cours = data['cours'] ?? [];
-    }
-
-
-    switch (role) {
-      case 'admin':
-        return RoleEnseignant.administrateurGeneral;
-      case 'enseignant_admin':
-        return RoleEnseignant.enseignantAdministrateur;
-      case 'enseignant_cadre':
-        return RoleEnseignant.enseignantCadre;
-      case 'enseignant_principal':
-        return RoleEnseignant.enseignantPrincipal;
-      case 'enseignant':
-      default:
-        return RoleEnseignant.enseignantSecondaire;
-    }
-  } else if (response.statusCode == 401) {
-    throw Exception('Token invalide ou expiré');
-  } else {
-    throw Exception(
-      'Erreur de chargement du rôle : ${response.statusCode} - $data',
-    );
-  }
-}
 
 class EnseignantHomePage extends StatefulWidget {
   const EnseignantHomePage({super.key});
@@ -92,163 +32,236 @@ class EnseignantHomePage extends StatefulWidget {
 }
 
 class _EnseignantHomePageState extends State<EnseignantHomePage> {
+  // ---------------- ✅ NOUVELLE CONFIGURATION DESIGN ----------------
+  static const Color mainBlue = Color(0xFF2884A0);      // Couleur principale
+  static const Color secondaryTeal = Color(0xFF008080); // Couleur secondaire astucieuse
+  static const Color selectedColor = Color(0xFFffb800); // Accent (Jaune Yeki)
+  static const Color backgroundColor = Color(0xFFF8FAFB);
+
   int _selectedIndex = 0;
   bool _isLoading = true;
+  RoleEnseignant? _currentRole;
   List<Widget> _pages = [];
-
-  static const Color primaryColor = Color(0xFF008088);
-  static const Color selectedColor = Color(0xFFffb800);
-  String getSimpleRoleLabel(RoleEnseignant backendRole) {
-  switch (backendRole) {
-    case RoleEnseignant.administrateurGeneral:
-      return 'Administrateur';
-    case RoleEnseignant.enseignantAdministrateur:
-      return 'Coordonnateur';
-    case RoleEnseignant.enseignantCadre:
-      return 'Cadre';
-    case RoleEnseignant.enseignantPrincipal:
-      return 'Principal';
-    default:
-      return 'Enseignant';
-  }
-}
 
   @override
   void initState() {
     super.initState();
-    _loadRole();
+    _loadData();
   }
 
-  Future<void> _loadRole() async {
+  // ---------------- LOGIQUE DATA & ROLE ----------------
+  Future<void> _loadData() async {
     try {
-      final role = await fetchUserRole();
+      final role = await _fetchUserRole();
       setState(() {
+        _currentRole = role;
         _pages = [
           _getDashboardPage(role),
           MesCoursPage(role: role),
           const HistoriquePage(),
-          const ProfilEnseignantPage(),
+          const ProfilPage(),
         ];
         _isLoading = false;
       });
     } catch (e) {
-      debugPrint("Erreur de rôle : $e");
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erreur de chargement du rôle : $e')),
-      );
-      setState(() {
-        _pages = [
-          const Center(child: Text('Erreur')),
-          const SizedBox(),
-          const SizedBox(),
-          const SizedBox(),
-        ];
-        _isLoading = false;
-      });
+      debugPrint("Erreur Initialisation : $e");
+      setState(() => _isLoading = false);
+    }
+  }
+
+  Future<RoleEnseignant> _fetchUserRole() async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('token');
+
+    if (token == null) throw Exception('Token non trouvé');
+
+    final response = await http.get(
+      Uri.parse('https://yeki.pythonanywhere.com/api/enseignant/dashboard/'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Token $token',
+      },
+    );
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      nom = data['nom'] ?? '';
+      parcours = data['parcours'] ?? [];
+      departements = data['departements'] ?? [];
+      cours = data['cours'] ?? [];
+
+      final roleStr = data['role'] ?? '';
+      switch (roleStr) {
+        case 'admin': return RoleEnseignant.administrateurGeneral;
+        case 'enseignant_admin': return RoleEnseignant.enseignantAdministrateur;
+        case 'enseignant_cadre': return RoleEnseignant.enseignantCadre;
+        case 'enseignant_principal': return RoleEnseignant.enseignantPrincipal;
+        default: return RoleEnseignant.enseignantSecondaire;
+      }
+    } else {
+      throw Exception('Erreur serveur');
+    }
+  }
+
+  String getSimpleRoleLabel(RoleEnseignant role) {
+    switch (role) {
+      case RoleEnseignant.administrateurGeneral: return 'Administrateur';
+      case RoleEnseignant.enseignantAdministrateur: return 'Coordonnateur';
+      case RoleEnseignant.enseignantCadre: return 'Cadre';
+      case RoleEnseignant.enseignantPrincipal: return 'Principal';
+      default: return 'Enseignant';
     }
   }
 
   Widget _getDashboardPage(RoleEnseignant role) {
     switch (role) {
       case RoleEnseignant.administrateurGeneral:
-        return const AdminGeneralDashboard();
-
+        return const AdminGeneralPage();
       case RoleEnseignant.enseignantAdministrateur:
-        final int parcoursId = parcours.first["id"];
-        return EnseignantAdminPage(parcoursId: parcoursId, role: getSimpleRoleLabel(role), nomUser:nom); // a changer
-
-      case RoleEnseignant.enseignantCadre:
+        return AdminEnseignantDashboardPage();
+      default:
         return DashboardEnseignantPage(
           role: role,
           roleEnseignant: getSimpleRoleLabel(role),
           nomEnseignant: nom,
-          extraInfo: departements, // tu peux afficher ses départements ici
-        );
-
-      case RoleEnseignant.enseignantPrincipal:
-        return DashboardEnseignantPage(
-          role: role,
-          nomEnseignant: nom,
-          roleEnseignant: getSimpleRoleLabel(role),
-          extraInfo: cours, // il voit ses cours
-        );
-
-      case RoleEnseignant.enseignantSecondaire:
-        return DashboardEnseignantPage(
-          role: role,
-          nomEnseignant: nom,
-          roleEnseignant: getSimpleRoleLabel(role),
-          extraInfo: cours, // il voit les cours où il est affecté
+          extraInfo: (role == RoleEnseignant.enseignantCadre) ? departements : cours,
         );
     }
   }
 
-  void _onItemTapped(int index) {
-    setState(() {
-      _selectedIndex = index;
-    });
-  }
-
-  BottomNavigationBarItem _buildNavItem(
-    IconData icon,
-    String label,
-    bool isActive,
-  ) {
-    return BottomNavigationBarItem(
-      icon: Icon(icon, color: isActive ? selectedColor : Colors.white),
-      label: label,
-    );
-  }
+  // ---------------- UI COMPONENTS ----------------
 
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return const Scaffold(
+        backgroundColor: backgroundColor,
+        body: Center(child: CircularProgressIndicator(color: mainBlue)),
+      );
     }
 
     return Scaffold(
-      backgroundColor: Colors.grey.shade100,
-      body: _pages[_selectedIndex],
-      bottomNavigationBar: Container(
-        decoration: const BoxDecoration(
-          color: primaryColor,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black26,
-              blurRadius: 10,
-              offset: Offset(0, -1),
+      extendBody: true,
+      backgroundColor: backgroundColor,
+      body: Stack(
+        children: [
+          // Header dégradé persistant Bleu -> Teal
+          Container(
+            height: 160,
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                colors: [mainBlue, secondaryTeal], // ✅ Dégradé harmonisé
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.only(
+                bottomLeft: Radius.circular(35),
+                bottomRight: Radius.circular(35),
+              ),
             ),
-          ],
-        ),
+          ),
+          
+          SafeArea(
+            child: Column(
+              children: [
+                _buildHeader(),
+                Expanded(
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 300),
+                    child: _pages[_selectedIndex],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+      bottomNavigationBar: _buildFloatingNavBar(),
+    );
+  }
+
+  Widget _buildHeader() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 25, vertical: 15),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                "Bonjour, $nom",
+                style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 5),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  getSimpleRoleLabel(_currentRole!),
+                  style: const TextStyle(color: selectedColor, fontSize: 11, fontWeight: FontWeight.w800),
+                ),
+              ),
+            ],
+          ),
+          const CircleAvatar(
+            backgroundColor: Colors.white24,
+            child: Icon(Icons.notifications_active_outlined, color: Colors.white, size: 20),
+          )
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFloatingNavBar() {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(20, 0, 20, 25),
+      height: 72,
+      decoration: BoxDecoration(
+        color: mainBlue, // ✅ Fond de la barre en bleu principal
+        borderRadius: BorderRadius.circular(25),
+        boxShadow: [
+          BoxShadow(
+            color: mainBlue.withOpacity(0.4),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(25),
         child: BottomNavigationBar(
-          backgroundColor: primaryColor,
+          backgroundColor: Colors.transparent,
           type: BottomNavigationBarType.fixed,
-          selectedItemColor: selectedColor,
-          unselectedItemColor: Colors.white,
+          elevation: 0,
+          selectedItemColor: selectedColor, // Le jaune ressort parfaitement sur le bleu
+          unselectedItemColor: Colors.white.withOpacity(0.5),
           currentIndex: _selectedIndex,
-          onTap: _onItemTapped,
-          selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold),
-          unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.normal),
+          showUnselectedLabels: false,
+          onTap: (index) => setState(() => _selectedIndex = index),
           items: [
-            _buildNavItem(
-              Icons.dashboard_rounded,
-              'Mon interface',
-              _selectedIndex == 0,
-            ),
-            _buildNavItem(
-              Icons.menu_book_rounded,
-              'Mes cours',
-              _selectedIndex == 1,
-            ),
-            _buildNavItem(
-              Icons.history_rounded,
-              'Historiques',
-              _selectedIndex == 2,
-            ),
-            _buildNavItem(Icons.person_rounded, 'Profil', _selectedIndex == 3),
+            _navItem(Icons.grid_view_rounded, 'Accueil', 0),
+            _navItem(Icons.menu_book_rounded, 'Cours', 1),
+            _navItem(Icons.history_toggle_off_rounded, 'Logs', 2),
+            _navItem(Icons.person_pin_rounded, 'Moi', 3),
           ],
         ),
       ),
+    );
+  }
+
+  BottomNavigationBarItem _navItem(IconData icon, String label, int index) {
+    bool isActive = _selectedIndex == index;
+    return BottomNavigationBarItem(
+      icon: AnimatedScale(
+        scale: isActive ? 1.2 : 1.0,
+        duration: const Duration(milliseconds: 200),
+        child: Icon(icon),
+      ),
+      label: label,
     );
   }
 }

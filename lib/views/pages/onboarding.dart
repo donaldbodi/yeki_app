@@ -1,8 +1,5 @@
-// Nouvelle version améliorée de OnboardingPage
-// (code complet remis à neuf)
-
 import 'package:flutter/material.dart';
-import 'package:yeki/views/pages/mise_a_jour.dart';
+import 'dart:ui';
 import '../auth/login_page.dart';
 
 class OnboardingPage extends StatefulWidget {
@@ -15,6 +12,11 @@ class OnboardingPage extends StatefulWidget {
 class _OnboardingPageState extends State<OnboardingPage> {
   final PageController _pageController = PageController();
   int _currentPage = 0;
+
+  // Définition de la nouvelle palette basée sur #1958AF
+  static const Color mainColor = Color(0xFF3271C8);
+  static const Color darkVariant = Color(0xFF1958AF);//172039
+  static const Color lightVariant = Color(0xFF9CA7D7);
 
   final List<Map<String, String>> _onboardData = [
     {
@@ -34,177 +36,212 @@ class _OnboardingPageState extends State<OnboardingPage> {
     },
   ];
 
-  @override
-  void initState() {
-    super.initState();
-    UpdateChecker.checkForUpdate(context);
-  }
-
   void _onNext() {
     if (_currentPage < _onboardData.length - 1) {
       _pageController.nextPage(
-        duration: const Duration(milliseconds: 450),
-        curve: Curves.easeOutExpo,
+        duration: const Duration(milliseconds: 600),
+        curve: Curves.easeInOutQuart,
       );
     } else {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const LoginPage()),
-      );
+      _finishOnboarding();
     }
+  }
+
+  void _finishOnboarding() {
+    Navigator.pushReplacement(
+      context,
+      PageRouteBuilder(
+        pageBuilder: (context, animation, secondaryAnimation) => const LoginPage(),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          return FadeTransition(opacity: animation, child: child);
+        },
+        transitionDuration: const Duration(milliseconds: 800),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+
     return Scaffold(
+      backgroundColor: Colors.white,
       body: Stack(
         children: [
-          // Background dégradé haut niveau
-          Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Color(0xFF008080),
-                  Color(0xFF00E6E6),
-                  Colors.white,
-                ],
-              ),
-            ),
-          ),
-
-          // Effet glass blur
-          Positioned.fill(
-            child: Container(
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-  colors: [
-    Color(0x2200E6E6),
-    Color(0x22008080),
-  ],
-  begin: Alignment.topLeft,
-  end: Alignment.bottomRight,
-),
-
-              ),
-            ),
-          ),
-
+          _buildAnimatedBackground(size),
           SafeArea(
             child: Column(
               children: [
+                Align(
+                  alignment: Alignment.topRight,
+                  child: TextButton(
+                    onPressed: _finishOnboarding,
+                    child: Text(
+                      "Passer",
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.7),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
                 Expanded(
                   child: PageView.builder(
                     controller: _pageController,
                     onPageChanged: (i) => setState(() => _currentPage = i),
                     itemCount: _onboardData.length,
                     itemBuilder: (context, index) {
-                      final item = _onboardData[index];
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 26),
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 300),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              AnimatedOpacity(
-                                opacity: _currentPage == index ? 1 : 0.3,
-                                duration: const Duration(milliseconds: 600),
-                                curve: Curves.easeInOut,
-                                child: SizedBox(
-                                  height: 260,
-                                  child: Image.asset(item['image']!),
-                                ),
-                              ),
-                              const SizedBox(height: 45),
-                              Text(
-                                item['title']!,
-                                textAlign: TextAlign.center,
-                                style: const TextStyle(
-                                  fontSize: 30,
-                                  fontFamily: 'Roboto',
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white,
-                                ),
-                              ),
-                              const SizedBox(height: 20),
-                              Text(
-                                item['desc']!,
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  fontSize: 17,
-                                  color: Colors.white.withOpacity(0.85),
-                                  height: 1.6,
-                                  fontWeight: FontWeight.w400,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
+                      return _buildPageContent(index, size);
                     },
                   ),
                 ),
-
-                const SizedBox(height: 20),
-
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: List.generate(
-                    _onboardData.length,
-                    (index) => AnimatedContainer(
-                      duration: const Duration(milliseconds: 350),
-                      curve: Curves.easeInOut,
-                      margin: const EdgeInsets.symmetric(horizontal: 5),
-                      width: _currentPage == index ? 32 : 10,
-                      height: 10,
-                      decoration: BoxDecoration(
-                        color: _currentPage == index ? Colors.white : Colors.white.withOpacity(0.3),
-                        borderRadius: BorderRadius.circular(50),
-                      ),
-                    ),
-                  ),
-                ),
-
-                const SizedBox(height: 20),
-
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 25),
-                  child: ElevatedButton(
-                    onPressed: _onNext,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.white,
-                      foregroundColor: const Color(0xFF008080),
-                      elevation: 8,
-                      shadowColor: Colors.black26,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(50),
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          _currentPage == _onboardData.length - 1
-                              ? "Commencer l'aventure"
-                              : "Suivant",
-                          style: const TextStyle(
-                            fontSize: 17,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        const Icon(Icons.arrow_forward_ios_rounded, size: 18),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 18),
+                _buildBottomControls(),
+                const SizedBox(height: 30),
               ],
             ),
-          )
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAnimatedBackground(Size size) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 500),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: _currentPage == 0 
+            ? [mainColor, darkVariant]
+            : _currentPage == 1
+                ? [lightVariant, mainColor]
+                : [mainColor, const Color(0xFF1F667C)], // Variante plus profonde pour la fin
+        ),
+      ),
+      child: Stack(
+        children: [
+          Positioned(
+            top: -50,
+            left: -50,
+            child: _circle(200, Colors.white.withOpacity(0.05)),
+          ),
+          Positioned(
+            bottom: 100,
+            right: -80,
+            child: _circle(300, Colors.white.withOpacity(0.08)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _circle(double size, Color color) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+    );
+  }
+
+  Widget _buildPageContent(int index, Size size) {
+    final item = _onboardData[index];
+    bool isActive = _currentPage == index;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 40),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 600),
+            curve: Curves.easeOutCubic,
+            margin: EdgeInsets.only(bottom: isActive ? 0 : 40),
+            height: size.height * 0.35,
+            child: Image.asset(item['image']!, fit: BoxFit.contain),
+          ),
+          const SizedBox(height: 50),
+          AnimatedOpacity(
+            duration: const Duration(milliseconds: 400),
+            opacity: isActive ? 1 : 0,
+            child: Text(
+              item['title']!,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 30,
+                fontWeight: FontWeight.w900,
+                color: Colors.white,
+                letterSpacing: -0.5,
+                height: 1.1,
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+          AnimatedOpacity(
+            duration: const Duration(milliseconds: 600),
+            opacity: isActive ? 1 : 0,
+            child: Text(
+              item['desc']!,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 16,
+                color: Colors.white.withOpacity(0.85),
+                height: 1.6,
+                fontWeight: FontWeight.w400,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBottomControls() {
+    bool isLastPage = _currentPage == _onboardData.length - 1;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 30),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
+            children: List.generate(
+              _onboardData.length,
+              (index) => AnimatedContainer(
+                duration: const Duration(milliseconds: 300),
+                margin: const EdgeInsets.only(right: 8),
+                height: 8,
+                width: _currentPage == index ? 24 : 8,
+                decoration: BoxDecoration(
+                  color: _currentPage == index ? Colors.white : Colors.white.withOpacity(0.4),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+            ),
+          ),
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 400),
+            height: 60,
+            width: isLastPage ? 180 : 60,
+            child: ElevatedButton(
+              onPressed: _onNext,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.white,
+                foregroundColor: mainColor, // Utilisation de la nouvelle couleur ici
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(isLastPage ? 15 : 50),
+                ),
+                elevation: 10,
+                padding: EdgeInsets.zero,
+              ),
+              child: isLastPage
+                  ? const Text(
+                      "C'EST PARTI !",
+                      style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1),
+                    )
+                  : const Icon(Icons.arrow_forward_ios_rounded, size: 24),
+            ),
+          ),
         ],
       ),
     );
