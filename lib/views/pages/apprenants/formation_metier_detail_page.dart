@@ -516,7 +516,6 @@ class _FormationMetierDetailPageState extends State<FormationMetierDetailPage>
   }
 
   Widget _podiumItem(Map<String, dynamic> entry, double height, Color color) {
-    final medals = ['', '', ''];
     final rang = entry['rang'] as int;
     final medal = rang == 1 ? '1er' : rang == 2 ? '2e' : '3e';
 

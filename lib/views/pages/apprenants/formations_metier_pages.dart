@@ -1137,8 +1137,10 @@ class _FormationMetierDetailPageState
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
+        // ignore: dead_code
         color: isMe ? _gold.withOpacity(0.08) : Colors.white,
         borderRadius: BorderRadius.circular(14),
+        // ignore: dead_code
         border: isMe ? Border.all(color: _gold.withOpacity(0.4)) : null,
         boxShadow: [BoxShadow(
             color: Colors.black.withOpacity(0.04), blurRadius: 6)],

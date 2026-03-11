@@ -3,16 +3,14 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:yeki/widgets/form_question_sheet.dart';
-import 'forum_page.dart';
 
 // ─────────────────────────────────────────────────────────────────
 // CONSTANTES
 // ─────────────────────────────────────────────────────────────────
-const String _base    = 'https://yekiapp.pythonanywhere.com/api';
+const String _base    = 'https://yeki.pythonanywhere.com/api';
 const Color _teal     = Color(0xFF008088);
 const Color _dark     = Color(0xFF0D1B2A);
 const Color _bg       = Color(0xFFF5F7FA);
-const Color _accent   = Color(0xFFFF7F77);
 const Color _violet   = Color(0xFF6A1B9A);  // Couleur exercice dans le forum
 
 Future<String?> _getToken() async {

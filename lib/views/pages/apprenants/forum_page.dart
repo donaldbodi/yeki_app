@@ -9,12 +9,12 @@ import 'package:timeago/timeago.dart' as timeago;
 // ─────────────────────────────────────────────────────────────────
 // CONSTANTES
 // ─────────────────────────────────────────────────────────────────
-const String _base = 'https://yekiapp.pythonanywhere.com/api';
+const String _base = 'https://yeki.pythonanywhere.com/api';
 
 const Color _teal   = Color(0xFF008088);
 const Color _dark   = Color(0xFF0D1B2A);
 const Color _bg     = Color(0xFFF4F9FB);
-const Color _accent = Color(0xFFFF7F77);
+//const Color _accent = Color(0xFFFF7F77);
 
 // Couleurs par source
 const Map<String, Color> _sourceColors = {

@@ -3,7 +3,6 @@ import 'package:flutter/services.dart';
 import 'dart:ui';
 
 import 'package:yeki/views/pages/apprenants/lecture_lecon_page.dart';
-import 'package:yeki/views/pages/enseignants/interface_enseignant_page.dart';
 
 // ─── Modèle (Inchangé) ────────────────────────────────────────────────────────
 class Lecon {

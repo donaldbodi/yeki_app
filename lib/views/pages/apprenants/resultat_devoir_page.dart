@@ -3,12 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:yeki/widgets/form_question_sheet.dart';
-import 'forum_page.dart';
 
 // ─────────────────────────────────────────────────────────────────
 // CONSTANTES
 // ─────────────────────────────────────────────────────────────────
-const String _base  = 'https://yekiapp.pythonanywhere.com/api';
+const String _base  = 'https://yeki.pythonanywhere.com/api';
 const Color _teal   = Color(0xFF008088);
 const Color _dark   = Color(0xFF1A1C1E);
 const Color _bg     = Color(0xFFF5F7FA);

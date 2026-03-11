@@ -9,10 +9,9 @@ const String _baseO = 'https://yekiapp.pythonanywhere.com/api';
 // ─── Palette ────────────────────────────────────────────────────
 const Color _olymp  = Color(0xFF7B2FBE);
 const Color _gold   = Color(0xFFE2A84B);
-const Color _teal   = Color(0xFF008088);
-const Color _accent = Color(0xFFFF7F77);
+//const Color _accent = Color(0xFFFF7F77);
 const Color _dark   = Color(0xFF1A1C1E);
-const Color _bg     = Color(0xFFF5F7FA);
+//const Color _bg     = Color(0xFFF5F7FA);
 
 // ═══════════════════════════════════════════════════════════════
 // Sheet inscription en bas de page

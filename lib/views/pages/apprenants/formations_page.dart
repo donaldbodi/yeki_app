@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:yeki/views/pages/apprenants/formations_classiques_pages.dart';
 import 'package:yeki/views/pages/apprenants/formations_metier_pages.dart';
-import 'dart:ui';
 
-import 'package:yeki/views/pages/apprenants/notifications_page.dart';
 import 'package:yeki/widgets/yeki_app_bar.dart';
 
 class FormationsPage extends StatefulWidget {

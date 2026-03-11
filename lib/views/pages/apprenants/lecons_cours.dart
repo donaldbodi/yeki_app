@@ -1,8 +1,6 @@
 import 'dart:convert';
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:http_parser/http_parser.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:yeki/views/pages/apprenants/detail_lecon_page.dart';
@@ -30,7 +28,7 @@ class _LeconsCoursPageState extends State<LeconsCoursPage> {
   List modules = [];
   final Color primaryColor = const Color(0xFF2884A0);
 
-  static const String _baseUrl = 'https://yekiapp.pythonanywhere.com/api';
+  static const String _baseUrl = 'https://yeki.pythonanywhere.com/api';
 
   final List<Map<String, String>> enseignants = const [
     {"nom": "Mr. Talla Jean", "role": "Principal"},
@@ -83,12 +81,6 @@ class _LeconsCoursPageState extends State<LeconsCoursPage> {
     );
   }
 
-  void _showSuccess(String message) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: Colors.green),
-    );
-  }
 
   // ── Convertit les modules API en liste de Lecon pour LectureLeconPage ────────
   List<Lecon> _getAllLecons() {
@@ -504,8 +496,9 @@ class _LeconsCoursPageState extends State<LeconsCoursPage> {
                 isLoading: isLoading,
                 label: "Créer le module",
                 onTap: () async {
-                  if (titreCtrl.text.isEmpty)
+                  if (titreCtrl.text.isEmpty) {
                     return _showError("Titre requis");
+                  }
                   setStateSheet(() => isLoading = true);
                 },
               ),
@@ -519,7 +512,6 @@ class _LeconsCoursPageState extends State<LeconsCoursPage> {
   void _showCreateLeconDialog(String moduleId) {
     final titreCtrl = TextEditingController();
     final descCtrl = TextEditingController();
-    File? selectedPdfFile;
     String? selectedPdfName;
     bool isLoading = false;
 
@@ -572,7 +564,6 @@ class _LeconsCoursPageState extends State<LeconsCoursPage> {
                       allowedExtensions: ['pdf']);
                   if (result != null) {
                     setStateSheet(() {
-                      selectedPdfFile = File(result.files.single.path!);
                       selectedPdfName = result.files.single.name;
                     });
                   }
@@ -618,15 +609,4 @@ class _LeconsCoursPageState extends State<LeconsCoursPage> {
     );
   }
 
-  String _parseErrors(dynamic body) {
-    if (body is Map) {
-      return body.entries.map((e) {
-        final val = e.value;
-        if (val is List) return '${e.key}: ${val.join(', ')}';
-        return '${e.key}: $val';
-      }).join('\n');
-    }
-    if (body is String) return body;
-    return body.toString();
-  }
 }

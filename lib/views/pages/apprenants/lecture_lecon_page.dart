@@ -85,7 +85,7 @@ class _LectureLeconPageState extends State<LectureLeconPage>
   static const Color _primary = Color(0xFF0D1B2A);
   static const Color _teal    = Color(0xFF008088);
   static const Color _accent  = Color(0xFFFF7F77);
-  static const Color _gold    = Color(0xFFE2A84B);
+  //static const Color _gold    = Color(0xFFE2A84B);
   static const Color _bg      = Color(0xFFF5F7FA);
 
   // ── State ─────────────────────────────────────────────────────

@@ -2,15 +2,11 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:intl/intl.dart';
 
 const String _baseO = 'https://yeki.pythonanywhere.com/api';
 
 // ─── Palette ────────────────────────────────────────────────────
 const Color _olymp  = Color(0xFF7B2FBE);
-const Color _gold   = Color(0xFFE2A84B);
-const Color _teal   = Color(0xFF008088);
-const Color _accent = Color(0xFFFF7F77);
 const Color _dark   = Color(0xFF1A1C1E);
 const Color _bg     = Color(0xFFF5F7FA);
 
