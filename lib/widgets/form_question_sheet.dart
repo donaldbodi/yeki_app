@@ -11,8 +11,6 @@ const String _base = 'https://yekiapp.pythonanywhere.com/api';
 
 const Color _teal   = Color(0xFF008088);
 const Color _dark   = Color(0xFF0D1B2A);
-const Color _bg     = Color(0xFFF4F9FB);
-const Color _accent = Color(0xFFFF7F77);
 
 // Couleurs par source
 const Map<String, Color> _sourceColors = {
@@ -29,12 +27,12 @@ const Map<String, IconData> _sourceIcons = {
   "libre":    Icons.chat_bubble_outline_rounded,
 };
 
-const Map<String, String> _sourceLabels = {
+/*const Map<String, String> _sourceLabels = {
   "lecon":    "Leçon",
   "exercice": "Exercice",
   "devoir":   "Devoir",
   "libre":    "Libre",
-};
+};*/
 
 // ─────────────────────────────────────────────────────────────────
 // WIDGET PARTAGÉ — Bottom Sheet "Poser une question"
