@@ -2,7 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:yeki/views/pages/apprenants/concours_pages.dart';
 import 'package:yeki/views/pages/apprenants/devoirs_page.dart';
-import 'package:yeki/views/pages/apprenants/formations_page.dart';
+import 'package:yeki/views/pages/apprenants/formations_pages.dart';
 import 'package:yeki/views/pages/apprenants/olympiades_page.dart';
 import 'cursus_page.dart';
 
