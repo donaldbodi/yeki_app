@@ -7,7 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'devoir_models.dart';
 
-const String _baseUrl = 'https://yekiapp.pythonanywhere.com/api';
+const String _baseUrl = 'https://yeki.pythonanywhere.com/api';
 
 class TraiterDevoirPage extends StatefulWidget {
   final int    devoirId;
@@ -150,7 +150,7 @@ class _TraiterDevoirPageState extends State<TraiterDevoirPage>
     if (_forceSubmit || _soumis) return;
     final token = await _token();
     final res = await http.post(
-      Uri.parse('$_baseUrl/devoirs/${widget.devoirId}/sortie/'),
+      Uri.parse('$_baseUrl/devoirs/${widget.devoirId}/focus-perdu/'),
       headers: {
         'Content-Type': 'application/json',
         if (token != null) 'Authorization': 'Token $token',
@@ -167,7 +167,7 @@ class _TraiterDevoirPageState extends State<TraiterDevoirPage>
         await Future.delayed(const Duration(seconds: 1));
         if (mounted) Navigator.pop(context, true);
       } else {
-        final nb  = data['nb_sorties'] ?? 1;
+        final nb  = data['nb_focus_perdu'] ?? 1;
         final max = (data['max_tolere'] ?? 0) + 1;
         _snack('Sortie $nb/$max détectée !', Colors.orange);
       }

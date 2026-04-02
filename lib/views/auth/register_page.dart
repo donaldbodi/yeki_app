@@ -1,5 +1,7 @@
+import 'dart:ui';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'login_page.dart';
 
 class RegisterPage extends StatefulWidget {
@@ -9,19 +11,20 @@ class RegisterPage extends StatefulWidget {
   State<RegisterPage> createState() => _RegisterPageState();
 }
 
-class _RegisterPageState extends State<RegisterPage> {
-  // ✅ Mise à jour de la Palette de couleurs
-  final Color mainBlue = const Color(0xFF3271C8); // Couleur principale #1958AF
-  final Color primaryTeal = const Color(0xFF1958AF); // Couleur secondaire Teal
+class _RegisterPageState extends State<RegisterPage> with SingleTickerProviderStateMixin {
+  // --- PALETTE PREMIUM & BOUSSOLE VISUELLE ---
+  static const Color mainBlue = Color(0xFF2884A0); 
+  static const Color darkBlue = Color(0xFF164A5A);
+  static const Color accentWarm = Color(0xFFF39C12);
 
-  // ---------------- CONTROLLERS ----------------
+  // --- CONTROLLERS ---
   final _nameController = TextEditingController();
   final _usernameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
 
-  // ---------------- STATES ----------------
+  // --- STATES ---
   bool _isLoading = false;
   bool _obscurePassword = true;
   bool _obscureConfirm = true;
@@ -40,13 +43,30 @@ class _RegisterPageState extends State<RegisterPage> {
   String? selectedNiveau;
   bool loadingNiveaux = false;
 
+  late AnimationController _animCtrl;
+  late Animation<double> _fadeAnim;
+
   @override
   void initState() {
     super.initState();
+    _animCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 800));
+    _fadeAnim = CurvedAnimation(parent: _animCtrl, curve: Curves.easeIn);
+    _animCtrl.forward();
     _fetchCursus();
   }
 
-  // ---------------- API CALLS ----------------
+  @override
+  void dispose() {
+    _animCtrl.dispose();
+    _nameController.dispose();
+    _usernameController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
+    _confirmPasswordController.dispose();
+    super.dispose();
+  }
+
+  // --- LOGIQUE API ---
   Future<void> _fetchCursus() async {
     setState(() => loadingCursus = true);
     try {
@@ -57,7 +77,6 @@ class _RegisterPageState extends State<RegisterPage> {
           final nom = e['nom'].toString().toLowerCase();
           return !nom.contains('Prépas') && !nom.contains('Formation');
         }).toList();
-
         setState(() {
           _parcoursRaw = List<Map<String, dynamic>>.from(filtered);
           cursusOptions = _parcoursRaw.map((e) => e['nom'] as String).toList();
@@ -112,6 +131,7 @@ class _RegisterPageState extends State<RegisterPage> {
       return;
     }
     setState(() => _isLoading = true);
+    HapticFeedback.lightImpact();
 
     try {
       final body = {
@@ -127,214 +147,308 @@ class _RegisterPageState extends State<RegisterPage> {
       final response = await Dio().post(
         'https://yeki.pythonanywhere.com/api/auth/register/',
         data: body,
+        options: Options(validateStatus: (s) => s! < 500),
       );
 
       if (response.statusCode == 201) {
-        _showSnackBar("Compte créé ! Connectez-vous.", Colors.green);
+        _showSnackBar("Compte créé avec succès !", mainBlue);
+        if (!mounted) return;
         Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const LoginPage()));
+      } else {
+        _showSnackBar("Erreur lors de l'inscription", Colors.redAccent);
       }
     } catch (e) {
-      _showSnackBar("Erreur lors de l'inscription", Colors.redAccent);
+      _showSnackBar("Problème de connexion", Colors.redAccent);
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   void _showSnackBar(String msg, Color color) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: color));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+        backgroundColor: color,
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.all(24),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      )
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Stack(
-        children: [
-          // ✅ Fond avec dégradé Bleu (#2884A0) et Teal (#008080)
-          Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [mainBlue, primaryTeal],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-            ),
+      body: Container(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topRight,
+            end: Alignment.bottomLeft,
+            colors: [mainBlue, darkBlue],
           ),
-          
-          SafeArea(
-            child: SingleChildScrollView(
-              physics: const BouncingScrollPhysics(),
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Column(
-                children: [
-                  const SizedBox(height: 20),
-                  Hero(
-                    tag: 'logo',
-                    child: Image.asset("assets/images/yeki_logo.png", width: 60, height: 60),
-                  ),
-                  const SizedBox(height: 15),
-                  const Text(
-                    "Rejoignez Yeki",
-                    style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 5),
-                  Text(
-                    "Créez votre profil en quelques étapes",
-                    style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 14),
-                  ),
-                  const SizedBox(height: 30),
+        ),
+        child: Stack(
+          children: [
+            // ÉLÉMENTS DÉCORATIFS
+            Positioned(top: -40, right: -40, child: CircleAvatar(radius: 100, backgroundColor: Colors.white.withOpacity(0.05))),
+            Positioned(bottom: 50, left: -30, child: CircleAvatar(radius: 60, backgroundColor: accentWarm.withOpacity(0.02))),
 
-                  Container(
-                    padding: const EdgeInsets.all(24),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.95),
-                      borderRadius: BorderRadius.circular(30),
-                      boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 20, offset: const Offset(0, 10))],
-                    ),
-                    child: Column(
-                      children: [
-                        _buildField(_nameController, "Nom complet", Icons.person_outline),
-                        _buildField(_emailController, "Email", Icons.email_outlined),
-                        _buildField(_usernameController, "Nom d'utilisateur", Icons.alternate_email),
-                        
-                        _buildDropdown<String>(
-                          label: "Je suis un...",
-                          value: selectedUserType,
-                          items: ["Apprenant", "Enseignant"].map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
-                          onChanged: (v) => setState(() {
-                            selectedUserType = v;
-                            selectedCursus = null;
-                            selectedDepartementId = null;
-                          }),
-                        ),
+            SafeArea(
+              child: FadeTransition(
+                opacity: _fadeAnim,
+                child: SingleChildScrollView(
+                  physics: const BouncingScrollPhysics(),
+                  padding: const EdgeInsets.symmetric(horizontal: 40),
+                  child: Column(
+                    children: [
+                      const SizedBox(height: 30),
+                      _buildHeader(),
+                      const SizedBox(height: 40),
+                      
+                      // FORMULAIRE
+                      _buildSectionLabel("IDENTITÉ"),
+                      _buildGlassField(controller: _nameController, label: "Nom complet", icon: Icons.person_outline),
+                      const SizedBox(height: 15),
+                      _buildGlassField(controller: _emailController, label: "Email académique", icon: Icons.alternate_email),
+                      const SizedBox(height: 15),
+                      _buildGlassField(controller: _usernameController, label: "Nom d'utilisateur", icon: Icons.badge_outlined),
+                      
+                      const SizedBox(height: 30),
+                      _buildSectionLabel("VOTRE STATUT"),
+                      _buildGlassDropdown<String>(
+                        label: "Vous êtes ?",
+                        value: selectedUserType,
+                        items: ["Apprenant", "Enseignant"].map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
+                        onChanged: (v) => setState(() {
+                          selectedUserType = v;
+                          selectedCursus = null;
+                          selectedDepartementId = null;
+                        }),
+                      ),
 
-                        if (selectedUserType == "Apprenant") ...[
-                          const SizedBox(height: 16),
-                          loadingCursus 
-                            ? LinearProgressIndicator(color: mainBlue)
-                            : _buildDropdown<String>(
-                                label: "Mon Parcours",
-                                value: selectedCursus,
-                                items: cursusOptions.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
-                                onChanged: (v) {
-                                  final id = _parcoursRaw.firstWhere((p) => p['nom'] == v)['id'];
-                                  setState(() => selectedCursus = v);
-                                  _fetchDepartements(id);
-                                },
-                              ),
-                          
-                          if (selectedCursus != null) ...[
-                            const SizedBox(height: 16),
-                            loadingDepartements 
-                              ? LinearProgressIndicator(color: mainBlue)
-                              : _buildDropdown<int>(
-                                  label: "Département",
-                                  value: selectedDepartementId,
-                                  items: departementOptions.map((d) => DropdownMenuItem(value: d['id'] as int, child: Text(d['nom']))).toList(),
-                                  onChanged: (v) {
-                                    setState(() => selectedDepartementId = v);
-                                    _fetchNiveaux(v!);
-                                  },
-                                ),
-                          ],
-
-                          if (selectedDepartementId != null) ...[
-                            const SizedBox(height: 16),
-                            loadingNiveaux 
-                              ? LinearProgressIndicator(color: mainBlue)
-                              : _buildDropdown<String>(
-                                  label: "Niveau",
-                                  value: selectedNiveau,
-                                  items: niveauOptions.map((n) => DropdownMenuItem(value: n, child: Text(n))).toList(),
-                                  onChanged: (v) => setState(() => selectedNiveau = v),
-                                ),
-                          ],
+                      if (selectedUserType == "Apprenant") ...[
+                        const SizedBox(height: 15),
+                        loadingCursus 
+                          ? const LinearProgressIndicator(color: Colors.white24, backgroundColor: Colors.transparent)
+                          : _buildGlassDropdown<String>(
+                              label: "Parcours",
+                              value: selectedCursus,
+                              items: cursusOptions.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
+                              onChanged: (v) {
+                                final id = _parcoursRaw.firstWhere((p) => p['nom'] == v)['id'];
+                                setState(() => selectedCursus = v);
+                                _fetchDepartements(id);
+                              },
+                            ),
+                        if (selectedCursus != null) ...[
+                          const SizedBox(height: 15),
+                          loadingDepartements
+                          ? const LinearProgressIndicator(color: Colors.white24, backgroundColor: Colors.transparent)
+                          : _buildGlassDropdown<int>(
+                              label: "Département",
+                              value: selectedDepartementId,
+                              items: departementOptions.map((d) => DropdownMenuItem(value: d['id'] as int, child: Text(d['nom']))).toList(),
+                              onChanged: (v) {
+                                setState(() => selectedDepartementId = v);
+                                _fetchNiveaux(v!);
+                              },
+                            ),
                         ],
-
-                        const SizedBox(height: 16),
-                        _buildField(_passwordController, "Mot de passe", Icons.lock_outline, isPassword: true, 
-                          obscure: _obscurePassword, onToggle: () => setState(() => _obscurePassword = !_obscurePassword)),
-                        
-                        _buildField(_confirmPasswordController, "Confirmer le mot de passe", Icons.lock_reset, isPassword: true, 
-                          obscure: _obscureConfirm, onToggle: () => setState(() => _obscureConfirm = !_obscureConfirm)),
-
-                        const SizedBox(height: 25),
-
-                        _isLoading 
-                          ? CircularProgressIndicator(color: mainBlue)
-                          : _buildSubmitButton(),
-                        
-                        TextButton(
-                          onPressed: () => Navigator.pop(context),
-                          child: Text("Déjà inscrit ? Connectez-vous", style: TextStyle(color: mainBlue, fontWeight: FontWeight.bold)),
-                        ),
+                        if (selectedDepartementId != null) ...[
+                          const SizedBox(height: 15),
+                          loadingNiveaux
+                          ? const LinearProgressIndicator(color: Colors.white24, backgroundColor: Colors.transparent)
+                          : _buildGlassDropdown<String>(
+                              label: "Niveau d'étude",
+                              value: selectedNiveau,
+                              items: niveauOptions.map((n) => DropdownMenuItem(value: n, child: Text(n))).toList(),
+                              onChanged: (v) => setState(() => selectedNiveau = v),
+                            ),
+                        ],
                       ],
-                    ),
+
+                      const SizedBox(height: 30),
+                      _buildSectionLabel("SÉCURITÉ"),
+                      _buildGlassField(
+                        controller: _passwordController, 
+                        label: "Mot de passe", 
+                        icon: Icons.lock_outline, 
+                        isPassword: true, 
+                        obscure: _obscurePassword, 
+                        onToggle: () => setState(() => _obscurePassword = !_obscurePassword)
+                      ),
+                      const SizedBox(height: 15),
+                      _buildGlassField(
+                        controller: _confirmPasswordController, 
+                        label: "Confirmation", 
+                        icon: Icons.shield_outlined, 
+                        isPassword: true, 
+                        obscure: _obscureConfirm, 
+                        onToggle: () => setState(() => _obscureConfirm = !_obscureConfirm)
+                      ),
+
+                      const SizedBox(height: 45),
+                      
+                      _isLoading 
+                        ? const CircularProgressIndicator(color: Colors.white, strokeWidth: 2)
+                        : _buildSubmitButton(),
+                      
+                      const SizedBox(height: 25),
+                      _buildFooterLink(),
+                      const SizedBox(height: 40),
+                    ],
                   ),
-                  const SizedBox(height: 40),
-                ],
+                ),
               ),
             ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // --- REUSABLE COMPONENTS ---
-
-  Widget _buildField(TextEditingController ctrl, String hint, IconData icon, {bool isPassword = false, bool? obscure, VoidCallback? onToggle}) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: TextField(
-        controller: ctrl,
-        obscureText: obscure ?? false,
-        decoration: InputDecoration(
-          hintText: hint,
-          prefixIcon: Icon(icon, color: mainBlue, size: 22),
-          suffixIcon: isPassword ? IconButton(icon: Icon(obscure! ? Icons.visibility_off : Icons.visibility, color: mainBlue), onPressed: onToggle) : null,
-          filled: true,
-          fillColor: Colors.grey.shade50,
-          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide(color: Colors.grey.shade200)),
-          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide(color: mainBlue, width: 1.5)),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildDropdown<T>({required String label, required T? value, required List<DropdownMenuItem<T>> items, required ValueChanged<T?> onChanged}) {
-    return DropdownButtonFormField<T>(
-      value: value,
-      items: items,
-      onChanged: onChanged,
-      style: const TextStyle(color: Colors.black87, fontSize: 15),
-      decoration: InputDecoration(
-        labelText: label,
-        labelStyle: TextStyle(color: mainBlue),
-        filled: true,
-        fillColor: Colors.grey.shade50,
-        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide(color: Colors.grey.shade200)),
-        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide(color: mainBlue, width: 1.5)),
+  Widget _buildHeader() {
+    return Column(
+      children: [
+        const Text('REJOINDRE YEKI', 
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, letterSpacing: 8, fontSize: 16)),
+        const SizedBox(height: 6),
+        Container(width: 40, height: 2, decoration: BoxDecoration(color: accentWarm, borderRadius: BorderRadius.circular(2))),
+      ],
+    );
+  }
+
+  Widget _buildSectionLabel(String label) {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Padding(
+        padding: const EdgeInsets.only(left: 15, bottom: 10),
+        child: Text(label, 
+          style: TextStyle(color: Colors.white.withOpacity(0.3), fontSize: 9, fontWeight: FontWeight.w900, letterSpacing: 2)),
+      ),
+    );
+  }
+
+  Widget _buildGlassField({
+    required TextEditingController controller, 
+    required String label, 
+    required IconData icon, 
+    bool isPassword = false, 
+    bool? obscure, 
+    VoidCallback? onToggle
+  }) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(20),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+        child: Container(
+          width: 300,
+          child: TextFormField(
+            controller: controller,
+            obscureText: isPassword && (obscure ?? true),
+            style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500),
+            decoration: InputDecoration(
+              labelText: label,
+              labelStyle: TextStyle(color: Colors.white.withOpacity(0.3), fontSize: 11),
+              floatingLabelStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+              prefixIcon: Icon(icon, color: Colors.white.withOpacity(0.5), size: 16),
+              suffixIcon: isPassword ? IconButton(
+                icon: Icon(obscure! ? Icons.visibility_off_rounded : Icons.visibility_rounded, color: Colors.white24, size: 16), 
+                onPressed: onToggle
+              ) : null,
+              filled: true,
+              fillColor: Colors.white.withOpacity(0.05),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(20), 
+                borderSide: BorderSide(color: Colors.white.withOpacity(0.1))
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(20), 
+                borderSide: const BorderSide(color: Colors.white, width: 0.8)
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGlassDropdown<T>({
+    required String label, 
+    required T? value, 
+    required List<DropdownMenuItem<T>> items, 
+    required ValueChanged<T?> onChanged
+  }) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(20),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+        child: Container(
+          width: 300,
+          padding: const EdgeInsets.only(right: 10),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.05),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: Colors.white.withOpacity(0.1)),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButtonFormField<T>(
+              value: value,
+              items: items,
+              onChanged: onChanged,
+              dropdownColor: darkBlue,
+              style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500),
+              icon: const Icon(Icons.expand_more_rounded, color: Colors.white24, size: 20),
+              decoration: InputDecoration(
+                labelText: label,
+                labelStyle: TextStyle(color: Colors.white.withOpacity(0.3), fontSize: 11),
+                floatingLabelStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                prefixIcon: const Icon(Icons.account_tree_outlined, color: Colors.white24, size: 16),
+                border: InputBorder.none,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
 
   Widget _buildSubmitButton() {
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(15),
-        gradient: LinearGradient(colors: [mainBlue, primaryTeal]), // ✅ Bouton en dégradé Bleu-Teal
-        boxShadow: [BoxShadow(color: mainBlue.withOpacity(0.3), blurRadius: 12, offset: const Offset(0, 5))],
-      ),
-      child: ElevatedButton(
-        onPressed: _submitRegistration,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.transparent,
-          shadowColor: Colors.transparent,
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+    return GestureDetector(
+      onTap: _submitRegistration,
+      child: Container(
+        width: 300,
+        padding: const EdgeInsets.symmetric(vertical: 18),
+        decoration: BoxDecoration(
+          color: accentWarm,
+          borderRadius: BorderRadius.circular(30),
+          boxShadow: [
+            BoxShadow(color: accentWarm.withOpacity(0.35), blurRadius: 20, offset: const Offset(0, 8)),
+          ],
         ),
-        child: const Text("CRÉER MON COMPTE", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, letterSpacing: 1)),
+        child: const Center(
+          child: Text('CRÉER MON COMPTE', 
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 12, letterSpacing: 1.5)),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFooterLink() {
+    return TextButton(
+      onPressed: () => Navigator.pop(context),
+      child: RichText(
+        text: TextSpan(
+          style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 12),
+          children: const [
+            TextSpan(text: "Déjà membre ? "),
+            TextSpan(text: "CONNEXION", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ],
+        ),
       ),
     );
   }

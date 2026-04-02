@@ -1,22 +1,34 @@
+// lib/views/pages/apprenants/lecons_cours.dart
+
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:yeki/views/pages/apprenants/detail_lecon_page.dart';
 import 'package:yeki/views/pages/enseignants/interface_enseignant_page.dart';
-//import 'lecture_lecon_page.dart';
+import 'package:yeki/views/pages/apprenants/lecture_lecon_page.dart';
+
+const String _baseUrl = 'https://yeki.pythonanywhere.com/api';
+const Color _primary = Color(0xFF2884A0);
 
 class LeconsCoursPage extends StatefulWidget {
   final String coursId;
+  final String coursTitre;
   final RoleEnseignant? role;
   final TabController tabController;
+  final void Function(int questionId)? onNaviguerForum;
+  final bool isPremium;
 
   const LeconsCoursPage({
     super.key,
     required this.coursId,
+    required this.coursTitre,
     this.role,
     required this.tabController,
+    this.onNaviguerForum,
+    this.isPremium = false,
   });
 
   @override
@@ -25,16 +37,11 @@ class LeconsCoursPage extends StatefulWidget {
 
 class _LeconsCoursPageState extends State<LeconsCoursPage> {
   bool loading = true;
-  List modules = [];
-  final Color primaryColor = const Color(0xFF2884A0);
+  List<dynamic> modules = [];
 
-  static const String _baseUrl = 'https://yeki.pythonanywhere.com/api';
-
-  final List<Map<String, String>> enseignants = const [
-    {"nom": "Mr. Talla Jean", "role": "Principal"},
-    {"nom": "Mme Carole Ndongo", "role": "Assistant"},
-    {"nom": "M. Jules Kamtchoum", "role": "Assistant"},
-  ];
+  bool get _canEdit =>
+      widget.role == RoleEnseignant.enseignantCadre ||
+      widget.role == RoleEnseignant.enseignantPrincipal;
 
   @override
   void initState() {
@@ -42,9 +49,15 @@ class _LeconsCoursPageState extends State<LeconsCoursPage> {
     fetchLecons();
   }
 
-  Future<String?> _getToken() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString('token');
+  Future<String?> _getToken() async =>
+      (await SharedPreferences.getInstance()).getString('token');
+
+  Future<Map<String, String>> _authHeaders() async {
+    final token = await _getToken();
+    return {
+      'Content-Type': 'application/json',
+      if (token != null) 'Authorization': 'Token $token',
+    };
   }
 
   Future<void> fetchLecons() async {
@@ -54,19 +67,21 @@ class _LeconsCoursPageState extends State<LeconsCoursPage> {
       setState(() => loading = false);
       return;
     }
+
     try {
       final res = await http.get(
         Uri.parse('$_baseUrl/cours/${widget.coursId}/liste-modules/'),
         headers: {'Authorization': 'Token $token'},
       );
+
       if (res.statusCode == 200) {
         setState(() {
-          modules = jsonDecode(res.body);
+          modules = jsonDecode(res.body) as List;
           loading = false;
         });
       } else {
         setState(() => loading = false);
-        _showError('Erreur ${res.statusCode} lors du chargement des modules.');
+        _showError('Erreur ${res.statusCode}');
       }
     } catch (e) {
       setState(() => loading = false);
@@ -74,142 +89,285 @@ class _LeconsCoursPageState extends State<LeconsCoursPage> {
     }
   }
 
-  void _showError(String message) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: Colors.red),
-    );
+  Future<void> _createModule(String titre, String desc, int ordre) async {
+    final headers = await _authHeaders();
+    try {
+      final res = await http.post(
+        Uri.parse('$_baseUrl/cours/${widget.coursId}/modules/'),
+        headers: headers,
+        body: jsonEncode({'titre': titre, 'description': desc, 'ordre': ordre}),
+      );
+      if (res.statusCode == 201) {
+        _showSuccess('Module créé !');
+        fetchLecons();
+      } else {
+        final e = jsonDecode(res.body);
+        _showError(e['detail'] ?? 'Erreur');
+      }
+    } catch (_) {
+      _showError('Erreur réseau.');
+    }
   }
 
+  Future<void> _updateModule(int id, String titre, String desc, int ordre) async {
+    final headers = await _authHeaders();
+    try {
+      final res = await http.patch(
+        Uri.parse('$_baseUrl/modules/$id/modifier/'),
+        headers: headers,
+        body: jsonEncode({'titre': titre, 'description': desc, 'ordre': ordre}),
+      );
+      if (res.statusCode == 200) {
+        _showSuccess('Module modifié !');
+        fetchLecons();
+      } else {
+        final e = jsonDecode(res.body);
+        _showError(e['detail'] ?? 'Erreur');
+      }
+    } catch (_) {
+      _showError('Erreur réseau.');
+    }
+  }
 
-  // ── Convertit les modules API en liste de Lecon pour LectureLeconPage ────────
-  List<Lecon> _getAllLecons() {
-    final List<Lecon> toutes = [];
-    int numero = 1;
-    for (final module in modules) {
-      final lecons = module["lecons"] as List? ?? [];
-      for (final l in lecons) {
-        toutes.add(Lecon(
-          id: l["id"]?.toString() ?? 'l$numero',
-          numero: numero,
-          titre: l["titre"] ?? "Sans titre",
-          duree: l["duree"] ?? "",
-          description: l["description"] ?? "",
-          hasPdf: (l["fichier_pdf"] != null && l["fichier_pdf"] != ""),
-          estTerminee: l["est_termine"] == true,
-          videoUrl: l["video_url"] ?? "",
+  Future<void> _deleteModule(int id) async {
+    if (await _confirm('Supprimer ce module ?', 'Toutes les leçons liées seront supprimées.') != true)
+      return;
+
+    final headers = await _authHeaders();
+    try {
+      final res = await http.delete(
+        Uri.parse('$_baseUrl/modules/$id/supprimer/'),
+        headers: headers,
+      );
+      if (res.statusCode == 204 || res.statusCode == 200) {
+        _showSuccess('Module supprimé.');
+        fetchLecons();
+      } else {
+        _showError('Erreur suppression.');
+      }
+    } catch (_) {
+      _showError('Erreur réseau.');
+    }
+  }
+
+  Future<void> _createLecon({
+    required String moduleId,
+    required String titre,
+    required String description,
+    PlatformFile? pdfFile,
+    PlatformFile? videoFile,
+  }) async {
+    final token = await _getToken();
+    if (token == null) return;
+
+    try {
+      final req = http.MultipartRequest(
+        'POST',
+        Uri.parse('$_baseUrl/cours/${widget.coursId}/lecons/'),
+      );
+      req.headers['Authorization'] = 'Token $token';
+      req.fields['titre'] = titre;
+      req.fields['description'] = description;
+      req.fields['module'] = moduleId;
+
+      if (pdfFile?.path != null) {
+        req.files.add(await http.MultipartFile.fromPath(
+          'fichier_pdf', pdfFile!.path!,
+          contentType: MediaType('application', 'pdf'),
         ));
-        numero++;
+      }
+      if (videoFile?.path != null) {
+        req.files.add(await http.MultipartFile.fromPath(
+          'video', videoFile!.path!,
+          contentType: MediaType('video', 'mp4'),
+        ));
+      }
+
+      final res = await http.Response.fromStream(await req.send());
+      if (res.statusCode == 201) {
+        _showSuccess('Leçon publiée !');
+        fetchLecons();
+      } else {
+        final e = jsonDecode(res.body);
+        _showError(e['detail'] ?? e.toString());
+      }
+    } catch (e) {
+      _showError('Erreur réseau : $e');
+    }
+  }
+
+  Future<void> _updateLecon({
+    required int leconId,
+    required String titre,
+    required String description,
+    PlatformFile? newPdfFile,
+    PlatformFile? newVideoFile,
+    String? newModuleId,
+  }) async {
+    final token = await _getToken();
+    if (token == null) return;
+
+    try {
+      final req = http.MultipartRequest(
+        'PATCH',
+        Uri.parse('$_baseUrl/lecons/$leconId/modifier/'),
+      );
+      req.headers['Authorization'] = 'Token $token';
+      req.fields['titre'] = titre;
+      req.fields['description'] = description;
+      if (newModuleId != null) req.fields['module'] = newModuleId;
+
+      if (newPdfFile?.path != null) {
+        req.files.add(await http.MultipartFile.fromPath(
+          'fichier_pdf', newPdfFile!.path!,
+          contentType: MediaType('application', 'pdf'),
+        ));
+      }
+      if (newVideoFile?.path != null) {
+        req.files.add(await http.MultipartFile.fromPath(
+          'video', newVideoFile!.path!,
+          contentType: MediaType('video', 'mp4'),
+        ));
+      }
+
+      final res = await http.Response.fromStream(await req.send());
+      if (res.statusCode == 200) {
+        _showSuccess('Leçon modifiée !');
+        fetchLecons();
+      } else {
+        final e = jsonDecode(res.body);
+        _showError(e['detail'] ?? e.toString());
+      }
+    } catch (e) {
+      _showError('Erreur réseau : $e');
+    }
+  }
+
+  Future<void> _deleteLecon(int id) async {
+    if (await _confirm('Supprimer cette leçon ?', 'Action irréversible.') != true) return;
+
+    final headers = await _authHeaders();
+    try {
+      final res = await http.delete(
+        Uri.parse('$_baseUrl/lecons/$id/supprimer/'),
+        headers: headers,
+      );
+      if (res.statusCode == 204 || res.statusCode == 200) {
+        _showSuccess('Leçon supprimée.');
+        fetchLecons();
+      } else {
+        _showError('Erreur suppression.');
+      }
+    } catch (_) {
+      _showError('Erreur réseau.');
+    }
+  }
+
+  int _numeroGlobal(String leconId) {
+    int num = 1;
+    for (final m in modules) {
+      for (final l in (m['lecons'] as List? ?? [])) {
+        if (l['id']?.toString() == leconId) return num;
+        num++;
       }
     }
-    return toutes;
+    return num;
   }
 
-  // ── Navigation vers LectureLeconPage ─────────────────────────────────────────
-  void _ouvrirLecon(Map lecon, int numero) {
-    final toutesLecons = _getAllLecons();
+  // lib/views/pages/apprenants/lecons_cours.dart
+// Modifier la méthode _ouvrirLecon
 
-    // Trouver la leçon correspondante dans la liste complète
-    final leconObj = toutesLecons.firstWhere(
-      (l) => l.id == lecon["id"]?.toString(),
-      orElse: () => Lecon(
-        id: lecon["id"]?.toString() ?? 'l$numero',
-        numero: numero,
-        titre: lecon["titre"] ?? "Sans titre",
-        duree: lecon["duree"] ?? "",
-        description: lecon["description"] ?? "",
-        hasPdf: (lecon["fichier_pdf"] != null && lecon["fichier_pdf"] != ""),
-        estTerminee: lecon["est_termine"] == true,
-        videoUrl: lecon["video_url"] ?? "",
+void _ouvrirLecon(Map leconMap) {
+  final leconId = leconMap['id'] as int;
+  final coursId = int.tryParse(widget.coursId) ?? 0;
+  if (coursId == 0) return;
+  
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (_) => DetailLeconPage(
+        leconId: leconId,
+        coursId: coursId,
+        coursTitre: widget.coursTitre,
       ),
-    );
-
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => DetailLeconPage(
-          lecon: leconObj,
-          toutesLesLecons: toutesLecons.isNotEmpty ? toutesLecons : [leconObj],
-          tabController: widget.tabController,
-        ),
-      ),
-    );
-  }
+    ),
+  );
+}
 
   @override
   Widget build(BuildContext context) {
     if (loading) {
-      return Center(child: CircularProgressIndicator(color: primaryColor));
+      return const Center(child: CircularProgressIndicator(color: _primary));
     }
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 20),
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(22, 20, 22, 100),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header Sommaire
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                "Sommaire du cours",
+              const Text(
+                'Sommaire du cours',
                 style: TextStyle(
-                  fontSize: 20,
+                  fontSize: 24,
                   fontWeight: FontWeight.bold,
-                  color: primaryColor,
+                  color: _primary,
                 ),
               ),
-              if (widget.role == RoleEnseignant.enseignantCadre ||
-                  widget.role == RoleEnseignant.enseignantPrincipal)
-                IconButton(
-                  onPressed: _showCreateModuleDialog,
-                  icon: Icon(Icons.add_box, color: primaryColor, size: 30),
-                  tooltip: 'Créer un module',
+              if (_canEdit)
+                ElevatedButton.icon(
+                  onPressed: () => _showModuleDialog(),
+                  icon: const Icon(Icons.add, size: 18, color: Colors.white),
+                  label: const Text('Module',
+                      style: TextStyle(color: Colors.white, fontSize: 13)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _primary,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    elevation: 0,
+                  ),
                 ),
             ],
           ),
           const SizedBox(height: 20),
-
-          // Liste des modules
           if (modules.isEmpty)
             Center(
-              child: Text(
-                'Aucun module disponible.',
-                style: TextStyle(color: Colors.grey.shade500),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 60),
+                child: Column(
+                  children: [
+                    Icon(Icons.folder_open, size: 60, color: Colors.grey.shade300),
+                    const SizedBox(height: 12),
+                    Text('Aucun module disponible.',
+                        style: TextStyle(color: Colors.grey.shade500)),
+                    if (_canEdit) ...[
+                      const SizedBox(height: 16),
+                      ElevatedButton.icon(
+                        onPressed: () => _showModuleDialog(),
+                        icon: const Icon(Icons.add, color: Colors.white),
+                        label: const Text('Créer le premier module',
+                            style: TextStyle(color: Colors.white)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: _primary,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
               ),
             )
           else
-            ...modules.map((module) => _buildModuleBlock(module)).toList(),
-
-          const SizedBox(height: 30),
-          Text(
-            "Équipe enseignante",
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: primaryColor,
-            ),
-          ),
-          const SizedBox(height: 15),
-
-          SizedBox(
-            height: 150,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              physics: const ClampingScrollPhysics(),
-              itemCount: enseignants.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 15),
-              itemBuilder: (context, index) =>
-                  _buildTeacherCard(enseignants[index]),
-            ),
-          ),
-          const SizedBox(height: 100),
+            ...modules.map((m) => _buildModuleBlock(m)),
         ],
       ),
     );
   }
 
   Widget _buildModuleBlock(Map module) {
-    List lecons = module["lecons"] ?? [];
+    final List lecons = module['lecons'] ?? [];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -217,76 +375,64 @@ class _LeconsCoursPageState extends State<LeconsCoursPage> {
           children: [
             Expanded(
               child: Text(
-                module["titre"] ?? "",
-                style: const TextStyle(
-                  fontSize: 17,
-                  fontWeight: FontWeight.bold,
-                ),
+                module['titre'] ?? '',
+                style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
               ),
             ),
-            if (widget.role == RoleEnseignant.enseignantCadre ||
-                widget.role == RoleEnseignant.enseignantPrincipal)
+            if (_canEdit) ...[
               IconButton(
-                icon: Icon(
-                  Icons.add_circle_outline,
-                  color: primaryColor,
-                  size: 20,
-                ),
-                onPressed: () =>
-                    _showCreateLeconDialog(module["id"].toString()),
-                tooltip: 'Ajouter une leçon',
+                icon: Icon(Icons.edit_outlined, color: Colors.grey.shade500, size: 18),
+                tooltip: 'Modifier le module',
+                onPressed: () => _showModuleDialog(existingModule: module),
               ),
+              IconButton(
+                icon: const Icon(Icons.add_circle_outline, color: _primary, size: 20),
+                tooltip: 'Ajouter une leçon',
+                onPressed: () => _showLeconDialog(moduleId: module['id'].toString()),
+              ),
+              IconButton(
+                icon: const Icon(Icons.delete_outline, color: Colors.red, size: 18),
+                tooltip: 'Supprimer le module',
+                onPressed: () => _deleteModule(module['id'] as int),
+              ),
+            ],
           ],
         ),
-        if (module["description"] != null && module["description"] != '')
-          Text(
-            module["description"],
-            style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+        if ((module['description'] ?? '').isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text(module['description'],
+                style: TextStyle(fontSize: 13, color: Colors.grey.shade600)),
           ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 8),
         Container(
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(15),
             boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.05),
-                blurRadius: 10,
-              ),
+              BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10),
             ],
           ),
           child: lecons.isEmpty
               ? Padding(
                   padding: const EdgeInsets.all(16),
-                  child: Text(
-                    'Aucune leçon dans ce module.',
-                    style: TextStyle(
-                      color: Colors.grey.shade400,
-                      fontSize: 13,
-                    ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.info_outline, size: 16, color: Colors.grey.shade400),
+                      const SizedBox(width: 8),
+                      Text('Aucune leçon dans ce module.',
+                          style: TextStyle(color: Colors.grey.shade400, fontSize: 13)),
+                    ],
                   ),
                 )
               : Column(
                   children: lecons.asMap().entries.map((entry) {
-                    // Calcul du numéro global de la leçon
-                    int globalNum = 1;
-                    for (final m in modules) {
-                      final ls = m["lecons"] as List? ?? [];
-                      for (final l in ls) {
-                        if (l["id"]?.toString() ==
-                            entry.value["id"]?.toString()) {
-                          break;
-                        }
-                        globalNum++;
-                      }
-                      if ((m["lecons"] as List? ?? [])
-                          .any((l) =>
-                              l["id"]?.toString() ==
-                              entry.value["id"]?.toString())) {
-                        break;
-                      }
-                    }
-                    return _buildLeconTile(entry.value, globalNum);
+                    final globalNum = _numeroGlobal(entry.value['id']?.toString() ?? '');
+                    return _buildLeconTile(
+                      entry.value,
+                      globalNum,
+                      module['id'].toString(),
+                    );
                   }).toList(),
                 ),
         ),
@@ -295,36 +441,46 @@ class _LeconsCoursPageState extends State<LeconsCoursPage> {
     );
   }
 
-  Widget _buildLeconTile(Map lecon, int numero) {
+  Widget _buildLeconTile(Map lecon, int numero, String moduleId) {
+    final hasPdf = lecon['fichier_pdf'] != null && lecon['fichier_pdf'] != '';
+    final hasVideo = lecon['video'] != null && lecon['video'] != '';
+
     return InkWell(
-      onTap: () => _ouvrirLecon(lecon, numero), // ← navigation vers LectureLeconPage
+      onTap: () => _ouvrirLecon(lecon),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 15),
+        padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 13),
         decoration: BoxDecoration(
-          border: Border(
-            bottom: BorderSide(color: Colors.grey.shade100),
-          ),
+          border: Border(bottom: BorderSide(color: Colors.grey.shade100)),
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Container(
               margin: const EdgeInsets.only(top: 4),
-              width: 12,
-              height: 12,
+              width: 28,
+              height: 28,
               decoration: BoxDecoration(
-                color: Colors.grey.shade300,
+                color: _primary.withOpacity(0.1),
                 shape: BoxShape.circle,
-                border: Border.all(color: Colors.white, width: 2),
+              ),
+              child: Center(
+                child: Text(
+                  '$numero',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: _primary,
+                  ),
+                ),
               ),
             ),
-            const SizedBox(width: 15),
+            const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    lecon["titre"] ?? "Sans titre",
+                    lecon['titre'] ?? 'Sans titre',
                     style: const TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.bold,
@@ -333,7 +489,7 @@ class _LeconsCoursPageState extends State<LeconsCoursPage> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    lecon["description"] ?? "Aucune description disponible.",
+                    lecon['description'] ?? 'Aucune description.',
                     style: TextStyle(
                       fontSize: 13,
                       color: Colors.grey.shade600,
@@ -342,266 +498,165 @@ class _LeconsCoursPageState extends State<LeconsCoursPage> {
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      if (hasPdf) _badge(Icons.picture_as_pdf, 'PDF', Colors.red),
+                      if (hasVideo) _badge(Icons.videocam, 'Vidéo', Colors.blue),
+                    ],
+                  ),
                 ],
               ),
             ),
-            const Icon(
-              Icons.play_circle_outline,
-              color: Color(0xFF008088),
-              size: 26,
-            ),
+            if (_canEdit)
+              PopupMenuButton<String>(
+                icon: Icon(Icons.more_vert, size: 18, color: Colors.grey.shade400),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                onSelected: (val) {
+                  if (val == 'edit') {
+                    _showLeconDialog(moduleId: moduleId, existingLecon: lecon);
+                  } else if (val == 'delete') {
+                    _deleteLecon(lecon['id'] as int);
+                  } else if (val == 'open') {
+                    _ouvrirLecon(lecon);
+                  }
+                },
+                itemBuilder: (_) => const [
+                  PopupMenuItem(
+                    value: 'open',
+                    child: Row(children: [
+                      Icon(Icons.open_in_new, size: 16, color: _primary),
+                      SizedBox(width: 8),
+                      Text('Ouvrir'),
+                    ]),
+                  ),
+                  PopupMenuItem(
+                    value: 'edit',
+                    child: Row(children: [
+                      Icon(Icons.edit_outlined, size: 16, color: Colors.blue),
+                      SizedBox(width: 8),
+                      Text('Modifier'),
+                    ]),
+                  ),
+                  PopupMenuItem(
+                    value: 'delete',
+                    child: Row(children: [
+                      Icon(Icons.delete_outline, size: 16, color: Colors.red),
+                      SizedBox(width: 8),
+                      Text('Supprimer'),
+                    ]),
+                  ),
+                ],
+              )
+            else
+              IconButton(
+                icon: const Icon(
+                  Icons.play_circle_outline,
+                  color: Color(0xFF008088),
+                  size: 28,
+                ),
+                onPressed: () => _ouvrirLecon(lecon),
+              ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildTeacherCard(Map ens) {
-    return Container(
-      width: 140,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(15),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 5,
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          const CircleAvatar(
-            radius: 25,
-            backgroundColor: Color(0xFFE0F2F1),
-            child: Icon(Icons.person, color: Colors.teal),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            ens["nom"]!,
-            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-            textAlign: TextAlign.center,
-          ),
-          Text(
-            ens["role"]!,
-            style: const TextStyle(fontSize: 10, color: Colors.teal),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildModernField(TextEditingController ctrl, String label,
-      IconData icon, String hint,
-      {int maxLines = 1, bool isNumber = false}) {
-    return TextField(
-      controller: ctrl,
-      maxLines: maxLines,
-      keyboardType:
-          isNumber ? TextInputType.number : TextInputType.text,
-      decoration: InputDecoration(
-        labelText: label,
-        hintText: hint,
-        prefixIcon: Icon(icon, color: primaryColor, size: 20),
-        filled: true,
-        fillColor: Colors.grey[50],
-        border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(15),
-            borderSide: BorderSide.none),
-        focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(15),
-            borderSide: BorderSide(color: primaryColor)),
-      ),
-    );
-  }
-
-  Widget _buildSubmitButton(
-      {required bool isLoading,
-      required String label,
-      required VoidCallback onTap}) {
-    return SizedBox(
-      width: double.infinity,
-      height: 55,
-      child: ElevatedButton(
-        onPressed: isLoading ? null : onTap,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: primaryColor,
-          shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(15)),
-          elevation: 0,
-        ),
-        child: isLoading
-            ? const CircularProgressIndicator(color: Colors.white)
-            : Text(label,
-                style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold)),
-      ),
-    );
-  }
-
-  void _showCreateModuleDialog() {
-    final titreCtrl = TextEditingController();
-    final descCtrl = TextEditingController();
-    final ordreCtrl = TextEditingController();
+  void _showModuleDialog({Map? existingModule}) {
+    final isEdit = existingModule != null;
+    final titreCtrl = TextEditingController(text: isEdit ? existingModule['titre'] ?? '' : '');
+    final descCtrl = TextEditingController(text: isEdit ? existingModule['description'] ?? '' : '');
+    final ordreCtrl = TextEditingController(
+        text: isEdit ? existingModule['ordre'].toString() : (modules.length + 1).toString());
     bool isLoading = false;
-    ordreCtrl.text = (modules.length + 1).toString();
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setStateSheet) => Container(
+        builder: (ctx, setS) => Container(
           decoration: const BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
           ),
           padding: EdgeInsets.only(
-            left: 25,
-            right: 25,
-            top: 15,
-            bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
+            left: 25, right: 25, top: 15,
+            bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                      color: Colors.grey[300],
-                      borderRadius: BorderRadius.circular(10))),
+              _sheetHandle(),
               const SizedBox(height: 20),
-              Text("Nouveau Module",
-                  style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w900,
-                      color: Colors.blueGrey)),
-              const SizedBox(height: 20),
-              _buildModernField(
-                  titreCtrl, "Titre du module", Icons.title, "Ex: Algèbre linéaire"),
-              const SizedBox(height: 15),
-              _buildModernField(descCtrl, "Description",
-                  Icons.description_outlined, "Objectifs du module",
-                  maxLines: 2),
-              const SizedBox(height: 15),
-              _buildModernField(
-                  ordreCtrl, "Position (Ordre)", Icons.sort, "",
-                  isNumber: true),
-              const SizedBox(height: 25),
-              _buildSubmitButton(
-                isLoading: isLoading,
-                label: "Créer le module",
-                onTap: () async {
-                  if (titreCtrl.text.isEmpty) {
-                    return _showError("Titre requis");
-                  }
-                  setStateSheet(() => isLoading = true);
-                },
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: _primary.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(
+                      isEdit ? Icons.edit_note : Icons.add_box_outlined,
+                      color: _primary, size: 22,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    isEdit ? 'Modifier le module' : 'Nouveau module',
+                    style: const TextStyle(
+                      fontSize: 20, fontWeight: FontWeight.w900, color: Color(0xFF1E293B),
+                    ),
+                  ),
+                ],
               ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _showCreateLeconDialog(String moduleId) {
-    final titreCtrl = TextEditingController();
-    final descCtrl = TextEditingController();
-    String? selectedPdfName;
-    bool isLoading = false;
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setStateSheet) => Container(
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
-          ),
-          padding: EdgeInsets.only(
-            left: 25,
-            right: 25,
-            top: 15,
-            bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                      color: Colors.grey[300],
-                      borderRadius: BorderRadius.circular(10))),
               const SizedBox(height: 20),
-              Text("Ajouter une leçon",
-                  style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w900,
-                      color: Colors.blueAccent)),
-              const SizedBox(height: 20),
-              _buildModernField(titreCtrl, "Titre de la leçon",
-                  Icons.menu_book, "Ex: Chapitre 1 : Introduction"),
-              const SizedBox(height: 15),
-              _buildModernField(
-                  descCtrl,
-                  "Résumé / Description",
-                  Icons.short_text,
-                  "De quoi parle cette leçon ?",
-                  maxLines: 3),
-              const SizedBox(height: 15),
-              InkWell(
-                onTap: () async {
-                  final result = await FilePicker.platform.pickFiles(
-                      type: FileType.custom,
-                      allowedExtensions: ['pdf']);
-                  if (result != null) {
-                    setStateSheet(() {
-                      selectedPdfName = result.files.single.name;
-                    });
-                  }
-                },
-                child: Container(
-                  padding: const EdgeInsets.all(15),
-                  decoration: BoxDecoration(
-                    color: primaryColor.withOpacity(0.05),
-                    borderRadius: BorderRadius.circular(15),
-                    border: Border.all(color: primaryColor.withOpacity(0.2)),
+              _field(titreCtrl, 'Titre du module', Icons.title, 'Ex: Algèbre linéaire'),
+              const SizedBox(height: 14),
+              _field(descCtrl, 'Description', Icons.description_outlined,
+                  'Objectifs du module', maxLines: 2),
+              const SizedBox(height: 14),
+              _field(ordreCtrl, 'Position (ordre)', Icons.sort, '', isNumber: true),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity, height: 54,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _primary,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                    elevation: 0,
                   ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.picture_as_pdf, color: primaryColor),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          selectedPdfName ?? "Joindre le support PDF",
-                          style: TextStyle(
-                              color: selectedPdfName != null
-                                  ? Colors.blueAccent
-                                  : Colors.grey[600],
-                              fontSize: 14),
-                          overflow: TextOverflow.ellipsis,
+                  onPressed: isLoading ? null : () async {
+                    if (titreCtrl.text.trim().isEmpty) {
+                      _showError('Le titre est requis.'); return;
+                    }
+                    final ordre = int.tryParse(ordreCtrl.text.trim()) ?? 1;
+                    setS(() => isLoading = true);
+                    Navigator.pop(ctx);
+                    if (isEdit) {
+                      await _updateModule(
+                        existingModule['id'] as int,
+                        titreCtrl.text.trim(), descCtrl.text.trim(), ordre,
+                      );
+                    } else {
+                      await _createModule(
+                        titreCtrl.text.trim(), descCtrl.text.trim(), ordre,
+                      );
+                    }
+                    setS(() => isLoading = false);
+                  },
+                  child: isLoading
+                      ? const CircularProgressIndicator(color: Colors.white)
+                      : Text(
+                          isEdit ? 'Enregistrer les modifications' : 'Créer le module',
+                          style: const TextStyle(
+                            color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold,
+                          ),
                         ),
-                      ),
-                      if (selectedPdfName != null)
-                        Icon(Icons.check_circle, color: primaryColor, size: 20),
-                    ],
-                  ),
                 ),
               ),
-              const SizedBox(height: 25),
-              _buildSubmitButton(
-                isLoading: isLoading,
-                label: "Publier la leçon",
-                onTap: () async {},
-              ),
             ],
           ),
         ),
@@ -609,4 +664,362 @@ class _LeconsCoursPageState extends State<LeconsCoursPage> {
     );
   }
 
+  void _showLeconDialog({required String moduleId, Map? existingLecon}) {
+    final isEdit = existingLecon != null;
+    final titreCtrl = TextEditingController(text: isEdit ? existingLecon['titre'] ?? '' : '');
+    final descCtrl = TextEditingController(text: isEdit ? existingLecon['description'] ?? '' : '');
+    PlatformFile? selectedPdf;
+    PlatformFile? selectedVideo;
+    String? currentPdfName = isEdit && existingLecon['fichier_pdf'] != null ? 'PDF actuel' : null;
+    String? currentVideoName = isEdit && existingLecon['video'] != null ? 'Vidéo actuelle' : null;
+    String selectedModuleId = moduleId;
+    bool isLoading = false;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setS) => Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+          ),
+          padding: EdgeInsets.only(
+            left: 25, right: 25, top: 15,
+            bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _sheetHandle(),
+                const SizedBox(height: 20),
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(
+                        isEdit ? Icons.edit : Icons.menu_book_outlined,
+                        color: Colors.blueAccent, size: 22,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Text(
+                      isEdit ? 'Modifier la leçon' : 'Ajouter une leçon',
+                      style: const TextStyle(
+                        fontSize: 20, fontWeight: FontWeight.w900, color: Color(0xFF1E293B),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                _field(titreCtrl, 'Titre de la leçon', Icons.menu_book, 'Ex: Chapitre 1 : Introduction'),
+                const SizedBox(height: 14),
+                _field(descCtrl, 'Résumé / Description', Icons.short_text,
+                    'De quoi parle cette leçon ?', maxLines: 3),
+                const SizedBox(height: 14),
+                if (isEdit && modules.isNotEmpty) ...[
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade50,
+                      borderRadius: BorderRadius.circular(15),
+                      border: Border.all(color: Colors.grey.shade200),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        isExpanded: true,
+                        value: selectedModuleId,
+                        icon: const Icon(Icons.keyboard_arrow_down, color: _primary),
+                        items: modules.map<DropdownMenuItem<String>>((m) {
+                          return DropdownMenuItem<String>(
+                            value: m['id'].toString(),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.folder_outlined, size: 18, color: _primary),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    m['titre'] ?? 'Module ${m['id']}',
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(fontSize: 14),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        }).toList(),
+                        onChanged: (val) {
+                          if (val != null) setS(() => selectedModuleId = val);
+                        },
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                ],
+                InkWell(
+                  onTap: () async {
+                    final result = await FilePicker.platform.pickFiles(
+                      type: FileType.custom, allowedExtensions: ['pdf'],
+                    );
+                    if (result != null) {
+                      setS(() { selectedPdf = result.files.single; currentPdfName = null; });
+                    }
+                  },
+                  borderRadius: BorderRadius.circular(15),
+                  child: Container(
+                    padding: const EdgeInsets.all(15),
+                    decoration: BoxDecoration(
+                      color: _primary.withOpacity(0.05),
+                      borderRadius: BorderRadius.circular(15),
+                      border: Border.all(
+                        color: selectedPdf != null ? _primary : _primary.withOpacity(0.2),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.picture_as_pdf,
+                            color: selectedPdf != null ? _primary : Colors.grey.shade400),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                selectedPdf != null
+                                    ? selectedPdf!.name
+                                    : (currentPdfName ?? 'Joindre le support PDF'),
+                                style: TextStyle(
+                                  color: selectedPdf != null ? _primary : Colors.grey.shade600,
+                                  fontSize: 14,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              if (currentPdfName != null && selectedPdf == null)
+                                const Text('Cliquez pour remplacer le PDF existant',
+                                    style: TextStyle(fontSize: 10, color: Colors.grey)),
+                            ],
+                          ),
+                        ),
+                        if (selectedPdf != null)
+                          Icon(Icons.check_circle, color: _primary, size: 20)
+                        else if (currentPdfName != null)
+                          Icon(Icons.description, color: Colors.green.shade400, size: 20)
+                        else
+                          Icon(Icons.upload_file, color: Colors.grey.shade400, size: 20),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text('Seuls les fichiers PDF sont acceptés.',
+                    style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
+                const SizedBox(height: 14),
+                InkWell(
+                  onTap: () async {
+                    final result = await FilePicker.platform.pickFiles(
+                      type: FileType.custom,
+                      allowedExtensions: ['mp4', 'mov', 'avi', 'mkv', 'webm'],
+                    );
+                    if (result != null) {
+                      setS(() { selectedVideo = result.files.single; currentVideoName = null; });
+                    }
+                  },
+                  borderRadius: BorderRadius.circular(15),
+                  child: Container(
+                    padding: const EdgeInsets.all(15),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.withOpacity(0.05),
+                      borderRadius: BorderRadius.circular(15),
+                      border: Border.all(
+                        color: selectedVideo != null ? Colors.blueAccent : Colors.blue.withOpacity(0.2),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.videocam_outlined,
+                            color: selectedVideo != null ? Colors.blueAccent : Colors.grey.shade400),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                selectedVideo != null
+                                    ? selectedVideo!.name
+                                    : (currentVideoName ?? 'Joindre une vidéo (optionnel)'),
+                                style: TextStyle(
+                                  color: selectedVideo != null ? Colors.blueAccent : Colors.grey.shade600,
+                                  fontSize: 14,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              if (currentVideoName != null && selectedVideo == null)
+                                const Text('Cliquez pour remplacer la vidéo existante',
+                                    style: TextStyle(fontSize: 10, color: Colors.grey)),
+                            ],
+                          ),
+                        ),
+                        if (selectedVideo != null)
+                          const Icon(Icons.check_circle, color: Colors.blueAccent, size: 20)
+                        else if (currentVideoName != null)
+                          Icon(Icons.videocam, color: Colors.green.shade400, size: 20)
+                        else
+                          Icon(Icons.upload, color: Colors.grey.shade400, size: 20),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text('Formats acceptés : MP4, MOV, AVI, MKV, WEBM.',
+                    style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
+                const SizedBox(height: 24),
+                SizedBox(
+                  width: double.infinity, height: 54,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blueAccent,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                      elevation: 0,
+                    ),
+                    onPressed: isLoading ? null : () async {
+                      if (titreCtrl.text.trim().isEmpty) {
+                        _showError('Le titre est requis.'); return;
+                      }
+                      setS(() => isLoading = true);
+                      Navigator.pop(ctx);
+                      if (isEdit) {
+                        await _updateLecon(
+                          leconId: existingLecon['id'] as int,
+                          titre: titreCtrl.text.trim(),
+                          description: descCtrl.text.trim(),
+                          newPdfFile: selectedPdf,
+                          newVideoFile: selectedVideo,
+                          newModuleId: selectedModuleId,
+                        );
+                      } else {
+                        await _createLecon(
+                          moduleId: moduleId,
+                          titre: titreCtrl.text.trim(),
+                          description: descCtrl.text.trim(),
+                          pdfFile: selectedPdf,
+                          videoFile: selectedVideo,
+                        );
+                      }
+                      setS(() => isLoading = false);
+                    },
+                    child: isLoading
+                        ? const CircularProgressIndicator(color: Colors.white)
+                        : Text(
+                            isEdit ? 'Enregistrer les modifications' : 'Publier la leçon',
+                            style: const TextStyle(
+                              color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<bool?> _confirm(String title, String content) => showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      title: Text(title),
+      content: Text(content),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(ctx, false),
+          child: const Text('Annuler'),
+        ),
+        ElevatedButton(
+          style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+          onPressed: () => Navigator.pop(ctx, true),
+          child: const Text('Supprimer', style: TextStyle(color: Colors.white)),
+        ),
+      ],
+    ),
+  );
+
+  Widget _badge(IconData icon, String text, Color color) => Container(
+    margin: const EdgeInsets.only(right: 6),
+    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+    decoration: BoxDecoration(
+      color: color.withOpacity(0.1),
+      borderRadius: BorderRadius.circular(6),
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 10, color: color),
+        const SizedBox(width: 3),
+        Text(text, style: TextStyle(fontSize: 10, color: color, fontWeight: FontWeight.bold)),
+      ],
+    ),
+  );
+
+  Widget _field(
+    TextEditingController ctrl,
+    String label,
+    IconData icon,
+    String hint, {
+    int maxLines = 1,
+    bool isNumber = false,
+  }) =>
+      TextField(
+        controller: ctrl,
+        maxLines: maxLines,
+        keyboardType: isNumber ? TextInputType.number : TextInputType.text,
+        decoration: InputDecoration(
+          labelText: label,
+          hintText: hint,
+          prefixIcon: Icon(icon, color: _primary, size: 20),
+          filled: true,
+          fillColor: Colors.grey.shade50,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(15),
+            borderSide: BorderSide.none,
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(15),
+            borderSide: BorderSide(color: Colors.grey.shade200),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(15),
+            borderSide: const BorderSide(color: _primary),
+          ),
+        ),
+      );
+
+  Widget _sheetHandle() => Center(
+    child: Container(
+      width: 40, height: 4,
+      decoration: BoxDecoration(
+        color: Colors.grey.shade300,
+        borderRadius: BorderRadius.circular(10),
+      ),
+    ),
+  );
+
+  void _showError(String msg) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(msg), backgroundColor: Colors.red));
+  }
+
+  void _showSuccess(String msg) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(msg), backgroundColor: Colors.green));
+  }
 }

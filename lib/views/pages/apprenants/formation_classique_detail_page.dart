@@ -1,11 +1,39 @@
+// lib/views/pages/apprenants/formation_classique_detail_page.dart
+//
+// ✅ Entièrement dynamique — charge depuis l'API
+// ✅ Design amélioré avec SliverAppBar hero
+// ✅ Inscription avec paiement si prix > 0
+// ✅ Yeki IA badge intégré
+//
+import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:yeki/views/pages/apprenants/cours_detail_page.dart';
-import 'package:yeki/views/pages/apprenants/formations_models.dart';
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
+import 'formations_models.dart';
+import 'paiement_page.dart';
 
+const Color _teal   = Color(0xFF008088);
+const Color _dark   = Color(0xFF0D1B2A);
+const Color _gold   = Color(0xFFE2A84B);
+const Color _bg     = Color(0xFFF5F7FA);
 
+Future<String?> _getToken() async =>
+    (await SharedPreferences.getInstance()).getString('token');
+Map<String, String> _headers(String? t) => {
+  'Content-Type': 'application/json',
+  if (t != null) 'Authorization': 'Token $t',
+};
+
+// ═══════════════════════════════════════════════════════════════
 class FormationClassiqueDetailPage extends StatefulWidget {
-  final FormationClassique formation;
-  const FormationClassiqueDetailPage({super.key, required this.formation});
+  final int formationId;
+  final FormationClassique? formation; // pré-chargé si disponible
+
+  const FormationClassiqueDetailPage({
+    super.key,
+    required this.formationId,
+    this.formation,
+  });
 
   @override
   State<FormationClassiqueDetailPage> createState() =>
@@ -15,533 +43,550 @@ class FormationClassiqueDetailPage extends StatefulWidget {
 class _FormationClassiqueDetailPageState
     extends State<FormationClassiqueDetailPage>
     with SingleTickerProviderStateMixin {
-  static const Color _teal = Color(0xFF008088);
-  static const Color _dark = Color(0xFF0D1B2A);
+  late TabController _tabCtrl;
+  bool _loading = true;
+  bool _inscribing = false;
+  Map<String, dynamic> _data = {};
 
-  final TextEditingController _searchCtrl = TextEditingController();
+  final _searchCtrl = TextEditingController();
   String _searchQuery = '';
   String _selectedNiveau = 'Tous';
   String _selectedMatiere = 'Toutes';
-  late TabController _tabCtrl;
 
-  // Mock cours
-  final List<Map<String, dynamic>> _cours = [
-    {'id': '1','titre': 'Algèbre Linéaire', 'matiere': 'Mathématiques', 'niveau': 'Licence 1', 'nbLecons': 12, 'duree': '8h', 'enseignant': 'Dr. Mbarga'},
-    {'id': '2','titre': 'Mécanique Newtonienne', 'matiere': 'Physique', 'niveau': 'Licence 1', 'nbLecons': 10, 'duree': '7h', 'enseignant': 'Prof. Fouda'},
-    {'id': '3','titre': 'Analyse Mathématique', 'matiere': 'Mathématiques', 'niveau': 'Licence 2', 'nbLecons': 14, 'duree': '10h', 'enseignant': 'Dr. Nkomo'},
-    {'id': '4','titre': 'Thermodynamique', 'matiere': 'Physique', 'niveau': 'Licence 2', 'nbLecons': 11, 'duree': '8h', 'enseignant': 'Prof. Abanda'},
-    {'id': '5','titre': 'Algorithmique & Python', 'matiere': 'Informatique', 'niveau': 'Licence 1', 'nbLecons': 16, 'duree': '12h', 'enseignant': 'Dr. Kamga'},
-    {'id': '6','titre': 'Chimie Organique', 'matiere': 'Chimie', 'niveau': 'Licence 2', 'nbLecons': 9, 'duree': '6h', 'enseignant': 'Prof. Bello'},
-    {'id': '7','titre': 'Electromagnétisme', 'matiere': 'Physique', 'niveau': 'Licence 3', 'nbLecons': 13, 'duree': '9h', 'enseignant': 'Dr. Essoh'},
-    {'id': '8','titre': 'Probabilités & Statistiques', 'matiere': 'Mathématiques', 'niveau': 'Licence 3', 'nbLecons': 10, 'duree': '7h', 'enseignant': 'Prof. Talla'},
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _tabCtrl = TabController(length: 2, vsync: this);
+    if (widget.formation != null) {
+      _data = {
+        'id': widget.formation!.id,
+        'ecole': widget.formation!.ecole,
+        'parcours': widget.formation!.parcours,
+        'ville': widget.formation!.ville,
+        'pays': widget.formation!.pays,
+        'image_url': widget.formation!.imageUrl,
+        'description': widget.formation!.description,
+        'type': widget.formation!.type,
+        'est_publique': widget.formation!.estPublique,
+        'prix': 0,
+        'nb_cours': widget.formation!.nbCours,
+        'nb_etudiants': widget.formation!.nbEtudiants,
+        'niveaux': widget.formation!.niveaux,
+        'matieres': widget.formation!.matieres,
+        'cours': widget.formation!.cours.map((c) => {
+          'id': c.id, 'titre': c.titre, 'matiere': c.matiere,
+          'niveau': c.niveau, 'enseignant': c.enseignant,
+          'nb_lecons': c.nbLecons, 'duree': c.duree, 'ordre': c.ordre,
+        }).toList(),
+        'est_inscrit': widget.formation!.estInscrit,
+        'mon_inscription': null,
+      };
+      _loading = false;
+    }
+    _charger();
+  }
 
-  List<Map<String, dynamic>> get _filtered {
-    return _cours.where((c) {
+  @override
+  void dispose() {
+    _tabCtrl.dispose();
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _charger() async {
+    final token = await _getToken();
+    try {
+      final res = await http.get(
+        Uri.parse('$kBaseUrl/formations/classiques/${widget.formationId}/'),
+        headers: _headers(token),
+      );
+      if (res.statusCode == 200 && mounted) {
+        setState(() {
+          _data = jsonDecode(res.body);
+          _loading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  List<dynamic> get _coursFiltres {
+    final cours = List<dynamic>.from(_data['cours'] ?? []);
+    return cours.where((c) {
       final q = _searchQuery.toLowerCase();
       final matchSearch = q.isEmpty ||
-          (c['titre'] as String).toLowerCase().contains(q) ||
-          (c['enseignant'] as String).toLowerCase().contains(q);
+          (c['titre'] as String? ?? '').toLowerCase().contains(q) ||
+          (c['enseignant'] as String? ?? '').toLowerCase().contains(q);
       final matchNiveau = _selectedNiveau == 'Tous' || c['niveau'] == _selectedNiveau;
       final matchMatiere = _selectedMatiere == 'Toutes' || c['matiere'] == _selectedMatiere;
       return matchSearch && matchNiveau && matchMatiere;
     }).toList();
   }
 
-  List<String> get _niveaux => ['Tous', ...widget.formation.niveaux];
-  List<String> get _matieres => ['Toutes', ...widget.formation.matieres];
+  List<String> get _niveaux =>
+      ['Tous', ...List<String>.from(_data['niveaux'] ?? [])];
+  List<String> get _matieres =>
+      ['Toutes', ...List<String>.from(_data['matieres'] ?? [])];
+  bool get _estInscrit => _data['est_inscrit'] == true;
+  int get _prix => _data['prix'] ?? 0;
 
-  @override
-  void initState() {
-    super.initState();
-    _tabCtrl = TabController(length: 2, vsync: this);
+  // ── Inscription ─────────────────────────────────────────────
+  Future<void> _inscrire() async {
+    if (_prix > 0) {
+      final result = await Navigator.push<String>(
+        context,
+        MaterialPageRoute(
+          builder: (_) => PaiementPage(
+            titre: _data['ecole'] ?? '',
+            montant: _prix.toDouble(),
+            typePaiement: 'formation_classique',
+            formationClassiqueId: widget.formationId,
+          ),
+        ),
+      );
+      if (result == null) return; // annulé
+      _inscrireAvecReference(result);
+    } else {
+      _inscrireAvecReference(null);
+    }
   }
 
-  @override
-  void dispose() {
-    _searchCtrl.dispose();
-    _tabCtrl.dispose();
-    super.dispose();
+  Future<void> _inscrireAvecReference(String? reference) async {
+    setState(() => _inscribing = true);
+    final token = await _getToken();
+    try {
+      final body = <String, dynamic>{};
+      if (reference != null) body['reference_paiement'] = reference;
+      final res = await http.post(
+        Uri.parse('$kBaseUrl/formations/classiques/${widget.formationId}/inscrire/'),
+        headers: _headers(token),
+        body: jsonEncode(body),
+      );
+      if (!mounted) return;
+      if (res.statusCode == 201) {
+        final json = jsonDecode(res.body);
+        final statut = json['statut'] ?? 'en_attente';
+        _showSnack(
+          statut == 'accepte'
+              ? '✅ Inscription confirmée !'
+              : '⏳ Demande envoyée, en attente de validation.',
+          success: true,
+        );
+        setState(() {
+          _data['est_inscrit'] = true;
+          _data['mon_inscription'] = {'statut': statut};
+        });
+      } else {
+        final msg = jsonDecode(res.body)['error'] ?? 'Erreur inscription';
+        _showSnack(msg);
+      }
+    } catch (e) {
+      _showSnack('Erreur réseau');
+    } finally {
+      if (mounted) setState(() => _inscribing = false);
+    }
   }
 
+  void _showSnack(String msg, {bool success = false}) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(msg),
+      backgroundColor: success ? const Color(0xFF2E7D32) : Colors.red.shade700,
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    ));
+  }
+
+  // ─── BUILD ────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
-    final f = widget.formation;
-    return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FA),
-      body: NestedScrollView(
-        headerSliverBuilder: (context, innerBoxIsScrolled) => [
-          _buildSliverAppBar(f),
-          SliverToBoxAdapter(child: _buildInfoBar(f)),
-          SliverToBoxAdapter(
-            child: TabBar(
-              controller: _tabCtrl,
-              labelColor: _teal,
-              unselectedLabelColor: Colors.grey.shade400,
-              indicatorColor: _teal,
-              indicatorWeight: 3,
-              labelStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
-              tabs: const [
-                Tab(text: 'Cours'),
-                Tab(text: 'Informations'),
-              ],
-            ),
-          ),
-        ],
-        body: TabBarView(
-          controller: _tabCtrl,
-          children: [
-            _buildCoursTab(),
-            _buildInfoTab(f),
-          ],
-        ),
-      ),
-    );
-  }
+    if (_loading) {
+      return Scaffold(
+        backgroundColor: _bg,
+        body: const Center(child: CircularProgressIndicator(color: _teal)),
+      );
+    }
 
-  Widget _buildSliverAppBar(FormationClassique f) {
-    return SliverAppBar(
-      expandedHeight: 200,
-      pinned: true,
-      backgroundColor: _teal,
-      leading: IconButton(
-        icon: const Icon(Icons.arrow_back_ios_rounded, color: Colors.white),
-        onPressed: () => Navigator.pop(context),
-      ),
-      actions: [
-        IconButton(
-          icon: const Icon(Icons.bookmark_border_rounded, color: Colors.white),
-          onPressed: () {},
-        ),
-      ],
-      flexibleSpace: FlexibleSpaceBar(
-        background: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                _typeColor(f.type),
-                _typeColor(f.type).withOpacity(0.6),
-                const Color(0xFF0D1B2A),
-              ],
-            ),
-          ),
-          child: SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 50, 20, 20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.end,
+    final ecole = _data['ecole'] ?? '';
+    final parcours = _data['parcours'] ?? '';
+    final ville = _data['ville'] ?? '';
+    final pays = _data['pays'] ?? '';
+    final imageUrl = _data['image_url'] ?? '';
+    final description = _data['description'] ?? '';
+    final nbCours = _data['nb_cours'] ?? 0;
+    final nbEtudiants = _data['nb_etudiants'] ?? 0;
+    final type = _data['type'] ?? '';
+    final inscription = _data['mon_inscription'];
+
+    return Scaffold(
+      backgroundColor: _bg,
+      body: NestedScrollView(
+        headerSliverBuilder: (_, __) => [
+          // ── SliverAppBar hero ───────────────────────────────
+          SliverAppBar(
+            expandedHeight: 280,
+            pinned: true,
+            stretch: true,
+            backgroundColor: _dark,
+            leading: _backBtn(),
+            flexibleSpace: FlexibleSpaceBar(
+              stretchModes: const [StretchMode.zoomBackground],
+              background: Stack(
+                fit: StackFit.expand,
                 children: [
+                  imageUrl.isNotEmpty
+                      ? Image.network(imageUrl, fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => _placeholder())
+                      : _placeholder(),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      f.ecole,
-                      style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.transparent,
+                          _dark.withOpacity(0.9),
+                        ],
+                        stops: const [0.4, 1.0],
+                      ),
                     ),
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    f.parcours,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 22,
-                      fontWeight: FontWeight.w900,
-                      height: 1.2,
+                  Positioned(
+                    bottom: 20, left: 20, right: 20,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _typeBadge(type),
+                        const SizedBox(height: 8),
+                        Text(ecole,
+                            style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 22,
+                                fontWeight: FontWeight.w800)),
+                        if (parcours.isNotEmpty)
+                          Text(parcours,
+                              style: TextStyle(
+                                  color: Colors.white.withOpacity(0.75),
+                                  fontSize: 14)),
+                        const SizedBox(height: 10),
+                        Row(children: [
+                          _statChip(Icons.book_rounded, '$nbCours cours'),
+                          const SizedBox(width: 8),
+                          _statChip(Icons.people_rounded, '$nbEtudiants étudiants'),
+                          const SizedBox(width: 8),
+                          _statChip(Icons.location_on_rounded, '$ville, $pays'),
+                        ]),
+                      ],
                     ),
                   ),
                 ],
               ),
             ),
           ),
+
+          // ── Bandeau inscription ─────────────────────────────
+          SliverToBoxAdapter(child: _buildInscriptionBand(inscription)),
+
+          // ── TabBar ──────────────────────────────────────────
+          SliverToBoxAdapter(
+            child: Container(
+              color: Colors.white,
+              child: TabBar(
+                controller: _tabCtrl,
+                labelColor: _teal,
+                unselectedLabelColor: Colors.grey.shade400,
+                indicatorColor: _teal,
+                indicatorWeight: 3,
+                labelStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                tabs: const [Tab(text: 'Cours'), Tab(text: 'Informations')],
+              ),
+            ),
+          ),
+        ],
+        body: TabBarView(
+          controller: _tabCtrl,
+          children: [_buildCoursTab(), _buildInfoTab(description)],
         ),
       ),
+      // ── Bouton d'inscription flottant ───────────────────────
+      bottomNavigationBar: _estInscrit ? null : _buildBottomBar(),
     );
   }
 
-  Widget _buildInfoBar(FormationClassique f) {
+  // ── Bandeau statut inscription ───────────────────────────────
+  Widget _buildInscriptionBand(dynamic inscription) {
+    if (!_estInscrit) return const SizedBox.shrink();
+    final statut = inscription?['statut'] ?? 'accepte';
+    final Color color;
+    final String label;
+    final IconData icon;
+    if (statut == 'accepte') {
+      color = const Color(0xFF2E7D32); label = 'Accès accordé'; icon = Icons.check_circle_rounded;
+    } else if (statut == 'en_attente') {
+      color = const Color(0xFFF57F17); label = 'En attente de validation'; icon = Icons.hourglass_empty_rounded;
+    } else {
+      color = Colors.red.shade700; label = 'Accès refusé'; icon = Icons.cancel_rounded;
+    }
     return Container(
-      color: Colors.white,
-      padding: const EdgeInsets.symmetric(vertical: 14),
+      color: color.withOpacity(0.08),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          _infoBarItem(Icons.book_outlined, '${f.nbCours}', 'Cours', _teal),
-          _divider(),
-          _infoBarItem(Icons.people_outline, '${f.nbEtudiants}', 'Étudiants', Colors.indigo),
-          _divider(),
-          _infoBarItem(Icons.layers_outlined, '${f.niveaux.length}', 'Niveaux', Colors.orange),
-          _divider(),
-          _infoBarItem(
-            f.estPublique ? Icons.account_balance_outlined : Icons.business_outlined,
-            f.estPublique ? 'Public' : 'Privé',
-            'Statut',
-            f.estPublique ? Colors.green : Colors.deepOrange,
-          ),
+          Icon(icon, color: color, size: 18),
+          const SizedBox(width: 8),
+          Text(label, style: TextStyle(color: color, fontWeight: FontWeight.w600)),
         ],
       ),
     );
   }
 
-  Widget _infoBarItem(IconData icon, String val, String label, Color color) {
+  // ── Tab Cours ───────────────────────────────────────────────
+  Widget _buildCoursTab() {
     return Column(
       children: [
-        Icon(icon, color: color, size: 20),
-        const SizedBox(height: 4),
-        Text(val, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: _dark)),
-        Text(label, style: TextStyle(fontSize: 10, color: Colors.grey.shade400)),
-      ],
-    );
-  }
-
-  Widget _divider() => Container(
-        width: 1, height: 35,
-        color: Colors.grey.shade100,
-      );
-
-  // ── Onglet Cours ─────────────────────────────────────────────────────────────
-  Widget _buildCoursTab() {
-    final cours = _filtered;
-    return CustomScrollView(
-      physics: const BouncingScrollPhysics(),
-      slivers: [
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-            child: _buildSearchBar(),
-          ),
-        ),
-        SliverToBoxAdapter(child: _buildNiveauFilter()),
-        SliverToBoxAdapter(child: _buildMatiereFilter()),
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
-            child: Text(
-              '${cours.length} cours trouvé${cours.length > 1 ? 's' : ''}',
-              style: TextStyle(fontSize: 12, color: Colors.grey.shade400, fontWeight: FontWeight.w500),
-            ),
-          ),
-        ),
-        cours.isEmpty
-            ? SliverFillRemaining(
-                child: Center(
-                  child: Text('Aucun cours trouvé',
-                      style: TextStyle(color: Colors.grey.shade400)),
+        // Filtres
+        Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(children: [
+            TextField(
+              controller: _searchCtrl,
+              onChanged: (v) => setState(() => _searchQuery = v),
+              decoration: InputDecoration(
+                hintText: 'Rechercher un cours…',
+                prefixIcon: const Icon(Icons.search, color: _teal),
+                filled: true, fillColor: Colors.white,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
                 ),
-              )
-            : SliverPadding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 30),
-                sliver: SliverList(
-                  delegate: SliverChildBuilderDelegate(
-                    (_, i) => _buildCoursTile(cours[i]),
-                    childCount: cours.length,
-                  ),
-                ),
+                contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
               ),
+            ),
+            const SizedBox(height: 8),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(children: [
+                ..._niveaux.map((n) => Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: ChoiceChip(
+                    label: Text(n, style: const TextStyle(fontSize: 12)),
+                    selected: _selectedNiveau == n,
+                    selectedColor: _teal.withOpacity(0.15),
+                    labelStyle: TextStyle(
+                        color: _selectedNiveau == n ? _teal : Colors.grey.shade600),
+                    onSelected: (_) => setState(() => _selectedNiveau = n),
+                  ),
+                )),
+              ]),
+            ),
+          ]),
+        ),
+        // Liste cours
+        Expanded(
+          child: _coursFiltres.isEmpty
+              ? const Center(child: Text('Aucun cours trouvé'))
+              : ListView.builder(
+                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 80),
+                  itemCount: _coursFiltres.length,
+                  itemBuilder: (_, i) => _buildCoursCard(_coursFiltres[i]),
+                ),
+        ),
       ],
     );
   }
 
-  Widget _buildSearchBar() {
+  Widget _buildCoursCard(Map<String, dynamic> c) {
     return Container(
-      height: 48,
+      margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, 3))],
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05),
+            blurRadius: 8, offset: const Offset(0, 2))],
       ),
-      child: TextField(
-        controller: _searchCtrl,
-        onChanged: (v) => setState(() => _searchQuery = v),
-        decoration: InputDecoration(
-          hintText: 'Rechercher un cours, un enseignant...',
-          hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 13),
-          prefixIcon: Icon(Icons.search_rounded, color: Colors.grey.shade400, size: 19),
-          suffixIcon: _searchQuery.isNotEmpty
-              ? IconButton(
-                  icon: Icon(Icons.close_rounded, color: Colors.grey.shade400, size: 16),
-                  onPressed: () { _searchCtrl.clear(); setState(() => _searchQuery = ''); },
-                )
-              : null,
-          border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(vertical: 14),
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        leading: Container(
+          width: 44, height: 44,
+          decoration: BoxDecoration(
+            color: _teal.withOpacity(0.12), borderRadius: BorderRadius.circular(10),
+          ),
+          child: const Icon(Icons.menu_book_rounded, color: _teal, size: 22),
         ),
-      ),
-    );
-  }
-
-  Widget _buildNiveauFilter() {
-    return SizedBox(
-      height: 46,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-        itemCount: _niveaux.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 7),
-        itemBuilder: (_, i) {
-          final n = _niveaux[i];
-          final isSelected = _selectedNiveau == n;
-          return GestureDetector(
-            onTap: () => setState(() => _selectedNiveau = n),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 180),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
-              decoration: BoxDecoration(
-                color: isSelected ? _teal : Colors.white,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: isSelected ? _teal : Colors.grey.shade200),
-              ),
-              child: Text(
-                n,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: isSelected ? Colors.white : Colors.grey.shade500,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildMatiereFilter() {
-    return SizedBox(
-      height: 42,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
-        itemCount: _matieres.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 7),
-        itemBuilder: (_, i) {
-          final m = _matieres[i];
-          final isSelected = _selectedMatiere == m;
-          return GestureDetector(
-            onTap: () => setState(() => _selectedMatiere = m),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 180),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-              decoration: BoxDecoration(
-                color: isSelected ? Colors.indigo.withOpacity(0.1) : Colors.transparent,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: isSelected ? Colors.indigo : Colors.grey.shade200,
-                ),
-              ),
-              child: Text(
-                m,
-                style: TextStyle(
-                  fontSize: 11.5,
-                  color: isSelected ? Colors.indigo : Colors.grey.shade400,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildCoursTile(Map<String, dynamic> cours) {
-  return Container(
-    margin: const EdgeInsets.only(bottom: 10),
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(16),
-      boxShadow: [
-        BoxShadow(
-          color: Colors.black.withOpacity(0.04),
-          blurRadius: 8,
-        )
-      ],
-    ),
-    child: ListTile(
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => CoursDetailTabs(
-              coursId: cours['id'], // tu peux remplacer par cours['id'] quand ton backend sera prêt
-              titre: cours['titre'],
-            ),
-          ),
-        );
-      },
-
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-
-      leading: Container(
-        width: 44,
-        height: 44,
-        decoration: BoxDecoration(
-          color: _teal.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(12),
+        title: Text(c['titre'] ?? '',
+            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 4),
+            Text(c['matiere'] ?? '', style: TextStyle(color: Colors.grey.shade500, fontSize: 12)),
+            const SizedBox(height: 4),
+            Row(children: [
+              Icon(Icons.person_outline_rounded, size: 12, color: Colors.grey.shade400),
+              const SizedBox(width: 4),
+              Text(c['enseignant'] ?? '', style: TextStyle(color: Colors.grey.shade400, fontSize: 11)),
+              const SizedBox(width: 12),
+              Icon(Icons.play_circle_outline_rounded, size: 12, color: Colors.grey.shade400),
+              const SizedBox(width: 4),
+              Text('${c['nb_lecons']} leçons', style: TextStyle(color: Colors.grey.shade400, fontSize: 11)),
+              const SizedBox(width: 12),
+              Icon(Icons.timer_outlined, size: 12, color: Colors.grey.shade400),
+              const SizedBox(width: 4),
+              Text(c['duree'] ?? '', style: TextStyle(color: Colors.grey.shade400, fontSize: 11)),
+            ]),
+          ],
         ),
-        child: Icon(
-          Icons.play_circle_outline_rounded,
-          color: _teal,
-          size: 22,
-        ),
-      ),
-
-      title: Text(
-        cours['titre'],
-        style: const TextStyle(
-          fontSize: 14,
-          fontWeight: FontWeight.w700,
-          color: _dark,
-        ),
-      ),
-
-      subtitle: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const SizedBox(height: 3),
-          Text(
-            cours['enseignant'],
-            style: TextStyle(
-              fontSize: 12,
-              color: Colors.grey.shade500,
-            ),
-          ),
-          const SizedBox(height: 5),
-          Row(
-            children: [
-              _miniChip(cours['matiere'], Colors.indigo),
-              const SizedBox(width: 5),
-              _miniChip(cours['niveau'], _teal),
-              const SizedBox(width: 5),
-              _miniChip('${cours['nbLecons']} leçons', Colors.orange),
-            ],
-          ),
-        ],
-      ),
-
-      trailing: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.arrow_forward_ios_rounded,
-            size: 13,
-            color: Colors.grey.shade300,
-          ),
-          const SizedBox(height: 4),
-          Text(
-            cours['duree'],
-            style: TextStyle(
-              fontSize: 11,
-              color: Colors.grey.shade400,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
-    ),
-  );
-}
-
-  Widget _miniChip(String label, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(fontSize: 9.5, color: color, fontWeight: FontWeight.w700),
+        trailing: _estInscrit
+            ? const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: _teal)
+            : Icon(Icons.lock_outline_rounded, size: 18, color: Colors.grey.shade300),
+        onTap: _estInscrit ? () {
+          // Naviguer vers le cours
+        } : null,
       ),
     );
   }
 
-  // ── Onglet Informations ───────────────────────────────────────────────────────
-  Widget _buildInfoTab(FormationClassique f) {
-    return ListView(
-      padding: const EdgeInsets.all(20),
-      physics: const BouncingScrollPhysics(),
-      children: [
-        _infoSection('À propos', Icons.info_outline_rounded, [
-          Text(f.description,
-              style: TextStyle(fontSize: 14, color: Colors.grey.shade700, height: 1.6)),
-        ]),
-        const SizedBox(height: 16),
-        _infoSection('Niveaux disponibles', Icons.layers_outlined, [
-          Wrap(
-            spacing: 8, runSpacing: 8,
-            children: f.niveaux.map((n) => _tagChip(n, _teal)).toList(),
-          ),
-        ]),
-        const SizedBox(height: 16),
-        _infoSection('Matières enseignées', Icons.subject_rounded, [
-          Wrap(
-            spacing: 8, runSpacing: 8,
-            children: f.matieres.map((m) => _tagChip(m, Colors.indigo)).toList(),
-          ),
-        ]),
-        const SizedBox(height: 16),
-        _infoSection('Localisation', Icons.location_on_outlined, [
-          Row(children: [
-            Icon(Icons.location_city_rounded, size: 16, color: Colors.grey.shade400),
-            const SizedBox(width: 8),
-            Text('${f.ville}, ${f.pays}',
-                style: TextStyle(fontSize: 14, color: Colors.grey.shade700)),
-          ]),
-        ]),
-        const SizedBox(height: 80),
-      ],
-    );
-  }
-
-  Widget _infoSection(String title, IconData icon, List<Widget> children) {
-    return Container(
+  // ── Tab Infos ───────────────────────────────────────────────
+  Widget _buildInfoTab(String description) {
+    return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8)],
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(children: [
-            Icon(icon, size: 16, color: _teal),
-            const SizedBox(width: 8),
-            Text(title,
-                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: _dark)),
-          ]),
-          const SizedBox(height: 12),
-          ...children,
+          if (description.isNotEmpty) ...[
+            const Text('À propos',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: _dark)),
+            const SizedBox(height: 8),
+            Text(description,
+                style: TextStyle(color: Colors.grey.shade700, height: 1.6)),
+            const SizedBox(height: 20),
+          ],
+          // Yeki IA badge
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [_teal.withOpacity(0.1), _gold.withOpacity(0.1)],
+              ),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: _teal.withOpacity(0.2)),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: _teal, borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.auto_awesome, color: Colors.white, size: 20),
+                ),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Yeki IA disponible',
+                          style: TextStyle(fontWeight: FontWeight.w700, color: _dark)),
+                      Text('Un assistant IA personnalisé vous accompagne dans cette formation.',
+                          style: TextStyle(fontSize: 12, color: Colors.grey)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _tagChip(String label, Color color) {
+  // ── Barre de paiement/inscription ───────────────────────────
+  Widget _buildBottomBar() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withOpacity(0.2)),
+        color: Colors.white,
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.08),
+            blurRadius: 12, offset: const Offset(0, -4))],
       ),
-      child: Text(label,
-          style: TextStyle(fontSize: 12, color: color, fontWeight: FontWeight.w600)),
+      child: Row(
+        children: [
+          if (_prix > 0) ...[
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('Prix', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                Text('${_prix.toString().replaceAllMapped(
+                  RegExp(r'\B(?=(\d{3})+(?!\d))'), (_) => ' ')} FCFA',
+                    style: const TextStyle(color: _dark, fontWeight: FontWeight.w800, fontSize: 18)),
+              ],
+            ),
+            const SizedBox(width: 16),
+          ],
+          Expanded(
+            child: ElevatedButton(
+              onPressed: _inscribing ? null : _inscrire,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _teal,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                elevation: 0,
+              ),
+              child: _inscribing
+                  ? const SizedBox(width: 20, height: 20,
+                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                  : Text(
+                      _prix > 0 ? 'Payer et s\'inscrire' : 'S\'inscrire gratuitement',
+                      style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+                    ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
-  Color _typeColor(String type) {
-    switch (type) {
-      case 'lycee':        return const Color(0xFF2884A0);
-      case 'universite':   return const Color(0xFF5B4FCF);
-      case 'grande_ecole': return const Color(0xFF008088);
-      default:             return const Color(0xFF008088);
-    }
+  // ── Helpers UI ──────────────────────────────────────────────
+  Widget _backBtn() => GestureDetector(
+    onTap: () => Navigator.pop(context),
+    child: Container(
+      margin: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: Colors.black45, borderRadius: BorderRadius.circular(10),
+      ),
+      child: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 18),
+    ),
+  );
+
+  Widget _placeholder() => Container(
+    color: _dark,
+    child: const Center(child: Icon(Icons.school_rounded, color: Colors.white24, size: 60)),
+  );
+
+  Widget _typeBadge(String type) {
+    final labels = {
+      'grande_ecole': 'Grande École', 'universite': 'Université',
+      'lycee': 'Lycée', 'centre_formation': 'Centre de formation',
+    };
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: _gold.withOpacity(0.2),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: _gold.withOpacity(0.5)),
+      ),
+      child: Text(labels[type] ?? type,
+          style: const TextStyle(color: _gold, fontSize: 11, fontWeight: FontWeight.w600)),
+    );
   }
+
+  Widget _statChip(IconData icon, String label) => Row(
+    children: [
+      Icon(icon, size: 12, color: Colors.white60),
+      const SizedBox(width: 4),
+      Text(label, style: const TextStyle(color: Colors.white70, fontSize: 11)),
+    ],
+  );
 }

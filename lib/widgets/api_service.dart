@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class ApiService {
-  static const baseUrl = "https://yekiapp.pythonanywhere.com/api";
+  static const baseUrl = "https://yeki.pythonanywhere.com/api";
 
   static Future<List<dynamic>> getParcours() async {
     final res = await http.get(Uri.parse("$baseUrl/parcours/"));

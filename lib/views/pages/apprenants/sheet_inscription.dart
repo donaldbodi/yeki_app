@@ -4,7 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
 
-const String _baseO = 'https://yekiapp.pythonanywhere.com/api';
+const String _baseO = 'https://yeki.pythonanywhere.com/api';
 
 // ─── Palette ────────────────────────────────────────────────────
 const Color _olymp  = Color(0xFF7B2FBE);
@@ -21,17 +21,17 @@ class InscriptionSheet extends StatefulWidget {
   final String   titre;
   final String   reglement;
   final String   prixDesc;
-  final DateTime datDebut;
-  final DateTime datFin;
+  final DateTime? datDebut;
+  final DateTime? datFin;
   final VoidCallback onSuccess;
 
-  const InscriptionSheet({super.key, 
+  const InscriptionSheet({super.key,
     required this.olympiadeId,
     required this.titre,
-    required this.reglement,
-    required this.prixDesc,
-    required this.datDebut,
-    required this.datFin,
+    this.reglement = '',
+    this.prixDesc  = '',
+    this.datDebut,
+    this.datFin,
     required this.onSuccess,
   });
 
@@ -138,11 +138,13 @@ class _InscriptionSheetState extends State<InscriptionSheet> {
           const SizedBox(height: 20),
 
           // Dates
+
+        if (widget.datDebut != null)
           _infoRow(Icons.play_circle_outline_rounded,
-              'Début compétition', fmt.format(widget.datDebut)),
-          const SizedBox(height: 8),
+              'Début compétition', fmt.format(widget.datDebut!)),  // null check + unwrap !
+        if (widget.datFin != null)
           _infoRow(Icons.stop_circle_outlined,
-              'Fin compétition', fmt.format(widget.datFin)),
+              'Fin compétition', fmt.format(widget.datFin!)), 
 
           // Prix
           if (widget.prixDesc.isNotEmpty) ...[

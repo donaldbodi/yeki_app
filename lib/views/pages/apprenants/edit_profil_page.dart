@@ -14,7 +14,7 @@ class EditProfilePage extends StatefulWidget {
 }
 
 class _EditProfilePageState extends State<EditProfilePage> {
-  static const String _base = 'https://yekiapp.pythonanywhere.com/api';
+  static const String _base = 'https://yeki.pythonanywhere.com/api';
 
   final Color primaryColor = const Color(0xFF2884A0);
   final Color darkBlue     = const Color(0xFF1A1C1E);

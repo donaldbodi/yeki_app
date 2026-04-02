@@ -13,16 +13,16 @@ const Color _bg     = Color(0xFFF5F7FA);
 // ═══════════════════════════════════════════════════════════════
 // Page classement olympiade
 // ═══════════════════════════════════════════════════════════════
-class ClassementPage extends StatefulWidget {
+class ClassementOlympiadePage extends StatefulWidget {
   final int    olympiadeId;
   final String titre;
-  const ClassementPage({super.key, required this.olympiadeId, required this.titre});
+  const ClassementOlympiadePage({super.key, required this.olympiadeId, required this.titre});
 
   @override
-  State<ClassementPage> createState() => _ClassementPageState();
+  State<ClassementOlympiadePage> createState() => _ClassementOlympiadePageState();
 }
 
-class _ClassementPageState extends State<ClassementPage> {
+class _ClassementOlympiadePageState extends State<ClassementOlympiadePage> {
   bool  _loading = true;
   List  _entrees = [];
 

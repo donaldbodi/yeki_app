@@ -47,7 +47,7 @@ class _DetailDevoirPageState extends State<DetailDevoirPage> {
     setState(() => isLoading = true);
     final token = await getToken();
     final res = await http.get(
-      Uri.parse("https://yekiapp.pythonanywhere.com/api/devoirs/${widget.devoirId}/"),
+      Uri.parse("https://yeki.pythonanywhere.com/api/devoirs/${widget.devoirId}/"),
       headers: {
         "Content-Type": "application/json",
         if (token != null) "Authorization": "Token $token",
@@ -81,7 +81,7 @@ class _DetailDevoirPageState extends State<DetailDevoirPage> {
     });
 
     final res = await http.post(
-      Uri.parse("https://yekiapp.pythonanywhere.com/api/devoirs/${widget.devoirId}/soumettre/"),
+      Uri.parse("https://yeki.pythonanywhere.com/api/devoirs/${widget.devoirId}/soumettre/"),
       headers: {
         "Content-Type": "application/json",
         if (token != null) "Authorization": "Token $token",

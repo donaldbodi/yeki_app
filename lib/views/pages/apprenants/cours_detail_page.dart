@@ -1,36 +1,52 @@
+// lib/views/pages/apprenants/cours_detail_page.dart
+
 import 'package:flutter/material.dart';
 import 'package:yeki/views/pages/apprenants/devoirs_cours_page.dart';
 import 'package:yeki/views/pages/apprenants/forum_page.dart';
-import 'lecons_cours.dart';
-import 'exercices_cours.dart';
+import 'package:yeki/views/pages/apprenants/lecons_cours.dart';
+import 'package:yeki/views/pages/apprenants/exercices_cours.dart';
 
 class CoursDetailTabs extends StatefulWidget {
   final String coursId;
   final String titre;
+  final bool isPremium;
+  final int initialTab;
+  final int? scrollToQuestionId;
 
   const CoursDetailTabs({
     super.key,
     required this.coursId,
     required this.titre,
+    this.isPremium = true,
+    this.initialTab = 0,
+    this.scrollToQuestionId,
   });
 
   @override
-  State<CoursDetailTabs> createState() => _DetailsCoursPageState();
+  State<CoursDetailTabs> createState() => _CoursDetailTabsState();
 }
 
-class _DetailsCoursPageState extends State<CoursDetailTabs>
+class _CoursDetailTabsState extends State<CoursDetailTabs>
     with SingleTickerProviderStateMixin {
-  
-  // On utilise un seul controller explicite
   late TabController _tabController;
-  final Color primaryColor = const Color(0xFF2884A0);
-  final Color accentColor = const Color(0xFFFF7F77);
+
+  static const Color _primary = Color(0xFF2884A0);
+  static const Color _gold = Color(0xFFFFD700);
+
+  int? _forumScrollToId;
+  String? _forumPreoccupationContenu;
+  String? _forumPreoccupationSource;
+  int? _forumPreoccupationLeconId;
+  String? _forumPreoccupationLeconTitre;
+  int? _forumPreoccupationExerciceId;
+  String? _forumPreoccupationExerciceTitre;
+  int? _forumPreoccupationDevoirId;
+  String? _forumPreoccupationDevoirTitre;
 
   @override
   void initState() {
     super.initState();
-    // Initialisation du controller pour 4 onglets
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController = TabController(length: 4, vsync: this, initialIndex: widget.initialTab);
   }
 
   @override
@@ -39,163 +55,272 @@ class _DetailsCoursPageState extends State<CoursDetailTabs>
     super.dispose();
   }
 
+  void naviguerVersForumAvecQuestion(int questionId) {
+    setState(() => _forumScrollToId = questionId);
+    _tabController.animateTo(3);
+  }
+
+  void setPreoccupationData({
+    String? contenu,
+    String? source,
+    int? leconId,
+    String? leconTitre,
+    int? exerciceId,
+    String? exerciceTitre,
+    int? devoirId,
+    String? devoirTitre,
+  }) {
+    setState(() {
+      _forumPreoccupationContenu = contenu;
+      _forumPreoccupationSource = source;
+      _forumPreoccupationLeconId = leconId;
+      _forumPreoccupationLeconTitre = leconTitre;
+      _forumPreoccupationExerciceId = exerciceId;
+      _forumPreoccupationExerciceTitre = exerciceTitre;
+      _forumPreoccupationDevoirId = devoirId;
+      _forumPreoccupationDevoirTitre = devoirTitre;
+    });
+    _tabController.animateTo(3);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFB),
-      // SUPPRESSION du DefaultTabController ici pour éviter le conflit
-      body: NestedScrollView(
-        headerSliverBuilder: (BuildContext context, bool innerBoxIsScrolled) {
-          return <Widget>[
-            SliverOverlapAbsorber(
-              handle: NestedScrollView.sliverOverlapAbsorberHandleFor(context),
-              sliver: SliverAppBar(
-                expandedHeight: 220,
-                pinned: true,
-                elevation: 0,
-                backgroundColor: primaryColor,
-                leading: IconButton(
-                  icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 20),
-                  onPressed: () => Navigator.pop(context),
-                ),
-                flexibleSpace: FlexibleSpaceBar(
-                  background: Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [primaryColor, const Color(0xFF005F66)],
-                      ),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(25, 80, 25, 60),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            widget.titre,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 22,
-                              fontWeight: FontWeight.bold,
-                            ),
-                            maxLines: 2,
-                          ),
-                          const SizedBox(height: 15),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(10),
-                                  child: LinearProgressIndicator(
-                                    value: 0.65,
-                                    backgroundColor: Colors.white.withOpacity(0.2),
-                                    valueColor: AlwaysStoppedAnimation<Color>(accentColor),
-                                    minHeight: 8,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Text(
-                                "65%",
-                                style: TextStyle(color: accentColor, fontWeight: FontWeight.bold),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
+      body: Column(
+        children: [
+          _buildHeader(),
+          _buildTabBar(),
+          Expanded(child: _buildTabViews()),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeader() {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [_primary, Color(0xFF005F66)],
+        ),
+      ),
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(4, 8, 20, 16),
+          child: Row(
+            children: [
+              IconButton(
+                icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 20),
+                onPressed: () => Navigator.pop(context),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  widget.titre,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w800,
                   ),
-                ),
-                bottom: PreferredSize(
-                  preferredSize: const Size.fromHeight(60),
-                  child: Container(
-                    decoration: const BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
-                    ),
-                    child: TabBar(
-                      controller: _tabController, // Utilisation du controller explicite
-                      indicatorColor: accentColor,
-                      labelColor: primaryColor,
-                      unselectedLabelColor: Colors.grey,
-                      labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                      tabs: const [
-                        Tab(text: "Leçons"),
-                        Tab(text: "Exercices"),
-                        Tab(text: "Devoirs"),
-                        Tab(text: "Forum"),
-                      ],
-                    ),
-                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
-            ),
-          ];
-        },
-        body: TabBarView(
-          controller: _tabController, // Utilisation du même controller
-          children: [
-            // Page Leçons : on lui passe le controller pour qu'il puisse l'envoyer à LectureLecon
-            _buildTabContent(LeconsCoursPage(coursId: widget.coursId, tabController: _tabController,)),
-            _buildTabContent(ExercicesCoursPage(coursId: widget.coursId)),
-            _buildTabContent(DevoirsCoursPage(coursId: widget.coursId, coursTitre: 'dsss',)),
-            
-            // Page Forum : Correction de l'affichage
-            _buildForumContent(),
-          ],
+              if (!widget.isPremium)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: _gold.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: _gold.withOpacity(0.4)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.workspace_premium_rounded, color: _gold, size: 14),
+                      const SizedBox(width: 4),
+                      const Text('Gratuit',
+                          style: TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w600)),
+                    ],
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  // Contenu standard pour les onglets scrollables (Leçons, Exercices...)
-  Widget _buildTabContent(Widget page) {
-    return Builder(
-      builder: (BuildContext context) {
-        return CustomScrollView(
-          physics: const BouncingScrollPhysics(),
-          slivers: [
-            SliverOverlapInjector(
-              handle: NestedScrollView.sliverOverlapAbsorberHandleFor(context),
+  Widget _buildTabBar() {
+    return Container(
+      color: Colors.white,
+      child: TabBar(
+        controller: _tabController,
+        indicatorColor: _primary,
+        indicatorWeight: 3,
+        labelColor: _primary,
+        unselectedLabelColor: Colors.grey,
+        labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+        tabs: [
+          const Tab(icon: Icon(Icons.play_lesson_rounded, size: 18), text: 'Leçons'),
+          Tab(
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.edit_note_rounded, size: 16),
+                const SizedBox(width: 4),
+                const Text('Exercices'),
+                if (!widget.isPremium) ...[
+                  const SizedBox(width: 3),
+                  Icon(Icons.lock_rounded, size: 10, color: _gold),
+                ],
+              ],
             ),
-            SliverPadding(
-              padding: const EdgeInsets.only(bottom: 20),
-              sliver: SliverToBoxAdapter(child: page),
+          ),
+          Tab(
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.assignment_rounded, size: 16),
+                const SizedBox(width: 4),
+                const Text('Devoirs'),
+                if (!widget.isPremium) ...[
+                  const SizedBox(width: 3),
+                  Icon(Icons.lock_rounded, size: 10, color: _gold),
+                ],
+              ],
             ),
-          ],
-        );
-      },
+          ),
+          Tab(
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.forum_rounded, size: 16),
+                const SizedBox(width: 4),
+                const Text('Forum'),
+                if (!widget.isPremium) ...[
+                  const SizedBox(width: 3),
+                  Icon(Icons.lock_rounded, size: 10, color: _gold),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
-  // Contenu spécifique pour le Forum (pour éviter les problèmes de clavier et de scroll)
-  Widget _buildForumContent() {
-    return Builder(
-      builder: (context) {
-        return Column(
+  Widget _buildTabViews() {
+    return TabBarView(
+      controller: _tabController,
+      children: [
+        LeconsCoursPage(
+          coursId: widget.coursId,
+          coursTitre: widget.titre,
+          tabController: _tabController,
+          onNaviguerForum: naviguerVersForumAvecQuestion,
+          isPremium: widget.isPremium,
+        ),
+        widget.isPremium
+            ? ExercicesCoursPage(
+                coursId: widget.coursId,
+                coursTitre: widget.titre,
+                onNaviguerForum: naviguerVersForumAvecQuestion,
+              )
+            : _buildPremiumLock('exercices'),
+        widget.isPremium
+            ? DevoirsCoursPage(
+                coursId: widget.coursId,
+                coursTitre: widget.titre,
+                onNaviguerForum: naviguerVersForumAvecQuestion,
+              )
+            : _buildPremiumLock('devoirs'),
+        widget.isPremium
+            ? ForumPage(
+                key: ValueKey('$_forumScrollToId$_forumPreoccupationContenu'),
+                scrollToQuestionId: _forumScrollToId,
+                preoccupationContenu: _forumPreoccupationContenu,
+                preoccupationSource: _forumPreoccupationSource,
+                preoccupationLeconId: _forumPreoccupationLeconId,
+                preoccupationLeconTitre: _forumPreoccupationLeconTitre,
+                preoccupationCoursId: int.tryParse(widget.coursId),
+                preoccupationCoursTitre: widget.titre,
+                preoccupationExerciceId: _forumPreoccupationExerciceId,
+                preoccupationExerciceTitre: _forumPreoccupationExerciceTitre,
+                preoccupationDevoirId: _forumPreoccupationDevoirId,
+                preoccupationDevoirTitre: _forumPreoccupationDevoirTitre,
+              )
+            : _buildPremiumLock('forum'),
+      ],
+    );
+  }
+
+  Widget _buildPremiumLock(String feature) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            // Cet injecteur est CRUCIAL pour que le contenu ne passe pas sous l'AppBar
-            SliverOverlapInjector(
-              handle: NestedScrollView.sliverOverlapAbsorberHandleFor(context),
-            ).specialSliverToBoxAdapter(), 
-            
-            Expanded(
-              child: ForumPage(),
+            Container(
+              padding: const EdgeInsets.all(22),
+              decoration: BoxDecoration(color: _gold.withOpacity(0.1), shape: BoxShape.circle),
+              child: Icon(Icons.workspace_premium_rounded, color: _gold, size: 52),
+            ),
+            const SizedBox(height: 20),
+            const Text('Accès Premium requis',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Color(0xFF1A1C1E))),
+            const SizedBox(height: 10),
+            Text(
+              'Abonnez-vous à Yéki Premium pour accéder aux $feature.',
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.grey, fontSize: 14, height: 1.5),
+            ),
+            const SizedBox(height: 28),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () => Navigator.pop(context),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _gold,
+                  foregroundColor: Colors.black,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  elevation: 0,
+                ),
+                child: const Text('1 500 FCFA / mois',
+                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+              ),
+            ),
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton(
+                onPressed: () => Navigator.pop(context),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: _primary,
+                  side: BorderSide(color: _primary),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                ),
+                child: const Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text('13 000 FCFA / an',
+                        style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+                    Text('Économisez 26% !',
+                        style: TextStyle(fontSize: 10, color: Color(0xFFFFD700))),
+                  ],
+                ),
+              ),
             ),
           ],
-        );
-      },
-    );
-  }
-}
-
-// Petite extension pour faciliter l'usage de l'injecteur dans une Column
-extension on SliverOverlapInjector {
-  Widget specialSliverToBoxAdapter() {
-    return Builder(
-      builder: (context) => SizedBox(
-        height: NestedScrollView.sliverOverlapAbsorberHandleFor(context).layoutExtent,
+        ),
       ),
     );
   }

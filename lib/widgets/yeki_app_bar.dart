@@ -1,16 +1,32 @@
+// lib/widgets/yeki_app_bar.dart
+// ═══════════════════════════════════════════════════════════════
+//  YEKI HEADER — AppBar premium dynamique
+//  • Avatar réseau + initiales fallback
+//  • Badge notifications animé
+//  • Streak feu
+//  • Solde portefeuille
+//  • Menu contextuel profil / portefeuille / paramètres / déconnexion
+// ═══════════════════════════════════════════════════════════════
+
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
 
-class YekiHeader extends StatelessWidget implements PreferredSizeWidget {
+const Color _hBlue  = Color(0xFF2884A0);
+const Color _hDark  = Color(0xFF0D1B2A);
+const Color _hGold  = Color(0xFFE2A84B);
 
+class YekiHeader extends StatefulWidget implements PreferredSizeWidget {
   final int unreadNotifications;
   final bool isSubscribed;
   final String username;
   final String userRole;
   final String? avatarUrl;
-
   final VoidCallback onLogout;
   final VoidCallback onSettings;
   final VoidCallback onNotifications;
+  final VoidCallback? onWallet;
 
   const YekiHeader({
     super.key,
@@ -22,177 +38,305 @@ class YekiHeader extends StatelessWidget implements PreferredSizeWidget {
     required this.onLogout,
     required this.onSettings,
     required this.onNotifications,
+    this.onWallet,
   });
 
   @override
-  Size get preferredSize => const Size.fromHeight(80);
+  Size get preferredSize => const Size.fromHeight(70);
+
+  @override
+  State<YekiHeader> createState() => _YekiHeaderState();
+}
+
+class _YekiHeaderState extends State<YekiHeader> {
+  int _solde = 0;
+  bool _loadingSolde = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSolde();
+  }
+
+  Future<void> _loadSolde() async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('token');
+    if (token == null) return;
+
+    try {
+      final response = await http.get(
+        Uri.parse('https://yeki.pythonanywhere.com/api/wallet/solde/'),
+        headers: {'Authorization': 'Token $token'},
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (mounted) {
+          setState(() {
+            _solde = data['solde'] ?? 0;
+            _loadingSolde = false;
+          });
+        }
+      } else {
+        setState(() => _loadingSolde = false);
+      }
+    } catch (e) {
+      setState(() => _loadingSolde = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-
-    return AppBar(
-      backgroundColor: Colors.transparent,
-      elevation: 0,
-
-      flexibleSpace: Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-        ),
-      ),
-
-      title: Row(
-        children: [
-
-          /// LOGO
-          ShaderMask(
-            shaderCallback: (bounds) => const LinearGradient(
-              colors: [Color(0xFF2884A0), Color(0xFF6e91a1)],
-            ).createShader(bounds),
-            child: const Text(
-              "Yéki",
-              style: TextStyle(
-                fontSize: 28,
-                fontFamily: "FredokaOne",
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
-            ),
-          ),
-
-          const Spacer(),
-
-          /// STREAK
-          _buildStatChip(Icons.local_fire_department_rounded, "5", Colors.orange),
-
-          const SizedBox(width: 8),
-
-          /// NOTIFICATIONS
-          _buildNotificationIcon(),
-
-          /// MENU PROFIL
-          PopupMenuButton<String>(
-            offset: const Offset(0, 45),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(15),
-            ),
-
-            onSelected: (value) {
-
-              if (value == "profil") {
-                onSettings();
-              }
-
-              if (value == "logout") {
-                onLogout();
-              }
-            },
-
-            itemBuilder: (context) => [
-
-              PopupMenuItem(
-                value: "profil",
-                child: Row(
-                  children: const [
-                    Icon(Icons.person_outline),
-                    SizedBox(width: 10),
-                    Text("Profil"),
-                  ],
-                ),
-              ),
-
-              PopupMenuItem(
-                value: "logout",
-                child: Row(
-                  children: const [
-                    Icon(Icons.logout, color: Colors.redAccent),
-                    SizedBox(width: 10),
-                    Text("Déconnexion"),
-                  ],
-                ),
-              ),
-            ],
-
-            child: Container(
-              padding: const EdgeInsets.all(2),
-              decoration: const BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: LinearGradient(
-                  colors: [Color(0xFF2884A0), Color(0xFF235768)],
-                ),
-              ),
-
-              child: CircleAvatar(
-                radius: 18,
-                backgroundImage: avatarUrl != null
-                    ? NetworkImage(avatarUrl!)
-                    : const AssetImage('assets/images/avatar_default.jpg')
-                        as ImageProvider,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// CHIP STREAK
-  Widget _buildStatChip(IconData icon, String text, Color color) {
-
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.15),
-        borderRadius: BorderRadius.circular(20),
-      ),
-
-      child: Row(
-        children: [
-          Icon(icon, size: 16, color: color),
-          const SizedBox(width: 4),
-          Text(
-            text,
-            style: TextStyle(
-              color: color,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
+      height: 70 + MediaQuery.of(context).padding.top,
+      padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(color: Color(0x0A000000), blurRadius: 12, offset: Offset(0, 2)),
         ],
       ),
-    );
-  }
-
-  /// NOTIFICATIONS
-  Widget _buildNotificationIcon() {
-
-    return Stack(
-      children: [
-
-        IconButton(
-          icon: const Icon(
-            Icons.notifications_none_rounded,
-            color: Colors.black87,
-          ),
-          onPressed: onNotifications,
-        ),
-
-        if (unreadNotifications > 0)
-          Positioned(
-            right: 12,
-            top: 12,
-            child: Container(
-              height: 10,
-              width: 10,
-              decoration: BoxDecoration(
-                color: Colors.redAccent,
-                shape: BoxShape.circle,
-                border: Border.all(
-                    color: Colors.white,
-                    width: 2),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 18),
+        child: Row(
+          children: [
+            // ── Logo Yéki ─────────────────────────────────────
+            ShaderMask(
+              shaderCallback: (bounds) => const LinearGradient(
+                colors: [_hBlue, Color(0xFF1F5F75)],
+              ).createShader(bounds),
+              child: const Text(
+                'Yéki',
+                style: TextStyle(
+                  fontSize: 26,
+                  fontWeight: FontWeight.w900,
+                  color: Colors.white,
+                  letterSpacing: -0.5,
+                ),
               ),
             ),
-          ),
-      ],
+            const Spacer(),
+
+            // ── Solde Portefeuille ─────────────────────────────
+            GestureDetector(
+              onTap: widget.onWallet ?? () {
+                Navigator.pushNamed(context, '/wallet');
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: _hBlue.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: _hBlue.withOpacity(0.2)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.account_balance_wallet_rounded,
+                        size: 14, color: _hGold),
+                    const SizedBox(width: 4),
+                    if (_loadingSolde)
+                      const SizedBox(
+                        width: 40,
+                        height: 12,
+                        child: LinearProgressIndicator(),
+                      )
+                    else
+                      Text(
+                        '$_solde FCFA',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                          color: _hBlue,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(width: 6),
+
+            // ── Streak ──────────────────────────────────────
+            _StatChip(Icons.local_fire_department_rounded, '5', Colors.orange),
+            const SizedBox(width: 6),
+
+            // ── Notifications ────────────────────────────────
+            _NotifIcon(
+              count: widget.unreadNotifications,
+              onTap: widget.onNotifications,
+            ),
+            const SizedBox(width: 4),
+
+            // ── Avatar / Menu profil ─────────────────────────
+            _ProfileMenu(
+              username: widget.username,
+              avatarUrl: widget.avatarUrl,
+              onSettings: widget.onSettings,
+              onWallet: widget.onWallet ?? () => Navigator.pushNamed(context, '/wallet'),
+              onLogout: widget.onLogout,
+            ),
+          ],
+        ),
+      ),
     );
   }
+}
+
+// ── Stat chip ────────────────────────────────────────────────────
+class _StatChip extends StatelessWidget {
+  final IconData icon;
+  final String value;
+  final Color color;
+  const _StatChip(this.icon, this.value, this.color);
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 14, color: color),
+            const SizedBox(width: 3),
+            Text(value,
+                style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                    color: color)),
+          ],
+        ),
+      );
+}
+
+// ── Icône notification animée ─────────────────────────────────────
+class _NotifIcon extends StatelessWidget {
+  final int count;
+  final VoidCallback onTap;
+  const _NotifIcon({required this.count, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+        onTap: onTap,
+        child: Stack(
+          children: [
+            Container(
+              width: 38, height: 38,
+              decoration: BoxDecoration(
+                color: const Color(0xFFF4F8FC),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(Icons.notifications_outlined,
+                  color: _hDark, size: 20),
+            ),
+            if (count > 0)
+              Positioned(
+                top: 2, right: 2,
+                child: Container(
+                  width: 16, height: 16,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEF4444),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 1.5),
+                  ),
+                  child: Center(
+                    child: Text(
+                      count > 9 ? '9+' : '$count',
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 8,
+                          fontWeight: FontWeight.w900),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      );
+}
+
+// ── Avatar + menu popover ─────────────────────────────────────────
+class _ProfileMenu extends StatelessWidget {
+  final String username;
+  final String? avatarUrl;
+  final VoidCallback onSettings;
+  final VoidCallback onWallet;
+  final VoidCallback onLogout;
+
+  const _ProfileMenu({
+    required this.username,
+    this.avatarUrl,
+    required this.onSettings,
+    required this.onWallet,
+    required this.onLogout,
+  });
+
+  String get _initial =>
+      username.isNotEmpty ? username[0].toUpperCase() : 'U';
+
+  @override
+  Widget build(BuildContext context) => PopupMenuButton<String>(
+        offset: const Offset(0, 48),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        color: Colors.white,
+        elevation: 12,
+        onSelected: (val) {
+          if (val == 'profile') Navigator.pushNamed(context, '/profile');
+          if (val == 'wallet') onWallet();
+          if (val == 'settings') onSettings();
+          if (val == 'logout') onLogout();
+        },
+        child: Container(
+          width: 38, height: 38,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: _hBlue.withOpacity(0.2), width: 2),
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: avatarUrl != null
+                ? Image.network(avatarUrl!, fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => _fallback())
+                : _fallback(),
+          ),
+        ),
+        itemBuilder: (_) => [
+          _menuItem('profile', Icons.person_outline, 'Mon profil', _hBlue),
+          _menuItem('wallet', Icons.account_balance_wallet_outlined, 'Portefeuille', _hGold),
+          _menuItem('settings', Icons.settings_outlined, 'Paramètres', Colors.grey),
+          const PopupMenuDivider(),
+          _menuItem('logout', Icons.logout_rounded, 'Déconnexion', const Color(0xFFEF4444)),
+        ],
+      );
+
+  Widget _fallback() => Container(
+        color: _hBlue.withOpacity(0.1),
+        child: Center(
+          child: Text(_initial,
+              style: const TextStyle(
+                  color: _hBlue,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 14)),
+        ),
+      );
+
+  PopupMenuItem<String> _menuItem(String val, IconData icon, String label, Color color) =>
+      PopupMenuItem(
+        value: val,
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                  color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+              child: Icon(icon, size: 15, color: color),
+            ),
+            const SizedBox(width: 10),
+            Text(label,
+                style: TextStyle(
+                    color: color, fontWeight: FontWeight.w700, fontSize: 14)),
+          ],
+        ),
+      );
 }

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:yeki/views/pages/apprenants/exercices_cours.dart';
 import 'package:yeki/views/pages/apprenants/forum_page.dart';
 import 'package:yeki/views/pages/apprenants/lecons_cours.dart';
-import 'package:yeki/views/pages/enseignants/devoirs_page.dart';
+import 'package:yeki/views/pages/apprenants/devoirs_cours_page.dart';
 import 'package:yeki/views/pages/enseignants/interface_enseignant_page.dart';
 
 class DetailCoursEnseignantPage extends StatefulWidget {
@@ -139,13 +139,21 @@ class _DetailCoursEnseignantPageState extends State<DetailCoursEnseignantPage>
           children: [
             _buildTabContent(LeconsCoursPage(
               coursId: widget.coursId,
+              coursTitre: widget.titre,  // ← Ajout du paramètre requis
               role: widget.role,
               tabController: _tabController,
             )),
-            _buildTabContent(ExercicesCoursPage(coursId: widget.coursId)),
-            _buildTabContent(DevoirsPageEnseignant(
-              estEnseignantPrincipal: widget.estEnseignantPrincipal,
+            _buildTabContent(ExercicesCoursPage(
+              coursId: widget.coursId, 
+              role: widget.role, 
+              coursTitre: widget.titre,
             )),
+            _buildTabContent(DevoirsCoursPage(
+                coursId: widget.coursId,
+                coursTitre: widget.titre,
+                isEnseignantPrincipal: widget.estEnseignantPrincipal,
+                //estEnseignantPrincipal: widget.estEnseignantPrincipal,
+              )),
             _buildForumContent(),
           ],
         ),

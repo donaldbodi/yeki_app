@@ -3,7 +3,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ExercicesApi {
-  static const String baseUrl = "https://yekiapp.pythonanywhere.com/api";
+  static const String baseUrl = "https://yeki.pythonanywhere.com/api";
 
   static Future<String?> _token() async {
     final prefs = await SharedPreferences.getInstance();

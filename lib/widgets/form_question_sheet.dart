@@ -7,7 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 // ─────────────────────────────────────────────────────────────────
 // CONSTANTES
 // ─────────────────────────────────────────────────────────────────
-const String _base = 'https://yekiapp.pythonanywhere.com/api';
+const String _base = 'https://yeki.pythonanywhere.com/api';
 
 const Color _teal   = Color(0xFF008088);
 const Color _dark   = Color(0xFF0D1B2A);

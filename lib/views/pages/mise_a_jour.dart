@@ -5,7 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 class UpdateChecker {
   static const int CURRENT_VERSION = 2; // Version actuelle de ton APK
-  static const String API_URL = "https://yekiapp.pythonanywhere.com/api/latest-version/";
+  static const String API_URL = "https://yeki.pythonanywhere.com/api/latest-version/";
 
   static Future<void> checkForUpdate(BuildContext context) async {
     try {

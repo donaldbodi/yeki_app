@@ -1,0 +1,828 @@
+import 'dart:convert';
+import 'dart:typed_data';
+import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:file_picker/file_picker.dart';
+
+// ═══════════════════════════════════════════════════════════════════
+// FORMULAIRE CRÉATION DE COURS — complet selon le modèle Cours
+// Champs : titre, niveau, matière, concours, description_brief,
+//          color_code, icon_name, enseignant_principal, image
+// ═══════════════════════════════════════════════════════════════════
+
+const String _baseUrl = 'https://yeki.pythonanywhere.com/api';
+const Color _primary  = Color(0xFF6A1B9A);
+const Color _dark     = Color(0xFF0D1B2A);
+
+// ── Listes de référence ──────────────────────────────────────────
+
+const List<String> _niveaux = [
+  'Terminale', '1ère', '2nde', '3ème',
+  'Licence 1', 'Licence 2', 'Licence 3',
+  'Master 1', 'Master 2', 'Autre',
+];
+
+const List<String> _matieres = [
+  'Mathématiques', 'Physique', 'Chimie', 'SVT',
+  'Informatique', 'Français', 'Anglais',
+  'Histoire-Géo', 'Philosophie', 'Économie', 'Autre',
+];
+
+// Icônes disponibles : nom Flutter MaterialIcons → label lisible
+const List<Map<String, dynamic>> _icones = [
+  {'name': 'school',           'icon': Icons.school,           'label': 'École'},
+  {'name': 'book',             'icon': Icons.book,             'label': 'Livre'},
+  {'name': 'calculate',        'icon': Icons.calculate,        'label': 'Maths'},
+  {'name': 'science',          'icon': Icons.science,          'label': 'Sciences'},
+  {'name': 'language',         'icon': Icons.language,         'label': 'Langue'},
+  {'name': 'computer',         'icon': Icons.computer,         'label': 'Info'},
+  {'name': 'history_edu',      'icon': Icons.history_edu,      'label': 'Histoire'},
+  {'name': 'psychology',       'icon': Icons.psychology,       'label': 'Philo'},
+  {'name': 'bar_chart',        'icon': Icons.bar_chart,        'label': 'Stats'},
+  {'name': 'biotech',          'icon': Icons.biotech,          'label': 'Bio'},
+  {'name': 'music_note',       'icon': Icons.music_note,       'label': 'Musique'},
+  {'name': 'sports_soccer',    'icon': Icons.sports_soccer,    'label': 'Sport'},
+  {'name': 'palette',          'icon': Icons.palette,          'label': 'Art'},
+  {'name': 'engineering',      'icon': Icons.engineering,      'label': 'Ingé'},
+  {'name': 'medical_services', 'icon': Icons.medical_services, 'label': 'Médecine'},
+];
+
+// Palette de couleurs prédéfinies
+const List<Color> _couleurs = [
+  Color(0xFF008080), // teal défaut
+  Color(0xFF6A1B9A), // violet
+  Color(0xFF1565C0), // bleu
+  Color(0xFF00897B), // vert menthe
+  Color(0xFFE65100), // orange
+  Color(0xFFC62828), // rouge
+  Color(0xFF4527A0), // indigo
+  Color(0xFF00695C), // vert foncé
+  Color(0xFF283593), // bleu marine
+  Color(0xFF6D4C41), // brun
+  Color(0xFF37474F), // gris ardoise
+  Color(0xFF558B2F), // vert olive
+];
+
+// ── Widget principal ─────────────────────────────────────────────
+
+class CreerCoursSheet extends StatefulWidget {
+  final int departementId;
+  final String departementNom;
+  final VoidCallback onSuccess;
+
+  const CreerCoursSheet({
+    super.key,
+    required this.departementId,
+    required this.departementNom,
+    required this.onSuccess,
+  });
+
+  @override
+  State<CreerCoursSheet> createState() => _CreerCoursSheetState();
+}
+
+class _CreerCoursSheetState extends State<CreerCoursSheet> {
+  // Controllers
+  final _titreCtrl  = TextEditingController();
+  final _descCtrl   = TextEditingController();
+  final _concoursCtrl = TextEditingController();
+
+  // Valeurs sélectionnées
+  String? _niveau;
+  String? _matiere;
+  String  _colorCode = '#008080';
+  String  _iconName  = 'school';
+  int?    _enseignantPrincipalId;
+
+  // Image
+  Uint8List? _imageBytes;
+  String?    _imageName;
+
+  // État
+  bool _isLoading = false;
+  List<Map<String, dynamic>> _enseignants = [];
+  bool _loadingEP = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _chargerEnseignants();
+  }
+
+  @override
+  void dispose() {
+    _titreCtrl.dispose();
+    _descCtrl.dispose();
+    _concoursCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<String?> _getToken() async {
+    final p = await SharedPreferences.getInstance();
+    return p.getString('token');
+  }
+
+  Future<void> _chargerEnseignants() async {
+    setState(() => _loadingEP = true);
+    final token = await _getToken();
+    try {
+      final res = await http.get(
+        Uri.parse('$_baseUrl/enseignants/liste/?role=principal'),
+        headers: {'Authorization': 'Token $token'},
+      );
+      if (res.statusCode == 200) {
+        final list = jsonDecode(res.body) as List;
+        setState(() {
+          _enseignants = list.map((e) => Map<String, dynamic>.from(e)).toList();
+        });
+      }
+    } catch (_) {}
+    setState(() => _loadingEP = false);
+  }
+
+  // ── Soumission ───────────────────────────────────────────────────
+  Future<void> _soumettre() async {
+    // Validations frontend
+    if (_titreCtrl.text.trim().isEmpty) {
+      _showError('Le titre est obligatoire'); return;
+    }
+    if (_niveau == null) {
+      _showError('Le niveau est obligatoire'); return;
+    }
+
+    setState(() => _isLoading = true);
+    final token = await _getToken();
+
+    try {
+      final uri     = Uri.parse('$_baseUrl/cours/create/');
+      final request = http.MultipartRequest('POST', uri);
+      request.headers['Authorization'] = 'Token $token';
+
+      // ── Champs obligatoires ──────────────────────────────────
+      request.fields['titre']       = _titreCtrl.text.trim();
+      request.fields['niveau']      = _niveau!;
+      request.fields['departement'] = widget.departementId.toString();
+      request.fields['color_code']  = _colorCode;
+      request.fields['icon_name']   = _iconName;
+
+      // ── Champs optionnels ────────────────────────────────────
+      if (_matiere != null && _matiere!.isNotEmpty) {
+        request.fields['matiere'] = _matiere!;
+      }
+      if (_concoursCtrl.text.trim().isNotEmpty) {
+        request.fields['concours'] = _concoursCtrl.text.trim();
+      }
+      if (_descCtrl.text.trim().isNotEmpty) {
+        request.fields['description_brief'] = _descCtrl.text.trim();
+      }
+      if (_enseignantPrincipalId != null) {
+        request.fields['enseignant_principal'] =
+            _enseignantPrincipalId.toString();
+      }
+
+      // ── Image ────────────────────────────────────────────────
+      if (_imageBytes != null && _imageName != null) {
+        request.files.add(http.MultipartFile.fromBytes(
+          'image', _imageBytes!,
+          filename: _imageName,
+          contentType: MediaType('image', 'jpeg'),
+        ));
+      }
+
+      final streamed = await request.send();
+      final res      = await http.Response.fromStream(streamed);
+      setState(() => _isLoading = false);
+
+      if (res.statusCode == 201) {
+        if (mounted) Navigator.pop(context);
+        widget.onSuccess();
+      } else {
+        final body = jsonDecode(res.body);
+        // Afficher le premier message d'erreur du serializer
+        String msg = 'Erreur ${res.statusCode}';
+        if (body is Map) {
+          final firstKey = body.keys.first;
+          final firstVal = body[firstKey];
+          msg = firstVal is List ? firstVal.first.toString() : firstVal.toString();
+        }
+        _showError(msg);
+      }
+    } catch (_) {
+      setState(() => _isLoading = false);
+      _showError('Erreur réseau');
+    }
+  }
+
+  // ── Build ────────────────────────────────────────────────────────
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      padding: EdgeInsets.only(
+        left: 24, right: 24, top: 16,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+      ),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // ── Handle ──────────────────────────────────────────
+            Center(
+              child: Container(
+                width: 40, height: 4,
+                decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(10)),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // ── Titre formulaire ─────────────────────────────────
+            const Text('Créer un cours',
+                style: TextStyle(
+                    fontSize: 20, fontWeight: FontWeight.bold, color: _dark)),
+            const SizedBox(height: 6),
+
+            // ── Badge département ────────────────────────────────
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+              decoration: BoxDecoration(
+                color: _primary.withOpacity(0.07),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.domain, color: _primary, size: 15),
+                  const SizedBox(width: 7),
+                  Text(
+                    'Département : ${widget.departementNom}',
+                    style: const TextStyle(
+                        color: _primary, fontSize: 13,
+                        fontWeight: FontWeight.w500),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 24),
+            _sectionLabel('Informations principales'),
+            const SizedBox(height: 12),
+
+            // ── Titre ────────────────────────────────────────────
+            _field(_titreCtrl, 'Titre du cours *', Icons.title,
+                'Ex: Algèbre Linéaire S1'),
+            const SizedBox(height: 14),
+
+            // ── Niveau (dropdown) ────────────────────────────────
+            _dropdown(
+              value: _niveau,
+              hint: 'Niveau *',
+              icon: Icons.school_outlined,
+              items: _niveaux,
+              onChanged: (v) => setState(() => _niveau = v),
+            ),
+            const SizedBox(height: 14),
+
+            // ── Matière (dropdown) ───────────────────────────────
+            _dropdown(
+              value: _matiere,
+              hint: 'Matière',
+              icon: Icons.subject,
+              items: _matieres,
+              onChanged: (v) => setState(() => _matiere = v),
+            ),
+            const SizedBox(height: 14),
+
+            // ── Description ──────────────────────────────────────
+            _field(_descCtrl, 'Description brève', Icons.description_outlined,
+                'Objectifs et contenu du cours', maxLines: 3),
+            const SizedBox(height: 14),
+
+            // ── Concours lié ─────────────────────────────────────
+            _field(_concoursCtrl, 'Concours lié (optionnel)',
+                Icons.emoji_events_outlined, 'Ex: BEPC, BAC, ENS…'),
+
+            const SizedBox(height: 24),
+            _sectionLabel('Apparence'),
+            const SizedBox(height: 12),
+
+            // ── Couleur ──────────────────────────────────────────
+            _buildColorPicker(),
+            const SizedBox(height: 16),
+
+            // ── Icône ────────────────────────────────────────────
+            _buildIconPicker(),
+
+            const SizedBox(height: 24),
+            _sectionLabel('Enseignant principal'),
+            const SizedBox(height: 12),
+
+            // ── Sélecteur EP ─────────────────────────────────────
+            _buildEPSelector(),
+
+            const SizedBox(height: 24),
+            _sectionLabel('Image de couverture'),
+            const SizedBox(height: 12),
+
+            // ── Image ────────────────────────────────────────────
+            _buildImagePicker(),
+
+            const SizedBox(height: 28),
+
+            // ── Bouton soumettre ─────────────────────────────────
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _primary,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14)),
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                ),
+                onPressed: _isLoading ? null : _soumettre,
+                child: _isLoading
+                    ? const SizedBox(
+                        width: 22, height: 22,
+                        child: CircularProgressIndicator(
+                            color: Colors.white, strokeWidth: 2))
+                    : const Text('Créer le cours',
+                        style: TextStyle(
+                            color: Colors.white, fontSize: 16,
+                            fontWeight: FontWeight.bold)),
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── Couleur picker ───────────────────────────────────────────────
+  Widget _buildColorPicker() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(
+              width: 28, height: 28,
+              decoration: BoxDecoration(
+                color: _hexToColor(_colorCode),
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.grey.shade300),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Text(
+              'Couleur : $_colorCode',
+              style: TextStyle(fontSize: 13, color: Colors.grey.shade700),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: _couleurs.map((c) {
+            final hex = '#${c.value.toRadixString(16).substring(2).toUpperCase()}';
+            final selected = _colorCode.toUpperCase() == hex;
+            return GestureDetector(
+              onTap: () => setState(() => _colorCode = hex),
+              child: Container(
+                width: 36, height: 36,
+                decoration: BoxDecoration(
+                  color: c,
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: selected ? _dark : Colors.transparent,
+                    width: selected ? 2.5 : 0,
+                  ),
+                  boxShadow: selected
+                      ? [BoxShadow(color: c.withOpacity(0.5), blurRadius: 6)]
+                      : null,
+                ),
+                child: selected
+                    ? const Icon(Icons.check, color: Colors.white, size: 18)
+                    : null,
+              ),
+            );
+          }).toList(),
+        ),
+      ],
+    );
+  }
+
+  // ── Icône picker ─────────────────────────────────────────────────
+  Widget _buildIconPicker() {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: _icones.map((item) {
+        final selected = _iconName == item['name'];
+        final couleur  = _hexToColor(_colorCode);
+        return GestureDetector(
+          onTap: () => setState(() => _iconName = item['name'] as String),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: selected ? couleur : Colors.grey.shade100,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: selected ? couleur : Colors.transparent,
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  item['icon'] as IconData,
+                  size: 18,
+                  color: selected ? Colors.white : Colors.grey.shade600,
+                ),
+                const SizedBox(width: 5),
+                Text(
+                  item['label'] as String,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: selected ? Colors.white : Colors.grey.shade700,
+                    fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  // ── Sélecteur enseignant principal ──────────────────────────────
+  Widget _buildEPSelector() {
+    if (_loadingEP) {
+      return const Center(
+        child: SizedBox(
+          height: 30,
+          child: CircularProgressIndicator(color: _primary, strokeWidth: 2),
+        ),
+      );
+    }
+    if (_enseignants.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Colors.grey.shade50,
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: const Row(
+          children: [
+            Icon(Icons.info_outline, color: Colors.grey, size: 18),
+            SizedBox(width: 8),
+            Text('Aucun enseignant principal disponible',
+                style: TextStyle(color: Colors.grey, fontSize: 13)),
+          ],
+        ),
+      );
+    }
+
+    // Trouver le nom de l'EP sélectionné
+    String epNom = 'Aucun (optionnel)';
+    if (_enseignantPrincipalId != null) {
+      final ep = _enseignants.firstWhere(
+        (e) => e['id'] == _enseignantPrincipalId,
+        orElse: () => {},
+      );
+      if (ep.isNotEmpty) {
+        epNom = ep['nom'] ?? ep['username'] ?? '';
+      }
+    }
+
+    return GestureDetector(
+      onTap: _ouvrirSelecteurEP,
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: _enseignantPrincipalId != null
+              ? _primary.withOpacity(0.05)
+              : Colors.grey.shade50,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: _enseignantPrincipalId != null
+                ? _primary.withOpacity(0.3)
+                : Colors.grey.shade200,
+          ),
+        ),
+        child: Row(
+          children: [
+            CircleAvatar(
+              radius: 18,
+              backgroundColor: _primary.withOpacity(0.12),
+              child: const Icon(Icons.person, color: _primary, size: 18),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Enseignant principal',
+                      style: TextStyle(fontSize: 11, color: Colors.grey)),
+                  const SizedBox(height: 2),
+                  Text(
+                    epNom,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: _enseignantPrincipalId != null
+                          ? _dark
+                          : Colors.grey.shade500,
+                      fontWeight: _enseignantPrincipalId != null
+                          ? FontWeight.w600
+                          : FontWeight.normal,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(
+              Icons.arrow_forward_ios,
+              size: 14,
+              color: Colors.grey.shade400,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _ouvrirSelecteurEP() {
+    int? tempSelected = _enseignantPrincipalId;
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setS) => Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          padding: EdgeInsets.only(
+            left: 20, right: 20, top: 14,
+            bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Center(
+                child: Container(
+                  width: 40, height: 4,
+                  decoration: BoxDecoration(
+                      color: Colors.grey.shade300,
+                      borderRadius: BorderRadius.circular(10)),
+                ),
+              ),
+              const SizedBox(height: 14),
+              const Text('Choisir l\'enseignant principal',
+                  style: TextStyle(
+                      fontSize: 16, fontWeight: FontWeight.bold, color: _dark)),
+              const SizedBox(height: 4),
+              const Text('Optionnel — peut être assigné plus tard',
+                  style: TextStyle(fontSize: 12, color: Colors.grey)),
+              const SizedBox(height: 10),
+              // Option "aucun"
+              RadioListTile<int?>(
+                value: null,
+                groupValue: tempSelected,
+                activeColor: _primary,
+                title: const Text('Aucun pour l\'instant',
+                    style: TextStyle(fontSize: 14, color: Colors.grey)),
+                onChanged: (v) => setS(() => tempSelected = v),
+              ),
+              ConstrainedBox(
+                constraints: BoxConstraints(
+                    maxHeight: MediaQuery.of(ctx).size.height * 0.35),
+                child: ListView(
+                  shrinkWrap: true,
+                  children: _enseignants.map((e) => RadioListTile<int>(
+                    value: e['id'] as int,
+                    groupValue: tempSelected,
+                    activeColor: _primary,
+                    title: Text(e['nom'] ?? e['username'] ?? '',
+                        style: const TextStyle(
+                            fontSize: 14, fontWeight: FontWeight.w500)),
+                    subtitle: Text(e['email'] ?? '',
+                        style: const TextStyle(fontSize: 12)),
+                    onChanged: (v) => setS(() => tempSelected = v),
+                  )).toList(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _primary,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                    padding: const EdgeInsets.symmetric(vertical: 13),
+                  ),
+                  onPressed: () {
+                    setState(() => _enseignantPrincipalId = tempSelected);
+                    Navigator.pop(ctx);
+                  },
+                  child: const Text('Confirmer',
+                      style: TextStyle(color: Colors.white)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ── Image picker ─────────────────────────────────────────────────
+  Widget _buildImagePicker() {
+    return GestureDetector(
+      onTap: () async {
+        final res = await FilePicker.platform.pickFiles(
+            type: FileType.image, withData: true);
+        if (res != null && res.files.single.bytes != null) {
+          setState(() {
+            _imageBytes = res.files.single.bytes;
+            _imageName  = res.files.single.name;
+          });
+        }
+      },
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: _imageName != null
+              ? _primary.withOpacity(0.05)
+              : Colors.grey.shade50,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: _imageName != null
+                ? _primary.withOpacity(0.3)
+                : Colors.grey.shade200,
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: _imageName != null
+                    ? _primary.withOpacity(0.1)
+                    : Colors.grey.shade200,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(
+                _imageName != null
+                    ? Icons.image
+                    : Icons.add_photo_alternate_outlined,
+                color: _imageName != null ? _primary : Colors.grey,
+                size: 22,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _imageName != null
+                        ? 'Image sélectionnée'
+                        : 'Ajouter une image de couverture',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: _imageName != null
+                          ? FontWeight.w600 : FontWeight.normal,
+                      color: _imageName != null ? _dark : Colors.grey.shade500,
+                    ),
+                  ),
+                  if (_imageName != null) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      _imageName!,
+                      style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ] else ...[
+                    const SizedBox(height: 2),
+                    Text('Optionnel — JPEG, PNG',
+                        style: TextStyle(
+                            fontSize: 11, color: Colors.grey.shade400)),
+                  ],
+                ],
+              ),
+            ),
+            if (_imageName != null)
+              GestureDetector(
+                onTap: () => setState(() {
+                  _imageBytes = null;
+                  _imageName  = null;
+                }),
+                child: Icon(Icons.close, color: Colors.grey.shade400, size: 18),
+              )
+            else
+              Icon(Icons.arrow_forward_ios,
+                  size: 13, color: Colors.grey.shade400),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── Helpers ──────────────────────────────────────────────────────
+  Widget _sectionLabel(String label) => Row(
+        children: [
+          Container(
+            width: 4, height: 16,
+            decoration: BoxDecoration(
+                color: _primary, borderRadius: BorderRadius.circular(2)),
+          ),
+          const SizedBox(width: 8),
+          Text(label,
+              style: const TextStyle(
+                  fontSize: 14, fontWeight: FontWeight.bold, color: _dark)),
+        ],
+      );
+
+  Widget _field(TextEditingController ctrl, String label, IconData icon,
+      String hint, {int maxLines = 1}) {
+    return TextField(
+      controller: ctrl,
+      maxLines: maxLines,
+      decoration: InputDecoration(
+        labelText: label,
+        hintText: hint,
+        prefixIcon: Icon(icon, color: _primary, size: 20),
+        filled: true,
+        fillColor: Colors.grey.shade50,
+        border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: BorderSide.none),
+        focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: const BorderSide(color: _primary)),
+        enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: BorderSide(color: Colors.grey.shade200)),
+      ),
+    );
+  }
+
+  Widget _dropdown({
+    required String? value,
+    required String hint,
+    required IconData icon,
+    required List<String> items,
+    required ValueChanged<String?> onChanged,
+  }) {
+    return DropdownButtonFormField<String>(
+      value: value,
+      decoration: InputDecoration(
+        labelText: hint,
+        prefixIcon: Icon(icon, color: _primary, size: 20),
+        filled: true,
+        fillColor: Colors.grey.shade50,
+        border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: BorderSide.none),
+        focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: const BorderSide(color: _primary)),
+        enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: BorderSide(color: Colors.grey.shade200)),
+      ),
+      icon: const Icon(Icons.keyboard_arrow_down, color: _primary),
+      dropdownColor: Colors.white,
+      items: items.map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
+      onChanged: onChanged,
+    );
+  }
+
+  Color _hexToColor(String hex) {
+    try {
+      return Color(int.parse(hex.replaceFirst('#', '0xFF')));
+    } catch (_) {
+      return const Color(0xFF008080);
+    }
+  }
+
+  void _showError(String msg) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(msg), backgroundColor: Colors.red));
+  }
+}
+

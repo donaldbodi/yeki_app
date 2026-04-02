@@ -26,7 +26,7 @@ class _MesCoursPageState extends State<MesCoursPage> {
   String? niveauFiltre;
   String? parcoursFiltre;
 
-  final String baseUrl = "https://yekiapp.pythonanywhere.com/api";
+  final String baseUrl = "https://yeki.pythonanywhere.com/api";
 
   @override
   void initState() {

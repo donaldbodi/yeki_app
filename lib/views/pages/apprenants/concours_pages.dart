@@ -1,28 +1,34 @@
+// lib/views/pages/apprenants/concours_pages.dart
+// ════════════════════════════════════════════════════════════════
+// PAGE PRÉPA CONCOURS — Design Prestigieux
+// ════════════════════════════════════════════════════════════════
+
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-import 'formations_models.dart';
+import 'package:yeki/views/pages/apprenants/formations_models.dart';
+import 'package:yeki/views/pages/apprenants/concours_detail_page.dart';
 
-// ─── Palette ──────────────────────────────────────────────────
-const Color _mainTeal = Color(0xFF2884A0);
-const Color _tealDark = Color(0xFF1F5F75);
-const Color _accent   = Color(0xFFFFB74D);
-const Color _bg       = Color(0xFFF4F9FB);
+const Color _navy = Color(0xFF0D1B2A);
+const Color _blue = Color(0xFF2884A0);
+const Color _gold = Color(0xFFE2A84B);
+const Color _green = Color(0xFF10B981);
+const Color _red = Color(0xFFEF4444);
+const Color _purple = Color(0xFF8B5CF6);
+const Color _bg = Color(0xFFF0F4F8);
 
-Future<String?> _getToken() async {
-  final p = await SharedPreferences.getInstance();
-  return p.getString('token');
-}
+Future<String?> _getToken() async =>
+    (await SharedPreferences.getInstance()).getString('token');
 
-Map<String, String> _headers(String? token) => {
+Map<String, String> _headers(String? t) => {
   'Content-Type': 'application/json',
-  if (token != null) 'Authorization': 'Token $token',
+  if (t != null) 'Authorization': 'Token $t',
 };
 
-// ═══════════════════════════════════════════════════════════════
-// CONCOURS — PAGE LISTE
-// ═══════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════
+// PAGE LISTE — PRÉPA CONCOURS
+// ══════════════════════════════════════════════════════════════
 class ConcoursPage extends StatefulWidget {
   const ConcoursPage({super.key});
 
@@ -30,38 +36,92 @@ class ConcoursPage extends StatefulWidget {
   State<ConcoursPage> createState() => _ConcoursPageState();
 }
 
-class _ConcoursPageState extends State<ConcoursPage> {
-  bool           _loading       = true;
-  List<Concours> _tous          = [];
-  List<Concours> _affiches      = [];
-  String         _selectedFilter = 'Tous';
+class _ConcoursPageState extends State<ConcoursPage>
+    with SingleTickerProviderStateMixin {
+  bool _loading = true;
+  String _error = '';
+  List<DepartementItem> _tous = [];
+  List<DepartementItem> _affiches = [];
+  String _filtre = 'Tous';
+  String _searchQ = '';
+  String _niveauApprenant = '';
+  final _searchCtrl = TextEditingController();
+  late AnimationController _animCtrl;
+
+  static const _filtres = ['Tous', 'Gratuit', 'Payant', 'En cours'];
 
   @override
   void initState() {
     super.initState();
+    _animCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 600));
+    _loadNiveau();
     _charger();
   }
 
+  @override
+  void dispose() {
+    _animCtrl.dispose();
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadNiveau() async {
+    final niveau = await NiveauService.getNiveau();
+    if (niveau != null) {
+      setState(() => _niveauApprenant = niveau);
+    }
+  }
+
   Future<void> _charger() async {
-    setState(() => _loading = true);
+    setState(() { _loading = true; _error = ''; });
     final token = await _getToken();
-
-    final params = <String, String>{};
-    if (_selectedFilter == 'Souscrits')   params['souscrit'] = 'true';
-    if (_selectedFilter == 'Disponibles') params['souscrit'] = 'false';
-
-    final uri = Uri.parse('$kBaseUrl/concours/')
-        .replace(queryParameters: params.isNotEmpty ? params : null);
-
     try {
-      final res = await http.get(uri, headers: _headers(token));
-      if (res.statusCode == 200) {
+      final res = await http.get(
+        Uri.parse('$kBaseUrl/apprenant/prepa-concours/'),
+        headers: _headers(token),
+      );
+      if (res.statusCode == 200 && mounted) {
         final List data = jsonDecode(res.body);
-        _tous     = data.map((d) => Concours.fromJson(d)).toList();
-        _affiches = List.from(_tous);
+        setState(() {
+          _tous = data.map((d) => DepartementItem.fromJson(d as Map<String, dynamic>)).toList();
+          _appliquerFiltre();
+        });
+        _animCtrl.forward(from: 0);
+      } else if (mounted) {
+        setState(() => _error = 'Erreur ${res.statusCode}');
       }
-    } catch (_) {}
-    if (mounted) setState(() => _loading = false);
+    } catch (_) {
+      if (mounted) setState(() => _error = 'Erreur réseau');
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  void _appliquerFiltre() {
+    final q = _searchQ.toLowerCase();
+    setState(() {
+      _affiches = _tous.where((d) {
+        final matchSearch = q.isEmpty ||
+            d.nom.toLowerCase().contains(q) ||
+            d.nomConcours.toLowerCase().contains(q) ||
+            d.niveauxCibles.toLowerCase().contains(q);
+
+        final matchFiltre = switch (_filtre) {
+          'Gratuit' => d.prix == 0,
+          'Payant' => d.prix > 0,
+          'En cours' => d.progression > 0 && d.progression < 100,
+          _ => true,
+        };
+
+        // Filtrage par niveau: niveau concours <= niveau apprenant
+        bool matchNiveau = true;
+        if (_niveauApprenant.isNotEmpty && d.niveauxCibles.isNotEmpty) {
+          matchNiveau = NiveauService.estAccessible(_niveauApprenant, d.niveauxCibles);
+        }
+
+        return matchSearch && matchFiltre && matchNiveau;
+      }).toList();
+    });
   }
 
   @override
@@ -69,954 +129,582 @@ class _ConcoursPageState extends State<ConcoursPage> {
     return Scaffold(
       backgroundColor: _bg,
       body: NestedScrollView(
-        headerSliverBuilder: (context, innerBoxIsScrolled) => [
-          SliverToBoxAdapter(
-            child: Stack(
-              clipBehavior: Clip.none,
-              alignment: Alignment.bottomCenter,
-              children: [
-                _buildHeader(),
-                Positioned(
-                  bottom: -25,
-                  left: 0,
-                  right: 0,
-                  child: _buildFilterBar(),
-                ),
-              ],
+        headerSliverBuilder: (_, __) => [
+          _buildAppBar(),
+          SliverToBoxAdapter(child: _buildSearchBar()),
+          SliverPersistentHeader(
+            pinned: true,
+            delegate: _FilterDelegate(
+              filtres: _filtres,
+              selected: _filtre,
+              onSelect: (f) { _filtre = f; _appliquerFiltre(); },
             ),
           ),
-          const SliverToBoxAdapter(child: SizedBox(height: 40)),
         ],
         body: _loading
-            ? const Center(
-                child: CircularProgressIndicator(color: _mainTeal))
-            : RefreshIndicator(
-                color: _mainTeal,
-                onRefresh: _charger,
-                child: _affiches.isEmpty
-                    ? _buildEmpty()
-                    : ListView.builder(
-                        padding: const EdgeInsets.symmetric(horizontal: 20),
-                        itemCount: _affiches.length,
-                        itemBuilder: (context, i) =>
-                            _buildConcoursCard(_affiches[i]),
-                      ),
-              ),
+            ? const _LoadingView()
+            : _error.isNotEmpty
+                ? _ErrorView(msg: _error, onRetry: _charger)
+                : _affiches.isEmpty
+                    ? const _EmptyView()
+                    : _buildList(),
       ),
     );
   }
 
-  Widget _buildHeader() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(24, 24, 24, 65),
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF0F172A), _tealDark, _mainTeal],
-        ),
-      ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Container(
-          padding:
-              const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(100),
-            border: Border.all(color: Colors.white.withOpacity(0.2)),
-          ),
-          child: Row(mainAxisSize: MainAxisSize.min, children: [
-            const Icon(Icons.verified_user, color: _accent, size: 14),
-            const SizedBox(width: 8),
-            Text(
-              "PROGRAMME ÉLITE",
-              style: TextStyle(
-                color: Colors.white.withOpacity(0.9),
-                fontSize: 10,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 1.2,
-              ),
-            ),
-          ]),
-        ),
-        const SizedBox(height: 20),
-        const Text(
-          'Réussissez vos\nconcours.',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 34,
-            fontWeight: FontWeight.w900,
-            height: 1.1,
-            letterSpacing: -1,
-          ),
-        ),
-        const SizedBox(height: 12),
-        Text(
-          'Accédez aux meilleures ressources pour intégrer\nles grandes écoles d\'excellence.',
-          style: TextStyle(
-              color: Colors.white.withOpacity(0.7), fontSize: 14, height: 1.5),
-        ),
-      ]),
-    );
-  }
-
-  Widget _buildFilterBar() {
-    final filters = ['Tous', 'Souscrits', 'Disponibles'];
-    return Container(
-      height: 54,
-      margin: const EdgeInsets.symmetric(horizontal: 24),
-      padding: const EdgeInsets.all(6),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: _tealDark.withOpacity(0.15),
-            blurRadius: 20,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
-      child: Row(
-        children: filters.map((f) {
-          final isSelected = _selectedFilter == f;
-          return Expanded(
-            child: GestureDetector(
-              onTap: () {
-                setState(() => _selectedFilter = f);
-                _charger();
-              },
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: isSelected ? _mainTeal : Colors.transparent,
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Text(
-                  f,
-                  style: TextStyle(
-                    color: isSelected
-                        ? Colors.white
-                        : _mainTeal.withOpacity(0.6),
-                    fontWeight:
-                        isSelected ? FontWeight.bold : FontWeight.w600,
-                    fontSize: 13,
-                  ),
-                ),
-              ),
-            ),
-          );
-        }).toList(),
-      ),
-    );
-  }
-
-  Widget _buildConcoursCard(Concours c) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 25),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 20,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(24),
-        child: InkWell(
-          onTap: () => Navigator.push(
-            context,
-            MaterialPageRoute(
-                builder: (_) => DetailConcoursPage(concoursId: c.id)),
-          ).then((_) => _charger()),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // ── Image / Banner ─────────────────────────
-              Stack(children: [
-                // Image réseau ou placeholder gradient
-                c.imageUrl.isNotEmpty
-                    ? Image.network(
-                        c.imageUrl,
-                        height: 160,
-                        width: double.infinity,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => _concoursPlaceholder(c),
-                      )
-                    : _concoursPlaceholder(c),
-
-                // Overlay gradient
-                Container(
-                  height: 160,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        Colors.transparent,
-                        Colors.black.withOpacity(0.65)
-                      ],
-                    ),
-                  ),
-                ),
-
-                // Badge J-X
-                Positioned(
-                  top: 12, left: 12,
-                  child: _glassBadge(
-                    "J-${c.joursRestants}",
-                    c.joursRestants <= 14
-                        ? Colors.redAccent
-                        : _mainTeal,
-                  ),
-                ),
-
-                // Étoile si souscrit
-                if (c.estSouscrit)
-                  const Positioned(
-                    top: 12, right: 12,
-                    child: CircleAvatar(
-                      backgroundColor: _accent,
-                      radius: 14,
-                      child: Icon(Icons.star, color: Colors.white, size: 16),
-                    ),
-                  ),
-
-                // Titre en bas de l'image
-                Positioned(
-                  bottom: 10, left: 14,
-                  child: Text(
-                    c.titre,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                      shadows: [
-                        Shadow(blurRadius: 8, color: Colors.black54)
-                      ],
-                    ),
-                  ),
-                ),
-              ]),
-
-              // ── Infos carte ─────────────────────────────
-              Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      c.description,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                          color: Colors.grey.shade600,
-                          fontSize: 13,
-                          height: 1.4),
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Barre de progression
-                    _buildProgressionBar(c.joursRestants),
-                    const SizedBox(height: 16),
-
-                    // Stats row
-                    Row(children: [
-                      _infoChip(Icons.school, c.niveau),
-                      const SizedBox(width: 8),
-                      _infoChip(Icons.menu_book,
-                          '${c.nbModules} module${c.nbModules > 1 ? 's' : ''}'),
-                      const Spacer(),
-                      Text(
-                        c.prix == 0
-                            ? 'Gratuit'
-                            : '${c.prix.toInt()} FCFA',
-                        style: const TextStyle(
-                          color: _mainTeal,
-                          fontWeight: FontWeight.w900,
-                          fontSize: 16,
-                        ),
-                      ),
-                    ]),
-
-                    const SizedBox(height: 12),
-
-                    // Footer : inscrits + taux
-                    Row(children: [
-                      Icon(Icons.people_outline,
-                          size: 13, color: Colors.grey.shade400),
-                      const SizedBox(width: 4),
-                      Text('${c.nbInscrits} inscrits',
-                          style: TextStyle(
-                              fontSize: 11, color: Colors.grey.shade500)),
-                      const SizedBox(width: 12),
-                      Icon(Icons.verified_outlined,
-                          size: 13, color: Colors.green.shade400),
-                      const SizedBox(width: 4),
-                      Text('${c.tauxReussite}% réussite',
-                          style: TextStyle(
-                              fontSize: 11, color: Colors.grey.shade500)),
-                      const Spacer(),
-                      if (c.estSouscrit)
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 10, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFFFF3E0),
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: _accent),
-                          ),
-                          child: const Text('Souscrit',
-                              style: TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w700,
-                                color: _accent,
-                              )),
-                        ),
-                    ]),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _concoursPlaceholder(Concours c) {
-    return Container(
-      height: 160,
-      width: double.infinity,
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF0F172A), _tealDark, _mainTeal],
-        ),
-      ),
-      child: Center(
-        child: Icon(Icons.emoji_events_rounded,
-            size: 60, color: Colors.white.withOpacity(0.2)),
-      ),
-    );
-  }
-
-  Widget _glassBadge(String text, Color color) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-    decoration: BoxDecoration(
-        color: color.withOpacity(0.9),
-        borderRadius: BorderRadius.circular(8)),
-    child: Text(text,
-        style: const TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-            fontSize: 11)),
-  );
-
-  Widget _infoChip(IconData icon, String label) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-    decoration: BoxDecoration(
-        color: _bg, borderRadius: BorderRadius.circular(8)),
-    child: Row(children: [
-      Icon(icon, size: 12, color: _mainTeal),
-      const SizedBox(width: 4),
-      Text(label,
-          style: const TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.bold,
-              color: _tealDark)),
-    ]),
-  );
-
-  Widget _buildProgressionBar(int jours) {
-    double progress = ((90 - jours) / 90).clamp(0.0, 1.0);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            const Text("Progression des inscriptions",
-                style: TextStyle(
-                    fontSize: 11, fontWeight: FontWeight.w500)),
-            Text("${(progress * 100).toInt()}%",
-                style: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                    color: _mainTeal)),
+  Widget _buildAppBar() {
+    return SliverAppBar(
+      expandedHeight: 200,
+      pinned: true,
+      stretch: true,
+      backgroundColor: _navy,
+      flexibleSpace: FlexibleSpaceBar(
+        stretchModes: const [StretchMode.zoomBackground, StretchMode.fadeTitle],
+        titlePadding: const EdgeInsets.only(left: 20, bottom: 56),
+        title: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: const [
+            Text('Prépa Concours',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900,
+                    color: Colors.white, letterSpacing: 0.5)),
+            Text('Préparez votre réussite',
+                style: TextStyle(fontSize: 11, color: Color(0xFFADD8E6))),
           ],
         ),
-        const SizedBox(height: 6),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(10),
-          child: LinearProgressIndicator(
-            value: progress,
-            backgroundColor: _mainTeal.withOpacity(0.1),
-            valueColor: AlwaysStoppedAnimation<Color>(
-                progress > 0.8 ? Colors.redAccent : _mainTeal),
-            minHeight: 6,
+        background: Stack(fit: StackFit.expand, children: [
+          Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Color(0xFF0D1B2A), Color(0xFF1A3A5C), Color(0xFF2884A0)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+            ),
           ),
+          Positioned.fill(
+            child: CustomPaint(painter: _StarPatternPainter()),
+          ),
+          Positioned(
+            right: 24, bottom: 48,
+            child: Opacity(
+              opacity: 0.15,
+              child: Icon(Icons.emoji_events_rounded, size: 100, color: _gold),
+            ),
+          ),
+        ]),
+      ),
+      actions: [
+        IconButton(
+          icon: const Icon(Icons.refresh_rounded, color: Colors.white),
+          onPressed: _charger,
         ),
       ],
     );
   }
 
-  Widget _buildEmpty() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.emoji_events_outlined,
-              size: 60, color: Colors.grey.shade300),
-          const SizedBox(height: 16),
-          Text('Aucun concours trouvé',
-              style: TextStyle(
-                  color: Colors.grey.shade400,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600)),
-          const SizedBox(height: 8),
-          TextButton(
-            onPressed: _charger,
-            child: const Text('Réessayer'),
+  Widget _buildSearchBar() {
+    return Container(
+      color: _navy,
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+      child: TextField(
+        controller: _searchCtrl,
+        style: const TextStyle(color: Colors.white, fontSize: 14),
+        decoration: InputDecoration(
+          hintText: 'Rechercher un concours…',
+          hintStyle: TextStyle(color: Colors.white.withOpacity(0.5)),
+          prefixIcon: Icon(Icons.search_rounded, color: Colors.white.withOpacity(0.7), size: 20),
+          suffixIcon: _searchQ.isNotEmpty
+              ? IconButton(
+                  icon: const Icon(Icons.close_rounded, color: Colors.white54, size: 18),
+                  onPressed: () {
+                    _searchCtrl.clear();
+                    setState(() => _searchQ = '');
+                    _appliquerFiltre();
+                  })
+              : null,
+          filled: true,
+          fillColor: Colors.white.withOpacity(0.1),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide.none,
           ),
-        ],
+          contentPadding: const EdgeInsets.symmetric(vertical: 10),
+        ),
+        onChanged: (v) {
+          setState(() => _searchQ = v);
+          _appliquerFiltre();
+        },
       ),
     );
   }
+
+  Widget _buildList() {
+    return ListView.builder(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+      itemCount: _affiches.length,
+      itemBuilder: (_, i) {
+        final anim = CurvedAnimation(
+          parent: _animCtrl,
+          curve: Interval(
+            (i / _affiches.length).clamp(0.0, 1.0),
+            ((i + 1) / _affiches.length).clamp(0.0, 1.0),
+            curve: Curves.easeOut,
+          ),
+        );
+        return FadeTransition(
+          opacity: anim,
+          child: SlideTransition(
+            position: Tween(begin: const Offset(0, 0.1), end: Offset.zero).animate(anim),
+            child: _ConcoursCard(
+              dept: _affiches[i],
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => DetailConcoursPage(
+                    concoursId: _affiches[i].id,
+                    deptPrecharge: _affiches[i],
+                  ),
+                ),
+              ).then((_) => _charger()),
+            ),
+          ),
+        );
+      },
+    );
+  }
 }
 
+// ══════════════════════════════════════════════════════════════
+// CARTE CONCOURS
+// ══════════════════════════════════════════════════════════════
+class _ConcoursCard extends StatelessWidget {
+  final DepartementItem dept;
+  final VoidCallback onTap;
 
-// ═══════════════════════════════════════════════════════════════
-// CONCOURS — DÉTAIL
-// ═══════════════════════════════════════════════════════════════
-class DetailConcoursPage extends StatefulWidget {
-  final int concoursId;
-  const DetailConcoursPage({super.key, required this.concoursId});
+  const _ConcoursCard({required this.dept, required this.onTap});
 
-  @override
-  State<DetailConcoursPage> createState() => _DetailConcoursPageState();
-}
-
-class _DetailConcoursPageState extends State<DetailConcoursPage> {
-  bool      _loading    = true;
-  bool      _souscribing = false;
-  Concours? _concours;
-
-  static const Color _primaryTeal = Color(0xFF008088);
-  static const Color _darkBlue    = Color(0xFF1A1C1E);
-  static const Color _goldAccent  = Color(0xFFD4AF37);
-  static const Color _scaffoldBg  = Color(0xFFF8FAFB);
-
-  @override
-  void initState() {
-    super.initState();
-    _charger();
-  }
-
-  Future<void> _charger() async {
-    final token = await _getToken();
-    final res = await http.get(
-      Uri.parse('$kBaseUrl/concours/${widget.concoursId}/'),
-      headers: _headers(token),
-    );
-    if (res.statusCode == 200) {
-      setState(() {
-        _concours = Concours.fromJson(jsonDecode(res.body));
-        _loading  = false;
-      });
-    } else {
-      setState(() => _loading = false);
-    }
-  }
-
-  Future<void> _souscrire() async {
-    setState(() => _souscribing = true);
-    final token = await _getToken();
-    final res = await http.post(
-      Uri.parse('$kBaseUrl/concours/${widget.concoursId}/souscrire/'),
-      headers: _headers(token),
-    );
-    setState(() => _souscribing = false);
-
-    final msg   = res.statusCode == 201
-        ? 'Souscription confirmée ! Bonne préparation.'
-        : res.statusCode == 409
-            ? 'Vous êtes déjà souscrit.'
-            : 'Erreur. Veuillez réessayer.';
-    final color = res.statusCode == 201
-        ? _primaryTeal
-        : res.statusCode == 409
-            ? Colors.orange
-            : Colors.red;
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(msg),
-        backgroundColor: color,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12)),
-      ));
-      if (res.statusCode == 201) _charger();
+  Color _parseColor() {
+    try {
+      final hex = dept.couleur.replaceAll('#', '');
+      return Color(int.parse('FF$hex', radix: 16));
+    } catch (_) {
+      return _blue;
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) {
-      return const Scaffold(
-          body: Center(
-              child: CircularProgressIndicator(color: _primaryTeal)));
-    }
-    final c = _concours!;
+    final color = _parseColor();
 
-    return Scaffold(
-      backgroundColor: _scaffoldBg,
-      body: CustomScrollView(
-        physics: const BouncingScrollPhysics(),
-        slivers: [
-          // ── Header image ───────────────────────────────
-          SliverAppBar(
-            expandedHeight: 340,
-            pinned: true,
-            stretch: true,
-            backgroundColor: _darkBlue,
-            leading: _buildBackButton(),
-            actions: [
-              if (c.estSouscrit)
-                Container(
-                  margin: const EdgeInsets.only(right: 16, top: 8, bottom: 8),
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 12, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: _accent,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: const Row(children: [
-                    Icon(Icons.star, color: Colors.white, size: 14),
-                    SizedBox(width: 4),
-                    Text('Souscrit',
-                        style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700)),
-                  ]),
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: color.withOpacity(0.12),
+              blurRadius: 20,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              height: 120,
+              decoration: BoxDecoration(
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                gradient: LinearGradient(
+                  colors: [color.withOpacity(0.9), color.withOpacity(0.6)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
                 ),
-            ],
-            flexibleSpace: FlexibleSpaceBar(
-              stretchModes: const [StretchMode.zoomBackground],
-              background: Stack(
-                fit: StackFit.expand,
+                image: dept.imageUrl != null
+                    ? DecorationImage(
+                        image: NetworkImage(dept.imageUrl!),
+                        fit: BoxFit.cover,
+                        colorFilter: ColorFilter.mode(color.withOpacity(0.4), BlendMode.darken),
+                      )
+                    : null,
+              ),
+              child: Stack(
                 children: [
-                  // Image ou placeholder
-                  c.imageUrl.isNotEmpty
-                      ? Image.network(c.imageUrl,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) =>
-                              _headerPlaceholder())
-                      : _headerPlaceholder(),
-
-                  // Overlay
-                  Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          Colors.black.withOpacity(0.1),
-                          Colors.transparent,
-                          _darkBlue.withOpacity(0.95),
+                  if (dept.imageUrl == null)
+                    Center(
+                      child: Icon(Icons.emoji_events_rounded, size: 52, color: Colors.white.withOpacity(0.3)),
+                    ),
+                  Positioned(
+                    top: 12, right: 12,
+                    child: _StatusBadge(statut: dept.statut),
+                  ),
+                  Positioned(
+                    top: 12, left: 12,
+                    child: _PrixBadge(prix: dept.prix),
+                  ),
+                  Positioned(
+                    bottom: 12, left: 14, right: 60,
+                    child: Text(
+                      dept.nomConcours.isNotEmpty ? dept.nomConcours : dept.nom,
+                      style: const TextStyle(
+                          color: Colors.white, fontSize: 16,
+                          fontWeight: FontWeight.w800, shadows: [
+                        Shadow(blurRadius: 4, color: Colors.black54),
+                      ]),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (dept.nom != dept.nomConcours && dept.nom.isNotEmpty)
+                    Text(dept.nom,
+                        style: TextStyle(fontSize: 13, color: Colors.grey.shade600, fontStyle: FontStyle.italic)),
+                  if (dept.description.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(dept.description,
+                        style: TextStyle(fontSize: 13, color: Colors.grey.shade700, height: 1.4),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis),
+                  ],
+                  const SizedBox(height: 12),
+                  _InfoGrid(dept: dept, accentColor: color),
+                  const SizedBox(height: 12),
+                  if (dept.nbCours > 0) ...[
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('${dept.nbCours} cours',
+                            style: TextStyle(fontSize: 12, color: Colors.grey.shade500, fontWeight: FontWeight.w500)),
+                        Text('${dept.progressionMoyenne.toStringAsFixed(0)}%',
+                            style: TextStyle(fontSize: 12, color: color, fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(4),
+                      child: LinearProgressIndicator(
+                        value: dept.progressionMoyenne / 100,
+                        backgroundColor: Colors.grey.shade100,
+                        valueColor: AlwaysStoppedAnimation(color),
+                        minHeight: 6,
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 14),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: onTap,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: color,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        elevation: 0,
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.play_arrow_rounded, size: 18),
+                          const SizedBox(width: 6),
+                          Text(
+                            dept.progression > 0 ? 'Continuer la préparation' : 'Commencer la préparation',
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                          ),
                         ],
                       ),
                     ),
                   ),
-
-                  // Texte header
-                  Positioned(
-                    bottom: 40, left: 24, right: 24,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 6),
-                          decoration: BoxDecoration(
-                              color: _goldAccent,
-                              borderRadius: BorderRadius.circular(8)),
-                          child: const Text("OFFRE ÉLITE 2026",
-                              style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
-                                  letterSpacing: 1)),
-                        ),
-                        const SizedBox(height: 12),
-                        Text(c.titre,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 30,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: -0.5,
-                            )),
-                        if (c.niveau.isNotEmpty) ...[
-                          const SizedBox(height: 8),
-                          Row(children: [
-                            Icon(Icons.school_outlined,
-                                size: 13,
-                                color: Colors.white.withOpacity(0.7)),
-                            const SizedBox(width: 5),
-                            Text(c.niveau,
-                                style: TextStyle(
-                                    color: Colors.white.withOpacity(0.7),
-                                    fontSize: 12)),
-                          ]),
-                        ],
-                      ],
-                    ),
-                  ),
                 ],
               ),
-            ),
-          ),
-
-          // ── Contenu ────────────────────────────────────
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Banner urgence
-                  _buildUrgencyBanner(c),
-                  const SizedBox(height: 28),
-
-                  // Stats
-                  _buildStatsRow(c),
-                  const SizedBox(height: 28),
-
-                  // Description
-                  _buildSectionHeader("À propos du concours"),
-                  const SizedBox(height: 12),
-                  Text(c.description,
-                      style: TextStyle(
-                          color: Colors.grey.shade700,
-                          fontSize: 15,
-                          height: 1.6)),
-                  const SizedBox(height: 28),
-
-                  // Modules
-                  if (c.modules.isNotEmpty) ...[
-                    _buildSectionHeader("Programme de formation"),
-                    const SizedBox(height: 16),
-                    ...c.modules.map((m) => _buildModuleTile(m, c.estSouscrit)),
-                  ],
-
-                  const SizedBox(height: 120),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-      bottomSheet: _buildBottomAction(c),
-    );
-  }
-
-  Widget _headerPlaceholder() => Container(
-    decoration: const BoxDecoration(
-      gradient: LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [Color(0xFF0F172A), _tealDark, _mainTeal],
-      ),
-    ),
-    child: Center(
-      child: Icon(Icons.emoji_events_rounded,
-          size: 80, color: Colors.white.withOpacity(0.15)),
-    ),
-  );
-
-  Widget _buildBackButton() => Padding(
-    padding: const EdgeInsets.all(8.0),
-    child: CircleAvatar(
-      backgroundColor: Colors.black.withOpacity(0.3),
-      child: IconButton(
-        icon: const Icon(Icons.arrow_back_ios_new,
-            color: Colors.white, size: 18),
-        onPressed: () => Navigator.pop(context),
-      ),
-    ),
-  );
-
-  Widget _buildUrgencyBanner(Concours c) {
-    final urgent = c.joursRestants <= 14;
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-            color: (urgent ? Colors.redAccent : _primaryTeal)
-                .withOpacity(0.15)),
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withOpacity(0.04), blurRadius: 20)
-        ],
-      ),
-      child: Row(children: [
-        Container(
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            color: (urgent ? Colors.redAccent : _primaryTeal)
-                .withOpacity(0.1),
-            shape: BoxShape.circle,
-          ),
-          child: Icon(
-            Icons.timer_outlined,
-            color: urgent ? Colors.redAccent : _primaryTeal,
-            size: 24,
-          ),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text("Temps restant",
-                  style: TextStyle(fontSize: 12, color: Colors.grey)),
-              Text(
-                c.joursRestants == 0
-                    ? 'Clôturé'
-                    : '${c.joursRestants} jour${c.joursRestants > 1 ? 's' : ''} restant${c.joursRestants > 1 ? 's' : ''}',
-                style: TextStyle(
-                    color: _darkBlue,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16),
-              ),
-              Text(
-                'Date limite : ${c.dateLimite}',
-                style: TextStyle(
-                    fontSize: 11, color: Colors.grey.shade500),
-              ),
-            ],
-          ),
-        ),
-        if (urgent)
-          Text("CLÔTURE BIENTÔT",
-              style: TextStyle(
-                  color: Colors.redAccent,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 10)),
-      ]),
-    );
-  }
-
-  Widget _buildStatsRow(Concours c) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        _statCard(Icons.groups_outlined,
-            c.nbInscrits >= 1000
-                ? '${(c.nbInscrits / 1000).toStringAsFixed(1)}k'
-                : '${c.nbInscrits}',
-            'Inscrits'),
-        _statCard(Icons.verified_outlined,
-            '${c.tauxReussite}%', 'Réussite'),
-        _statCard(Icons.menu_book_outlined,
-            '${c.nbModules}', 'Modules'),
-      ],
-    );
-  }
-
-  Widget _statCard(IconData icon, String value, String label) {
-    return Container(
-      width: (MediaQuery.of(context).size.width - 72) / 3,
-      padding: const EdgeInsets.symmetric(vertical: 16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withOpacity(0.04), blurRadius: 10)
-        ],
-      ),
-      child: Column(children: [
-        Icon(icon, color: _primaryTeal, size: 22),
-        const SizedBox(height: 8),
-        Text(value,
-            style: TextStyle(
-                fontWeight: FontWeight.bold,
-                color: _darkBlue,
-                fontSize: 16)),
-        Text(label,
-            style: const TextStyle(color: Colors.grey, fontSize: 11)),
-      ]),
-    );
-  }
-
-  Widget _buildSectionHeader(String title) => Row(children: [
-    Container(
-        width: 4, height: 20,
-        decoration: BoxDecoration(
-            color: _primaryTeal,
-            borderRadius: BorderRadius.circular(2))),
-    const SizedBox(width: 12),
-    Text(title,
-        style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-            color: _darkBlue)),
-  ]);
-
-  Widget _buildModuleTile(ModuleConcours m, bool estSouscrit) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.withOpacity(0.06)),
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withOpacity(0.03), blurRadius: 10)
-        ],
-      ),
-      child: Row(children: [
-        Container(
-          height: 44, width: 44,
-          decoration: BoxDecoration(
-            color: _primaryTeal.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Icon(Icons.play_arrow_rounded, color: _primaryTeal),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(m.titre,
-                  style: TextStyle(
-                      fontWeight: FontWeight.bold, color: _darkBlue)),
-              const SizedBox(height: 3),
-              Text(
-                m.description.isEmpty
-                    ? (estSouscrit
-                        ? 'Accès débloqué'
-                        : 'Accès premium requis')
-                    : m.description,
-                style: TextStyle(
-                    fontSize: 12, color: Colors.grey.shade500),
-              ),
-            ],
-          ),
-        ),
-        Icon(
-          estSouscrit
-              ? Icons.check_circle_outline_rounded
-              : Icons.lock_outline_rounded,
-          size: 18,
-          color: estSouscrit ? Colors.green : Colors.grey.shade400,
-        ),
-      ]),
-    );
-  }
-
-  Widget _buildBottomAction(Concours c) {
-    return Container(
-      padding: EdgeInsets.fromLTRB(
-          24, 16, 24, MediaQuery.of(context).padding.bottom + 16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withOpacity(0.06),
-              blurRadius: 20,
-              offset: const Offset(0, -5))
-        ],
-      ),
-      child: Row(children: [
-        Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              c.estSouscrit ? 'Accès actif' : 'Accès complet',
-              style: const TextStyle(color: Colors.grey, fontSize: 12),
-            ),
-            Text(
-              c.prix == 0 ? 'Gratuit' : '${c.prix.toInt()} FCFA',
-              style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                  color: c.estSouscrit ? Colors.green : _primaryTeal),
             ),
           ],
         ),
-        const SizedBox(width: 20),
-        Expanded(
-          child: c.estSouscrit
-              ? Container(
-                  padding: const EdgeInsets.symmetric(vertical: 18),
-                  decoration: BoxDecoration(
-                    color: Colors.green.shade50,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.green.shade200),
-                  ),
-                  child: const Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.check_circle_rounded,
-                          color: Colors.green, size: 18),
-                      SizedBox(width: 8),
-                      Text('ACCÈS DÉBLOQUÉ',
-                          style: TextStyle(
-                              color: Colors.green,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 0.5)),
-                    ],
-                  ),
-                )
-              : GestureDetector(
-                  onTap: _souscribing ? null : _souscrire,
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 180),
-                    padding: const EdgeInsets.symmetric(vertical: 18),
-                    decoration: BoxDecoration(
-                      color: _souscribing
-                          ? _primaryTeal.withOpacity(0.7)
-                          : _primaryTeal,
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: [
-                        BoxShadow(
-                            color: _primaryTeal.withOpacity(0.35),
-                            blurRadius: 14,
-                            offset: const Offset(0, 5))
-                      ],
-                    ),
-                    child: Center(
-                      child: _souscribing
-                          ? const SizedBox(
-                              width: 20, height: 20,
-                              child: CircularProgressIndicator(
-                                  color: Colors.white, strokeWidth: 2))
-                          : const Text("DÉBLOQUER L'ACCÈS",
-                              style: TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                  letterSpacing: 0.5)),
-                    ),
-                  ),
-                ),
-        ),
-      ]),
+      ),
     );
   }
+}
+
+// ══════════════════════════════════════════════════════════════
+// GRILLE D'INFOS
+// ══════════════════════════════════════════════════════════════
+class _InfoGrid extends StatelessWidget {
+  final DepartementItem dept;
+  final Color accentColor;
+
+  const _InfoGrid({required this.dept, required this.accentColor});
+
+  String _formatDate(String? iso) {
+    if (iso == null) return '';
+    try {
+      final d = DateTime.parse(iso);
+      return '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
+    } catch (_) {
+      return iso;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final items = <Widget>[];
+
+    if (dept.dateExamen != null) {
+      items.add(_InfoChip(
+        icon: Icons.event_rounded,
+        label: 'Examen: ${_formatDate(dept.dateExamen)}',
+        color: _red,
+      ));
+    }
+    if (dept.dateLimiteInscription != null) {
+      items.add(_InfoChip(
+        icon: Icons.timer_rounded,
+        label: 'Clôture: ${_formatDate(dept.dateLimiteInscription)}',
+        color: _gold,
+      ));
+    }
+    if (dept.niveauxCibles.isNotEmpty) {
+      items.add(_InfoChip(
+        icon: Icons.school_rounded,
+        label: 'Niveaux: ${dept.niveauxCibles}',
+        color: accentColor,
+      ));
+    }
+    if (dept.placesDisponibles != null) {
+      items.add(_InfoChip(
+        icon: Icons.people_rounded,
+        label: 'Places: ${dept.placesDisponibles}',
+        color: _purple,
+      ));
+    }
+    if (dept.fraisDossier > 0) {
+      items.add(_InfoChip(
+        icon: Icons.receipt_long_rounded,
+        label: 'Frais: ${dept.fraisDossier} FCFA',
+        color: _green,
+      ));
+    }
+
+    if (items.isEmpty) return const SizedBox.shrink();
+
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: items,
+    );
+  }
+}
+
+class _InfoChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  const _InfoChip({required this.icon, required this.label, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withOpacity(0.2)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 13, color: color),
+          const SizedBox(width: 5),
+          Text(label, style: TextStyle(fontSize: 11, color: color, fontWeight: FontWeight.w500)),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatusBadge extends StatelessWidget {
+  final String statut;
+  const _StatusBadge({required this.statut});
+
+  @override
+  Widget build(BuildContext context) {
+    final (color, label) = switch (statut) {
+      'TERMINÉ' => (Colors.green.shade600, 'Terminé'),
+      'EN COURS' => (_blue, 'En cours'),
+      _ => (Colors.grey.shade600, 'Nouveau'),
+    };
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+      decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(20)),
+      child: Text(label,
+          style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+    );
+  }
+}
+
+class _PrixBadge extends StatelessWidget {
+  final int prix;
+  const _PrixBadge({required this.prix});
+
+  @override
+  Widget build(BuildContext context) {
+    if (prix == 0) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+        decoration: BoxDecoration(color: _green, borderRadius: BorderRadius.circular(20)),
+        child: const Text('GRATUIT',
+            style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+      );
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+      decoration: BoxDecoration(color: _gold, borderRadius: BorderRadius.circular(20)),
+      child: Text('$prix FCFA',
+          style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+    );
+  }
+}
+
+class _FilterDelegate extends SliverPersistentHeaderDelegate {
+  final List<String> filtres;
+  final String selected;
+  final ValueChanged<String> onSelect;
+
+  const _FilterDelegate({
+    required this.filtres,
+    required this.selected,
+    required this.onSelect,
+  });
+
+  @override double get minExtent => 52;
+  @override double get maxExtent => 52;
+  @override bool shouldRebuild(_FilterDelegate o) => o.selected != selected;
+
+  @override
+  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
+    return Container(
+      color: Colors.white,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        itemCount: filtres.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemBuilder: (_, i) {
+          final f = filtres[i];
+          final sel = f == selected;
+          return GestureDetector(
+            onTap: () => onSelect(f),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+              decoration: BoxDecoration(
+                color: sel ? _navy : Colors.grey.shade100,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(f,
+                  style: TextStyle(
+                      fontSize: 13,
+                      color: sel ? Colors.white : Colors.grey.shade600,
+                      fontWeight: sel ? FontWeight.bold : FontWeight.normal)),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _LoadingView extends StatelessWidget {
+  const _LoadingView();
+  @override
+  Widget build(BuildContext context) {
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: 3,
+      itemBuilder: (_, __) => Container(
+        height: 280,
+        margin: const EdgeInsets.only(bottom: 16),
+        decoration: BoxDecoration(
+          color: Colors.grey.shade200,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+      ),
+    );
+  }
+}
+
+class _ErrorView extends StatelessWidget {
+  final String msg;
+  final VoidCallback onRetry;
+  const _ErrorView({required this.msg, required this.onRetry});
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.wifi_off_rounded, size: 60, color: Colors.grey.shade400),
+          const SizedBox(height: 16),
+          Text(msg, style: TextStyle(color: Colors.grey.shade600)),
+          const SizedBox(height: 16),
+          ElevatedButton.icon(
+            onPressed: onRetry,
+            icon: const Icon(Icons.refresh_rounded),
+            label: const Text('Réessayer'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _EmptyView extends StatelessWidget {
+  const _EmptyView();
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.emoji_events_outlined, size: 70, color: Colors.grey.shade300),
+          const SizedBox(height: 16),
+          Text('Aucun concours disponible pour votre niveau',
+              style: TextStyle(color: Colors.grey.shade500, fontSize: 15)),
+          const SizedBox(height: 8),
+          Text('Des concours seront disponibles quand vous aurez le niveau requis',
+              style: TextStyle(color: Colors.grey.shade400, fontSize: 12),
+              textAlign: TextAlign.center),
+        ],
+      ),
+    );
+  }
+}
+
+class _StarPatternPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.white.withOpacity(0.04)
+      ..style = PaintingStyle.fill;
+    const positions = [
+      Offset(0.1, 0.2), Offset(0.3, 0.7), Offset(0.5, 0.3),
+      Offset(0.7, 0.8), Offset(0.85, 0.15),
+    ];
+    for (final p in positions) {
+      canvas.drawCircle(Offset(p.dx * size.width, p.dy * size.height), 3, paint);
+    }
+  }
+  @override
+  bool shouldRepaint(covariant CustomPainter old) => false;
 }

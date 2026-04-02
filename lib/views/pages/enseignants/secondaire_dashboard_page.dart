@@ -44,7 +44,7 @@ class _SecondaireDashboardPageState extends State<SecondaireDashboardPage> {
     if (token == null) { setState(() => _loading = false); return; }
     try {
       final res = await http.get(
-        Uri.parse('$_baseUrl/enseignant/secondaire/dashboard/'),
+        Uri.parse('$_baseUrl/enseignant/dashboard/'),
         headers: {'Authorization': 'Token $token'},
       );
       if (res.statusCode == 200) {

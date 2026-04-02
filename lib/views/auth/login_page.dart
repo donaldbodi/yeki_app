@@ -1,9 +1,9 @@
 import 'dart:convert';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:yeki/views/pages/apprenants/dasboard.dart';
-import 'package:yeki/views/pages/enseignants/interface_enseignant_page.dart';
+import 'package:yeki/main.dart'; 
+import 'package:yeki/views/auth/forgot_password_flow.dart';
 import 'register_page.dart';
 
 class LoginPage extends StatefulWidget {
@@ -13,306 +13,289 @@ class LoginPage extends StatefulWidget {
   State<LoginPage> createState() => _LoginPageState();
 }
 
-class _LoginPageState extends State<LoginPage> {
-  final _emailOrUsernameController = TextEditingController();
-  final _passwordController = TextEditingController();
-  bool _isLoading = false;
-  bool _obscurePassword = true;
-  String _error = "";
+class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMixin {
+  final _identCtrl = TextEditingController();
+  final _pwdCtrl = TextEditingController();
+  bool _loading = false;
+  bool _obscurePwd = true;
+  String _error = '';
 
-  // ✅ Nouvelle Palette de couleurs Yeki mise à jour
-  final Color mainBlue = const Color(0xFF3271C8); // Ta nouvelle couleur principale
-  final Color primaryTeal = const Color(0xFF1C8986); // Le Teal astucieusement ajouté
-  final Color accentLight = const Color(0xFFCD8E37);
+  // Palette Onboarding Validée
+  static const Color mainBlue = Color(0xFF2884A0); 
+  static const Color darkBlue = Color(0xFF164A5A);
+  static const Color accentWarm = Color(0xFFF39C12);
 
+  late AnimationController _animCtrl;
+  late Animation<double> _fadeAnim;
+
+  @override
+  void initState() {
+    super.initState();
+    _animCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 800));
+    _fadeAnim = CurvedAnimation(parent: _animCtrl, curve: Curves.easeIn);
+    _animCtrl.forward();
+  }
+
+  @override
+  void dispose() {
+    _animCtrl.dispose();
+    _identCtrl.dispose();
+    _pwdCtrl.dispose();
+    super.dispose();
+  }
+
+  // TA LOGIQUE DE CONNEXION CONSERVÉE
   Future<void> _login() async {
-    if (_emailOrUsernameController.text.isEmpty || _passwordController.text.isEmpty) {
-      setState(() => _error = "Veuillez remplir tous les champs");
+    if (_identCtrl.text.trim().isEmpty || _pwdCtrl.text.trim().isEmpty) {
+      setState(() => _error = 'Veuillez remplir tous les champs.');
       return;
     }
+    setState(() { _loading = true; _error = ''; });
 
-    setState(() {
-      _isLoading = true;
-      _error = "";
-    });
-
-    const apiUrl = 'https://yeki.pythonanywhere.com/api/auth/login/';
-    
     try {
-      final response = await http.post(
-        Uri.parse(apiUrl),
-        headers: {"Content-Type": "application/json"},
+      final res = await http.post(
+        Uri.parse('https://yeki.pythonanywhere.com/api/auth/login/'),
+        headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
-          "identifier": _emailOrUsernameController.text.trim(), 
-          "password": _passwordController.text.trim()
+          'identifier': _identCtrl.text.trim(),
+          'password': _pwdCtrl.text.trim(),
         }),
       );
 
-      final data = jsonDecode(response.body);
+      final data = jsonDecode(res.body) as Map<String, dynamic>;
 
-      if (response.statusCode == 200) {
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('token', data['token']);
-        await prefs.setString('role', data['role']);
-        
-        String role = data['role'];
+      if (res.statusCode == 200) {
         if (!mounted) return;
-
-        if (role.contains('enseignant') || role == 'admin') {
-          _navigateTo(const EnseignantHomePage());
-        } else {
-          _navigateTo(const Dashboard());
-        }
+        await YekiAuth.login(
+          context,
+          token: data['token'] as String,
+          role: data['role'] as String,
+        );
       } else {
-        setState(() => _error = data['detail'] ?? "Identifiants incorrects");
+        setState(() => _error = (data['detail'] as String?) ?? 'Identifiants incorrects.');
       }
     } catch (_) {
-      setState(() => _error = "Problème de connexion au serveur");
+      setState(() => _error = 'Problème de connexion au serveur.');
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) setState(() => _loading = false);
     }
-  }
-
-  void _navigateTo(Widget page) {
-    Navigator.pushReplacement(
-      context,
-      PageRouteBuilder(
-        pageBuilder: (_, __, ___) => page,
-        transitionsBuilder: (_, anim, __, child) => FadeTransition(opacity: anim, child: child),
-      ),
-    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final size = MediaQuery.of(context).size;
-
     return Scaffold(
-      body: Stack(
-        children: [
-          // 1. Fond avec le dégradé Bleu-Teal
-          Container(
-            height: size.height,
-            width: size.width,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [mainBlue, primaryTeal], // ✅ Mélange astucieux des deux couleurs
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
+      body: Container(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topRight,
+            end: Alignment.bottomLeft,
+            colors: [mainBlue, darkBlue],
+          ),
+        ),
+        child: Stack(
+          children: [
+            // ÉLÉMENTS DÉCORATIFS (Style Onboarding)
+            Positioned(
+              top: -50,
+              left: -50,
+              child: CircleAvatar(
+                radius: 130,
+                backgroundColor: Colors.white.withOpacity(0.05),
               ),
             ),
-          ),
-          Positioned(
-            top: -50,
-            right: -50,
-            child: _buildBlurCircle(150, Colors.white.withOpacity(0.1)),
-          ),
-          
-          SafeArea(
-            child: SingleChildScrollView(
-              physics: const BouncingScrollPhysics(),
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Column(
-                children: [
-                  SizedBox(height: size.height * 0.08),
-                  
-                  Hero(
-                    tag: 'logo',
-                    child: Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.2),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Image.asset("assets/images/yeki_logo.png", width: 80, height: 80),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  const Text(
-                    "Bon retour parmi nous !",
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 26,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: -0.5,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    "Connectez-vous pour continuer votre aventure",
-                    style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 14),
-                  ),
-                  
-                  const SizedBox(height: 40),
+            Positioned(
+              bottom: 100,
+              right: -30,
+              child: CircleAvatar(
+                radius: 80,
+                backgroundColor: accentWarm.withOpacity(0.03),
+              ),
+            ),
 
-                  Container(
-                    padding: const EdgeInsets.all(24),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.95),
-                      borderRadius: BorderRadius.circular(30),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.1),
-                          blurRadius: 20,
-                          offset: const Offset(0, 10),
-                        )
-                      ],
-                    ),
+            SafeArea(
+              child: FadeTransition(
+                opacity: _fadeAnim,
+                child: Center(
+                  child: SingleChildScrollView(
+                    physics: const BouncingScrollPhysics(),
+                    padding: const EdgeInsets.symmetric(horizontal: 40),
                     child: Column(
                       children: [
-                        _buildTextField(
-                          controller: _emailOrUsernameController,
-                          hint: "Email ou nom d'utilisateur",
-                          icon: Icons.alternate_email_rounded,
-                        ),
-                        const SizedBox(height: 18),
-                        _buildTextField(
-                          controller: _passwordController,
-                          hint: "Mot de passe",
-                          icon: Icons.lock_outline_rounded,
-                          isPassword: true,
-                        ),
+                        // LOGO GLASS DÉPOLI
+                        //_buildGlassLogo(),
+                        const SizedBox(height: 25),
+                        const Text('YEKI', 
+                          style: TextStyle(
+                            color: Colors.white, 
+                            fontWeight: FontWeight.w900, 
+                            letterSpacing: 10, 
+                            fontSize: 24
+                          )),
+                        const SizedBox(height: 10),
+                        Text('Connectez-vous pour continuer',
+                          style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 12)),
                         
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: TextButton(
-                            onPressed: () {},
-                            child: Text(
-                              "Mot de passe oublié ?",
-                              style: TextStyle(color: mainBlue, fontWeight: FontWeight.w600), // ✅ Utilisation du Bleu
-                            ),
+                        const SizedBox(height: 50),
+
+                        // FORMULAIRE COMPACT (280px pour le look pro)
+                        SizedBox(
+                          width: 280, 
+                          child: Column(
+                            children: [
+                              _buildSmallField(
+                                controller: _identCtrl,
+                                label: "Email ou Identifiant",
+                                icon: Icons.alternate_email_rounded,
+                              ),
+                              const SizedBox(height: 20),
+                              _buildSmallField(
+                                controller: _pwdCtrl,
+                                label: "Mot de passe",
+                                icon: Icons.lock_outline_rounded,
+                                isPassword: true,
+                              ),
+                              
+                              Align(
+                                alignment: Alignment.centerRight,
+                                child: TextButton(
+                                  onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ForgotPasswordPage())),
+                                  child: Text("Oublié ?", 
+                                    style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 11)),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
 
-                        if (_error.isNotEmpty) ...[
-                          const SizedBox(height: 10),
-                          Text(_error, style: const TextStyle(color: Colors.redAccent, fontSize: 13, fontWeight: FontWeight.w500)),
-                        ],
+                        if (_error.isNotEmpty) 
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 10),
+                            child: Text(_error, 
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold)),
+                          ),
 
-                        const SizedBox(height: 20),
+                        const SizedBox(height: 35),
 
-                        _isLoading 
-                          ? CircularProgressIndicator(color: mainBlue)
+                        // BOUTON ACTION (Style Onboarding)
+                        _loading 
+                          ? const CircularProgressIndicator(color: Colors.white, strokeWidth: 2)
                           : _buildPrimaryButton(),
-                        
-                        const SizedBox(height: 20),
-                        
-                        Row(
-                          children: [
-                            Expanded(child: Divider(color: Colors.grey.shade300)),
-                            const Padding(
-                              padding: EdgeInsets.symmetric(horizontal: 10),
-                              child: Text("OU", style: TextStyle(color: Colors.grey, fontSize: 12)),
-                            ),
-                            Expanded(child: Divider(color: Colors.grey.shade300)),
-                          ],
-                        ),
-                        
-                        const SizedBox(height: 20),
 
-                        _buildSecondaryButton(),
+                        const SizedBox(height: 50),
+                        
+                        // LIEN INSCRIPTION
+                        _buildFooterLink(),
                       ],
                     ),
                   ),
-                  const SizedBox(height: 40),
-                ],
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 
-  // --- WIDGETS DE COMPOSANTS ---
-
-  Widget _buildBlurCircle(double size, Color color) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+  Widget _buildGlassLogo() {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(40),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: Container(
+          height: 80,
+          width: 80,
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: Colors.white.withOpacity(0.1),
+            border: Border.all(color: Colors.white.withOpacity(0.15)),
+          ),
+          child: Image.asset(
+            'assets/images/yeki_logo.png',
+            errorBuilder: (_, __, ___) => const Icon(Icons.school_rounded, color: Colors.white, size: 35),
+          ),
+        ),
+      ),
     );
   }
 
-  Widget _buildTextField({
+  // CHAMPS PETITS, ARRONDIS & GLASS
+  Widget _buildSmallField({
     required TextEditingController controller,
-    required String hint,
+    required String label,
     required IconData icon,
     bool isPassword = false,
   }) {
-    return TextField(
-      controller: controller,
-      obscureText: isPassword ? _obscurePassword : false,
-      style: const TextStyle(fontSize: 15),
-      decoration: InputDecoration(
-        hintText: hint,
-        hintStyle: TextStyle(color: Colors.grey.shade500),
-        prefixIcon: Icon(icon, color: mainBlue, size: 22), // ✅ Icône en Bleu
-        suffixIcon: isPassword 
-          ? IconButton(
-              icon: Icon(_obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined, size: 20, color: mainBlue),
-              onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-            ) 
-          : null,
-        filled: true,
-        fillColor: Colors.grey.shade50,
-        contentPadding: const EdgeInsets.symmetric(vertical: 18),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(15),
-          borderSide: BorderSide(color: Colors.grey.shade200),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(15),
-          borderSide: BorderSide(color: mainBlue, width: 1.5),
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(25),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+        child: TextFormField(
+          controller: controller,
+          obscureText: isPassword && _obscurePwd,
+          style: const TextStyle(color: Colors.white, fontSize: 14),
+          cursorColor: Colors.white,
+          decoration: InputDecoration(
+            labelText: label,
+            labelStyle: TextStyle(color: Colors.white.withOpacity(0.35), fontSize: 12),
+            floatingLabelStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+            prefixIcon: Icon(icon, color: Colors.white.withOpacity(0.7), size: 18),
+            suffixIcon: isPassword ? IconButton(
+              icon: Icon(_obscurePwd ? Icons.visibility_off_rounded : Icons.visibility_rounded, 
+                color: Colors.white24, size: 16),
+              onPressed: () => setState(() => _obscurePwd = !_obscurePwd),
+            ) : null,
+            filled: true,
+            fillColor: Colors.white.withOpacity(0.06),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(25),
+              borderSide: BorderSide(color: Colors.white.withOpacity(0.1)),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(25),
+              borderSide: const BorderSide(color: Colors.white, width: 0.8),
+            ),
+          ),
         ),
       ),
     );
   }
 
   Widget _buildPrimaryButton() {
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(15),
-        gradient: LinearGradient(colors: [mainBlue, primaryTeal]), // ✅ Dégradé Bleu vers Teal
-        boxShadow: [
-          BoxShadow(
-            color: mainBlue.withOpacity(0.3),
-            blurRadius: 12,
-            offset: const Offset(0, 5),
-          )
-        ],
-      ),
-      child: ElevatedButton(
-        onPressed: _login,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.transparent,
-          shadowColor: Colors.transparent,
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+    return GestureDetector(
+      onTap: _login,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 50, vertical: 16),
+        decoration: BoxDecoration(
+          color: accentWarm,
+          borderRadius: BorderRadius.circular(30),
+          boxShadow: [
+            BoxShadow(color: accentWarm.withOpacity(0.35), blurRadius: 20, offset: const Offset(0, 8)),
+          ],
         ),
         child: const Text(
-          "SE CONNECTER",
-          style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 1),
+          'SE CONNECTER',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 1.5),
         ),
       ),
     );
   }
 
-  Widget _buildSecondaryButton() {
-    return SizedBox(
-      width: double.infinity,
-      child: OutlinedButton(
-        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RegisterPage())),
-        style: OutlinedButton.styleFrom(
-          padding: const EdgeInsets.symmetric(vertical: 15),
-          side: BorderSide(color: primaryTeal, width: 1.5), // ✅ Bordure en Teal pour varier
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-        ),
-        child: Text(
-          "CRÉER UN COMPTE",
-          style: TextStyle(color: primaryTeal, fontWeight: FontWeight.bold),
+  Widget _buildFooterLink() {
+    return TextButton(
+      onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RegisterPage())),
+      child: RichText(
+        text: TextSpan(
+          style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 12),
+          children: const [
+            TextSpan(text: "Pas encore de compte ? "),
+            TextSpan(text: "S'INSCRIRE", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ],
         ),
       ),
     );

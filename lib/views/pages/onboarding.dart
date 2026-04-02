@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:ui';
-import '../auth/login_page.dart';
+import 'package:yeki/main.dart';
 
 class OnboardingPage extends StatefulWidget {
   const OnboardingPage({super.key});
@@ -10,15 +10,15 @@ class OnboardingPage extends StatefulWidget {
 }
 
 class _OnboardingPageState extends State<OnboardingPage> {
-  final PageController _pageController = PageController();
-  int _currentPage = 0;
+  final PageController _ctrl = PageController();
+  int _current = 0;
 
-  // Définition de la nouvelle palette basée sur #1958AF
-  static const Color mainColor = Color(0xFF3271C8);
-  static const Color darkVariant = Color(0xFF1958AF);//172039
-  static const Color lightVariant = Color(0xFF9CA7D7);
+  // Palette : Ta couleur + Couleur chaude contrastée
+  static const Color mainBlue = Color(0xFF2884A0); 
+  static const Color darkBlue = Color(0xFF164A5A); // Version sombre pour le dégradé
+  static const Color accentWarm = Color(0xFFF39C12); // Orange chaud pour les boutons
 
-  final List<Map<String, String>> _onboardData = [
+  final List<Map<String, String>> _pages = [
     {
       'title': 'Apprenez à votre rythme',
       'desc': 'Des cours captivants, interactifs et adaptés à tous les niveaux pour booster vos compétences.',
@@ -31,164 +31,119 @@ class _OnboardingPageState extends State<OnboardingPage> {
     },
     {
       'title': 'Collaborez et discutez',
-      'desc': 'Participez à des forums d’échanges avec enseignants et camarades, partout et à tout moment.',
+      'desc': 'Participez à des forums d\'échanges avec enseignants et camarades, partout et à tout moment.',
       'image': 'assets/images/onboard3.png',
     },
   ];
 
-  void _onNext() {
-    if (_currentPage < _onboardData.length - 1) {
-      _pageController.nextPage(
-        duration: const Duration(milliseconds: 600),
-        curve: Curves.easeInOutQuart,
-      );
-    } else {
-      _finishOnboarding();
-    }
-  }
-
-  void _finishOnboarding() {
-    Navigator.pushReplacement(
-      context,
-      PageRouteBuilder(
-        pageBuilder: (context, animation, secondaryAnimation) => const LoginPage(),
-        transitionsBuilder: (context, animation, secondaryAnimation, child) {
-          return FadeTransition(opacity: animation, child: child);
-        },
-        transitionDuration: const Duration(milliseconds: 800),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
-    final size = MediaQuery.of(context).size;
-
     return Scaffold(
-      backgroundColor: Colors.white,
-      body: Stack(
-        children: [
-          _buildAnimatedBackground(size),
-          SafeArea(
-            child: Column(
-              children: [
-                Align(
-                  alignment: Alignment.topRight,
-                  child: TextButton(
-                    onPressed: _finishOnboarding,
-                    child: Text(
-                      "Passer",
-                      style: TextStyle(
-                        color: Colors.white.withOpacity(0.7),
-                        fontWeight: FontWeight.w600,
-                      ),
+      body: Container(
+        // Dégradé utilisant ta couleur principale
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topRight,
+            end: Alignment.bottomLeft,
+            colors: [mainBlue, darkBlue],
+          ),
+        ),
+        child: Stack(
+          children: [
+            // Effet de grain ou halo pour la texture
+            Positioned(
+              bottom: -50,
+              right: -50,
+              child: CircleAvatar(
+                radius: 150,
+                backgroundColor: Colors.white.withOpacity(0.05),
+              ),
+            ),
+            
+            SafeArea(
+              child: Column(
+                children: [
+                  _buildHeader(),
+                  Expanded(
+                    child: PageView.builder(
+                      controller: _ctrl,
+                      onPageChanged: (i) => setState(() => _current = i),
+                      itemCount: _pages.length,
+                      itemBuilder: (context, i) => _buildPage(_pages[i]),
                     ),
                   ),
-                ),
-                Expanded(
-                  child: PageView.builder(
-                    controller: _pageController,
-                    onPageChanged: (i) => setState(() => _currentPage = i),
-                    itemCount: _onboardData.length,
-                    itemBuilder: (context, index) {
-                      return _buildPageContent(index, size);
-                    },
-                  ),
-                ),
-                _buildBottomControls(),
-                const SizedBox(height: 30),
-              ],
+                  _buildFooter(),
+                ],
+              ),
             ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildAnimatedBackground(Size size) {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 500),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: _currentPage == 0 
-            ? [mainColor, darkVariant]
-            : _currentPage == 1
-                ? [lightVariant, mainColor]
-                : [mainColor, const Color(0xFF1F667C)], // Variante plus profonde pour la fin
+          ],
         ),
       ),
-      child: Stack(
+    );
+  }
+
+  Widget _buildHeader() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 20),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Positioned(
-            top: -50,
-            left: -50,
-            child: _circle(200, Colors.white.withOpacity(0.05)),
-          ),
-          Positioned(
-            bottom: 100,
-            right: -80,
-            child: _circle(300, Colors.white.withOpacity(0.08)),
+          const Text('YEKI', 
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, letterSpacing: 2, fontSize: 18)),
+          TextButton(
+            onPressed: () => YekiAuth.finishOnboarding(context),
+            child: Text('Passer', 
+              style: TextStyle(color: Colors.white.withOpacity(0.7), fontWeight: FontWeight.w600)),
           ),
         ],
       ),
     );
   }
 
-  Widget _circle(double size, Color color) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-    );
-  }
-
-  Widget _buildPageContent(int index, Size size) {
-    final item = _onboardData[index];
-    bool isActive = _currentPage == index;
-
+  Widget _buildPage(Map<String, String> data) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 40),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 600),
-            curve: Curves.easeOutCubic,
-            margin: EdgeInsets.only(bottom: isActive ? 0 : 40),
-            height: size.height * 0.35,
-            child: Image.asset(item['image']!, fit: BoxFit.contain),
-          ),
-          const SizedBox(height: 50),
-          AnimatedOpacity(
-            duration: const Duration(milliseconds: 400),
-            opacity: isActive ? 1 : 0,
-            child: Text(
-              item['title']!,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 30,
-                fontWeight: FontWeight.w900,
-                color: Colors.white,
-                letterSpacing: -0.5,
-                height: 1.1,
+          // Illustration avec bordure fine et légère ombre
+          Container(
+            height: 260,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: Colors.white.withOpacity(0.2)),
+              boxShadow: [
+                BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 20, offset: const Offset(0, 10)),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(24),
+              child: Image.asset(
+                data['image']!,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => Icon(Icons.auto_awesome_motion, size: 80, color: Colors.white.withOpacity(0.5)),
               ),
             ),
           ),
-          const SizedBox(height: 20),
-          AnimatedOpacity(
-            duration: const Duration(milliseconds: 600),
-            opacity: isActive ? 1 : 0,
-            child: Text(
-              item['desc']!,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 16,
-                color: Colors.white.withOpacity(0.85),
-                height: 1.6,
-                fontWeight: FontWeight.w400,
-              ),
+          const SizedBox(height: 40),
+          Text(
+            data['title']!,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 28,
+              fontWeight: FontWeight.w800,
+              height: 1.2,
+            ),
+          ),
+          const SizedBox(height: 15),
+          Text(
+            data['desc']!,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: Colors.white.withOpacity(0.9),
+              fontSize: 16,
+              height: 1.5,
             ),
           ),
         ],
@@ -196,50 +151,55 @@ class _OnboardingPageState extends State<OnboardingPage> {
     );
   }
 
-  Widget _buildBottomControls() {
-    bool isLastPage = _currentPage == _onboardData.length - 1;
-
+  Widget _buildFooter() {
+    bool isLast = _current == _pages.length - 1;
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 30),
+      padding: const EdgeInsets.fromLTRB(40, 0, 40, 50),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
+          // Indicateurs blancs pour le contraste sur fond bleu
           Row(
-            children: List.generate(
-              _onboardData.length,
-              (index) => AnimatedContainer(
-                duration: const Duration(milliseconds: 300),
-                margin: const EdgeInsets.only(right: 8),
-                height: 8,
-                width: _currentPage == index ? 24 : 8,
-                decoration: BoxDecoration(
-                  color: _currentPage == index ? Colors.white : Colors.white.withOpacity(0.4),
-                  borderRadius: BorderRadius.circular(10),
-                ),
+            children: List.generate(_pages.length, (i) => AnimatedContainer(
+              duration: const Duration(milliseconds: 300),
+              margin: const EdgeInsets.only(right: 8),
+              width: i == _current ? 24 : 8,
+              height: 4,
+              decoration: BoxDecoration(
+                color: i == _current ? Colors.white : Colors.white.withOpacity(0.3),
+                borderRadius: BorderRadius.circular(2),
               ),
-            ),
+            )),
           ),
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 400),
-            height: 60,
-            width: isLastPage ? 180 : 60,
-            child: ElevatedButton(
-              onPressed: _onNext,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.white,
-                foregroundColor: mainColor, // Utilisation de la nouvelle couleur ici
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(isLastPage ? 15 : 50),
-                ),
-                elevation: 10,
-                padding: EdgeInsets.zero,
+
+          // Bouton avec la couleur CHAUDE (Orange/Ambre)
+          GestureDetector(
+            onTap: () {
+              if (!isLast) {
+                _ctrl.nextPage(duration: const Duration(milliseconds: 400), curve: Curves.easeOut);
+              } else {
+                YekiAuth.finishOnboarding(context);
+              }
+            },
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 300),
+              padding: EdgeInsets.symmetric(horizontal: isLast ? 24 : 16, vertical: 16),
+              decoration: BoxDecoration(
+                color: accentWarm,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(color: accentWarm.withOpacity(0.4), blurRadius: 15, offset: const Offset(0, 5)),
+                ],
               ),
-              child: isLastPage
-                  ? const Text(
-                      "C'EST PARTI !",
-                      style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1),
-                    )
-                  : const Icon(Icons.arrow_forward_ios_rounded, size: 24),
+              child: Row(
+                children: [
+                  if (isLast) ...[
+                    const Text('Commencer', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                    const SizedBox(width: 10),
+                  ],
+                  const Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 24),
+                ],
+              ),
             ),
           ),
         ],

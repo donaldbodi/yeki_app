@@ -5,7 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
-const String _baseC = 'https://yekiapp.pythonanywhere.com/api';
+const String _baseC = 'https://yeki.pythonanywhere.com/api';
 
 // ─── Palette ──────────────────────────────────────────────────
 const Color _teal   = Color(0xFF008088);
@@ -203,7 +203,7 @@ class _ComposerDevoirPageState extends State<ComposerDevoirPage>
     _nbSorties++;
     final token = await _token();
     final res = await http.post(
-      Uri.parse('$_baseC/devoirs/${widget.devoirId}/sortie/'),
+      Uri.parse('$_baseC/devoirs/${widget.devoirId}/focus-perdu/'),
       headers: {
         'Content-Type': 'application/json',
         if (token != null) 'Authorization': 'Token $token',
@@ -219,7 +219,7 @@ class _ComposerDevoirPageState extends State<ComposerDevoirPage>
         await Future.delayed(const Duration(seconds: 1));
         if (mounted) Navigator.pop(context, true);
       } else {
-        final nb  = data['nb_sorties'] ?? _nbSorties;
+        final nb  = data['nb_focus_perdu'] ?? _nbSorties;
         final max = (_nbSortiesMax) + 1;
         _snack('Sortie $nb/$max détectée !', Colors.orange);
       }
