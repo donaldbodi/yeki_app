@@ -9,20 +9,27 @@ import '../../../../widgets/yeki_app_bar.dart';
 import 'cours_detail_page.dart';
 
 // ─────────────────────────────────────────────────────────────────
-// CURSUS PAGE — Entièrement dynamique
-//  • Profil apprenant (nom, avatar)        → GET /api/profil/me/
-//  • Cours du cursus + progression         → GET /api/apprenant/cursus/
-//  • Leçons récentes "Continuer la lecture"→ GET /api/apprenant/lectures-recentes/
+// CURSUS PAGE — Design harmonisé avec RegisterPage
+// Palette : fond blanc, cartes dégradé brandBackground (#135F74)
 // ─────────────────────────────────────────────────────────────────
 
 const String _base = 'https://yeki.pythonanywhere.com/api';
 
-// Palette
-const Color _blue   = Color(0xFF2884A0);
-const Color _teal   = Color(0xFF2A657D);
-const Color _gold   = Color(0xFFD77B56);
-const Color _bg     = Color(0xFFFBFDFF);
-const Color _dark   = Color(0xFF1A1C1E);
+// Palette harmonisée
+const Color brandBackground = Color(0xFF135F74);
+const Color actionOrange = Color(0xFFFF6B00);
+const Color glassFill = Color(0x1AFFFFFF);
+
+// Couleurs pour le mode light
+const Color _white = Color(0xFFFFFFFF);
+const Color _white80 = Color(0xCCFFFFFF);
+const Color _white60 = Color(0x99FFFFFF);
+const Color _white20 = Color(0x33FFFFFF);
+const Color _textDark = Color(0xFF1A1C1E);
+const Color _textMedium = Color(0xFF5A5C5E);
+const Color _textLight = Color(0xFF8A8C8E);
+const Color _borderLight = Color(0xFFE8ECEF);
+const Color _bgLight = Color(0xFFF8FAFC);
 
 class CursusPage extends StatefulWidget {
   const CursusPage({super.key});
@@ -53,7 +60,7 @@ class _CursusPageState extends State<CursusPage>
   late AnimationController _animCtrl;
   late Animation<double> _fadeAnim;
 
-  // ── Abonnement (statique pour l'instant) ─────────────────────────
+  // ── Abonnement ───────────────────────────────────────────────────
   final bool _isSubscribed = true;
 
   @override
@@ -189,15 +196,18 @@ class _CursusPageState extends State<CursusPage>
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        backgroundColor: _white,
         title: const Text('Déconnexion',
-            style: TextStyle(fontWeight: FontWeight.bold)),
-        content:
-            const Text('Souhaitez-vous vraiment quitter l\'application ?'),
+            style: TextStyle(fontWeight: FontWeight.bold, color: _textDark)),
+        content: const Text(
+          'Souhaitez-vous vraiment quitter l\'application ?',
+          style: TextStyle(color: _textMedium),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text('Annuler', style: TextStyle(color: Colors.grey[600])),
+            child: Text('Annuler', style: TextStyle(color: _textMedium)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
@@ -241,11 +251,11 @@ class _CursusPageState extends State<CursusPage>
   String? get _avatarUrl => _profil['avatar']?.toString();
 
   Color _parseColor(String? hex) {
-    if (hex == null) return _blue;
+    if (hex == null) return brandBackground;
     try {
       return Color(int.parse(hex.replaceAll('#', 'FF'), radix: 16));
     } catch (_) {
-      return _blue;
+      return brandBackground;
     }
   }
 
@@ -272,26 +282,13 @@ class _CursusPageState extends State<CursusPage>
     return map[name] ?? Icons.menu_book_rounded;
   }
 
-  /*String _tempsDepuis(String? isoDate) {
-    if (isoDate == null) return '';
-    try {
-      final dt = DateTime.parse(isoDate).toLocal();
-      final diff = DateTime.now().difference(dt);
-      if (diff.inMinutes < 60) return 'Il y a ${diff.inMinutes}min';
-      if (diff.inHours < 24) return 'Il y a ${diff.inHours}h';
-      return 'Il y a ${diff.inDays}j';
-    } catch (_) {
-      return '';
-    }
-  }*/
-
   // ════════════════════════════════════════════════════════════════
   //  BUILD
   // ════════════════════════════════════════════════════════════════
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _bg,
+      backgroundColor: _bgLight,
       appBar: YekiHeader(
         unreadNotifications: 3,
         isSubscribed: _isSubscribed,
@@ -310,17 +307,17 @@ class _CursusPageState extends State<CursusPage>
               ? _buildError()
               : RefreshIndicator(
                   onRefresh: _chargerTout,
-                  color: _blue,
+                  color: brandBackground,
+                  backgroundColor: _white,
                   child: FadeTransition(
                     opacity: _fadeAnim,
                     child: ListView.builder(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 20, vertical: 10),
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                       itemCount: _coursFiltres.length + 2,
                       itemBuilder: (ctx, i) {
                         if (i == 0) return _buildTopSection();
                         if (i == _coursFiltres.length + 1)
-                          return const SizedBox(height: 100);
+                          return const SizedBox(height: 80);
                         return _buildCoursCard(_coursFiltres[i - 1], i - 1);
                       },
                     ),
@@ -329,97 +326,58 @@ class _CursusPageState extends State<CursusPage>
     );
   }
 
-  // ── Section supérieure (header + recherche + récentes + titre liste) ───
+  // ── Section supérieure ───────────────────────────────────────────
   Widget _buildTopSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        const SizedBox(height: 8),
         _buildHeader(),
-        _buildSearchBar(),
         const SizedBox(height: 24),
+        _buildSearchBar(),
+        const SizedBox(height: 32),
         _buildContinuerLecture(),
-        const SizedBox(height: 20),
+        const SizedBox(height: 32),
         _buildListeTitle(),
-        const SizedBox(height: 10),
+        const SizedBox(height: 16),
       ],
     );
   }
 
-  // ── Header personnalisé ──────────────────────────────────────────
+  // ── Header ────────────────────────────────────────────────────────
   Widget _buildHeader() {
-    return Padding(
-      padding: const EdgeInsets.only(top: 10, bottom: 20),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Text(
-                      _loadingProfil
-                          ? 'Bonjour 👋'
-                          : 'Bonjour $_nomApprenant',
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.grey.shade900,
-                      ),
-                    ),
-                    if (!_loadingProfil)
-                      const Text(
-                        ' 👋',
-                        style: TextStyle(fontSize: 22),
-                      ),
-                  ],
+    return Row(
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                _loadingProfil
+                    ? 'Bonjour 👋'
+                    : 'Bonjour $_nomApprenant',
+                style: const TextStyle(
+                  fontSize: 26,
+                  fontWeight: FontWeight.bold,
+                  color: _textDark,
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  'Prêt à apprendre quelque chose aujourd\'hui ?',
-                  style: TextStyle(
-                    color: Colors.grey.shade600,
-                    fontSize: 13,
-                  ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Prêt à apprendre quelque chose aujourd\'hui ?',
+                style: TextStyle(
+                  color: _textMedium,
+                  fontSize: 14,
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-          // ── Avatar dynamique ──────────────────────────────────
-          _buildAvatar(),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildAvatar() {
-    return GestureDetector(
-      onTap: () => Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => ProfilPage()),
-      ),
-      child: Container(
-        width: 46,
-        height: 46,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          border: Border.all(color: _blue.withOpacity(0.3), width: 2),
-          color: _blue.withOpacity(0.1),
         ),
-        child: _avatarUrl != null
-            ? ClipOval(
-                child: Image.network(
-                  _avatarUrl!,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => _avatarFallback(),
-                ),
-              )
-            : _avatarFallback(),
-      ),
+      ],
     );
   }
 
-  Widget _avatarFallback() {
+  /*Widget _avatarFallback() {
     final initial = _nomApprenant.isNotEmpty
         ? _nomApprenant[0].toUpperCase()
         : 'A';
@@ -427,39 +385,40 @@ class _CursusPageState extends State<CursusPage>
       child: Text(
         initial,
         style: const TextStyle(
-          color: _blue,
+          color: brandBackground,
           fontWeight: FontWeight.bold,
-          fontSize: 18,
+          fontSize: 20,
         ),
       ),
     );
-  }
+  }*/
 
   // ── Barre de recherche ───────────────────────────────────────────
   Widget _buildSearchBar() {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
+        color: _white,
+        borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: _blue.withOpacity(0.08),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
       child: TextField(
         controller: _searchCtrl,
         onChanged: _filtrer,
+        style: const TextStyle(color: _textDark, fontSize: 15),
         decoration: InputDecoration(
-          hintText: 'Rechercher un cours, un prof...',
-          hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 14),
-          prefixIcon: Icon(Icons.search_rounded, color: _blue),
+          hintText: 'Rechercher un cours, un professeur...',
+          hintStyle: TextStyle(color: _textLight, fontSize: 14),
+          prefixIcon: Icon(Icons.search_rounded, color: _textMedium),
           suffixIcon: _searchCtrl.text.isNotEmpty
               ? IconButton(
                   icon: const Icon(Icons.clear, size: 18),
-                  color: Colors.grey,
+                  color: _textLight,
                   onPressed: () {
                     _searchCtrl.clear();
                     _filtrer('');
@@ -469,14 +428,14 @@ class _CursusPageState extends State<CursusPage>
                   margin: const EdgeInsets.all(8),
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: _blue,
+                    color: brandBackground.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: const Icon(Icons.tune_rounded,
-                      color: Colors.white, size: 18),
+                  child: Icon(Icons.tune_rounded,
+                      color: brandBackground, size: 18),
                 ),
           border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(vertical: 15),
+          contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
         ),
       ),
     );
@@ -490,18 +449,18 @@ class _CursusPageState extends State<CursusPage>
         const Text(
           'Continuer la lecture',
           style: TextStyle(
-            fontSize: 18,
+            fontSize: 20,
             fontWeight: FontWeight.bold,
-            color: _dark,
+            color: _textDark,
           ),
         ),
-        const SizedBox(height: 14),
+        const SizedBox(height: 16),
         _loadingRecent
             ? _buildRecentSkeleton()
             : _recent.isEmpty
                 ? _buildMotivation()
                 : SizedBox(
-                    height: 162,
+                    height: 170,
                     child: ListView.builder(
                       scrollDirection: Axis.horizontal,
                       physics: const BouncingScrollPhysics(),
@@ -519,230 +478,223 @@ class _CursusPageState extends State<CursusPage>
     final pct    = (item['pourcentage'] as num? ?? 0).toInt();
     final mins   = item['mins_restants'] as int? ?? 5;
     final module = item['module_titre']?.toString() ?? '';
-    //final leconId= item['lecon_id'];
-    final coursId= item['cours_id'];
+    final coursId = item['cours_id'];
 
-    return Container(
-      width: 282,
-      margin: const EdgeInsets.only(right: 16, bottom: 4),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [color, _darken(color, 0.15)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
+    return GestureDetector(
+      onTap: () {
+        if (coursId != null) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => CoursDetailTabs(
+                coursId: coursId.toString(),
+                titre: item['cours_titre']?.toString() ?? '',
+                coursColor: color.value,
+                isPremium: true,
+              ),
+            ),
+          );
+        }
+      },
+      child: Container(
+        width: 280,
+        margin: const EdgeInsets.only(right: 16),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [brandBackground, brandBackground.withOpacity(0.8)],
+          ),
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: brandBackground.withOpacity(0.3),
+              blurRadius: 16,
+              offset: const Offset(0, 6),
+            ),
+          ],
         ),
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: color.withOpacity(0.35),
-            blurRadius: 14,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      child: Stack(
-        children: [
-          // ── Décor icône en filigrane ─────────────────────────
-          Positioned(
-            right: -12,
-            bottom: -12,
-            child: Icon(icon, size: 90, color: Colors.white.withOpacity(0.1)),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(18),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // ── En-tête ──────────────────────────────────
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(6),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Icon(icon, color: Colors.white, size: 14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Bande supérieure avec icône
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: _white20,
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        item['cours_titre']?.toString() ?? '',
-                        style: const TextStyle(
-                          color: Colors.white70,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w500,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                // ── Titre leçon ───────────────────────────────
-                Text(
-                  item['lecon_titre']?.toString() ?? '',
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 15,
-                    fontWeight: FontWeight.bold,
-                    height: 1.3,
+                    child: Icon(icon, color: _white, size: 18),
                   ),
-                ),
-                const Spacer(),
-                // ── Barre de progression ──────────────────────
-                Row(
-                  children: [
-                    Expanded(
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(4),
-                        child: LinearProgressIndicator(
-                          value: pct / 100,
-                          backgroundColor: Colors.white.withOpacity(0.25),
-                          valueColor:
-                              const AlwaysStoppedAnimation(Colors.white),
-                          minHeight: 4,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      '$pct%',
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      item['cours_titre']?.toString() ?? '',
                       style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
+                        color: _white80,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
                       ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                  ],
+                  ),
+                ],
+              ),
+            ),
+            // Titre leçon
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Text(
+                item['lecon_titre']?.toString() ?? '',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: _white,
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                  height: 1.3,
                 ),
-                const SizedBox(height: 8),
-                // ── Bas : info + bouton ──────────────────────
-                Row(
-                  children: [
-                    Text(
-                      module.isNotEmpty ? '$module · $mins min' : '$mins min restantes',
-                      style: const TextStyle(
-                        color: Colors.white70,
-                        fontSize: 11,
-                      ),
-                    ),
-                    const Spacer(),
-                    GestureDetector(
-                      onTap: () {
-                        if (coursId != null) {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => CoursDetailTabs(
-                                coursId: coursId.toString(),
-                                titre: item['cours_titre']?.toString() ?? '',
-                              ),
-                            ),
-                          );
-                        }
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 5),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Text(
-                          'Reprendre',
-                          style: TextStyle(
-                            color: color,
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
+              ),
+            ),
+            const Spacer(),
+            // Barre de progression
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(6),
+                          child: LinearProgressIndicator(
+                            value: pct / 100,
+                            backgroundColor: _white20,
+                            valueColor: const AlwaysStoppedAnimation<Color>(_white),
+                            minHeight: 6,
                           ),
                         ),
                       ),
-                    ),
-                  ],
-                ),
-              ],
+                      const SizedBox(width: 10),
+                      Text(
+                        '$pct%',
+                        style: const TextStyle(
+                          color: _white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Icon(Icons.access_time_rounded, size: 12, color: _white60),
+                      const SizedBox(width: 4),
+                      Text(
+                        module.isNotEmpty ? '$module · $mins min' : '$mins min restantes',
+                        style: TextStyle(
+                          color: _white60,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 
-  // ── État motivationnel (aucune lecture récente) ──────────────────
+  // ── État motivationnel ───────────────────────────────────────────
   Widget _buildMotivation() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF5F7FA),
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: _teal.withOpacity(0.12)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: _blue.withOpacity(0.1),
-                  blurRadius: 12,
-                ),
-              ],
-            ),
-            child: const Text('🚀', style: TextStyle(fontSize: 26)),
+    return GestureDetector(
+      onTap: () {
+        // Scroll vers la liste des cours
+      },
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [brandBackground, brandBackground.withOpacity(0.8)],
           ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Le savoir n\'attend pas !',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                    color: Color(0xFF1e4f61),
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: brandBackground.withOpacity(0.3),
+              blurRadius: 16,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: _white20,
+                shape: BoxShape.circle,
+              ),
+              child: const Text('🚀', style: TextStyle(fontSize: 28)),
+            ),
+            const SizedBox(width: 18),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Le savoir n\'attend pas !',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                      color: _white,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Tu n\'as rien lu récemment. Lance-toi !',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey.shade600,
-                    height: 1.3,
+                  const SizedBox(height: 6),
+                  Text(
+                    'Tu n\'as rien lu récemment. Lance-toi !',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: _white80,
+                      height: 1.4,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Text(
-                      'Choisir un cours',
-                      style: TextStyle(
-                        color: _teal,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12,
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Text(
+                        'Choisir un cours',
+                        style: TextStyle(
+                          color: actionOrange,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 4),
-                    Icon(
-                      Icons.arrow_forward_rounded,
-                      size: 13,
-                      color: _teal,
-                    ),
-                  ],
-                ),
-              ],
+                      const SizedBox(width: 6),
+                      Icon(
+                        Icons.arrow_forward_rounded,
+                        size: 14,
+                        color: actionOrange,
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -756,21 +708,21 @@ class _CursusPageState extends State<CursusPage>
           style: TextStyle(
             fontSize: 20,
             fontWeight: FontWeight.bold,
-            color: _dark,
+            color: _textDark,
           ),
         ),
         const Spacer(),
         if (_cours.isNotEmpty)
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
             decoration: BoxDecoration(
-              color: _blue.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
+              color: brandBackground.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(20),
             ),
             child: Text(
               '${_cours.length} cours',
-              style: const TextStyle(
-                color: _blue,
+              style: TextStyle(
+                color: brandBackground,
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
               ),
@@ -794,144 +746,137 @@ class _CursusPageState extends State<CursusPage>
     return AnimatedContainer(
       duration: Duration(milliseconds: 300 + index * 60),
       curve: Curves.easeOutCubic,
-      margin: const EdgeInsets.only(bottom: 18),
+      margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
+        color: _white,
+        borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: color.withOpacity(0.08),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(24),
-        onTap: () => Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => CoursDetailTabs(
-              coursId: cours['id'].toString(),
-              titre: titre,
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(20),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(20),
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => CoursDetailTabs(
+                coursId: cours['id'].toString(),
+                titre: titre,
+                coursColor: color.value, // Transmettre la couleur
+                isPremium: true,
+              ),
             ),
           ),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(18),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // ── En-tête ──────────────────────────────────────
-              Row(
-                children: [
-                  // Icône colorée
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: color.withOpacity(0.12),
-                      borderRadius: BorderRadius.circular(16),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: color.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Icon(icon, color: color, size: 24),
                     ),
-                    child: Icon(icon, color: color, size: 24),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          titre,
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: _dark,
-                          ),
-                        ),
-                        const SizedBox(height: 3),
-                        Row(
-                          children: [
-                            Icon(Icons.person_outline,
-                                size: 12,
-                                color: Colors.grey.shade400),
-                            const SizedBox(width: 4),
-                            Expanded(
-                              child: Text(
-                                ep,
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.grey.shade500,
-                                ),
-                                overflow: TextOverflow.ellipsis,
-                              ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            titre,
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: _textDark,
                             ),
-                          ],
-                        ),
-                      ],
+                          ),
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              Icon(Icons.person_outline,
+                                  size: 12, color: _textLight),
+                              const SizedBox(width: 4),
+                              Expanded(
+                                child: Text(
+                                  ep,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: _textMedium,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    _buildBadge(progression, color),
+                  ],
+                ),
+                if (desc.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    desc,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: _textMedium,
+                      fontSize: 13,
+                      height: 1.4,
                     ),
                   ),
-                  // Badge état
-                  _buildBadge(progression, color),
                 ],
-              ),
-
-              // ── Description ──────────────────────────────────
-              if (desc.isNotEmpty) ...[
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    _metaChip(
+                      icon: Icons.play_lesson_outlined,
+                      label: '$nbLecons leçon${nbLecons > 1 ? 's' : ''}',
+                      color: color,
+                    ),
+                    const SizedBox(width: 12),
+                    if (nbDevoirs > 0)
+                      _metaChip(
+                        icon: Icons.assignment_outlined,
+                        label: '$nbDevoirs devoir${nbDevoirs > 1 ? 's' : ''}',
+                        color: actionOrange,
+                      ),
+                    const Spacer(),
+                    Text(
+                      '${progression.toStringAsFixed(0)}%',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: color,
+                      ),
+                    ),
+                  ],
+                ),
                 const SizedBox(height: 12),
-                Text(
-                  desc,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: Colors.grey.shade600,
-                    fontSize: 13,
-                    height: 1.4,
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: LinearProgressIndicator(
+                    value: progression / 100,
+                    backgroundColor: color.withOpacity(0.1),
+                    valueColor: AlwaysStoppedAnimation<Color>(color),
+                    minHeight: 6,
                   ),
                 ),
               ],
-
-              const SizedBox(height: 16),
-
-              // ── Méta (leçons + devoirs) ──────────────────────
-              Row(
-                children: [
-                  _metaChip(
-                    icon: Icons.play_lesson_outlined,
-                    label: '$nbLecons leçon${nbLecons > 1 ? 's' : ''}',
-                    color: color,
-                  ),
-                  const SizedBox(width: 10),
-                  if (nbDevoirs > 0)
-                    _metaChip(
-                      icon: Icons.assignment_outlined,
-                      label: '$nbDevoirs devoir${nbDevoirs > 1 ? 's' : ''}',
-                      color: _gold,
-                    ),
-                  const Spacer(),
-                  // Pourcentage
-                  Text(
-                    '${progression.toStringAsFixed(0)}%',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.bold,
-                      color: color,
-                    ),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 10),
-
-              // ── Barre de progression ─────────────────────────
-              ClipRRect(
-                borderRadius: BorderRadius.circular(10),
-                child: LinearProgressIndicator(
-                  value: progression / 100,
-                  backgroundColor: color.withOpacity(0.1),
-                  valueColor: AlwaysStoppedAnimation<Color>(color),
-                  minHeight: 7,
-                ),
-              ),
-            ],
+            ),
           ),
         ),
       ),
@@ -948,17 +893,17 @@ class _CursusPageState extends State<CursusPage>
       bg = color.withOpacity(0.1);
       fg = color;
     } else if (progression >= 100) {
-      label = 'TERMINÉ ✓';
-      bg = Colors.green.withOpacity(0.12);
-      fg = Colors.green.shade700;
+      label = 'TERMINÉ';
+      bg = Colors.green.withOpacity(0.1);
+      fg = Colors.green;
     } else {
       label = 'EN COURS';
-      bg = _gold.withOpacity(0.15);
-      fg = _gold;
+      bg = actionOrange.withOpacity(0.1);
+      fg = actionOrange;
     }
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.circular(12),
@@ -968,7 +913,7 @@ class _CursusPageState extends State<CursusPage>
         style: TextStyle(
           color: fg,
           fontSize: 10,
-          fontWeight: FontWeight.w800,
+          fontWeight: FontWeight.w700,
           letterSpacing: 0.3,
         ),
       ),
@@ -983,14 +928,14 @@ class _CursusPageState extends State<CursusPage>
       Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 13, color: color),
-          const SizedBox(width: 4),
+          Icon(icon, size: 14, color: color),
+          const SizedBox(width: 5),
           Text(
             label,
             style: TextStyle(
               fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: Colors.grey.shade700,
+              fontWeight: FontWeight.w500,
+              color: _textMedium,
             ),
           ),
         ],
@@ -1005,20 +950,27 @@ class _CursusPageState extends State<CursusPage>
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(Icons.cloud_off_outlined,
-                size: 56, color: Colors.grey.shade300),
-            const SizedBox(height: 16),
+                size: 64, color: _textLight),
+            const SizedBox(height: 20),
             Text(
               _errorCours,
-              style: TextStyle(color: Colors.grey.shade600),
+              style: TextStyle(color: _textMedium, fontSize: 15),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 24),
             ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(backgroundColor: _blue),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: brandBackground,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
               onPressed: _chargerTout,
-              icon: const Icon(Icons.refresh, color: Colors.white),
-              label: const Text('Réessayer',
-                  style: TextStyle(color: Colors.white)),
+              icon: const Icon(Icons.refresh, size: 18),
+              label: const Text('Réessayer', style: TextStyle(fontSize: 14)),
             ),
           ],
         ),
@@ -1029,40 +981,42 @@ class _CursusPageState extends State<CursusPage>
   // ── Skeletons ────────────────────────────────────────────────────
   Widget _buildSkeleton() {
     return ListView(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
       children: [
         const SizedBox(height: 60),
-        _skeletonBox(h: 48, radius: 20),
+        _skeletonBox(h: 48, radius: 16),
         const SizedBox(height: 24),
         _skeletonBox(h: 18, w: 160),
-        const SizedBox(height: 14),
+        const SizedBox(height: 16),
         SizedBox(
-          height: 162,
+          height: 170,
           child: Row(
             children: [
-              _skeletonBox(h: 162, w: 282, radius: 24),
+              _skeletonBox(h: 170, w: 280, radius: 20),
               const SizedBox(width: 16),
-              _skeletonBox(h: 162, w: 282, radius: 24),
+              _skeletonBox(h: 170, w: 280, radius: 20),
             ],
           ),
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: 32),
+        _skeletonBox(h: 20, w: 150),
+        const SizedBox(height: 16),
         ...List.generate(3, (_) => Padding(
-          padding: const EdgeInsets.only(bottom: 18),
-          child: _skeletonBox(h: 160, radius: 24),
+          padding: const EdgeInsets.only(bottom: 16),
+          child: _skeletonBox(h: 140, radius: 20),
         )),
       ],
     );
   }
 
   Widget _buildRecentSkeleton() => SizedBox(
-        height: 162,
+        height: 170,
         child: ListView.builder(
           scrollDirection: Axis.horizontal,
           itemCount: 3,
           itemBuilder: (_, __) => Padding(
             padding: const EdgeInsets.only(right: 16),
-            child: _skeletonBox(h: 162, w: 282, radius: 24),
+            child: _skeletonBox(h: 170, w: 280, radius: 20),
           ),
         ),
       );
@@ -1076,16 +1030,16 @@ class _CursusPageState extends State<CursusPage>
         height: h,
         width: w,
         decoration: BoxDecoration(
-          color: Colors.grey.shade200,
+          color: _borderLight,
           borderRadius: BorderRadius.circular(radius),
         ),
       );
 
   // ── Utilitaire couleur ───────────────────────────────────────────
-  Color _darken(Color color, double amount) {
+  /*Color _darken(Color color, double amount) {
     final hsl = HSLColor.fromColor(color);
     return hsl
         .withLightness((hsl.lightness - amount).clamp(0.0, 1.0))
         .toColor();
-  }
+  }*/
 }

@@ -6,22 +6,21 @@ import 'package:yeki/widgets/creer_cours_sheet.dart';
 import 'package:yeki/widgets/modifier_cours_sheet.dart';
 import 'package:yeki/widgets/creer_olympiade_sheet.dart';
 
-// ─────────────────────────────────────────────────────────────────
-// DASHBOARD ENSEIGNANT CADRE
-// - Affiche clairement le département auquel il est affecté
-// - Stats complètes du département
-// - Liste des cours du département
-// - Performances des enseignants principaux
-// - Changer un enseignant principal dans un cours
-// - Créer un cours
-// - Modifier un cours          ← NOUVEAU
-// - Créer une olympiade        ← NOUVEAU
-// ─────────────────────────────────────────────────────────────────
+// Palette harmonisée
+const Color _primary = Color(0xFF6A1B9A);
+//const Color _primaryLight = Color(0xFF8B3FC9);
+const Color _textDark = Color(0xFF1A1C1E);
+const Color _textMedium = Color(0xFF5A5C5E);
+const Color _textLight = Color(0xFF8A8C8E);
+const Color _borderLight = Color(0xFFE0E4E8);
+const Color _bgLight = Color(0xFFF8FAFC);
+const Color _white = Color(0xFFFFFFFF);
+const Color _green = Color(0xFF10B981);
+const Color _orange = Color(0xFFF97316);
+const Color _red = Color(0xFFEF4444);
+const Color _gold = Color(0xFFE2A84B);
 
 const String _baseUrl = 'https://yeki.pythonanywhere.com/api';
-const Color _primary = Color(0xFF6A1B9A);
-const Color _dark = Color(0xFF0D1B2A);
-const Color _bg = Color(0xFFF8F4FC);
 
 class CadreDashboardPage extends StatefulWidget {
   const CadreDashboardPage({super.key});
@@ -58,7 +57,6 @@ class _CadreDashboardPageState extends State<CadreDashboardPage>
     return p.getString('token');
   }
 
-  // ─── Chargement dashboard ────────────────────────────────────────
   Future<void> _charger() async {
     setState(() => _loading = true);
     final token = await _getToken();
@@ -91,7 +89,6 @@ class _CadreDashboardPageState extends State<CadreDashboardPage>
     }
   }
 
-  // ─── Changer enseignant principal d'un cours ─────────────────────
   void _changerEnseignantPrincipal(Map cours) async {
     final token = await _getToken();
     List enseignants = [];
@@ -121,9 +118,9 @@ class _CadreDashboardPageState extends State<CadreDashboardPage>
       isScrollControlled: true,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setS) => Container(
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          decoration: BoxDecoration(
+            color: _white,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
           ),
           padding: EdgeInsets.only(
             left: 24,
@@ -135,21 +132,21 @@ class _CadreDashboardPageState extends State<CadreDashboardPage>
             mainAxisSize: MainAxisSize.min,
             children: [
               _sheetHandle(),
-              const SizedBox(height: 16),
+              const SizedBox(height: 20),
               Text(
                 'Changer l\'enseignant principal',
-                style: TextStyle(
+                style: const TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
-                  color: _dark,
+                  color: _textDark,
                 ),
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: 6),
               Text(
                 'Cours : ${cours['titre'] ?? ''}',
-                style: const TextStyle(fontSize: 13, color: Colors.grey),
+                style: const TextStyle(fontSize: 13, color: _textMedium),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 20),
               ConstrainedBox(
                 constraints: BoxConstraints(
                   maxHeight: MediaQuery.of(ctx).size.height * 0.4,
@@ -158,7 +155,7 @@ class _CadreDashboardPageState extends State<CadreDashboardPage>
                     ? const Center(
                         child: Text(
                           'Aucun enseignant principal disponible',
-                          style: TextStyle(color: Colors.grey),
+                          style: TextStyle(color: _textLight),
                         ),
                       )
                     : ListView(
@@ -169,15 +166,21 @@ class _CadreDashboardPageState extends State<CadreDashboardPage>
                                 value: e['id'] as int,
                                 groupValue: selected,
                                 activeColor: _primary,
-                                title: Text(e['nom'] ?? e['username'] ?? ''),
-                                subtitle: Text(e['email'] ?? ''),
+                                title: Text(
+                                  e['nom'] ?? e['username'] ?? '',
+                                  style: const TextStyle(color: _textDark),
+                                ),
+                                subtitle: Text(
+                                  e['email'] ?? '',
+                                  style: const TextStyle(color: _textLight),
+                                ),
                                 onChanged: (v) => setS(() => selected = v),
                               ),
                             )
                             .toList(),
                       ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 20),
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
@@ -187,6 +190,7 @@ class _CadreDashboardPageState extends State<CadreDashboardPage>
                       borderRadius: BorderRadius.circular(14),
                     ),
                     padding: const EdgeInsets.symmetric(vertical: 14),
+                    elevation: 0,
                   ),
                   onPressed: selected == null
                       ? null
@@ -199,7 +203,7 @@ class _CadreDashboardPageState extends State<CadreDashboardPage>
                         },
                   child: const Text(
                     'Confirmer',
-                    style: TextStyle(color: Colors.white, fontSize: 16),
+                    style: TextStyle(color: _white, fontSize: 16, fontWeight: FontWeight.bold),
                   ),
                 ),
               ),
@@ -233,7 +237,6 @@ class _CadreDashboardPageState extends State<CadreDashboardPage>
     }
   }
 
-  // ─── Créer un cours ──────────────────────────────────────────────
   void ouvrirFormulaireCreerCours({
     required BuildContext context,
     required int departementId,
@@ -257,7 +260,6 @@ class _CadreDashboardPageState extends State<CadreDashboardPage>
     );
   }
 
-  // ─── Modifier un cours ────────────────────────────────────────────
   void _ouvrirModifierCours(Map cours) {
     showModalBottomSheet(
       context: context,
@@ -272,7 +274,6 @@ class _CadreDashboardPageState extends State<CadreDashboardPage>
     );
   }
 
-  // ─── Créer une olympiade ──────────────────────────────────────────
   void _ouvrirCreerOlympiade() {
     if (_departement.isEmpty) {
       _showError('Aucun département assigné. Contactez votre administrateur.');
@@ -288,21 +289,19 @@ class _CadreDashboardPageState extends State<CadreDashboardPage>
         departementNom: _departement['nom'] as String? ?? '',
         onSuccess: () {
           _showSuccess('Olympiade créée ! Ajoutez les questions depuis la section Olympiades.');
-          // Rafraîchir si besoin (les olympiades ne sont pas dans ce dashboard)
         },
       ),
     );
   }
 
-  // ─── Menu d'actions rapides (SpeedDial custom) ────────────────────
   void _afficherMenuActions() {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       builder: (ctx) => Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        decoration: BoxDecoration(
+          color: _white,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
         ),
         padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
         child: Column(
@@ -315,11 +314,10 @@ class _CadreDashboardPageState extends State<CadreDashboardPage>
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
-                color: _dark,
+                color: _textDark,
               ),
             ),
             const SizedBox(height: 20),
-            // ── Créer un cours ──────────────────────────────────
             _buildActionTile(
               icon: Icons.book_outlined,
               label: 'Créer un cours',
@@ -336,12 +334,11 @@ class _CadreDashboardPageState extends State<CadreDashboardPage>
               },
             ),
             const SizedBox(height: 10),
-            // ── Créer une olympiade ──────────────────────────────
             _buildActionTile(
               icon: Icons.emoji_events,
               label: 'Créer une olympiade',
               subtitle: 'Organiser une compétition académique',
-              color: const Color(0xFFFFA000),
+              color: _gold,
               onTap: () {
                 Navigator.pop(ctx);
                 _ouvrirCreerOlympiade();
@@ -368,7 +365,7 @@ class _CadreDashboardPageState extends State<CadreDashboardPage>
           decoration: BoxDecoration(
             color: color.withOpacity(0.07),
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: color.withOpacity(0.25)),
+            border: Border.all(color: color.withOpacity(0.25), width: 1),
           ),
           child: Row(
             children: [
@@ -390,12 +387,12 @@ class _CadreDashboardPageState extends State<CadreDashboardPage>
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
-                        color: _dark,
+                        color: _textDark,
                       ),
                     ),
                     Text(
                       subtitle,
-                      style: const TextStyle(fontSize: 12, color: Colors.grey),
+                      style: const TextStyle(fontSize: 12, color: _textLight),
                     ),
                   ],
                 ),
@@ -406,18 +403,17 @@ class _CadreDashboardPageState extends State<CadreDashboardPage>
         ),
       );
 
-  // ─── Build ───────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _bg,
-      // ── FAB avec menu actions ─────────────────────────────────────
+      backgroundColor: _bgLight,
       floatingActionButton: _departement.isEmpty
           ? null
           : FloatingActionButton(
               backgroundColor: _primary,
+              elevation: 4,
               onPressed: _afficherMenuActions,
-              child: const Icon(Icons.add, color: Colors.white),
+              child: const Icon(Icons.add_rounded, color: _white, size: 28),
             ),
       body: _loading
           ? const Center(child: CircularProgressIndicator(color: _primary))
@@ -431,79 +427,96 @@ class _CadreDashboardPageState extends State<CadreDashboardPage>
     );
   }
 
-  // ─── AppBar ──────────────────────────────────────────────────────
   SliverAppBar _buildAppBar() {
     final nomDept = _departement['nom'] as String?;
     final nomParcours = _departement['parcours'] as String?;
 
     return SliverAppBar(
-      expandedHeight: nomDept != null ? 215 : 170,
+      expandedHeight: nomDept != null ? 250 : 200,
       pinned: true,
       backgroundColor: _primary,
       flexibleSpace: FlexibleSpaceBar(
+        collapseMode: CollapseMode.parallax,
         background: Container(
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             gradient: LinearGradient(
-              colors: [Color(0xFF4A148C), _primary],
+              colors: [_primary, _primary.withOpacity(0.85)],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
           ),
           child: SafeArea(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+              padding: const EdgeInsets.fromLTRB(24, 16, 24, 20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  const Text(
-                    'Tableau de bord',
-                    style: TextStyle(color: Colors.white70, fontSize: 13),
+                  // Badge "CADRE"
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: _white.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: const Text(
+                      "CADRE",
+                      style: TextStyle(
+                        color: _gold,
+                        fontSize: 9,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 10),
+                  // Nom de l'enseignant
                   Text(
                     _nomEnseignant.isEmpty
                         ? 'Enseignant Cadre'
                         : _nomEnseignant,
                     style: const TextStyle(
-                      color: Colors.white,
+                      color: _white,
                       fontSize: 22,
                       fontWeight: FontWeight.bold,
                     ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 8),
-                  _badge('Enseignant Cadre', Colors.white.withOpacity(0.2)),
-                  const SizedBox(height: 8),
+                  // Badge rôle
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: _white.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: const Text(
+                      'Enseignant Cadre',
+                      style: TextStyle(
+                        color: _white,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  // Badge département ou alerte
                   if (nomDept == null)
                     Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 7,
-                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                       decoration: BoxDecoration(
-                        color: Colors.orange.withOpacity(0.25),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(
-                          color: Colors.orange.shade300,
-                          width: 1,
-                        ),
+                        color: _orange.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(16),
                       ),
                       child: const Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(
-                            Icons.warning_amber_rounded,
-                            color: Colors.orange,
-                            size: 14,
-                          ),
+                          Icon(Icons.warning_amber_rounded, color: _orange, size: 12),
                           SizedBox(width: 6),
                           Text(
                             'Aucun département assigné',
-                            style: TextStyle(
-                              color: Colors.orange,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                            ),
+                            style: TextStyle(color: _orange, fontSize: 11, fontWeight: FontWeight.w500),
                           ),
                         ],
                       ),
@@ -512,42 +525,44 @@ class _CadreDashboardPageState extends State<CadreDashboardPage>
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Row(
-                          children: [
-                            const Icon(
-                              Icons.workspace_premium,
-                              color: Colors.amber,
-                              size: 15,
-                            ),
-                            const SizedBox(width: 6),
-                            Expanded(
-                              child: Text(
-                                'Cadre du département $nomDept',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 13,
-                                  fontStyle: FontStyle.italic,
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: _white.withOpacity(0.12),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.workspace_premium, color: _gold, size: 12),
+                              const SizedBox(width: 6),
+                              Flexible(
+                                child: Text(
+                                  'Cadre du département $nomDept',
+                                  style: const TextStyle(
+                                    color: _white,
+                                    fontSize: 11,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
                                 ),
-                                overflow: TextOverflow.ellipsis,
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                         if (nomParcours != null) ...[
-                          const SizedBox(height: 4),
+                          const SizedBox(height: 6),
                           Row(
                             children: [
-                              const Icon(
-                                Icons.route,
-                                color: Colors.white54,
-                                size: 12,
-                              ),
+                              Icon(Icons.route, color: _white, size: 11),
                               const SizedBox(width: 5),
-                              Text(
-                                'Parcours : $nomParcours',
-                                style: const TextStyle(
-                                  color: Colors.white54,
-                                  fontSize: 11,
+                              Flexible(
+                                child: Text(
+                                  'Parcours : $nomParcours',
+                                  style: TextStyle(
+                                    color: _white,
+                                    fontSize: 10,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                               ),
                             ],
@@ -560,23 +575,16 @@ class _CadreDashboardPageState extends State<CadreDashboardPage>
             ),
           ),
         ),
-        title: const Text(
-          'Dashboard Cadre',
-          style: TextStyle(fontSize: 16, color: Colors.white),
-        ),
-        titlePadding: const EdgeInsets.only(left: 16, bottom: 16),
-        collapseMode: CollapseMode.parallax,
       ),
       actions: [
-        // ── Bouton Olympiade dans l'AppBar ──────────────────────
         if (_departement.isNotEmpty)
           IconButton(
-            icon: const Icon(Icons.emoji_events, color: Colors.amber),
+            icon: Icon(Icons.emoji_events, color: _gold, size: 22),
             tooltip: 'Créer une olympiade',
             onPressed: _ouvrirCreerOlympiade,
           ),
         IconButton(
-          icon: const Icon(Icons.refresh, color: Colors.white),
+          icon: const Icon(Icons.refresh, color: _white),
           onPressed: _charger,
         ),
       ],
@@ -590,15 +598,16 @@ class _CadreDashboardPageState extends State<CadreDashboardPage>
         TabBar(
           controller: _tabCtrl,
           labelColor: _primary,
-          unselectedLabelColor: Colors.grey,
+          unselectedLabelColor: _textMedium,
           indicatorColor: _primary,
+          labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
           tabs: const [
             Tab(text: 'Mes cours'),
             Tab(text: 'Enseignants'),
             Tab(text: 'Statistiques'),
           ],
         ),
-        backgroundColor: Colors.white,
+        backgroundColor: _white,
       ),
     );
   }
@@ -615,14 +624,11 @@ class _CadreDashboardPageState extends State<CadreDashboardPage>
               Container(
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
-                  color: Colors.orange.shade50,
+                  color: _orange.withOpacity(0.08),
                   shape: BoxShape.circle,
+                  border: Border.all(color: _orange.withOpacity(0.2), width: 1),
                 ),
-                child: Icon(
-                  Icons.domain_disabled,
-                  size: 50,
-                  color: Colors.orange.shade300,
-                ),
+                child: Icon(Icons.domain_disabled, size: 50, color: _orange),
               ),
               const SizedBox(height: 20),
               const Text(
@@ -630,7 +636,7 @@ class _CadreDashboardPageState extends State<CadreDashboardPage>
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
-                  color: _dark,
+                  color: _textDark,
                 ),
               ),
               const SizedBox(height: 8),
@@ -638,7 +644,7 @@ class _CadreDashboardPageState extends State<CadreDashboardPage>
                 'Vous n\'êtes encore affecté à aucun département.\n'
                 'Contactez votre administrateur.',
                 textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.grey, fontSize: 13),
+                style: TextStyle(color: _textLight, fontSize: 13),
               ),
             ],
           ),
@@ -660,26 +666,35 @@ class _CadreDashboardPageState extends State<CadreDashboardPage>
                 padding: const EdgeInsets.symmetric(vertical: 40),
                 child: Column(
                   children: [
-                    Icon(
-                      Icons.book_outlined,
-                      size: 60,
-                      color: Colors.grey.shade300,
+                    Container(
+                      padding: const EdgeInsets.all(24),
+                      decoration: BoxDecoration(
+                        color: _primary.withOpacity(0.08),
+                        shape: BoxShape.circle,
+                        border: Border.all(color: _primary.withOpacity(0.2), width: 1),
+                      ),
+                      child: Icon(Icons.book_outlined, size: 48, color: _primary),
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 16),
                     const Text(
                       'Aucun cours créé',
-                      style: TextStyle(color: Colors.grey),
+                      style: TextStyle(color: _textMedium, fontSize: 16, fontWeight: FontWeight.w600),
                     ),
                     const SizedBox(height: 8),
+                    const Text(
+                      'Commencez par créer votre premier cours',
+                      style: TextStyle(color: _textLight, fontSize: 13),
+                    ),
+                    const SizedBox(height: 20),
                     ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(
                         backgroundColor: _primary,
+                        foregroundColor: _white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        elevation: 0,
                       ),
-                      icon: const Icon(Icons.add, color: Colors.white),
-                      label: const Text(
-                        'Créer un cours',
-                        style: TextStyle(color: Colors.white),
-                      ),
+                      icon: const Icon(Icons.add, size: 18),
+                      label: const Text('Créer un cours'),
                       onPressed: () {
                         ouvrirFormulaireCreerCours(
                           context: context,
@@ -700,7 +715,6 @@ class _CadreDashboardPageState extends State<CadreDashboardPage>
     );
   }
 
-  // ── Bannière département ─────────────────────────────────────────
   Widget _buildDeptBannerCard() {
     final nomDept = _departement['nom'] as String? ?? '';
     final nomParcours = _departement['parcours'] as String? ?? '';
@@ -710,19 +724,12 @@ class _CadreDashboardPageState extends State<CadreDashboardPage>
 
     return Container(
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF4A148C), _primary],
+        gradient: LinearGradient(
+          colors: [_primary, _primary.withOpacity(0.85)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(18),
-        boxShadow: [
-          BoxShadow(
-            color: _primary.withOpacity(0.3),
-            blurRadius: 14,
-            offset: const Offset(0, 5),
-          ),
-        ],
       ),
       padding: const EdgeInsets.all(20),
       child: Column(
@@ -733,10 +740,10 @@ class _CadreDashboardPageState extends State<CadreDashboardPage>
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.15),
+                  color: _white.withOpacity(0.15),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Icon(Icons.domain, color: Colors.white, size: 22),
+                child: const Icon(Icons.domain, color: _white, size: 22),
               ),
               const SizedBox(width: 12),
               const Expanded(
@@ -745,12 +752,12 @@ class _CadreDashboardPageState extends State<CadreDashboardPage>
                   children: [
                     Text(
                       'Mon département',
-                      style: TextStyle(color: Colors.white70, fontSize: 12),
+                      style: TextStyle(color: _white, fontSize: 12),
                     ),
                     Text(
                       'Enseignant Cadre',
                       style: TextStyle(
-                        color: Colors.white,
+                        color: _white,
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
                       ),
@@ -764,50 +771,51 @@ class _CadreDashboardPageState extends State<CadreDashboardPage>
                   Text(
                     '$nbCours cours',
                     style: const TextStyle(
-                      color: Colors.white,
+                      color: _white,
                       fontSize: 12,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
                   Text(
                     '$nbApp apprenants',
-                    style: const TextStyle(color: Colors.white70, fontSize: 11),
+                    style: const TextStyle(color: _white, fontSize: 11),
                   ),
                 ],
               ),
             ],
           ),
           const SizedBox(height: 14),
-          const Divider(color: Colors.white24, height: 1),
+          const Divider(color: _white, height: 1),
           const SizedBox(height: 14),
           Text(
             nomDept,
             style: const TextStyle(
-              color: Colors.white,
+              color: _white,
               fontSize: 22,
               fontWeight: FontWeight.bold,
-              letterSpacing: 0.3,
             ),
           ),
           if (desc.isNotEmpty) ...[
             const SizedBox(height: 4),
             Text(
               desc,
-              style: const TextStyle(color: Colors.white70, fontSize: 13),
+              style: const TextStyle(color: _white, fontSize: 13),
             ),
           ],
           if (nomParcours.isNotEmpty) ...[
             const SizedBox(height: 8),
             Row(
               children: [
-                const Icon(Icons.route, color: Colors.white54, size: 13),
+                Icon(Icons.route, color: _white, size: 13),
                 const SizedBox(width: 5),
-                Text(
-                  'Parcours : $nomParcours',
-                  style: const TextStyle(
-                    color: Colors.white60,
-                    fontSize: 12,
-                    fontStyle: FontStyle.italic,
+                Flexible(
+                  child: Text(
+                    'Parcours : $nomParcours',
+                    style: const TextStyle(
+                      color: _white,
+                      fontSize: 12,
+                    ),
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ],
@@ -818,13 +826,11 @@ class _CadreDashboardPageState extends State<CadreDashboardPage>
     );
   }
 
-  // ── Carte cours (avec bouton Modifier) ────────────────────────────
   Widget _buildCoursCard(Map cours) {
     final taux = (cours['taux_completion'] as num? ?? 0).toDouble();
     final nbApp = cours['nb_apprenants'] ?? 0;
     final ep = cours['enseignant_principal'];
 
-    // Couleur du cours
     final colorHex =
         (cours['color_code'] as String? ?? '#6A1B9A').replaceAll('#', '');
     Color coursColor;
@@ -837,14 +843,12 @@ class _CadreDashboardPageState extends State<CadreDashboardPage>
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10),
-        ],
+        color: _white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: _borderLight, width: 1),
       ),
       child: InkWell(
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(20),
         onTap: () => _ouvrirCours(cours),
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -853,12 +857,12 @@ class _CadreDashboardPageState extends State<CadreDashboardPage>
             children: [
               Row(
                 children: [
-                  // ── Icône colorée ────────────────────────────
                   Container(
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      color: coursColor.withOpacity(0.12),
-                      borderRadius: BorderRadius.circular(12),
+                      color: coursColor.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: coursColor.withOpacity(0.2), width: 0.8),
                     ),
                     child: Icon(Icons.book, color: coursColor, size: 22),
                   ),
@@ -872,7 +876,7 @@ class _CadreDashboardPageState extends State<CadreDashboardPage>
                           style: const TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 15,
-                            color: _dark,
+                            color: _textDark,
                           ),
                         ),
                         const SizedBox(height: 2),
@@ -880,13 +884,12 @@ class _CadreDashboardPageState extends State<CadreDashboardPage>
                           '$nbApp apprenants',
                           style: const TextStyle(
                             fontSize: 12,
-                            color: Colors.grey,
+                            color: _textLight,
                           ),
                         ),
                       ],
                     ),
                   ),
-                  // ── Menu d'actions (3 boutons) ────────────────
                   _buildCoursActions(cours, coursColor),
                 ],
               ),
@@ -894,41 +897,38 @@ class _CadreDashboardPageState extends State<CadreDashboardPage>
                 const SizedBox(height: 10),
                 Row(
                   children: [
-                    const CircleAvatar(
+                    CircleAvatar(
                       radius: 12,
-                      backgroundColor: Color(0xFFE8F4F8),
+                      backgroundColor: _primary.withOpacity(0.1),
                       child: Icon(Icons.person, size: 14, color: _primary),
                     ),
                     const SizedBox(width: 8),
-                    Text(
-                      'EP : ${ep['nom'] ?? ep['username'] ?? 'Non assigné'}',
-                      style: const TextStyle(fontSize: 12, color: Colors.grey),
+                    Expanded(
+                      child: Text(
+                        'EP : ${ep['nom'] ?? ep['username'] ?? 'Non assigné'}',
+                        style: const TextStyle(fontSize: 12, color: _textMedium),
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                   ],
                 ),
               ] else ...[
                 const SizedBox(height: 10),
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 5,
-                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                   decoration: BoxDecoration(
-                    color: Colors.orange.withOpacity(0.1),
+                    color: _orange.withOpacity(0.08),
                     borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: _orange.withOpacity(0.2), width: 0.8),
                   ),
                   child: const Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(
-                        Icons.warning_outlined,
-                        size: 12,
-                        color: Colors.orange,
-                      ),
+                      Icon(Icons.warning_outlined, size: 12, color: _orange),
                       SizedBox(width: 5),
                       Text(
                         'Aucun enseignant principal',
-                        style: TextStyle(fontSize: 11, color: Colors.orange),
+                        style: TextStyle(fontSize: 11, color: _orange),
                       ),
                     ],
                   ),
@@ -939,12 +939,12 @@ class _CadreDashboardPageState extends State<CadreDashboardPage>
                 children: [
                   Expanded(
                     child: ClipRRect(
-                      borderRadius: BorderRadius.circular(10),
+                      borderRadius: BorderRadius.circular(8),
                       child: LinearProgressIndicator(
                         value: taux / 100,
-                        backgroundColor: Colors.grey.shade100,
+                        backgroundColor: _borderLight,
                         color: coursColor,
-                        minHeight: 7,
+                        minHeight: 6,
                       ),
                     ),
                   ),
@@ -966,10 +966,9 @@ class _CadreDashboardPageState extends State<CadreDashboardPage>
     );
   }
 
-  // ── Boutons d'actions sur une carte cours ─────────────────────────
   Widget _buildCoursActions(Map cours, Color coursColor) {
     return PopupMenuButton<String>(
-      icon: Icon(Icons.more_vert, color: Colors.grey.shade500),
+      icon: Icon(Icons.more_vert, color: _textLight),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       itemBuilder: (ctx) => [
         PopupMenuItem(
@@ -978,7 +977,7 @@ class _CadreDashboardPageState extends State<CadreDashboardPage>
             children: [
               Icon(Icons.edit_outlined, color: coursColor, size: 18),
               const SizedBox(width: 10),
-              const Text('Modifier le cours'),
+              const Text('Modifier le cours', style: TextStyle(color: _textDark)),
             ],
           ),
         ),
@@ -988,7 +987,7 @@ class _CadreDashboardPageState extends State<CadreDashboardPage>
             children: [
               Icon(Icons.swap_horiz, color: _primary, size: 18),
               const SizedBox(width: 10),
-              const Text('Changer l\'enseignant'),
+              const Text('Changer l\'enseignant', style: TextStyle(color: _textDark)),
             ],
           ),
         ),
@@ -1010,9 +1009,24 @@ class _CadreDashboardPageState extends State<CadreDashboardPage>
   Widget _tabEnseignants() {
     if (_enseignantsPrincipaux.isEmpty) {
       return Center(
-        child: Text(
-          'Aucun enseignant principal assigné',
-          style: TextStyle(color: Colors.grey.shade400),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: _primary.withOpacity(0.08),
+                shape: BoxShape.circle,
+                border: Border.all(color: _primary.withOpacity(0.2), width: 1),
+              ),
+              child: Icon(Icons.person_outline_rounded, size: 48, color: _primary),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Aucun enseignant principal assigné',
+              style: TextStyle(color: _textMedium, fontSize: 16, fontWeight: FontWeight.w600),
+            ),
+          ],
         ),
       );
     }
@@ -1036,11 +1050,9 @@ class _CadreDashboardPageState extends State<CadreDashboardPage>
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: _white,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8),
-        ],
+        border: Border.all(color: _borderLight, width: 1),
       ),
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -1073,8 +1085,10 @@ class _CadreDashboardPageState extends State<CadreDashboardPage>
                     style: const TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 15,
-                      color: _dark,
+                      color: _textDark,
                     ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 4),
                   Row(
@@ -1103,11 +1117,11 @@ class _CadreDashboardPageState extends State<CadreDashboardPage>
                 ),
                 const Text(
                   '/20',
-                  style: TextStyle(fontSize: 11, color: Colors.grey),
+                  style: TextStyle(fontSize: 11, color: _textLight),
                 ),
                 const Text(
                   'moy.',
-                  style: TextStyle(fontSize: 10, color: Colors.grey),
+                  style: TextStyle(fontSize: 10, color: _textLight),
                 ),
               ],
             ),
@@ -1127,7 +1141,6 @@ class _CadreDashboardPageState extends State<CadreDashboardPage>
           const SizedBox(height: 20),
           _buildDeptCardStats(),
           const SizedBox(height: 20),
-          // ── Raccourcis actions ───────────────────────────────
           _buildRaccourcisActions(),
         ],
       ),
@@ -1138,11 +1151,9 @@ class _CadreDashboardPageState extends State<CadreDashboardPage>
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: _white,
         borderRadius: BorderRadius.circular(18),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8),
-        ],
+        border: Border.all(color: _borderLight, width: 1),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1152,7 +1163,7 @@ class _CadreDashboardPageState extends State<CadreDashboardPage>
             style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.bold,
-              color: _dark,
+              color: _textDark,
             ),
           ),
           const SizedBox(height: 12),
@@ -1176,7 +1187,7 @@ class _CadreDashboardPageState extends State<CadreDashboardPage>
                 child: _buildStatActionBtn(
                   icon: Icons.emoji_events,
                   label: 'Olympiade',
-                  color: const Color(0xFFFFA000),
+                  color: _gold,
                   onTap: _ouvrirCreerOlympiade,
                 ),
               ),
@@ -1199,9 +1210,9 @@ class _CadreDashboardPageState extends State<CadreDashboardPage>
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 14),
           decoration: BoxDecoration(
-            color: color.withOpacity(0.1),
+            color: color.withOpacity(0.08),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: color.withOpacity(0.3)),
+            border: Border.all(color: color.withOpacity(0.2), width: 1),
           ),
           child: Column(
             children: [
@@ -1226,7 +1237,7 @@ class _CadreDashboardPageState extends State<CadreDashboardPage>
         'Cours créés',
         '${_stats['nb_cours'] ?? _cours.length}',
         Icons.book,
-        const Color(0xFF6A1B9A),
+        _primary,
       ),
       _StatInfo(
         'Apprenants',
@@ -1238,13 +1249,13 @@ class _CadreDashboardPageState extends State<CadreDashboardPage>
         'Enseignants',
         '${_stats['nb_enseignants'] ?? 0}',
         Icons.person_outline,
-        const Color(0xFF008088),
+        Colors.teal,
       ),
       _StatInfo(
         'Taux moyen',
         '${(_stats['taux_moyen'] as num? ?? 0).toStringAsFixed(0)}%',
         Icons.bar_chart,
-        const Color(0xFFE65100),
+        _orange,
       ),
     ];
     return GridView.count(
@@ -1261,15 +1272,9 @@ class _CadreDashboardPageState extends State<CadreDashboardPage>
   Widget _buildInfoCard(_StatInfo item) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: _white,
         borderRadius: BorderRadius.circular(18),
-        boxShadow: [
-          BoxShadow(
-            color: item.color.withOpacity(0.12),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        border: Border.all(color: _borderLight, width: 1),
       ),
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -1277,27 +1282,29 @@ class _CadreDashboardPageState extends State<CadreDashboardPage>
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Container(
-            padding: const EdgeInsets.all(8),
+            padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
               color: item.color.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: item.color.withOpacity(0.2), width: 0.8),
             ),
-            child: Icon(item.icon, color: item.color, size: 20),
+            child: Icon(item.icon, color: item.color, size: 22),
           ),
+          const SizedBox(height: 12),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 item.value,
                 style: TextStyle(
-                  fontSize: 24,
+                  fontSize: 26,
                   fontWeight: FontWeight.bold,
                   color: item.color,
                 ),
               ),
               Text(
                 item.label,
-                style: const TextStyle(fontSize: 12, color: Colors.grey),
+                style: const TextStyle(fontSize: 12, color: _textLight),
               ),
             ],
           ),
@@ -1314,7 +1321,7 @@ class _CadreDashboardPageState extends State<CadreDashboardPage>
     return Container(
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [_primary.withOpacity(0.85), _primary],
+          colors: [_primary, _primary.withOpacity(0.85)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -1326,11 +1333,11 @@ class _CadreDashboardPageState extends State<CadreDashboardPage>
         children: [
           const Row(
             children: [
-              Icon(Icons.domain, color: Colors.white, size: 20),
+              Icon(Icons.domain, color: _white, size: 20),
               SizedBox(width: 8),
               Text(
                 'Mon Département',
-                style: TextStyle(color: Colors.white70, fontSize: 14),
+                style: TextStyle(color: _white, fontSize: 14),
               ),
             ],
           ),
@@ -1338,7 +1345,7 @@ class _CadreDashboardPageState extends State<CadreDashboardPage>
           Text(
             _departement['nom'] ?? '',
             style: const TextStyle(
-              color: Colors.white,
+              color: _white,
               fontSize: 20,
               fontWeight: FontWeight.bold,
             ),
@@ -1347,21 +1354,23 @@ class _CadreDashboardPageState extends State<CadreDashboardPage>
             const SizedBox(height: 4),
             Text(
               desc,
-              style: const TextStyle(color: Colors.white70, fontSize: 13),
+              style: const TextStyle(color: _white, fontSize: 13),
             ),
           ],
           if (nomParcours.isNotEmpty) ...[
             const SizedBox(height: 8),
             Row(
               children: [
-                const Icon(Icons.route, color: Colors.white54, size: 13),
+                Icon(Icons.route, color: _white, size: 13),
                 const SizedBox(width: 5),
-                Text(
-                  'Parcours : $nomParcours',
-                  style: const TextStyle(
-                    color: Colors.white60,
-                    fontSize: 12,
-                    fontStyle: FontStyle.italic,
+                Flexible(
+                  child: Text(
+                    'Parcours : $nomParcours',
+                    style: const TextStyle(
+                      color: _white,
+                      fontSize: 12,
+                    ),
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ],
@@ -1372,7 +1381,6 @@ class _CadreDashboardPageState extends State<CadreDashboardPage>
     );
   }
 
-  // ─── Helpers ─────────────────────────────────────────────────────
   void _ouvrirCours(Map cours) {}
 
   Widget _sheetHandle() => Center(
@@ -1380,21 +1388,9 @@ class _CadreDashboardPageState extends State<CadreDashboardPage>
       width: 40,
       height: 4,
       decoration: BoxDecoration(
-        color: Colors.grey.shade300,
+        color: _borderLight,
         borderRadius: BorderRadius.circular(10),
       ),
-    ),
-  );
-
-  Widget _badge(String text, Color bg) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-    decoration: BoxDecoration(
-      color: bg,
-      borderRadius: BorderRadius.circular(20),
-    ),
-    child: Text(
-      text,
-      style: const TextStyle(color: Colors.white, fontSize: 12),
     ),
   );
 
@@ -1409,22 +1405,31 @@ class _CadreDashboardPageState extends State<CadreDashboardPage>
 
   void _showError(String msg) {
     if (!mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(msg), backgroundColor: Colors.red));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg, style: const TextStyle(color: _white)),
+        backgroundColor: _red,
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.all(16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
   }
 
   void _showSuccess(String msg) {
     if (!mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(msg), backgroundColor: Colors.green));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg, style: const TextStyle(color: _white)),
+        backgroundColor: _green,
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.all(16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
   }
 }
 
-// ─────────────────────────────────────────────────────────────────
-// Types helpers
-// ─────────────────────────────────────────────────────────────────
 class _StatInfo {
   final String label, value;
   final IconData icon;

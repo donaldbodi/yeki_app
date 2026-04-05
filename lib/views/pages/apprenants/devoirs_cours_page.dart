@@ -1,5 +1,3 @@
-// lib/views/pages/apprenants/devoirs_cours_page.dart
-
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -9,13 +7,17 @@ import 'package:yeki/views/pages/apprenants/resultat_devoir_page.dart';
 import 'package:yeki/views/pages/apprenants/composer_devoir_page.dart';
 import 'package:yeki/widgets/form_preoccupation_sheet.dart';
 
-// ============================================================
-// CONSTANTES
-// ============================================================
 const String _base = 'https://yeki.pythonanywhere.com/api';
-const Color _teal = Color(0xFF2884A0);
-const Color _dark = Color(0xFF0D1B2A);
-const Color _bg = Color(0xFFF8FAFC);
+// Palette harmonisée
+const Color brandBackground = Color(0xFF135F74);
+const Color actionOrange = Color(0xFFFF6B00);
+const Color _textDark = Color(0xFF1A1C1E);
+const Color _textMedium = Color(0xFF5A5C5E);
+const Color _textLight = Color(0xFF8A8C8E);
+const Color _borderLight = Color(0xFFE0E4E8);
+const Color _borderMedium = Color(0xFFD0D4D8);
+const Color _bgLight = Color(0xFFF8FAFC);
+const Color _white = Color(0xFFFFFFFF);
 const Color _green = Color(0xFF10B981);
 const Color _orange = Color(0xFFF97316);
 const Color _red = Color(0xFFEF4444);
@@ -170,6 +172,7 @@ class DevoirsCoursPage extends StatefulWidget {
   final String coursTitre;
   final bool isEnseignantPrincipal;
   final void Function(int questionId)? onNaviguerForum;
+  final Color courseColor;
 
   const DevoirsCoursPage({
     super.key,
@@ -177,6 +180,7 @@ class DevoirsCoursPage extends StatefulWidget {
     required this.coursTitre,
     this.isEnseignantPrincipal = false,
     this.onNaviguerForum,
+    required this.courseColor,
   });
 
   @override
@@ -203,9 +207,6 @@ class _DevoirsCoursPageState extends State<DevoirsCoursPage>
     super.dispose();
   }
 
-  // ============================================================
-  // CHARGEMENT DES DEVOIRS
-  // ============================================================
   Future<void> _charger() async {
     setState(() => _loading = true);
     final token = await _getToken();
@@ -243,9 +244,6 @@ class _DevoirsCoursPageState extends State<DevoirsCoursPage>
     }
   }
 
-  // ============================================================
-  // FILTRES
-  // ============================================================
   List<DevoirCours> get _filtres {
     if (_filtreStatut == 'tous') return _devoirs;
     if (_filtreStatut == 'non_commence')
@@ -253,9 +251,6 @@ class _DevoirsCoursPageState extends State<DevoirsCoursPage>
     return _devoirs.where((d) => d.statut == _filtreStatut).toList();
   }
 
-  // ============================================================
-  // DÉMARRER UN DEVOIR
-  // ============================================================
   Future<void> _demarrerDevoir(DevoirCours d) async {
     final token = await _getToken();
     try {
@@ -287,15 +282,13 @@ class _DevoirsCoursPageState extends State<DevoirsCoursPage>
     }
   }
 
-  // ============================================================
-  // DIALOGUE DE CONFIRMATION
-  // ============================================================
   Future<void> _confirmerDemarrage(DevoirCours d) async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text(d.titre, style: const TextStyle(fontWeight: FontWeight.bold)),
+        backgroundColor: _white,
+        title: Text(d.titre, style: const TextStyle(fontWeight: FontWeight.bold, color: _textDark)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -310,6 +303,7 @@ class _DevoirsCoursPageState extends State<DevoirsCoursPage>
               decoration: BoxDecoration(
                 color: _orange.withOpacity(0.08),
                 borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: _orange.withOpacity(0.2)),
               ),
               child: const Row(
                 children: [
@@ -329,16 +323,16 @@ class _DevoirsCoursPageState extends State<DevoirsCoursPage>
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Annuler'),
+            child: const Text('Annuler', style: TextStyle(color: _textMedium)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: _teal,
+              backgroundColor: widget.courseColor,
               elevation: 0,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             ),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Commencer', style: TextStyle(color: Colors.white)),
+            child: const Text('Commencer', style: TextStyle(color: _white)),
           ),
         ],
       ),
@@ -350,23 +344,22 @@ class _DevoirsCoursPageState extends State<DevoirsCoursPage>
     padding: const EdgeInsets.only(bottom: 6),
     child: Row(
       children: [
-        Icon(icon, size: 14, color: _teal),
+        Icon(icon, size: 14, color: widget.courseColor),
         const SizedBox(width: 8),
-        Text(text, style: const TextStyle(fontSize: 13)),
+        Text(text, style: const TextStyle(fontSize: 13, color: _textMedium)),
       ],
     ),
   );
 
-  // ============================================================
-  // MÉTHODES UTILITAIRES
-  // ============================================================
   void _snack(String msg, {bool error = false}) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(msg),
+        content: Text(msg, style: const TextStyle(color: _white)),
         backgroundColor: error ? _red : _green,
         behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.all(16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         duration: const Duration(seconds: 3),
       ),
     );
@@ -386,19 +379,16 @@ class _DevoirsCoursPageState extends State<DevoirsCoursPage>
     if (d.statut == 'en_cours') return ('En cours', _purple);
     if (d.statut == 'en_retard') return ('En retard', _red);
     if (d.estExpire) return ('Expiré', _red);
-    if (d.estOuvert) return ('Ouvert', _teal);
+    if (d.estOuvert) return ('Ouvert', widget.courseColor);
     return ('À venir', Colors.grey);
   }
 
-  // ============================================================
-  // WIDGETS UI
-  // ============================================================
   Widget _statusBadge(String label, Color color) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
     decoration: BoxDecoration(
       color: color.withOpacity(0.12),
       borderRadius: BorderRadius.circular(100),
-      border: Border.all(color: color.withOpacity(0.3)),
+      border: Border.all(color: color.withOpacity(0.3), width: 0.8),
     ),
     child: Row(
       mainAxisSize: MainAxisSize.min,
@@ -412,7 +402,11 @@ class _DevoirsCoursPageState extends State<DevoirsCoursPage>
 
   Widget _infoChip(IconData icon, String label, Color color) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-    decoration: BoxDecoration(color: color.withOpacity(0.08), borderRadius: BorderRadius.circular(8)),
+    decoration: BoxDecoration(
+      color: color.withOpacity(0.08),
+      borderRadius: BorderRadius.circular(8),
+      border: Border.all(color: color.withOpacity(0.15), width: 0.5),
+    ),
     child: Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -431,17 +425,16 @@ class _DevoirsCoursPageState extends State<DevoirsCoursPage>
           decoration: BoxDecoration(
             gradient: LinearGradient(colors: [color, color.withOpacity(0.75)]),
             borderRadius: BorderRadius.circular(12),
-            boxShadow: [BoxShadow(color: color.withOpacity(0.25), blurRadius: 8)],
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, color: Colors.white, size: 16),
+              Icon(icon, color: _white, size: 16),
               const SizedBox(width: 6),
               Flexible(
                 child: Text(
                   label,
-                  style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                  style: const TextStyle(color: _white, fontSize: 13, fontWeight: FontWeight.bold),
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
@@ -458,7 +451,7 @@ class _DevoirsCoursPageState extends State<DevoirsCoursPage>
           decoration: BoxDecoration(
             color: color.withOpacity(0.08),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: color.withOpacity(0.3)),
+            border: Border.all(color: color.withOpacity(0.3), width: 1),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -486,28 +479,25 @@ class _DevoirsCoursPageState extends State<DevoirsCoursPage>
           decoration: BoxDecoration(
             color: color.withOpacity(0.08),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: color.withOpacity(0.25)),
+            border: Border.all(color: color.withOpacity(0.25), width: 1),
           ),
           child: Icon(icon, color: color, size: 20),
         ),
       );
 
-  // ============================================================
-  // BARRE DE FILTRES
-  // ============================================================
   Widget _buildFilters() {
     final filters = [
       ('tous', 'Tous', null),
       ('non_commence', 'À faire', _orange),
       ('en_cours', 'En cours', _purple),
-      ('soumis', 'Soumis', _teal),
+      ('soumis', 'Soumis', widget.courseColor),
       ('corrige', 'Corrigés', _green),
       ('en_retard', 'En retard', _red),
     ];
 
     return Container(
-      color: _bg,
-      padding: const EdgeInsets.symmetric(vertical: 10),
+      color: _bgLight,
+      padding: const EdgeInsets.symmetric(vertical: 12),
       child: Row(
         children: [
           Expanded(
@@ -517,7 +507,7 @@ class _DevoirsCoursPageState extends State<DevoirsCoursPage>
               child: Row(
                 children: filters.map((f) {
                   final sel = _filtreStatut == f.$1;
-                  final col = f.$3 ?? _teal;
+                  final col = f.$3 ?? widget.courseColor;
                   return GestureDetector(
                     onTap: () => setState(() => _filtreStatut = f.$1),
                     child: AnimatedContainer(
@@ -525,17 +515,19 @@ class _DevoirsCoursPageState extends State<DevoirsCoursPage>
                       margin: const EdgeInsets.only(right: 8),
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
                       decoration: BoxDecoration(
-                        color: sel ? col : Colors.white,
+                        color: sel ? col : _white,
                         borderRadius: BorderRadius.circular(100),
-                        border: Border.all(color: sel ? col : Colors.grey.shade200),
-                        boxShadow: sel ? [BoxShadow(color: col.withOpacity(0.25), blurRadius: 8)] : [],
+                        border: Border.all(
+                          color: sel ? col : _borderLight,
+                          width: sel ? 0 : 1,
+                        ),
                       ),
                       child: Text(
                         f.$2,
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w700,
-                          color: sel ? Colors.white : _dark,
+                          color: sel ? _white : _textDark,
                         ),
                       ),
                     ),
@@ -548,7 +540,7 @@ class _DevoirsCoursPageState extends State<DevoirsCoursPage>
             padding: const EdgeInsets.only(right: 16),
             child: Text(
               '${_filtres.length}',
-              style: const TextStyle(fontSize: 11, color: Colors.grey),
+              style: const TextStyle(fontSize: 11, color: _textLight),
             ),
           ),
         ],
@@ -556,16 +548,12 @@ class _DevoirsCoursPageState extends State<DevoirsCoursPage>
     );
   }
 
-  // ============================================================
-  // ACTIONS PAR STATUT
-  // ============================================================
   Widget _buildActions(DevoirCours d) {
-    // Vue enseignant
     if (widget.isEnseignantPrincipal) {
       return Row(
         children: [
           Expanded(
-            child: _outlineBtn('Questions', Icons.quiz_rounded, _teal, () {
+            child: _outlineBtn('Questions', Icons.quiz_rounded, widget.courseColor, () {
               _showQuestionsSheet(d);
             }),
           ),
@@ -579,7 +567,6 @@ class _DevoirsCoursPageState extends State<DevoirsCoursPage>
       );
     }
 
-    // Vue apprenant - Devoir corrigé
     if (d.estCorrige) {
       return Row(
         children: [
@@ -602,7 +589,7 @@ class _DevoirsCoursPageState extends State<DevoirsCoursPage>
             ),
           ),
           const SizedBox(width: 8),
-          _iconBtn(Icons.help_outline_rounded, _teal, () {
+          _iconBtn(Icons.help_outline_rounded, widget.courseColor, () {
             ouvrirPreoccupation(
               context: context,
               source: 'devoir',
@@ -616,7 +603,6 @@ class _DevoirsCoursPageState extends State<DevoirsCoursPage>
       );
     }
 
-    // Vue apprenant - Devoir soumis en attente
     if (d.aSoumis && !d.estCorrige) {
       return Row(
         children: [
@@ -626,7 +612,7 @@ class _DevoirsCoursPageState extends State<DevoirsCoursPage>
               decoration: BoxDecoration(
                 color: _orange.withOpacity(0.08),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: _orange.withOpacity(0.3)),
+                border: Border.all(color: _orange.withOpacity(0.3), width: 1),
               ),
               child: const Row(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -642,7 +628,7 @@ class _DevoirsCoursPageState extends State<DevoirsCoursPage>
             ),
           ),
           const SizedBox(width: 8),
-          _iconBtn(Icons.help_outline_rounded, _teal, () {
+          _iconBtn(Icons.help_outline_rounded, widget.courseColor, () {
             ouvrirPreoccupation(
               context: context,
               source: 'devoir',
@@ -656,36 +642,31 @@ class _DevoirsCoursPageState extends State<DevoirsCoursPage>
       );
     }
 
-    // Vue apprenant - Devoir non disponible
     if (!d.estOuvert || d.estExpire) {
       return Container(
         padding: const EdgeInsets.all(13),
         decoration: BoxDecoration(
-          color: Colors.grey.shade50,
+          color: _bgLight,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.grey.shade200),
+          border: Border.all(color: _borderLight, width: 1),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.lock_clock_rounded, color: Colors.grey.shade400, size: 16),
+            Icon(Icons.lock_clock_rounded, color: _textLight, size: 16),
             const SizedBox(width: 6),
             Text(
               d.estExpire ? 'Devoir expiré' : 'Non disponible',
-              style: TextStyle(color: Colors.grey.shade500, fontSize: 12),
+              style: TextStyle(color: _textLight, fontSize: 12),
             ),
           ],
         ),
       );
     }
 
-    // Vue apprenant - Devoir disponible
-    return _solidBtn('Commencer le devoir', Icons.play_arrow_rounded, _teal, () => _confirmerDemarrage(d));
+    return _solidBtn('Commencer le devoir', Icons.play_arrow_rounded, widget.courseColor, () => _confirmerDemarrage(d));
   }
 
-  // ============================================================
-  // ÉTAT VIDE
-  // ============================================================
   Widget _buildEmpty() {
     return Center(
       child: Padding(
@@ -695,19 +676,23 @@ class _DevoirsCoursPageState extends State<DevoirsCoursPage>
           children: [
             Container(
               padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(color: _teal.withOpacity(0.08), shape: BoxShape.circle),
-              child: const Icon(Icons.assignment_outlined, size: 48, color: _teal),
+              decoration: BoxDecoration(
+                color: widget.courseColor.withOpacity(0.08),
+                shape: BoxShape.circle,
+                border: Border.all(color: widget.courseColor.withOpacity(0.2), width: 1),
+              ),
+              child: Icon(Icons.assignment_outlined, size: 48, color: widget.courseColor),
             ),
             const SizedBox(height: 16),
             const Text(
               'Aucun devoir',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: _dark),
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: _textDark),
             ),
             const SizedBox(height: 8),
             const Text(
               'Les devoirs créés par l\'enseignant apparaîtront ici.',
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 13, color: Colors.grey),
+              style: TextStyle(fontSize: 13, color: _textLight),
             ),
           ],
         ),
@@ -715,21 +700,19 @@ class _DevoirsCoursPageState extends State<DevoirsCoursPage>
     );
   }
 
-  // ============================================================
-  // GESTION DES QUESTIONS (ENSEIGNANT)
-  // ============================================================
   void _showQuestionsSheet(DevoirCours d) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => _QuestionsSheet(devoirId: d.id, devoir: d),
+      builder: (_) => _QuestionsSheet(
+        devoirId: d.id,
+        devoir: d,
+        courseColor: widget.courseColor,
+      ),
     ).then((_) => _charger());
   }
 
-  // ============================================================
-  // GESTION DES SOUMISSIONS (ENSEIGNANT)
-  // ============================================================
   void _showGestionSoumissions(DevoirCours d) {
     showModalBottomSheet(
       context: context,
@@ -738,6 +721,7 @@ class _DevoirsCoursPageState extends State<DevoirsCoursPage>
       builder: (_) => _GestionSoumissionsSheet(
         devoir: d,
         noteSur: d.noteSur,
+        courseColor: widget.courseColor,
         fetchSoumissions: () => _fetchSoumissions(d.id),
         corrigerSoumission: _corrigerSoumission,
       ),
@@ -774,13 +758,10 @@ class _DevoirsCoursPageState extends State<DevoirsCoursPage>
     }
   }
 
-  // ============================================================
-  // BUILD PRINCIPAL
-  // ============================================================
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return const Center(child: CircularProgressIndicator(color: _teal));
+      return const Center(child: CircularProgressIndicator());
     }
 
     if (_devoirs.isEmpty) {
@@ -811,11 +792,9 @@ class _DevoirsCoursPageState extends State<DevoirsCoursPage>
                   child: Container(
                     margin: const EdgeInsets.only(bottom: 14),
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: _white,
                       borderRadius: BorderRadius.circular(20),
-                      boxShadow: [
-                        BoxShadow(color: _teal.withOpacity(0.07), blurRadius: 16, offset: const Offset(0, 6)),
-                      ],
+                      border: Border.all(color: _borderLight, width: 1.5),
                     ),
                     child: Column(
                       children: [
@@ -838,6 +817,7 @@ class _DevoirsCoursPageState extends State<DevoirsCoursPage>
                                     decoration: BoxDecoration(
                                       color: statusInfo.$2.withOpacity(0.1),
                                       borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(color: statusInfo.$2.withOpacity(0.2), width: 0.8),
                                     ),
                                     child: Icon(Icons.assignment_rounded, color: statusInfo.$2, size: 20),
                                   ),
@@ -848,14 +828,14 @@ class _DevoirsCoursPageState extends State<DevoirsCoursPage>
                                       children: [
                                         Text(
                                           d.titre,
-                                          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: _dark),
+                                          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: _textDark),
                                         ),
                                         const SizedBox(height: 2),
                                         Text(
                                           d.description,
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
-                                          style: const TextStyle(fontSize: 12, color: Colors.grey),
+                                          style: const TextStyle(fontSize: 12, color: _textLight),
                                         ),
                                       ],
                                     ),
@@ -869,7 +849,7 @@ class _DevoirsCoursPageState extends State<DevoirsCoursPage>
                                 runSpacing: 6,
                                 children: [
                                   _infoChip(Icons.calendar_today_rounded, _formatDate(d.dateLimite), d.estExpire ? _red : _orange),
-                                  _infoChip(Icons.timer_rounded, '${d.dureeMinutes}min', _teal),
+                                  _infoChip(Icons.timer_rounded, '${d.dureeMinutes}min', widget.courseColor),
                                   _infoChip(Icons.quiz_rounded, '${d.nbQuestions} question${d.nbQuestions > 1 ? 's' : ''}', _purple),
                                   _infoChip(Icons.grade_rounded, '/${d.noteSur.toStringAsFixed(0)}', _gold),
                                 ],
@@ -881,7 +861,7 @@ class _DevoirsCoursPageState extends State<DevoirsCoursPage>
                                   decoration: BoxDecoration(
                                     color: _green.withOpacity(0.08),
                                     borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(color: _green.withOpacity(0.25)),
+                                    border: Border.all(color: _green.withOpacity(0.25), width: 1),
                                   ),
                                   child: Row(
                                     children: [
@@ -889,7 +869,7 @@ class _DevoirsCoursPageState extends State<DevoirsCoursPage>
                                       const SizedBox(width: 8),
                                       Text(
                                         'Note : ${d.note!.toStringAsFixed(1)} / ${d.noteSur.toStringAsFixed(0)}',
-                                        style: const TextStyle(fontWeight: FontWeight.w800, color: _dark, fontSize: 15),
+                                        style: const TextStyle(fontWeight: FontWeight.w800, color: _textDark, fontSize: 15),
                                       ),
                                       const Spacer(),
                                       Container(
@@ -897,7 +877,7 @@ class _DevoirsCoursPageState extends State<DevoirsCoursPage>
                                         decoration: BoxDecoration(color: _green, borderRadius: BorderRadius.circular(100)),
                                         child: Text(
                                           '${(d.note! / d.noteSur * 100).toStringAsFixed(0)}%',
-                                          style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700),
+                                          style: const TextStyle(color: _white, fontSize: 12, fontWeight: FontWeight.w700),
                                         ),
                                       ),
                                     ],
@@ -928,8 +908,13 @@ class _DevoirsCoursPageState extends State<DevoirsCoursPage>
 class _QuestionsSheet extends StatefulWidget {
   final int devoirId;
   final DevoirCours devoir;
+  final Color courseColor;
 
-  const _QuestionsSheet({required this.devoirId, required this.devoir});
+  const _QuestionsSheet({
+    required this.devoirId,
+    required this.devoir,
+    required this.courseColor,
+  });
 
   @override
   State<_QuestionsSheet> createState() => _QuestionsSheetState();
@@ -1018,9 +1003,9 @@ class _QuestionsSheetState extends State<_QuestionsSheet> {
   Widget build(BuildContext context) {
     return Container(
       height: MediaQuery.of(context).size.height * 0.9,
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      decoration: BoxDecoration(
+        color: _white,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
       ),
       child: Column(
         children: [
@@ -1032,7 +1017,7 @@ class _QuestionsSheetState extends State<_QuestionsSheet> {
                   child: Container(
                     width: 40,
                     height: 4,
-                    decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(10)),
+                    decoration: BoxDecoration(color: _borderLight, borderRadius: BorderRadius.circular(10)),
                   ),
                 ),
                 const SizedBox(height: 14),
@@ -1040,18 +1025,21 @@ class _QuestionsSheetState extends State<_QuestionsSheet> {
                   children: [
                     Container(
                       padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(color: _teal.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
-                      child: const Icon(Icons.quiz_rounded, color: _teal, size: 20),
+                      decoration: BoxDecoration(
+                        color: widget.courseColor.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Icon(Icons.quiz_rounded, color: widget.courseColor, size: 20),
                     ),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('Questions', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                          const Text('Questions', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: _textDark)),
                           Text(
                             widget.devoir.titre,
-                            style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+                            style: TextStyle(fontSize: 12, color: _textLight),
                             overflow: TextOverflow.ellipsis,
                           ),
                         ],
@@ -1059,7 +1047,7 @@ class _QuestionsSheetState extends State<_QuestionsSheet> {
                     ),
                     Text(
                       '${_questions.length} question${_questions.length > 1 ? 's' : ''}',
-                      style: const TextStyle(fontSize: 12, color: _teal, fontWeight: FontWeight.bold),
+                      style: TextStyle(fontSize: 12, color: widget.courseColor, fontWeight: FontWeight.bold),
                     ),
                   ],
                 ),
@@ -1069,7 +1057,7 @@ class _QuestionsSheetState extends State<_QuestionsSheet> {
           const SizedBox(height: 8),
           Expanded(
             child: _loading
-                ? const Center(child: CircularProgressIndicator(color: _teal))
+                ? const Center(child: CircularProgressIndicator())
                 : ListView(
                     padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
                     children: [
@@ -1081,16 +1069,16 @@ class _QuestionsSheetState extends State<_QuestionsSheet> {
                             margin: const EdgeInsets.only(top: 8),
                             padding: const EdgeInsets.all(16),
                             decoration: BoxDecoration(
-                              color: _teal.withOpacity(0.05),
+                              color: widget.courseColor.withOpacity(0.05),
                               borderRadius: BorderRadius.circular(14),
-                              border: Border.all(color: _teal.withOpacity(0.2), style: BorderStyle.solid),
+                              border: Border.all(color: widget.courseColor.withOpacity(0.2), width: 1),
                             ),
-                            child: const Row(
+                            child: Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                Icon(Icons.add_circle_outline, color: _teal, size: 20),
-                                SizedBox(width: 8),
-                                Text('Ajouter une question', style: TextStyle(color: _teal, fontWeight: FontWeight.w700, fontSize: 14)),
+                                Icon(Icons.add_circle_outline, color: widget.courseColor, size: 20),
+                                const SizedBox(width: 8),
+                                Text('Ajouter une question', style: TextStyle(color: widget.courseColor, fontWeight: FontWeight.w700, fontSize: 14)),
                               ],
                             ),
                           ),
@@ -1110,10 +1098,9 @@ class _QuestionsSheetState extends State<_QuestionsSheet> {
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: _white,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.grey.shade100),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 8)],
+        border: Border.all(color: _borderLight, width: 1),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1122,8 +1109,11 @@ class _QuestionsSheetState extends State<_QuestionsSheet> {
             children: [
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(color: _teal.withOpacity(0.1), borderRadius: BorderRadius.circular(6)),
-                child: Text('Q$num', style: const TextStyle(color: _teal, fontWeight: FontWeight.bold, fontSize: 12)),
+                decoration: BoxDecoration(
+                  color: widget.courseColor.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text('Q$num', style: TextStyle(color: widget.courseColor, fontWeight: FontWeight.bold, fontSize: 12)),
               ),
               const SizedBox(width: 6),
               Container(
@@ -1143,7 +1133,7 @@ class _QuestionsSheetState extends State<_QuestionsSheet> {
             ],
           ),
           const SizedBox(height: 8),
-          Text(q.texte, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+          Text(q.texte, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: _textDark)),
           if (q.typeQuestion == 'qcm') ...[
             const SizedBox(height: 8),
             ...q.choix.map((c) => Padding(
@@ -1153,7 +1143,7 @@ class _QuestionsSheetState extends State<_QuestionsSheet> {
                   Icon(
                     c.estCorrect ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
                     size: 14,
-                    color: c.estCorrect ? _green : Colors.grey.shade400,
+                    color: c.estCorrect ? _green : _textLight,
                   ),
                   const SizedBox(width: 8),
                   Expanded(
@@ -1161,7 +1151,7 @@ class _QuestionsSheetState extends State<_QuestionsSheet> {
                       c.texte,
                       style: TextStyle(
                         fontSize: 13,
-                        color: c.estCorrect ? _green : Colors.grey.shade700,
+                        color: c.estCorrect ? _green : _textMedium,
                         fontWeight: c.estCorrect ? FontWeight.w600 : FontWeight.normal,
                       ),
                     ),
@@ -1180,14 +1170,14 @@ class _QuestionsSheetState extends State<_QuestionsSheet> {
       margin: const EdgeInsets.only(top: 8),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
+        color: _bgLight,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _teal.withOpacity(0.2)),
+        border: Border.all(color: widget.courseColor.withOpacity(0.3), width: 1),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Nouvelle question', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: _dark)),
+          const Text('Nouvelle question', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: _textDark)),
           const SizedBox(height: 12),
           Row(
             children: [
@@ -1205,14 +1195,14 @@ class _QuestionsSheetState extends State<_QuestionsSheet> {
           const SizedBox(height: 10),
           Row(
             children: [
-              const Text('Points :', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+              const Text('Points :', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: _textMedium)),
               const SizedBox(width: 12),
-              _cBtn(Icons.remove, _teal, _points > 1 ? () => setState(() => _points--) : null),
+              _cBtn(Icons.remove, widget.courseColor, _points > 1 ? () => setState(() => _points--) : null),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
-                child: Text('$_points', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+                child: Text('$_points', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: _textDark)),
               ),
-              _cBtn(Icons.add, _teal, _points < 20 ? () => setState(() => _points++) : null),
+              _cBtn(Icons.add, widget.courseColor, _points < 20 ? () => setState(() => _points++) : null),
             ],
           ),
           if (_type == 'qcm') ...[
@@ -1232,9 +1222,9 @@ class _QuestionsSheetState extends State<_QuestionsSheet> {
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         color: _choixCorrect[e.key] ? _green : Colors.transparent,
-                        border: Border.all(color: _choixCorrect[e.key] ? _green : Colors.grey.shade300, width: 2),
+                        border: Border.all(color: _choixCorrect[e.key] ? _green : _borderMedium, width: 2),
                       ),
-                      child: _choixCorrect[e.key] ? const Icon(Icons.check, size: 12, color: Colors.white) : null,
+                      child: _choixCorrect[e.key] ? const Icon(Icons.check, size: 12, color: _white) : null,
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -1252,8 +1242,8 @@ class _QuestionsSheetState extends State<_QuestionsSheet> {
                 _choixCtrl.add(TextEditingController());
                 _choixCorrect.add(false);
               }),
-              icon: const Icon(Icons.add, size: 14),
-              label: const Text('Ajouter un choix', style: TextStyle(fontSize: 12)),
+              icon: const Icon(Icons.add, size: 14, color: _purple),
+              label: const Text('Ajouter un choix', style: TextStyle(fontSize: 12, color: _purple)),
             ),
           ],
           const SizedBox(height: 12),
@@ -1261,15 +1251,15 @@ class _QuestionsSheetState extends State<_QuestionsSheet> {
             children: [
               TextButton(
                 onPressed: () => setState(() => _showForm = false),
-                child: const Text('Annuler'),
+                child: const Text('Annuler', style: TextStyle(color: _textMedium)),
               ),
               const Spacer(),
               ElevatedButton.icon(
                 onPressed: _ajouterQuestion,
-                icon: const Icon(Icons.save_rounded, size: 16, color: Colors.white),
-                label: const Text('Enregistrer', style: TextStyle(color: Colors.white)),
+                icon: const Icon(Icons.save_rounded, size: 16, color: _white),
+                label: const Text('Enregistrer', style: TextStyle(color: _white)),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: _teal,
+                  backgroundColor: widget.courseColor,
                   elevation: 0,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                 ),
@@ -1289,20 +1279,20 @@ class _QuestionsSheetState extends State<_QuestionsSheet> {
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 10),
           decoration: BoxDecoration(
-            color: sel ? _teal : Colors.white,
+            color: sel ? widget.courseColor : _white,
             borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: sel ? _teal : Colors.grey.shade300),
+            border: Border.all(color: sel ? widget.courseColor : _borderLight, width: 1),
           ),
           child: Column(
             children: [
-              Icon(icon, size: 16, color: sel ? Colors.white : Colors.grey.shade500),
+              Icon(icon, size: 16, color: sel ? _white : _textMedium),
               const SizedBox(height: 3),
               Text(
                 label,
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w600,
-                  color: sel ? Colors.white : Colors.grey.shade600,
+                  color: sel ? _white : _textMedium,
                 ),
                 textAlign: TextAlign.center,
               ),
@@ -1319,22 +1309,22 @@ class _QuestionsSheetState extends State<_QuestionsSheet> {
       width: 30,
       height: 30,
       decoration: BoxDecoration(
-        color: onTap != null ? col.withOpacity(0.1) : Colors.grey.shade100,
+        color: onTap != null ? col.withOpacity(0.1) : _borderLight,
         borderRadius: BorderRadius.circular(8),
       ),
-      child: Icon(icon, size: 16, color: onTap != null ? col : Colors.grey.shade400),
+      child: Icon(icon, size: 16, color: onTap != null ? col : _textLight),
     ),
   );
 
   InputDecoration _inputDeco(String hint) => InputDecoration(
     hintText: hint,
-    hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 13),
+    hintStyle: TextStyle(color: _textLight, fontSize: 13),
     filled: true,
-    fillColor: Colors.white,
+    fillColor: _white,
     contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey.shade200)),
-    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey.shade200)),
-    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: _teal)),
+    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: _borderLight, width: 1)),
+    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: _borderLight, width: 1)),
+    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: widget.courseColor, width: 1.5)),
   );
 }
 
@@ -1344,12 +1334,14 @@ class _QuestionsSheetState extends State<_QuestionsSheet> {
 class _GestionSoumissionsSheet extends StatefulWidget {
   final DevoirCours devoir;
   final double noteSur;
+  final Color courseColor;
   final Future<List<SoumissionItem>> Function() fetchSoumissions;
   final Future<bool> Function(int, double, String) corrigerSoumission;
 
   const _GestionSoumissionsSheet({
     required this.devoir,
     required this.noteSur,
+    required this.courseColor,
     required this.fetchSoumissions,
     required this.corrigerSoumission,
   });
@@ -1402,9 +1394,9 @@ class _GestionSoumissionsSheetState extends State<_GestionSoumissionsSheet>
   Widget build(BuildContext context) {
     return Container(
       height: MediaQuery.of(context).size.height * 0.92,
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      decoration: BoxDecoration(
+        color: _white,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
       ),
       child: Column(
         children: [
@@ -1416,7 +1408,7 @@ class _GestionSoumissionsSheetState extends State<_GestionSoumissionsSheet>
                   child: Container(
                     width: 40,
                     height: 4,
-                    decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(10)),
+                    decoration: BoxDecoration(color: _borderLight, borderRadius: BorderRadius.circular(10)),
                   ),
                 ),
                 const SizedBox(height: 14),
@@ -1424,7 +1416,10 @@ class _GestionSoumissionsSheetState extends State<_GestionSoumissionsSheet>
                   children: [
                     Container(
                       padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(color: _purple.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+                      decoration: BoxDecoration(
+                        color: _purple.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
                       child: const Icon(Icons.people_alt_outlined, color: _purple, size: 20),
                     ),
                     const SizedBox(width: 10),
@@ -1432,10 +1427,10 @@ class _GestionSoumissionsSheetState extends State<_GestionSoumissionsSheet>
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('Soumissions', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                          const Text('Soumissions', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: _textDark)),
                           Text(
                             widget.devoir.titre,
-                            style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+                            style: TextStyle(fontSize: 12, color: _textLight),
                             overflow: TextOverflow.ellipsis,
                           ),
                         ],
@@ -1444,7 +1439,10 @@ class _GestionSoumissionsSheetState extends State<_GestionSoumissionsSheet>
                     if (!_loading)
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                        decoration: BoxDecoration(color: _purple.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+                        decoration: BoxDecoration(
+                          color: _purple.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
                         child: Text(
                           '${_soumissions.length} soumis',
                           style: const TextStyle(color: _purple, fontWeight: FontWeight.bold, fontSize: 12),
@@ -1455,9 +1453,9 @@ class _GestionSoumissionsSheetState extends State<_GestionSoumissionsSheet>
                 const SizedBox(height: 12),
                 TabBar(
                   controller: _tabs,
-                  labelColor: _teal,
-                  unselectedLabelColor: Colors.grey,
-                  indicatorColor: _teal,
+                  labelColor: widget.courseColor,
+                  unselectedLabelColor: _textLight,
+                  indicatorColor: widget.courseColor,
                   labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
                   tabs: [
                     Tab(text: 'Tous (${_soumissions.length})'),
@@ -1470,7 +1468,7 @@ class _GestionSoumissionsSheetState extends State<_GestionSoumissionsSheet>
           ),
           Expanded(
             child: _loading
-                ? const Center(child: CircularProgressIndicator(color: _teal))
+                ? const Center(child: CircularProgressIndicator())
                 : TabBarView(
                     controller: _tabs,
                     children: [
@@ -1487,7 +1485,7 @@ class _GestionSoumissionsSheetState extends State<_GestionSoumissionsSheet>
 
   Widget _listeSoumissions(List<SoumissionItem> list) {
     if (list.isEmpty) {
-      return const Center(child: Text('Aucune soumission', style: TextStyle(color: Colors.grey)));
+      return const Center(child: Text('Aucune soumission', style: TextStyle(color: _textLight)));
     }
     return ListView.builder(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
@@ -1502,17 +1500,20 @@ class _GestionSoumissionsSheetState extends State<_GestionSoumissionsSheet>
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: _white,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.grey.shade100),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 8)],
+        border: Border.all(color: _borderLight, width: 1),
       ),
       child: Row(
         children: [
           Container(
             width: 40,
             height: 40,
-            decoration: BoxDecoration(color: col.withOpacity(0.1), shape: BoxShape.circle),
+            decoration: BoxDecoration(
+              color: col.withOpacity(0.1),
+              shape: BoxShape.circle,
+              border: Border.all(color: col.withOpacity(0.2), width: 1),
+            ),
             child: Center(
               child: Text(
                 s.apprenantNom.isNotEmpty ? s.apprenantNom[0].toUpperCase() : '?',
@@ -1527,7 +1528,7 @@ class _GestionSoumissionsSheetState extends State<_GestionSoumissionsSheet>
               children: [
                 Text(
                   s.apprenantNom.isNotEmpty ? s.apprenantNom : s.apprenantUsername,
-                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: _textDark),
                 ),
                 if (s.note != null)
                   Text(
@@ -1544,8 +1545,11 @@ class _GestionSoumissionsSheetState extends State<_GestionSoumissionsSheet>
               onTap: () => _showCorrectionDialog(s),
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(color: _teal, borderRadius: BorderRadius.circular(10)),
-                child: const Text('Corriger', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                decoration: BoxDecoration(
+                  color: widget.courseColor,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Text('Corriger', style: TextStyle(color: _white, fontWeight: FontWeight.bold, fontSize: 12)),
               ),
             ),
           if (s.estSuspecte)
@@ -1566,7 +1570,8 @@ class _GestionSoumissionsSheetState extends State<_GestionSoumissionsSheet>
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text('Corriger : ${s.apprenantNom}'),
+        backgroundColor: _white,
+        title: Text('Corriger : ${s.apprenantNom}', style: const TextStyle(fontWeight: FontWeight.bold, color: _textDark)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -1575,14 +1580,14 @@ class _GestionSoumissionsSheetState extends State<_GestionSoumissionsSheet>
                 children: [
                   Text(
                     '${note.toStringAsFixed(1)} / ${widget.noteSur.toStringAsFixed(0)}',
-                    style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: _teal),
+                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: widget.courseColor),
                   ),
                   Slider(
                     value: note,
                     min: 0,
                     max: widget.noteSur,
                     divisions: (widget.noteSur * 2).toInt(),
-                    activeColor: _teal,
+                    activeColor: widget.courseColor,
                     onChanged: (v) => setS(() => note = v),
                   ),
                 ],
@@ -1600,15 +1605,19 @@ class _GestionSoumissionsSheetState extends State<_GestionSoumissionsSheet>
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Annuler')),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Annuler', style: TextStyle(color: _textMedium))),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: _teal, elevation: 0),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: widget.courseColor,
+              elevation: 0,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
             onPressed: () async {
               Navigator.pop(ctx);
               final ok = await widget.corrigerSoumission(s.id, note, commentCtrl.text);
               if (ok) _load();
             },
-            child: const Text('Valider', style: TextStyle(color: Colors.white)),
+            child: const Text('Valider', style: TextStyle(color: _white)),
           ),
         ],
       ),

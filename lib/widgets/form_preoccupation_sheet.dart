@@ -7,16 +7,29 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:yeki/views/pages/apprenants/cours_detail_page.dart';
 import 'package:yeki/views/pages/apprenants/forum_page.dart';
 
+// Palette harmonisée
+const Color brandBackground = Color(0xFF135F74);
+const Color actionOrange = Color(0xFFFF6B00);
+const Color _textDark = Color(0xFF1A1C1E);
+//const Color _textMedium = Color(0xFF5A5C5E);
+const Color _textLight = Color(0xFF8A8C8E);
+const Color _borderLight = Color(0xFFE0E4E8);
+//const Color _borderMedium = Color(0xFFD0D4D8);
+const Color _bgLight = Color(0xFFF8FAFC);
+const Color _white = Color(0xFFFFFFFF);
+const Color _green = Color(0xFF10B981);
+const Color _red = Color(0xFFEF4444);
+const Color _blue = Color(0xFF3B82F6);
+const Color _purple = Color(0xFFA855F7);
+const Color _orange = Color(0xFFF97316);
+
 const String _basePreocc = 'https://yeki.pythonanywhere.com/api';
-const Color _pBlue = Color(0xFF2884A0);
-const Color _pCard = Color(0xFF1C2128);
-const Color _pBord = Color(0xFF30363D);
 
 const Map<String, Color> _srcColP = {
-  'lecon': Color(0xFF3B82F6),
-  'exercice': Color(0xFFA855F7),
-  'devoir': Color(0xFFF97316),
-  'libre': Color(0xFF22C55E),
+  'lecon': _blue,
+  'exercice': _purple,
+  'devoir': _orange,
+  'libre': _green,
 };
 
 const Map<String, IconData> _srcIcoP = {
@@ -34,6 +47,7 @@ void ouvrirPreoccupation({
   String? leconTitre,
   int? coursId,
   String? coursTitre,
+  int? coursColor,
   int? exerciceId,
   String? exerciceTitre,
   int? devoirId,
@@ -53,6 +67,7 @@ void ouvrirPreoccupation({
       leconTitre: leconTitre,
       coursId: coursId,
       coursTitre: coursTitre,
+      coursColor: coursColor,
       exerciceId: exerciceId,
       exerciceTitre: exerciceTitre,
       devoirId: devoirId,
@@ -71,6 +86,7 @@ class _PreoccupationSheet extends StatefulWidget {
   final String? leconTitre;
   final int? coursId;
   final String? coursTitre;
+  final int? coursColor;
   final int? exerciceId;
   final String? exerciceTitre;
   final int? devoirId;
@@ -83,7 +99,7 @@ class _PreoccupationSheet extends StatefulWidget {
     required this.source,
     required this.contenuPrefill,
     this.leconId, this.leconTitre,
-    this.coursId, this.coursTitre,
+    this.coursId, this.coursTitre, this.coursColor,
     this.exerciceId, this.exerciceTitre,
     this.devoirId, this.devoirTitre,
     this.tabController,
@@ -115,7 +131,14 @@ class _PreoccupationSheetState extends State<_PreoccupationSheet> {
     final texte = _ctrl.text.trim();
     if (texte.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Écrivez votre question.'), backgroundColor: Colors.orange));
+        SnackBar(
+          content: const Text('Écrivez votre question.'),
+          backgroundColor: _orange,
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.all(16),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      );
       return;
     }
 
@@ -175,6 +198,7 @@ class _PreoccupationSheetState extends State<_PreoccupationSheet> {
               builder: (_) => CoursDetailTabs(
                 coursId: widget.coursId!.toString(),
                 titre: widget.coursTitre!,
+                coursColor: widget.coursColor ?? brandBackground.value,
                 isPremium: true,
                 initialTab: widget.forumTabIndex,
                 scrollToQuestionId: newId,
@@ -186,11 +210,16 @@ class _PreoccupationSheetState extends State<_PreoccupationSheet> {
             context,
             MaterialPageRoute(
               builder: (_) => Scaffold(
-                backgroundColor: const Color(0xFF0D1117),
+                backgroundColor: _bgLight,
                 appBar: AppBar(
-                  backgroundColor: const Color(0xFF161B22),
-                  title: const Text('Forum', style: TextStyle(color: Colors.white)),
-                  iconTheme: const IconThemeData(color: Colors.white),
+                  backgroundColor: _white,
+                  title: const Text('Forum', style: TextStyle(color: _textDark)),
+                  iconTheme: const IconThemeData(color: _textDark),
+                  elevation: 0,
+                  bottom: const PreferredSize(
+                    preferredSize: Size.fromHeight(1),
+                    child: Divider(height: 1, color: _borderLight),
+                  ),
                 ),
                 body: ForumPage(scrollToQuestionId: newId),
               ),
@@ -199,19 +228,35 @@ class _PreoccupationSheetState extends State<_PreoccupationSheet> {
         }
 
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('✓ Question envoyée au forum !'),
-            backgroundColor: Color(0xFF10B981),
+          SnackBar(
+            content: const Text('✓ Question envoyée au forum !'),
+            backgroundColor: _green,
             behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.all(16),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Erreur lors de l\'envoi.'), backgroundColor: Colors.red));
+          SnackBar(
+            content: const Text('Erreur lors de l\'envoi.'),
+            backgroundColor: _red,
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.all(16),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        );
       }
     } catch (_) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Erreur réseau.'), backgroundColor: Colors.red));
+        SnackBar(
+          content: const Text('Erreur réseau.'),
+          backgroundColor: _red,
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.all(16),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      );
     }
 
     if (mounted) setState(() => _sending = false);
@@ -219,14 +264,14 @@ class _PreoccupationSheetState extends State<_PreoccupationSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final col = _srcColP[widget.source] ?? _pBlue;
+    final col = _srcColP[widget.source] ?? brandBackground;
     final ico = _srcIcoP[widget.source] ?? Icons.help_outline_rounded;
     final contextLabel = _contextLabel();
 
     return Container(
-      decoration: const BoxDecoration(
-        color: Color(0xFF161B22),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      decoration: BoxDecoration(
+        color: _white,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
       ),
       padding: EdgeInsets.only(
         left: 24, right: 24, top: 16,
@@ -235,23 +280,27 @@ class _PreoccupationSheetState extends State<_PreoccupationSheet> {
       child: Column(mainAxisSize: MainAxisSize.min, children: [
         Center(child: Container(
           width: 40, height: 4,
-          decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(10)),
+          decoration: BoxDecoration(color: _borderLight, borderRadius: BorderRadius.circular(10)),
         )),
         const SizedBox(height: 20),
         Row(children: [
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: col.withOpacity(0.15), borderRadius: BorderRadius.circular(12)),
+              color: col.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: col.withOpacity(0.2), width: 0.8),
+            ),
             child: Icon(ico, color: col, size: 20),
           ),
           const SizedBox(width: 12),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Text('Poser une question', style: TextStyle(
-              color: Colors.white, fontSize: 17, fontWeight: FontWeight.w800)),
+            Text('Poser une question',
+                style: TextStyle(color: _textDark, fontSize: 18, fontWeight: FontWeight.w800)),
             if (contextLabel.isNotEmpty)
-              Text(contextLabel, style: TextStyle(fontSize: 12, color: col, fontWeight: FontWeight.w600),
-                maxLines: 1, overflow: TextOverflow.ellipsis),
+              Text(contextLabel,
+                  style: TextStyle(fontSize: 12, color: col, fontWeight: FontWeight.w600),
+                  maxLines: 1, overflow: TextOverflow.ellipsis),
           ])),
         ]),
         const SizedBox(height: 16),
@@ -260,7 +309,7 @@ class _PreoccupationSheetState extends State<_PreoccupationSheet> {
           decoration: BoxDecoration(
             color: col.withOpacity(0.08),
             borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: col.withOpacity(0.25)),
+            border: Border.all(color: col.withOpacity(0.25), width: 0.8),
           ),
           child: Row(children: [
             Icon(Icons.link_rounded, size: 13, color: col),
@@ -275,19 +324,20 @@ class _PreoccupationSheetState extends State<_PreoccupationSheet> {
         const SizedBox(height: 14),
         Container(
           decoration: BoxDecoration(
-            color: _pCard, borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: _pBord),
+            color: _bgLight,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: _borderLight, width: 1),
           ),
           child: TextField(
             controller: _ctrl,
             maxLines: 5,
             autofocus: true,
-            style: const TextStyle(color: Colors.white, fontSize: 14, height: 1.6),
-            decoration: const InputDecoration(
+            style: TextStyle(color: _textDark, fontSize: 14, height: 1.6),
+            decoration: InputDecoration(
               hintText: 'Décrivez votre préoccupation en détail...',
-              hintStyle: TextStyle(color: Colors.white30, fontSize: 13),
+              hintStyle: TextStyle(color: _textLight, fontSize: 13),
               border: InputBorder.none,
-              contentPadding: EdgeInsets.all(14),
+              contentPadding: const EdgeInsets.all(14),
             ),
           ),
         ),
@@ -299,19 +349,18 @@ class _PreoccupationSheetState extends State<_PreoccupationSheet> {
             child: Container(
               padding: const EdgeInsets.symmetric(vertical: 14),
               decoration: BoxDecoration(
-                gradient: LinearGradient(colors: [col, col.withOpacity(0.7)]),
+                gradient: LinearGradient(colors: [col, col.withOpacity(0.8)]),
                 borderRadius: BorderRadius.circular(14),
-                boxShadow: [BoxShadow(color: col.withOpacity(0.3), blurRadius: 12)],
               ),
               child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
                 if (_sending)
-                  const SizedBox(width: 18, height: 18,
-                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                  SizedBox(width: 20, height: 20,
+                      child: CircularProgressIndicator(color: _white, strokeWidth: 2))
                 else ...[
-                  const Icon(Icons.send_rounded, color: Colors.white, size: 18),
+                  const Icon(Icons.send_rounded, color: _white, size: 18),
                   const SizedBox(width: 8),
                   const Text('Envoyer au forum', style: TextStyle(
-                    color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),
+                    color: _white, fontSize: 15, fontWeight: FontWeight.bold)),
                 ],
               ]),
             ),
@@ -319,7 +368,7 @@ class _PreoccupationSheetState extends State<_PreoccupationSheet> {
         ),
         const SizedBox(height: 6),
         Text('Vous serez redirigé vers le forum après envoi.',
-            style: TextStyle(fontSize: 11, color: Colors.white38)),
+            style: TextStyle(fontSize: 11, color: _textLight)),
       ]),
     );
   }

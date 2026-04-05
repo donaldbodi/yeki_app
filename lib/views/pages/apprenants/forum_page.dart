@@ -1,5 +1,3 @@
-// lib/views/pages/apprenants/forum_page.dart
-
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
@@ -11,21 +9,28 @@ import 'package:yeki/views/pages/apprenants/lecture_lecon_page.dart';
 import 'package:yeki/views/pages/apprenants/passer_exercice.dart';
 import 'package:yeki/views/pages/apprenants/resultat_devoir_page.dart';
 
+// Palette harmonisée
+const Color brandBackground = Color(0xFF135F74);
+const Color actionOrange = Color(0xFFFF6B00);
+const Color _textDark = Color(0xFF1A1C1E);
+const Color _textMedium = Color(0xFF5A5C5E);
+const Color _textLight = Color(0xFF8A8C8E);
+const Color _borderLight = Color(0xFFE0E4E8);
+//const Color _borderMedium = Color(0xFFD0D4D8);
+const Color _bgLight = Color(0xFFF8FAFC);
+const Color _white = Color(0xFFFFFFFF);
+const Color _green = Color(0xFF10B981);
+const Color _blue = Color(0xFF3B82F6);
+const Color _purple = Color(0xFFA855F7);
+const Color _orange = Color(0xFFF97316);
+
 const String _base = 'https://yeki.pythonanywhere.com/api';
 
-// ── Palette forum sombre ──────────────────────────────────────────
-const Color _ink = Color(0xFF0D1117);
-const Color _surface = Color(0xFF161B22);
-const Color _card = Color(0xFF1C2128);
-const Color _border = Color(0xFF30363D);
-const Color _teal = Color(0xFF2884A0);
-const Color _tealLight = Color(0xFF39A0C2);
-
 const Map<String, Color> _srcColor = {
-  'lecon': Color(0xFF3B82F6),
-  'exercice': Color(0xFFA855F7),
-  'devoir': Color(0xFFF97316),
-  'libre': Color(0xFF22C55E),
+  'lecon': _blue,
+  'exercice': _purple,
+  'devoir': _orange,
+  'libre': _green,
 };
 const Map<String, IconData> _srcIcon = {
   'lecon': Icons.play_lesson_rounded,
@@ -40,9 +45,32 @@ const Map<String, String> _srcLabel = {
   'libre': 'Libre',
 };
 
-// ─────────────────────────────────────────────────────────────────
-// MODÈLES
-// ─────────────────────────────────────────────────────────────────
+Future<String?> _getToken() async {
+  final prefs = await SharedPreferences.getInstance();
+  return prefs.getString('token');
+}
+
+Map<String, String> _getHeaders(String? token) => {
+      'Content-Type': 'application/json',
+      if (token != null) 'Authorization': 'Token $token',
+    };
+
+String _formatTimeAgo(String iso) {
+  try {
+    return timeago.format(DateTime.parse(iso).toLocal(), locale: 'fr');
+  } catch (_) {
+    return '';
+  }
+}
+
+String _getInitials(String nom, String username) {
+  final n = nom.isNotEmpty ? nom : username;
+  if (n.isEmpty) return '?';
+  final parts = n.trim().split(' ');
+  if (parts.length >= 2) return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
+  return n[0].toUpperCase();
+}
+
 class QForum {
   final int id;
   final String contenu, source, creeLe;
@@ -156,35 +184,6 @@ class RepForum {
       );
 }
 
-// ─────────────────────────────────────────────────────────────────
-// HELPERS
-// ─────────────────────────────────────────────────────────────────
-Future<String?> _getToken() async {
-  final prefs = await SharedPreferences.getInstance();
-  return prefs.getString('token');
-}
-
-Map<String, String> _getHeaders(String? token) => {
-      'Content-Type': 'application/json',
-      if (token != null) 'Authorization': 'Token $token',
-    };
-
-String _formatTimeAgo(String iso) {
-  try {
-    return timeago.format(DateTime.parse(iso).toLocal(), locale: 'fr');
-  } catch (_) {
-    return '';
-  }
-}
-
-String _getInitials(String nom, String username) {
-  final n = nom.isNotEmpty ? nom : username;
-  if (n.isEmpty) return '?';
-  final parts = n.trim().split(' ');
-  if (parts.length >= 2) return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
-  return n[0].toUpperCase();
-}
-
 // ════════════════════════════════════════════════════════════════
 // PAGE FORUM
 // ════════════════════════════════════════════════════════════════
@@ -200,6 +199,7 @@ class ForumPage extends StatefulWidget {
   final String? preoccupationExerciceTitre;
   final int? preoccupationDevoirId;
   final String? preoccupationDevoirTitre;
+  final int? coursColor;
 
   const ForumPage({
     super.key,
@@ -214,6 +214,7 @@ class ForumPage extends StatefulWidget {
     this.preoccupationExerciceTitre,
     this.preoccupationDevoirId,
     this.preoccupationDevoirTitre,
+    this.coursColor,
   });
 
   @override
@@ -235,12 +236,13 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin {
   bool _sending = false;
   String _composerSource = 'libre';
 
+  Color get _accentColor => widget.coursColor != null ? Color(widget.coursColor!) : brandBackground;
+
   @override
   void initState() {
     super.initState();
     timeago.setLocaleMessages('fr', timeago.FrMessages());
-    _listCtrl = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 600));
+    _listCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 600));
     _loadQuestions();
 
     _poll = Timer.periodic(const Duration(seconds: 15), (_) => _loadQuestions(silent: true));
@@ -264,7 +266,6 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin {
     super.dispose();
   }
 
-  // Navigation vers la source d'origine
   void _navigateToSource(QForum q) {
     if (q.source == 'lecon' && q.leconId != null && q.coursId != null) {
       Navigator.push(
@@ -274,6 +275,7 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin {
             leconId: q.leconId!,
             coursId: q.coursId!,
             coursTitre: q.coursTitre,
+            coursColor: widget.coursColor ?? _accentColor.value,
           ),
         ),
       );
@@ -303,7 +305,6 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin {
     }
   }
 
-  // Charger les questions depuis l'API
   Future<void> _loadQuestions({bool silent = false}) async {
     if (!silent && mounted) setState(() => _loading = true);
 
@@ -325,8 +326,7 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin {
 
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(response.body);
-        final List<QForum> questions =
-            data.map((j) => QForum.fromJson(j as Map<String, dynamic>)).toList();
+        final List<QForum> questions = data.map((j) => QForum.fromJson(j as Map<String, dynamic>)).toList();
 
         if (mounted) {
           setState(() {
@@ -335,7 +335,6 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin {
           });
           _listCtrl.forward(from: 0);
 
-          // Scroll vers la question ciblée
           if (widget.scrollToQuestionId != null) {
             final idx = questions.indexWhere((q) => q.id == widget.scrollToQuestionId);
             if (idx >= 0) {
@@ -362,7 +361,6 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin {
     }
   }
 
-  // Envoyer une nouvelle question
   Future<void> _envoyerQuestion() async {
     final texte = _composerCtrl.text.trim();
     if (texte.isEmpty) {
@@ -384,7 +382,6 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin {
       'source': _composerSource,
     };
 
-    // Ajouter le contexte si disponible
     if (widget.preoccupationLeconId != null) {
       body['lecon_id'] = widget.preoccupationLeconId;
       body['lecon_titre'] = widget.preoccupationLeconTitre ?? '';
@@ -435,9 +432,11 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(message),
-        backgroundColor: isError ? Colors.red : Colors.green,
+        content: Text(message, style: const TextStyle(color: _white)),
+        backgroundColor: isError ? Colors.red : _green,
         behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.all(16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         duration: const Duration(seconds: 2),
       ),
     );
@@ -459,7 +458,7 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: _ink,
+      color: _bgLight,
       child: Column(
         children: [
           _buildHeader(),
@@ -481,7 +480,7 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin {
   Widget _buildContent() {
     if (_loading) {
       return const Center(
-        child: CircularProgressIndicator(color: _teal),
+        child: CircularProgressIndicator(),
       );
     }
 
@@ -492,14 +491,12 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin {
     }
 
     return RefreshIndicator(
-      color: _teal,
-      backgroundColor: _card,
+      color: _accentColor,
+      backgroundColor: _white,
       onRefresh: () => _loadQuestions(),
       child: ListView.builder(
         controller: _scrollCtrl,
-        physics: const AlwaysScrollableScrollPhysics(
-          parent: BouncingScrollPhysics(),
-        ),
+        physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
         padding: const EdgeInsets.fromLTRB(12, 8, 12, 100),
         itemCount: filtered.length,
         itemBuilder: (context, index) {
@@ -511,10 +508,7 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin {
           return FadeTransition(
             opacity: animation,
             child: SlideTransition(
-              position: Tween<Offset>(
-                begin: const Offset(0, 0.2),
-                end: Offset.zero,
-              ).animate(animation),
+              position: Tween<Offset>(begin: const Offset(0, 0.2), end: Offset.zero).animate(animation),
               child: _buildQuestionCard(filtered[index]),
             ),
           );
@@ -527,18 +521,18 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin {
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 10),
       decoration: BoxDecoration(
-        color: _surface,
-        border: Border(bottom: BorderSide(color: _border)),
+        color: _white,
+        border: Border(bottom: BorderSide(color: _borderLight)),
       ),
       child: Row(
         children: [
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              gradient: const LinearGradient(colors: [_teal, _tealLight]),
+              gradient: LinearGradient(colors: [_accentColor, _accentColor.withOpacity(0.7)]),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: const Icon(Icons.forum_rounded, color: Colors.white, size: 20),
+            child: const Icon(Icons.forum_rounded, color: _white, size: 20),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -547,15 +541,11 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin {
               children: [
                 const Text(
                   'Forum',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800,
-                  ),
+                  style: TextStyle(color: _textDark, fontSize: 18, fontWeight: FontWeight.w800),
                 ),
                 Text(
                   '${_questions.length} préoccupation${_questions.length > 1 ? 's' : ''}',
-                  style: const TextStyle(color: Colors.white54, fontSize: 12),
+                  style: const TextStyle(color: _textLight, fontSize: 12),
                 ),
               ],
             ),
@@ -572,16 +562,16 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin {
               duration: const Duration(milliseconds: 200),
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               decoration: BoxDecoration(
-                color: _composerVisible ? _teal : _teal.withOpacity(0.15),
+                color: _composerVisible ? _accentColor : _accentColor.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: _teal.withOpacity(0.4)),
+                border: Border.all(color: _accentColor.withOpacity(0.4)),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(
                     _composerVisible ? Icons.close_rounded : Icons.add_rounded,
-                    color: _composerVisible ? Colors.white : _teal,
+                    color: _composerVisible ? _white : _accentColor,
                     size: 16,
                   ),
                   const SizedBox(width: 5),
@@ -590,7 +580,7 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin {
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
-                      color: _composerVisible ? Colors.white : _teal,
+                      color: _composerVisible ? _white : _accentColor,
                     ),
                   ),
                 ],
@@ -599,7 +589,7 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin {
           ),
           IconButton(
             onPressed: () => _loadQuestions(),
-            icon: const Icon(Icons.refresh_rounded, color: Colors.white54, size: 20),
+            icon: Icon(Icons.refresh_rounded, color: _textMedium, size: 20),
           ),
         ],
       ),
@@ -616,14 +606,14 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin {
     ];
 
     return Container(
-      color: _surface,
+      color: _white,
       padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: Row(
           children: items.map((item) {
             final isSelected = _sourceFiltre == item.$1;
-            final color = item.$3 ?? _teal;
+            final color = item.$3 ?? _accentColor;
             return GestureDetector(
               onTap: () {
                 setState(() => _sourceFiltre = item.$1);
@@ -634,16 +624,16 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin {
                 margin: const EdgeInsets.only(right: 8),
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
                 decoration: BoxDecoration(
-                  color: isSelected ? color.withOpacity(0.2) : Colors.transparent,
+                  color: isSelected ? color.withOpacity(0.1) : Colors.transparent,
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: isSelected ? color : _border),
+                  border: Border.all(color: isSelected ? color : _borderLight),
                 ),
                 child: Text(
                   item.$2,
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w700,
-                    color: isSelected ? color : Colors.white54,
+                    color: isSelected ? color : _textMedium,
                   ),
                 ),
               ),
@@ -656,25 +646,25 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin {
 
   Widget _buildSearchBar() {
     return Container(
-      color: _surface,
+      color: _white,
       padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
       child: Container(
         decoration: BoxDecoration(
-          color: _card,
+          color: _bgLight,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: _border),
+          border: Border.all(color: _borderLight),
         ),
         child: TextField(
           controller: _searchCtrl,
           onChanged: (value) => setState(() => _searchText = value),
-          style: const TextStyle(color: Colors.white, fontSize: 14),
+          style: const TextStyle(color: _textDark, fontSize: 14),
           decoration: InputDecoration(
             hintText: 'Rechercher une préoccupation...',
-            hintStyle: const TextStyle(color: Colors.white38),
-            prefixIcon: const Icon(Icons.search_rounded, color: Colors.white38, size: 18),
+            hintStyle: const TextStyle(color: _textLight),
+            prefixIcon: const Icon(Icons.search_rounded, color: _textLight, size: 18),
             suffixIcon: _searchText.isNotEmpty
                 ? IconButton(
-                    icon: const Icon(Icons.clear, color: Colors.white38, size: 16),
+                    icon: const Icon(Icons.clear, color: _textLight, size: 16),
                     onPressed: () {
                       _searchCtrl.clear();
                       setState(() => _searchText = '');
@@ -694,10 +684,9 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin {
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: _card,
+        color: _white,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: _teal.withOpacity(0.4), width: 1.5),
-        boxShadow: [BoxShadow(color: _teal.withOpacity(0.1), blurRadius: 20)],
+        border: Border.all(color: _accentColor.withOpacity(0.4), width: 1.5),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -706,13 +695,13 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin {
             children: [
               Container(
                 padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(color: _teal.withOpacity(0.2), shape: BoxShape.circle),
-                child: const Icon(Icons.edit_rounded, color: _teal, size: 14),
+                decoration: BoxDecoration(color: _accentColor.withOpacity(0.1), shape: BoxShape.circle),
+                child: Icon(Icons.edit_rounded, color: _accentColor, size: 14),
               ),
               const SizedBox(width: 8),
-              const Text(
+              Text(
                 'Nouvelle préoccupation',
-                style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w700),
+                style: const TextStyle(color: _textDark, fontSize: 14, fontWeight: FontWeight.w700),
               ),
             ],
           ),
@@ -733,28 +722,28 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin {
               child: Row(
                 children: ['libre', 'lecon', 'exercice', 'devoir'].map((s) {
                   final isSelected = _composerSource == s;
-                  final color = _srcColor[s] ?? _teal;
+                  final color = _srcColor[s] ?? _accentColor;
                   return GestureDetector(
                     onTap: () => setState(() => _composerSource = s),
                     child: Container(
                       margin: const EdgeInsets.only(right: 6),
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                       decoration: BoxDecoration(
-                        color: isSelected ? color.withOpacity(0.2) : Colors.transparent,
+                        color: isSelected ? color.withOpacity(0.1) : Colors.transparent,
                         borderRadius: BorderRadius.circular(100),
-                        border: Border.all(color: isSelected ? color : _border),
+                        border: Border.all(color: isSelected ? color : _borderLight),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(_srcIcon[s]!, size: 11, color: isSelected ? color : Colors.white54),
+                          Icon(_srcIcon[s]!, size: 11, color: isSelected ? color : _textMedium),
                           const SizedBox(width: 4),
                           Text(
                             _srcLabel[s]!,
                             style: TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.w700,
-                              color: isSelected ? color : Colors.white54,
+                              color: isSelected ? color : _textMedium,
                             ),
                           ),
                         ],
@@ -768,17 +757,17 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin {
           ],
           Container(
             decoration: BoxDecoration(
-              color: _surface,
+              color: _bgLight,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: _border),
+              border: Border.all(color: _borderLight),
             ),
             child: TextField(
               controller: _composerCtrl,
               maxLines: 4,
-              style: const TextStyle(color: Colors.white, fontSize: 14, height: 1.5),
+              style: const TextStyle(color: _textDark, fontSize: 14, height: 1.5),
               decoration: const InputDecoration(
                 hintText: 'Décrivez votre question ou difficulté...',
-                hintStyle: TextStyle(color: Colors.white30, fontSize: 13),
+                hintStyle: TextStyle(color: _textLight, fontSize: 13),
                 border: InputBorder.none,
                 contentPadding: EdgeInsets.all(14),
               ),
@@ -792,7 +781,7 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin {
               child: Container(
                 padding: const EdgeInsets.symmetric(vertical: 13),
                 decoration: BoxDecoration(
-                  gradient: const LinearGradient(colors: [_teal, _tealLight]),
+                  gradient: LinearGradient(colors: [_accentColor, _accentColor.withOpacity(0.8)]),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Row(
@@ -802,14 +791,14 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin {
                       const SizedBox(
                         width: 16,
                         height: 16,
-                        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                        child: CircularProgressIndicator(color: _white, strokeWidth: 2),
                       )
                     else ...[
-                      const Icon(Icons.send_rounded, color: Colors.white, size: 16),
+                      const Icon(Icons.send_rounded, color: _white, size: 16),
                       const SizedBox(width: 8),
                       const Text(
                         'Poster la préoccupation',
-                        style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                        style: TextStyle(color: _white, fontSize: 13, fontWeight: FontWeight.bold),
                       ),
                     ],
                   ],
@@ -823,12 +812,12 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin {
   }
 
   Widget _buildContextBadge({required String source, required String contextLabel}) {
-    final color = _srcColor[source] ?? _teal;
+    final color = _srcColor[source] ?? _accentColor;
     final icon = _srcIcon[source] ?? Icons.link_rounded;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.15),
+        color: color.withOpacity(0.08),
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: color.withOpacity(0.3)),
       ),
@@ -850,7 +839,7 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin {
   }
 
   Widget _buildQuestionCard(QForum q) {
-    final color = _srcColor[q.source] ?? _teal;
+    final color = _srcColor[q.source] ?? _accentColor;
     final icon = _srcIcon[q.source] ?? Icons.chat_bubble_outline_rounded;
     final label = _srcLabel[q.source] ?? 'Libre';
     final isHighlighted = q.id == widget.scrollToQuestionId;
@@ -866,22 +855,19 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin {
         duration: const Duration(milliseconds: 300),
         margin: const EdgeInsets.only(bottom: 10),
         decoration: BoxDecoration(
-          color: isHighlighted ? color.withOpacity(0.08) : _card,
+          color: _white,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: isHighlighted ? color.withOpacity(0.5) : _border.withOpacity(0.5),
+            color: isHighlighted ? color.withOpacity(0.5) : _borderLight,
             width: isHighlighted ? 1.5 : 1,
           ),
-          boxShadow: isHighlighted
-              ? [BoxShadow(color: color.withOpacity(0.2), blurRadius: 20, offset: const Offset(0, 4))]
-              : [],
         ),
         child: Column(
           children: [
             Container(
               padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
               decoration: BoxDecoration(
-                color: color.withOpacity(0.08),
+                color: color.withOpacity(0.05),
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
                 border: Border(left: BorderSide(color: color, width: 3)),
               ),
@@ -889,7 +875,7 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin {
                 children: [
                   Container(
                     padding: const EdgeInsets.all(5),
-                    decoration: BoxDecoration(color: color.withOpacity(0.2), shape: BoxShape.circle),
+                    decoration: BoxDecoration(color: color.withOpacity(0.15), shape: BoxShape.circle),
                     child: Icon(icon, size: 12, color: color),
                   ),
                   const SizedBox(width: 8),
@@ -899,9 +885,9 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                       decoration: BoxDecoration(
-                        color: color.withOpacity(0.12),
+                        color: color.withOpacity(0.08),
                         borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: color.withOpacity(0.25)),
+                        border: Border.all(color: color.withOpacity(0.2)),
                       ),
                       child: Text(
                         q.contexteLabel,
@@ -916,16 +902,16 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF22C55E).withOpacity(0.15),
+                        color: _green.withOpacity(0.1),
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: const Color(0xFF22C55E).withOpacity(0.3)),
+                        border: Border.all(color: _green.withOpacity(0.3)),
                       ),
                       child: const Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.check_circle_rounded, size: 10, color: Color(0xFF22C55E)),
+                          Icon(Icons.check_circle_rounded, size: 10, color: _green),
                           SizedBox(width: 4),
-                          Text('Résolue', style: TextStyle(fontSize: 10, color: Color(0xFF22C55E), fontWeight: FontWeight.w700)),
+                          Text('Résolue', style: TextStyle(fontSize: 10, color: _green, fontWeight: FontWeight.w700)),
                         ],
                       ),
                     ),
@@ -941,7 +927,7 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin {
                     q.contenu,
                     maxLines: 3,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w500, height: 1.55),
+                    style: const TextStyle(color: _textDark, fontSize: 14, fontWeight: FontWeight.w500, height: 1.55),
                   ),
                   if (q.imageUrl != null) ...[
                     const SizedBox(height: 8),
@@ -961,15 +947,16 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.06),
+                        color: _bgLight,
                         borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: _borderLight),
                       ),
                       child: const Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.mic_rounded, size: 13, color: Colors.white54),
+                          Icon(Icons.mic_rounded, size: 13, color: _textLight),
                           SizedBox(width: 5),
-                          Text('Message audio', style: TextStyle(color: Colors.white54, fontSize: 11)),
+                          Text('Message audio', style: TextStyle(color: _textLight, fontSize: 11)),
                         ],
                       ),
                     ),
@@ -985,31 +972,31 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin {
                           children: [
                             Text(
                               q.auteurNom.isNotEmpty ? q.auteurNom : q.auteurUsername,
-                              style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w600),
+                              style: const TextStyle(color: _textMedium, fontSize: 12, fontWeight: FontWeight.w600),
                             ),
                             if (q.auteurEstEnseignant)
-                              const Text('Enseignant', style: TextStyle(color: _tealLight, fontSize: 10, fontWeight: FontWeight.w700)),
+                              Text('Enseignant', style: TextStyle(color: _accentColor, fontSize: 10, fontWeight: FontWeight.w700)),
                           ],
                         ),
                       ),
                       const Spacer(),
-                      Icon(Icons.chat_bubble_outline_rounded, size: 13, color: Colors.white30),
+                      Icon(Icons.chat_bubble_outline_rounded, size: 13, color: _textLight),
                       const SizedBox(width: 4),
-                      Text('${q.nbReponses}', style: const TextStyle(fontSize: 12, color: Colors.white38)),
+                      Text('${q.nbReponses}', style: const TextStyle(fontSize: 12, color: _textLight)),
                       const SizedBox(width: 12),
-                      Icon(Icons.remove_red_eye_outlined, size: 13, color: Colors.white30),
+                      Icon(Icons.remove_red_eye_outlined, size: 13, color: _textLight),
                       const SizedBox(width: 4),
-                      Text('${q.nbVues}', style: const TextStyle(fontSize: 12, color: Colors.white38)),
+                      Text('${q.nbVues}', style: const TextStyle(fontSize: 12, color: _textLight)),
                       const SizedBox(width: 12),
                       IconButton(
-                        icon: const Icon(Icons.open_in_new_rounded, size: 13, color: Colors.white38),
+                        icon: const Icon(Icons.open_in_new_rounded, size: 13, color: _textLight),
                         onPressed: () => _navigateToSource(q),
                         tooltip: 'Retour à la source',
                         padding: EdgeInsets.zero,
                         constraints: const BoxConstraints(),
                       ),
                       const SizedBox(width: 8),
-                      Text(_formatTimeAgo(q.creeLe), style: const TextStyle(fontSize: 11, color: Colors.white24)),
+                      Text(_formatTimeAgo(q.creeLe), style: const TextStyle(fontSize: 11, color: _textLight)),
                     ],
                   ),
                 ],
@@ -1026,12 +1013,12 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin {
       children: [
         CircleAvatar(
           radius: radius,
-          backgroundColor: estEnseignant ? _teal.withOpacity(0.3) : color.withOpacity(0.2),
+          backgroundColor: estEnseignant ? _accentColor.withOpacity(0.15) : color.withOpacity(0.1),
           child: Text(
             _getInitials(nom, username),
             style: TextStyle(
               fontSize: radius * 0.75,
-              color: estEnseignant ? _tealLight : color,
+              color: estEnseignant ? _accentColor : color,
               fontWeight: FontWeight.w800,
             ),
           ),
@@ -1043,10 +1030,10 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin {
             child: Container(
               width: 8,
               height: 8,
-              decoration: const BoxDecoration(
-                color: _tealLight,
+              decoration: BoxDecoration(
+                color: _accentColor,
                 shape: BoxShape.circle,
-                boxShadow: [BoxShadow(color: Colors.black38, blurRadius: 2)],
+                border: Border.all(color: _white, width: 1),
               ),
             ),
           ),
@@ -1061,19 +1048,19 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin {
         children: [
           Container(
             padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(color: _card, shape: BoxShape.circle),
-            child: const Icon(Icons.forum_outlined, size: 48, color: Colors.white24),
+            decoration: BoxDecoration(color: _bgLight, shape: BoxShape.circle, border: Border.all(color: _borderLight)),
+            child: const Icon(Icons.forum_outlined, size: 48, color: _textLight),
           ),
           const SizedBox(height: 16),
           const Text(
             'Aucune préoccupation',
-            style: TextStyle(color: Colors.white54, fontSize: 16, fontWeight: FontWeight.w600),
+            style: TextStyle(color: _textMedium, fontSize: 16, fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 8),
           const Text(
             'Les questions posées depuis les leçons,\nexercices et devoirs apparaîtront ici.',
             textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.white38, fontSize: 13, height: 1.5),
+            style: TextStyle(color: _textLight, fontSize: 13, height: 1.5),
           ),
           const SizedBox(height: 24),
           GestureDetector(
@@ -1081,16 +1068,16 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
               decoration: BoxDecoration(
-                color: _teal.withOpacity(0.15),
+                color: _accentColor.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: _teal.withOpacity(0.3)),
+                border: Border.all(color: _accentColor.withOpacity(0.3)),
               ),
-              child: const Row(
+              child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.add_rounded, color: _teal, size: 16),
-                  SizedBox(width: 6),
-                  Text('Poser une question', style: TextStyle(color: _teal, fontSize: 13, fontWeight: FontWeight.w700)),
+                  Icon(Icons.add_rounded, color: _accentColor, size: 16),
+                  const SizedBox(width: 6),
+                  Text('Poser une question', style: TextStyle(color: _accentColor, fontSize: 13, fontWeight: FontWeight.w700)),
                 ],
               ),
             ),

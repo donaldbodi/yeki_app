@@ -1,6 +1,6 @@
 // lib/widgets/yeki_app_bar.dart
 // ═══════════════════════════════════════════════════════════════
-//  YEKI HEADER — AppBar premium dynamique
+//  YEKI HEADER — AppBar premium dynamique (Design Light)
 //  • Avatar réseau + initiales fallback
 //  • Badge notifications animé
 //  • Streak feu
@@ -13,9 +13,12 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 
-const Color _hBlue  = Color(0xFF2884A0);
-const Color _hDark  = Color(0xFF0D1B2A);
-const Color _hGold  = Color(0xFFE2A84B);
+// Palette harmonisée avec RegisterPage
+const Color brandBackground = Color(0xFF135F74);
+const Color actionOrange = Color(0xFFFF6B00);
+const Color _hGold = Color(0xFFE2A84B);
+const Color _textDark = Color(0xFF1A1C1E);
+const Color _textMedium = Color(0xFF5A5C5E);
 
 class YekiHeader extends StatefulWidget implements PreferredSizeWidget {
   final int unreadNotifications;
@@ -90,7 +93,7 @@ class _YekiHeaderState extends State<YekiHeader> {
       height: 70 + MediaQuery.of(context).padding.top,
       padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top),
       decoration: const BoxDecoration(
-        color: Colors.white,
+        color: Color(0xFFFFFFFF),
         boxShadow: [
           BoxShadow(color: Color(0x0A000000), blurRadius: 12, offset: Offset(0, 2)),
         ],
@@ -101,8 +104,8 @@ class _YekiHeaderState extends State<YekiHeader> {
           children: [
             // ── Logo Yéki ─────────────────────────────────────
             ShaderMask(
-              shaderCallback: (bounds) => const LinearGradient(
-                colors: [_hBlue, Color(0xFF1F5F75)],
+              shaderCallback: (bounds) => LinearGradient(
+                colors: [brandBackground, brandBackground.withOpacity(0.7)],
               ).createShader(bounds),
               child: const Text(
                 'Yéki',
@@ -124,9 +127,9 @@ class _YekiHeaderState extends State<YekiHeader> {
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                 decoration: BoxDecoration(
-                  color: _hBlue.withOpacity(0.1),
+                  color: brandBackground.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: _hBlue.withOpacity(0.2)),
+                  border: Border.all(color: brandBackground.withOpacity(0.2)),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
@@ -146,7 +149,7 @@ class _YekiHeaderState extends State<YekiHeader> {
                         style: const TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w800,
-                          color: _hBlue,
+                          color: brandBackground,
                         ),
                       ),
                   ],
@@ -156,7 +159,7 @@ class _YekiHeaderState extends State<YekiHeader> {
             const SizedBox(width: 6),
 
             // ── Streak ──────────────────────────────────────
-            _StatChip(Icons.local_fire_department_rounded, '5', Colors.orange),
+            _StatChip(Icons.local_fire_department_rounded, '5', actionOrange),
             const SizedBox(width: 6),
 
             // ── Notifications ────────────────────────────────
@@ -227,8 +230,8 @@ class _NotifIcon extends StatelessWidget {
                 color: const Color(0xFFF4F8FC),
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: const Icon(Icons.notifications_outlined,
-                  color: _hDark, size: 20),
+              child: Icon(Icons.notifications_outlined,
+                  color: _textDark, size: 20),
             ),
             if (count > 0)
               Positioned(
@@ -288,36 +291,42 @@ class _ProfileMenu extends StatelessWidget {
           if (val == 'logout') onLogout();
         },
         child: Container(
-          width: 38, height: 38,
+          width: 38,
+          height: 38,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: _hBlue.withOpacity(0.2), width: 2),
+            shape: BoxShape.circle,
+            border: Border.all(color: brandBackground.withOpacity(0.2), width: 2),
           ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(10),
+          child: ClipOval(
             child: avatarUrl != null
-                ? Image.network(avatarUrl!, fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => _fallback())
+                ? Image.network(
+                    avatarUrl!,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => _fallback(),
+                  )
                 : _fallback(),
           ),
         ),
         itemBuilder: (_) => [
-          _menuItem('profile', Icons.person_outline, 'Mon profil', _hBlue),
+          _menuItem('profile', Icons.person_outline, 'Mon profil', brandBackground),
           _menuItem('wallet', Icons.account_balance_wallet_outlined, 'Portefeuille', _hGold),
-          _menuItem('settings', Icons.settings_outlined, 'Paramètres', Colors.grey),
+          _menuItem('settings', Icons.settings_outlined, 'Paramètres', _textMedium),
           const PopupMenuDivider(),
           _menuItem('logout', Icons.logout_rounded, 'Déconnexion', const Color(0xFFEF4444)),
         ],
       );
 
   Widget _fallback() => Container(
-        color: _hBlue.withOpacity(0.1),
+        color: brandBackground.withOpacity(0.1),
         child: Center(
-          child: Text(_initial,
-              style: const TextStyle(
-                  color: _hBlue,
-                  fontWeight: FontWeight.w900,
-                  fontSize: 14)),
+          child: Text(
+            _initial,
+            style: const TextStyle(
+              color: brandBackground,
+              fontWeight: FontWeight.w900,
+              fontSize: 14,
+            ),
+          ),
         ),
       );
 
@@ -329,13 +338,20 @@ class _ProfileMenu extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(6),
               decoration: BoxDecoration(
-                  color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+                color: color.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
               child: Icon(icon, size: 15, color: color),
             ),
             const SizedBox(width: 10),
-            Text(label,
-                style: TextStyle(
-                    color: color, fontWeight: FontWeight.w700, fontSize: 14)),
+            Text(
+              label,
+              style: TextStyle(
+                color: color,
+                fontWeight: FontWeight.w700,
+                fontSize: 14,
+              ),
+            ),
           ],
         ),
       );

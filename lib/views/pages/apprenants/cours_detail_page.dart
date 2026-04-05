@@ -1,14 +1,22 @@
-// lib/views/pages/apprenants/cours_detail_page.dart
-
 import 'package:flutter/material.dart';
 import 'package:yeki/views/pages/apprenants/devoirs_cours_page.dart';
 import 'package:yeki/views/pages/apprenants/forum_page.dart';
 import 'package:yeki/views/pages/apprenants/lecons_cours.dart';
 import 'package:yeki/views/pages/apprenants/exercices_cours.dart';
 
+// Palette harmonisée
+const Color brandBackground = Color(0xFF135F74);
+const Color actionOrange = Color(0xFFFF6B00);
+const Color _white = Color(0xFFFFFFFF);
+const Color _white80 = Color(0xCCFFFFFF);
+const Color _textDark = Color(0xFF1A1C1E);
+const Color _textMedium = Color(0xFF5A5C5E);
+const Color _bgLight = Color(0xFFF8FAFC);
+
 class CoursDetailTabs extends StatefulWidget {
   final String coursId;
   final String titre;
+  final int coursColor;
   final bool isPremium;
   final int initialTab;
   final int? scrollToQuestionId;
@@ -17,6 +25,7 @@ class CoursDetailTabs extends StatefulWidget {
     super.key,
     required this.coursId,
     required this.titre,
+    required this.coursColor,
     this.isPremium = true,
     this.initialTab = 0,
     this.scrollToQuestionId,
@@ -30,9 +39,6 @@ class _CoursDetailTabsState extends State<CoursDetailTabs>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
 
-  static const Color _primary = Color(0xFF2884A0);
-  static const Color _gold = Color(0xFFFFD700);
-
   int? _forumScrollToId;
   String? _forumPreoccupationContenu;
   String? _forumPreoccupationSource;
@@ -43,10 +49,17 @@ class _CoursDetailTabsState extends State<CoursDetailTabs>
   int? _forumPreoccupationDevoirId;
   String? _forumPreoccupationDevoirTitre;
 
+  late Color _courseColor;
+
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this, initialIndex: widget.initialTab);
+    _courseColor = Color(widget.coursColor);
+    _tabController = TabController(
+      length: 4, 
+      vsync: this, 
+      initialIndex: widget.initialTab,
+    );
   }
 
   @override
@@ -86,7 +99,7 @@ class _CoursDetailTabsState extends State<CoursDetailTabs>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFB),
+      backgroundColor: _bgLight,
       body: Column(
         children: [
           _buildHeader(),
@@ -100,20 +113,20 @@ class _CoursDetailTabsState extends State<CoursDetailTabs>
   Widget _buildHeader() {
     return Container(
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
+        gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [_primary, Color(0xFF005F66)],
+          colors: [_courseColor, _courseColor.withOpacity(0.7)],
         ),
       ),
       child: SafeArea(
         bottom: false,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(4, 8, 20, 16),
+          padding: const EdgeInsets.fromLTRB(4, 8, 20, 12),
           child: Row(
             children: [
               IconButton(
-                icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 20),
+                icon: const Icon(Icons.arrow_back_ios_new, color: _white, size: 18),
                 onPressed: () => Navigator.pop(context),
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),
@@ -123,8 +136,8 @@ class _CoursDetailTabsState extends State<CoursDetailTabs>
                 child: Text(
                   widget.titre,
                   style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 17,
+                    color: _white,
+                    fontSize: 16,
                     fontWeight: FontWeight.w800,
                   ),
                   maxLines: 1,
@@ -133,19 +146,19 @@ class _CoursDetailTabsState extends State<CoursDetailTabs>
               ),
               if (!widget.isPremium)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: _gold.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: _gold.withOpacity(0.4)),
+                    color: actionOrange.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: actionOrange.withOpacity(0.4)),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.workspace_premium_rounded, color: _gold, size: 14),
+                      Icon(Icons.workspace_premium_rounded, color: actionOrange, size: 12),
                       const SizedBox(width: 4),
                       const Text('Gratuit',
-                          style: TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w600)),
+                          style: TextStyle(color: _white80, fontSize: 10, fontWeight: FontWeight.w600)),
                     ],
                   ),
                 ),
@@ -158,59 +171,25 @@ class _CoursDetailTabsState extends State<CoursDetailTabs>
 
   Widget _buildTabBar() {
     return Container(
-      color: Colors.white,
-      child: TabBar(
-        controller: _tabController,
-        indicatorColor: _primary,
-        indicatorWeight: 3,
-        labelColor: _primary,
-        unselectedLabelColor: Colors.grey,
-        labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-        tabs: [
-          const Tab(icon: Icon(Icons.play_lesson_rounded, size: 18), text: 'Leçons'),
-          Tab(
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.edit_note_rounded, size: 16),
-                const SizedBox(width: 4),
-                const Text('Exercices'),
-                if (!widget.isPremium) ...[
-                  const SizedBox(width: 3),
-                  Icon(Icons.lock_rounded, size: 10, color: _gold),
-                ],
-              ],
-            ),
-          ),
-          Tab(
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.assignment_rounded, size: 16),
-                const SizedBox(width: 4),
-                const Text('Devoirs'),
-                if (!widget.isPremium) ...[
-                  const SizedBox(width: 3),
-                  Icon(Icons.lock_rounded, size: 10, color: _gold),
-                ],
-              ],
-            ),
-          ),
-          Tab(
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.forum_rounded, size: 16),
-                const SizedBox(width: 4),
-                const Text('Forum'),
-                if (!widget.isPremium) ...[
-                  const SizedBox(width: 3),
-                  Icon(Icons.lock_rounded, size: 10, color: _gold),
-                ],
-              ],
-            ),
-          ),
-        ],
+      color: _white,
+      child: SizedBox(
+        height: 44,
+        child: TabBar(
+          controller: _tabController,
+          indicatorColor: _courseColor,
+          indicatorWeight: 2.5,
+          labelColor: _courseColor,
+          unselectedLabelColor: _textMedium,
+          labelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 11),
+          unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w500, fontSize: 11),
+          indicatorSize: TabBarIndicatorSize.tab,
+          tabs: const [
+            Tab(icon: Icon(Icons.play_lesson_rounded, size: 16), text: 'Leçons'),
+            Tab(icon: Icon(Icons.edit_note_rounded, size: 16), text: 'Exos'),
+            Tab(icon: Icon(Icons.assignment_rounded, size: 16), text: 'Devoirs'),
+            Tab(icon: Icon(Icons.forum_rounded, size: 16), text: 'Forum'),
+          ],
+        ),
       ),
     );
   }
@@ -225,12 +204,14 @@ class _CoursDetailTabsState extends State<CoursDetailTabs>
           tabController: _tabController,
           onNaviguerForum: naviguerVersForumAvecQuestion,
           isPremium: widget.isPremium,
+          courseColor: _courseColor,
         ),
         widget.isPremium
             ? ExercicesCoursPage(
                 coursId: widget.coursId,
                 coursTitre: widget.titre,
                 onNaviguerForum: naviguerVersForumAvecQuestion,
+                courseColor: _courseColor,
               )
             : _buildPremiumLock('exercices'),
         widget.isPremium
@@ -238,6 +219,7 @@ class _CoursDetailTabsState extends State<CoursDetailTabs>
                 coursId: widget.coursId,
                 coursTitre: widget.titre,
                 onNaviguerForum: naviguerVersForumAvecQuestion,
+                courseColor: _courseColor,
               )
             : _buildPremiumLock('devoirs'),
         widget.isPremium
@@ -254,6 +236,7 @@ class _CoursDetailTabsState extends State<CoursDetailTabs>
                 preoccupationExerciceTitre: _forumPreoccupationExerciceTitre,
                 preoccupationDevoirId: _forumPreoccupationDevoirId,
                 preoccupationDevoirTitre: _forumPreoccupationDevoirTitre,
+                coursColor: widget.coursColor,
               )
             : _buildPremiumLock('forum'),
       ],
@@ -268,53 +251,59 @@ class _CoursDetailTabsState extends State<CoursDetailTabs>
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              padding: const EdgeInsets.all(22),
-              decoration: BoxDecoration(color: _gold.withOpacity(0.1), shape: BoxShape.circle),
-              child: Icon(Icons.workspace_premium_rounded, color: _gold, size: 52),
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: actionOrange.withOpacity(0.1),
+                shape: BoxShape.circle,
+                border: Border.all(color: actionOrange.withOpacity(0.2), width: 1),
+              ),
+              child: Icon(Icons.workspace_premium_rounded, color: actionOrange, size: 48),
             ),
-            const SizedBox(height: 20),
-            const Text('Accès Premium requis',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Color(0xFF1A1C1E))),
-            const SizedBox(height: 10),
+            const SizedBox(height: 16),
+            const Text(
+              'Accès Premium requis',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: _textDark),
+            ),
+            const SizedBox(height: 8),
             Text(
               'Abonnez-vous à Yéki Premium pour accéder aux $feature.',
               textAlign: TextAlign.center,
-              style: const TextStyle(color: Colors.grey, fontSize: 14, height: 1.5),
+              style: const TextStyle(color: _textMedium, fontSize: 13, height: 1.4),
             ),
-            const SizedBox(height: 28),
+            const SizedBox(height: 24),
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
                 onPressed: () => Navigator.pop(context),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: _gold,
-                  foregroundColor: Colors.black,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  backgroundColor: actionOrange,
+                  foregroundColor: _white,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   elevation: 0,
                 ),
                 child: const Text('1 500 FCFA / mois',
-                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
               ),
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 8),
             SizedBox(
               width: double.infinity,
               child: OutlinedButton(
                 onPressed: () => Navigator.pop(context),
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: _primary,
-                  side: BorderSide(color: _primary),
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  foregroundColor: brandBackground,
+                  side: const BorderSide(color: brandBackground),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
                 child: const Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text('13 000 FCFA / an',
-                        style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+                        style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
                     Text('Économisez 26% !',
-                        style: TextStyle(fontSize: 10, color: Color(0xFFFFD700))),
+                        style: TextStyle(fontSize: 9, color: actionOrange)),
                   ],
                 ),
               ),

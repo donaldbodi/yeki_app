@@ -20,10 +20,10 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
   bool _obscurePwd = true;
   String _error = '';
 
-  // Palette Onboarding Validée
-  static const Color mainBlue = Color(0xFF2884A0); 
-  static const Color darkBlue = Color(0xFF164A5A);
-  static const Color accentWarm = Color(0xFFF39C12);
+  // Palette Mise à jour : Fond #135F74 et Bouton Vivant
+  static const Color brandBackground = Color(0xFF135F74); 
+  static const Color actionOrange = Color(0xFFFF6B00); // Couleur vive et pro pour le bouton
+  static const Color glassFill = Color(0x1AFFFFFF); // Blanc 10% pour l'effet clair
 
   late AnimationController _animCtrl;
   late Animation<double> _fadeAnim;
@@ -44,7 +44,7 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
     super.dispose();
   }
 
-  // TA LOGIQUE DE CONNEXION CONSERVÉE
+  // TA LOGIQUE DE CONNEXION CONSERVÉE À 100%
   Future<void> _login() async {
     if (_identCtrl.text.trim().isEmpty || _pwdCtrl.text.trim().isEmpty) {
       setState(() => _error = 'Veuillez remplir tous les champs.');
@@ -84,183 +84,157 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
-        width: double.infinity,
-        height: double.infinity,
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topRight,
-            end: Alignment.bottomLeft,
-            colors: [mainBlue, darkBlue],
+      backgroundColor: brandBackground, // Application du fond #135F74
+      body: Stack(
+        children: [
+          // ÉLÉMENTS DÉCORATIFS ÉPURÉS
+          Positioned(
+            top: -60,
+            right: -60,
+            child: _buildCircle(220, Colors.white.withOpacity(0.04)),
           ),
-        ),
-        child: Stack(
-          children: [
-            // ÉLÉMENTS DÉCORATIFS (Style Onboarding)
-            Positioned(
-              top: -50,
-              left: -50,
-              child: CircleAvatar(
-                radius: 130,
-                backgroundColor: Colors.white.withOpacity(0.05),
-              ),
-            ),
-            Positioned(
-              bottom: 100,
-              right: -30,
-              child: CircleAvatar(
-                radius: 80,
-                backgroundColor: accentWarm.withOpacity(0.03),
-              ),
-            ),
 
-            SafeArea(
-              child: FadeTransition(
-                opacity: _fadeAnim,
-                child: Center(
-                  child: SingleChildScrollView(
-                    physics: const BouncingScrollPhysics(),
-                    padding: const EdgeInsets.symmetric(horizontal: 40),
-                    child: Column(
-                      children: [
-                        // LOGO GLASS DÉPOLI
-                        //_buildGlassLogo(),
-                        const SizedBox(height: 25),
-                        const Text('YEKI', 
-                          style: TextStyle(
-                            color: Colors.white, 
-                            fontWeight: FontWeight.w900, 
-                            letterSpacing: 10, 
-                            fontSize: 24
-                          )),
-                        const SizedBox(height: 10),
-                        Text('Connectez-vous pour continuer',
-                          style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 12)),
-                        
-                        const SizedBox(height: 50),
+          SafeArea(
+            child: FadeTransition(
+              opacity: _fadeAnim,
+              child: Center(
+                child: SingleChildScrollView(
+                  physics: const BouncingScrollPhysics(),
+                  padding: const EdgeInsets.symmetric(horizontal: 40),
+                  child: Column(
+                    children: [
+                      // LOGO YEKI
+                      _buildLogo(),
+                      const SizedBox(height: 25),
+                      const Text('YEKI', 
+                        style: TextStyle(
+                          color: Colors.white, 
+                          fontWeight: FontWeight.w900, 
+                          letterSpacing: 10, 
+                          fontSize: 28
+                        )),
+                      const SizedBox(height: 8),
+                      Text('EXCELLENCE ET INGÉNIERIE',
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.4), 
+                          fontSize: 10, 
+                          letterSpacing: 2,
+                          fontWeight: FontWeight.bold
+                        )),
+                      
+                      const SizedBox(height: 55),
 
-                        // FORMULAIRE COMPACT (280px pour le look pro)
-                        SizedBox(
-                          width: 280, 
-                          child: Column(
-                            children: [
-                              _buildSmallField(
-                                controller: _identCtrl,
-                                label: "Email ou Identifiant",
-                                icon: Icons.alternate_email_rounded,
+                      // FORMULAIRE ÉLÉGANT
+                      SizedBox(
+                        width: 300, 
+                        child: Column(
+                          children: [
+                            _buildModernField(
+                              controller: _identCtrl,
+                              label: "Email ou Identifiant",
+                              icon: Icons.person_outline_rounded,
+                            ),
+                            const SizedBox(height: 20),
+                            _buildModernField(
+                              controller: _pwdCtrl,
+                              label: "Mot de passe",
+                              icon: Icons.lock_open_rounded,
+                              isPassword: true,
+                            ),
+                            
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: TextButton(
+                                onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ForgotPasswordPage())),
+                                child: Text("Oublié ?", 
+                                  style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 12, fontWeight: FontWeight.bold)),
                               ),
-                              const SizedBox(height: 20),
-                              _buildSmallField(
-                                controller: _pwdCtrl,
-                                label: "Mot de passe",
-                                icon: Icons.lock_outline_rounded,
-                                isPassword: true,
-                              ),
-                              
-                              Align(
-                                alignment: Alignment.centerRight,
-                                child: TextButton(
-                                  onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ForgotPasswordPage())),
-                                  child: Text("Oublié ?", 
-                                    style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 11)),
-                                ),
-                              ),
-                            ],
-                          ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      if (_error.isNotEmpty) 
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 15),
+                          child: Text(_error, 
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w500)),
                         ),
 
-                        if (_error.isNotEmpty) 
-                          Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 10),
-                            child: Text(_error, 
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold)),
-                          ),
+                      const SizedBox(height: 30),
 
-                        const SizedBox(height: 35),
+                      // BOUTON ACTION VIVANT
+                      _loading 
+                        ? const CircularProgressIndicator(color: Colors.white, strokeWidth: 3)
+                        : _buildPrimaryButton(),
 
-                        // BOUTON ACTION (Style Onboarding)
-                        _loading 
-                          ? const CircularProgressIndicator(color: Colors.white, strokeWidth: 2)
-                          : _buildPrimaryButton(),
-
-                        const SizedBox(height: 50),
-                        
-                        // LIEN INSCRIPTION
-                        _buildFooterLink(),
-                      ],
-                    ),
+                      const SizedBox(height: 60),
+                      
+                      // LIEN INSCRIPTION
+                      _buildFooterLink(),
+                    ],
                   ),
                 ),
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildGlassLogo() {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(40),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-        child: Container(
-          height: 80,
-          width: 80,
-          padding: const EdgeInsets.all(18),
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: Colors.white.withOpacity(0.1),
-            border: Border.all(color: Colors.white.withOpacity(0.15)),
-          ),
-          child: Image.asset(
-            'assets/images/yeki_logo.png',
-            errorBuilder: (_, __, ___) => const Icon(Icons.school_rounded, color: Colors.white, size: 35),
-          ),
-        ),
-      ),
+  Widget _buildCircle(double size, Color color) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(shape: BoxShape.circle, color: color),
     );
   }
 
-  // CHAMPS PETITS, ARRONDIS & GLASS
-  Widget _buildSmallField({
+  Widget _buildLogo() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: glassFill,
+        borderRadius: BorderRadius.circular(25),
+        border: Border.all(color: Colors.white.withOpacity(0.1)),
+      ),
+      child: const Icon(Icons.school_outlined, color: Colors.white, size: 40),
+    );
+  }
+
+  Widget _buildModernField({
     required TextEditingController controller,
     required String label,
     required IconData icon,
     bool isPassword = false,
   }) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(25),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
-        child: TextFormField(
-          controller: controller,
-          obscureText: isPassword && _obscurePwd,
-          style: const TextStyle(color: Colors.white, fontSize: 14),
-          cursorColor: Colors.white,
-          decoration: InputDecoration(
-            labelText: label,
-            labelStyle: TextStyle(color: Colors.white.withOpacity(0.35), fontSize: 12),
-            floatingLabelStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-            prefixIcon: Icon(icon, color: Colors.white.withOpacity(0.7), size: 18),
-            suffixIcon: isPassword ? IconButton(
-              icon: Icon(_obscurePwd ? Icons.visibility_off_rounded : Icons.visibility_rounded, 
-                color: Colors.white24, size: 16),
-              onPressed: () => setState(() => _obscurePwd = !_obscurePwd),
-            ) : null,
-            filled: true,
-            fillColor: Colors.white.withOpacity(0.06),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(25),
-              borderSide: BorderSide(color: Colors.white.withOpacity(0.1)),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(25),
-              borderSide: const BorderSide(color: Colors.white, width: 0.8),
-            ),
-          ),
+    return TextFormField(
+      controller: controller,
+      obscureText: isPassword && _obscurePwd,
+      style: const TextStyle(color: Colors.white, fontSize: 15),
+      cursorColor: Colors.white,
+      decoration: InputDecoration(
+        labelText: label,
+        labelStyle: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 13),
+        floatingLabelStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+        prefixIcon: Icon(icon, color: Colors.white.withOpacity(0.8), size: 20),
+        suffixIcon: isPassword ? IconButton(
+          icon: Icon(_obscurePwd ? Icons.visibility_off_outlined : Icons.visibility_outlined, 
+            color: Colors.white38, size: 18),
+          onPressed: () => setState(() => _obscurePwd = !_obscurePwd),
+        ) : null,
+        filled: true,
+        fillColor: glassFill,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(15),
+          borderSide: BorderSide(color: Colors.white.withOpacity(0.05)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(15),
+          borderSide: const BorderSide(color: Colors.white, width: 1.5),
         ),
       ),
     );
@@ -270,17 +244,28 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
     return GestureDetector(
       onTap: _login,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 50, vertical: 16),
+        width: 300,
+        height: 60,
+        alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: accentWarm,
-          borderRadius: BorderRadius.circular(30),
+          color: actionOrange, // Couleur vivante
+          borderRadius: BorderRadius.circular(15),
           boxShadow: [
-            BoxShadow(color: accentWarm.withOpacity(0.35), blurRadius: 20, offset: const Offset(0, 8)),
+            BoxShadow(
+              color: actionOrange.withOpacity(0.3),
+              blurRadius: 15,
+              offset: const Offset(0, 8),
+            ),
           ],
         ),
         child: const Text(
           'SE CONNECTER',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 1.5),
+          style: TextStyle(
+            color: Colors.white, 
+            fontWeight: FontWeight.w900, 
+            fontSize: 14, 
+            letterSpacing: 2
+          ),
         ),
       ),
     );
@@ -291,10 +276,10 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
       onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RegisterPage())),
       child: RichText(
         text: TextSpan(
-          style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 12),
+          style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 13),
           children: const [
-            TextSpan(text: "Pas encore de compte ? "),
-            TextSpan(text: "S'INSCRIRE", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            TextSpan(text: "Besoin d'un compte ? "),
+            TextSpan(text: "S'INSCRIRE", style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, decoration: TextDecoration.underline)),
           ],
         ),
       ),

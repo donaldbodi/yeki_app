@@ -106,7 +106,7 @@ class _PasserExercicePageState extends State<PasserExercicePage> {
         tempsRestant = _toInt(startData['temps_restant']);
         dureeTotale = _toInt(startData['duree_totale']);
         tentativesRestantes = _toInt(startData['tentatives_restantes']);
-        tentativesMax = _toInt(startData['tentatives_max']) ?? 1;
+        tentativesMax = _toInt(startData['tentatives_max']);
         
         debugPrint("Démarrage réussi - tempsRestant: $tempsRestant, tentativesRestantes: $tentativesRestantes");
       } else if (startRes.statusCode == 403) {

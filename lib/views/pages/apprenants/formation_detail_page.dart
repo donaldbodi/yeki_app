@@ -1,6 +1,6 @@
 // lib/views/pages/apprenants/formation_detail_page.dart
 // ════════════════════════════════════════════════════════════════
-// DÉTAIL FORMATION (Métier + Classique) — Design Premium Unifié
+// DÉTAIL FORMATION (Métier + Classique) — Design Light Harmonisé
 // Affiche durée, mode, certificat, objectifs, prérequis, cours…
 // ════════════════════════════════════════════════════════════════
 
@@ -11,14 +11,21 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:yeki/views/pages/apprenants/cours_detail_page.dart';
 import 'formations_models.dart';
 
-const Color _dark   = Color(0xFF0D1B2A);
-const Color _teal   = Color(0xFF008088);
-const Color _gold   = Color(0xFFE2A84B);
-const Color _green  = Color(0xFF10B981);
-const Color _blue   = Color(0xFF2884A0);
+// Palette harmonisée
+const Color brandBackground = Color(0xFF135F74);
+const Color actionOrange = Color(0xFFFF6B00);
+const Color _textDark = Color(0xFF1A1C1E);
+const Color _textMedium = Color(0xFF5A5C5E);
+const Color _textLight = Color(0xFF8A8C8E);
+const Color _borderLight = Color(0xFFE0E4E8);
+const Color _borderMedium = Color(0xFFD0D4D8);
+const Color _bgLight = Color(0xFFF8FAFC);
+const Color _white = Color(0xFFFFFFFF);
+const Color _green = Color(0xFF10B981);
+const Color _blue = Color(0xFF2884A0);
 const Color _purple = Color(0xFF8B5CF6);
 const Color _orange = Color(0xFFF97316);
-const Color _bg     = Color(0xFFF5F8FA);
+const Color _gold = Color(0xFFE2A84B);
 
 Future<String?> _getToken() async =>
     (await SharedPreferences.getInstance()).getString('token');
@@ -87,39 +94,43 @@ class _FormationDetailPageState extends State<FormationDetailPage>
   }
 
   Color get _accentColor {
-    if (_dept == null) return _teal;
+    if (_dept == null) return brandBackground;
     try {
       final hex = _dept!.couleur.replaceAll('#', '');
       return Color(int.parse('FF$hex', radix: 16));
     } catch (_) {
-      return _dept!.estFormationMetier ? _orange : _teal;
+      return _dept!.estFormationMetier ? _orange : brandBackground;
     }
   }
 
   bool get _isMetier => _dept?.estFormationMetier ?? false;
 
-  // ── BUILD ─────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     if (_loading) {
       return Scaffold(
-        backgroundColor: _bg,
+        backgroundColor: _bgLight,
         body: const Center(child: CircularProgressIndicator()),
       );
     }
     if (_dept == null) {
       return Scaffold(
-        backgroundColor: _bg,
+        backgroundColor: _bgLight,
         body: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.error_outline, size: 60, color: Colors.grey),
+              const Icon(Icons.error_outline, size: 60, color: _textLight),
               const SizedBox(height: 16),
-              const Text('Formation introuvable'),
+              const Text('Formation introuvable', style: TextStyle(color: _textMedium)),
               const SizedBox(height: 12),
               ElevatedButton(
                   onPressed: () => Navigator.pop(context),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: brandBackground,
+                    foregroundColor: _white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
                   child: const Text('Retour')),
             ],
           ),
@@ -130,7 +141,7 @@ class _FormationDetailPageState extends State<FormationDetailPage>
     final dept = _dept!;
 
     return Scaffold(
-      backgroundColor: _bg,
+      backgroundColor: _bgLight,
       body: NestedScrollView(
         headerSliverBuilder: (_, __) => [
           _buildSliverAppBar(dept),
@@ -160,24 +171,22 @@ class _FormationDetailPageState extends State<FormationDetailPage>
       backgroundColor: c,
       leading: IconButton(
         icon: Container(
-          padding: const EdgeInsets.all(6),
+          padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
               color: Colors.black26,
-              borderRadius: BorderRadius.circular(10)),
+              borderRadius: BorderRadius.circular(12)),
           child: const Icon(Icons.arrow_back_ios_new_rounded,
-              color: Colors.white, size: 16),
+              color: _white, size: 16),
         ),
         onPressed: () => Navigator.pop(context),
       ),
       flexibleSpace: FlexibleSpaceBar(
         background: Stack(fit: StackFit.expand, children: [
-          // Image ou dégradé
           if (dept.imageUrl != null)
             Image.network(dept.imageUrl!, fit: BoxFit.cover,
                 errorBuilder: (_, __, ___) => _gradientBg(c))
           else
             _gradientBg(c),
-          // Overlay
           Container(
             decoration: BoxDecoration(
               gradient: LinearGradient(
@@ -190,62 +199,48 @@ class _FormationDetailPageState extends State<FormationDetailPage>
               ),
             ),
           ),
-          // Contenu
           Positioned(
             left: 20, right: 20, bottom: 20,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Badge type
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 10, vertical: 4),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
-                    color: _isMetier ? _orange : _teal,
+                    color: _isMetier ? _orange : brandBackground,
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(
-                        _isMetier
-                            ? Icons.work_rounded
-                            : Icons.account_balance_rounded,
-                        size: 11, color: Colors.white,
+                        _isMetier ? Icons.work_rounded : Icons.account_balance_rounded,
+                        size: 11, color: _white,
                       ),
                       const SizedBox(width: 4),
                       Text(
                         _isMetier ? 'Formation Métier' : 'Formation Classique',
-                        style: const TextStyle(
-                            color: Colors.white, fontSize: 11,
-                            fontWeight: FontWeight.bold),
+                        style: const TextStyle(color: _white, fontSize: 11, fontWeight: FontWeight.bold),
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 10),
                 Text(dept.nom,
-                    style: const TextStyle(
-                        color: Colors.white, fontSize: 22,
-                        fontWeight: FontWeight.w900, height: 1.2),
+                    style: const TextStyle(color: _white, fontSize: 22, fontWeight: FontWeight.w900, height: 1.2),
                     maxLines: 2),
                 if (dept.domaine.isNotEmpty)
                   Text(dept.domaine,
-                      style: TextStyle(
-                          color: Colors.white.withOpacity(0.8),
-                          fontSize: 13)),
+                      style: TextStyle(color: _white.withOpacity(0.8), fontSize: 13)),
                 if (dept.cadre != null)
                   Text('Cadre : ${dept.cadre!.nom}',
-                      style: TextStyle(
-                          color: Colors.white.withOpacity(0.7),
-                          fontSize: 12)),
+                      style: TextStyle(color: _white.withOpacity(0.7), fontSize: 12)),
                 if (dept.estCertifiante)
                   Padding(
                     padding: const EdgeInsets.only(top: 6),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 3),
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                       decoration: BoxDecoration(
                         color: _gold,
                         borderRadius: BorderRadius.circular(8),
@@ -253,13 +248,10 @@ class _FormationDetailPageState extends State<FormationDetailPage>
                       child: const Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.verified_rounded,
-                              size: 11, color: Colors.white),
+                          Icon(Icons.verified_rounded, size: 11, color: _white),
                           SizedBox(width: 4),
                           Text('Formation Certifiante',
-                              style: TextStyle(
-                                  color: Colors.white, fontSize: 10,
-                                  fontWeight: FontWeight.bold)),
+                              style: TextStyle(color: _white, fontSize: 10, fontWeight: FontWeight.bold)),
                         ],
                       ),
                     ),
@@ -276,7 +268,7 @@ class _FormationDetailPageState extends State<FormationDetailPage>
     return Container(
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [c, c.withOpacity(0.7), _dark],
+          colors: [c, c.withOpacity(0.7), c.withOpacity(0.4)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -284,7 +276,7 @@ class _FormationDetailPageState extends State<FormationDetailPage>
       child: Center(
         child: Icon(
           _isMetier ? Icons.work_outline_rounded : Icons.school_outlined,
-          size: 80, color: Colors.white.withOpacity(0.1),
+          size: 80, color: _white.withOpacity(0.1),
         ),
       ),
     );
@@ -313,7 +305,7 @@ class _FormationDetailPageState extends State<FormationDetailPage>
     if (stats.isEmpty) return const SizedBox.shrink();
 
     return Container(
-      color: Colors.white,
+      color: _white,
       padding: const EdgeInsets.symmetric(vertical: 16),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -325,11 +317,11 @@ class _FormationDetailPageState extends State<FormationDetailPage>
   Widget _buildTabs() {
     final c = _accentColor;
     return Container(
-      color: Colors.white,
+      color: _white,
       child: TabBar(
         controller: _tabCtrl,
         labelColor: c,
-        unselectedLabelColor: Colors.grey,
+        unselectedLabelColor: _textLight,
         indicatorColor: c,
         indicatorWeight: 3,
         labelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
@@ -349,13 +341,8 @@ class _FormationDetailPageState extends State<FormationDetailPage>
           left: 20, right: 20, top: 12,
           bottom: MediaQuery.of(context).padding.bottom + 12),
       decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withOpacity(0.06),
-              blurRadius: 12,
-              offset: const Offset(0, -4)),
-        ],
+        color: _white,
+        border: Border(top: BorderSide(color: _borderLight, width: 1)),
       ),
       child: Row(
         children: [
@@ -368,16 +355,16 @@ class _FormationDetailPageState extends State<FormationDetailPage>
                   dept.progressionMoyenne > 0
                       ? '${dept.progressionMoyenne.toStringAsFixed(0)}% complété'
                       : '${dept.nbCours} cours disponibles',
-                  style: const TextStyle(fontSize: 12, color: Colors.grey),
+                  style: const TextStyle(fontSize: 12, color: _textLight),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 6),
                 ClipRRect(
                   borderRadius: BorderRadius.circular(4),
                   child: LinearProgressIndicator(
                     value: dept.progressionMoyenne / 100,
-                    backgroundColor: Colors.grey.shade100,
+                    backgroundColor: _borderLight,
                     valueColor: AlwaysStoppedAnimation(c),
-                    minHeight: 5,
+                    minHeight: 6,
                   ),
                 ),
               ],
@@ -389,16 +376,18 @@ class _FormationDetailPageState extends State<FormationDetailPage>
                 ? () => Navigator.push(context,
                       MaterialPageRoute(
                         builder: (_) => CoursDetailTabs(
-                            coursId: dept.cours.first.id.toString(), titre: '',),
+                            coursId: dept.cours.first.id.toString(),
+                            titre: dept.cours.first.title,
+                            coursColor: c.value,
+                        ),
                       ))
                 : null,
             style: ElevatedButton.styleFrom(
               backgroundColor: c,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 24, vertical: 13),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
+              foregroundColor: _white,
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 13),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              elevation: 0,
             ),
             child: Text(
               dept.progressionMoyenne > 0 ? 'Continuer' : 'Commencer',
@@ -426,20 +415,25 @@ class _TabAPropos extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Description
           if (dept.description.isNotEmpty) ...[
             _SectionHeader(
                 title: 'À propos de cette formation',
                 icon: Icons.info_outline_rounded,
                 color: accentColor),
             const SizedBox(height: 10),
-            Text(dept.description,
-                style: const TextStyle(
-                    fontSize: 14, height: 1.7, color: Color(0xFF374151))),
-            const SizedBox(height: 22),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: _white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: _borderLight, width: 1),
+              ),
+              child: Text(dept.description,
+                  style: const TextStyle(fontSize: 14, height: 1.7, color: _textMedium)),
+            ),
+            const SizedBox(height: 24),
           ],
 
-          // Objectifs
           if (dept.objectifs.isNotEmpty) ...[
             _SectionHeader(
                 title: 'Objectifs pédagogiques',
@@ -447,21 +441,19 @@ class _TabAPropos extends StatelessWidget {
                 color: accentColor),
             const SizedBox(height: 10),
             _BulletList(text: dept.objectifs, color: accentColor),
-            const SizedBox(height: 22),
+            const SizedBox(height: 24),
           ],
 
-          // Prérequis
           if (dept.prerequis.isNotEmpty) ...[
             _SectionHeader(
                 title: 'Prérequis',
                 icon: Icons.checklist_rounded,
-                color: accentColor),
+                color: _orange),
             const SizedBox(height: 10),
-            _BulletList(text: dept.prerequis, color: Colors.orange),
-            const SizedBox(height: 22),
+            _BulletList(text: dept.prerequis, color: _orange),
+            const SizedBox(height: 24),
           ],
 
-          // Détails pratiques
           _SectionHeader(
               title: 'Infos pratiques',
               icon: Icons.info_rounded,
@@ -469,9 +461,8 @@ class _TabAPropos extends StatelessWidget {
           const SizedBox(height: 10),
           _PratiqueCard(dept: dept, accentColor: accentColor),
 
-          // Certificat
           if (dept.certificatDelivre.isNotEmpty) ...[
-            const SizedBox(height: 22),
+            const SizedBox(height: 24),
             _SectionHeader(
                 title: 'Certification',
                 icon: Icons.card_membership_rounded,
@@ -500,10 +491,10 @@ class _TabCours extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.book_outlined, size: 60, color: Colors.grey.shade300),
+            Icon(Icons.book_outlined, size: 60, color: _borderMedium),
             const SizedBox(height: 14),
             Text('Aucun cours disponible',
-                style: TextStyle(color: Colors.grey.shade500)),
+                style: TextStyle(color: _textLight)),
           ],
         ),
       );
@@ -525,87 +516,72 @@ class _TabCours extends StatelessWidget {
         return GestureDetector(
           onTap: () => Navigator.push(ctx,
               MaterialPageRoute(
-                  builder: (_) => CoursDetailTabs(coursId: c.id.toString(), titre: c.title,))),
+                  builder: (_) => CoursDetailTabs(
+                    coursId: c.id.toString(),
+                    titre: c.title,
+                    coursColor: cardColor.value,
+                  ))),
           child: Container(
             margin: const EdgeInsets.only(bottom: 12),
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: _white,
               borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: cardColor.withOpacity(0.08),
-                  blurRadius: 10,
-                  offset: const Offset(0, 3),
-                ),
-              ],
+              border: Border.all(color: _borderLight, width: 1),
             ),
             child: Row(
               children: [
-                // Numéro
                 Container(
-                  width: 36, height: 36,
+                  width: 38, height: 38,
                   decoration: BoxDecoration(
-                    color: cardColor.withOpacity(0.12),
+                    color: cardColor.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: cardColor.withOpacity(0.2), width: 0.8),
                   ),
                   child: Center(
                     child: Text('${i + 1}',
-                        style: TextStyle(
-                            color: cardColor,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14)),
+                        style: TextStyle(color: cardColor, fontWeight: FontWeight.bold, fontSize: 14)),
                   ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 14),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(c.title,
-                          style: const TextStyle(
-                              fontSize: 14, fontWeight: FontWeight.bold)),
+                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: _textDark)),
                       if (c.enseignantPrincipal != '—')
                         Text(c.enseignantPrincipal,
-                            style: TextStyle(
-                                fontSize: 11, color: Colors.grey.shade500)),
-                      const SizedBox(height: 4),
+                            style: TextStyle(fontSize: 11, color: _textLight)),
+                      const SizedBox(height: 6),
                       Row(
                         children: [
-                          Icon(Icons.play_lesson_rounded,
-                              size: 11, color: Colors.grey.shade400),
+                          Icon(Icons.play_lesson_rounded, size: 11, color: _textLight),
                           const SizedBox(width: 3),
                           Text('${c.lessons} leçons',
-                              style: TextStyle(
-                                  fontSize: 11, color: Colors.grey.shade500)),
+                              style: TextStyle(fontSize: 11, color: _textLight)),
                           const SizedBox(width: 10),
-                          Icon(Icons.assignment_rounded,
-                              size: 11, color: Colors.grey.shade400),
+                          Icon(Icons.assignment_rounded, size: 11, color: _textLight),
                           const SizedBox(width: 3),
                           Text('${c.assignments}',
-                              style: TextStyle(
-                                  fontSize: 11, color: Colors.grey.shade500)),
+                              style: TextStyle(fontSize: 11, color: _textLight)),
                         ],
                       ),
                     ],
                   ),
                 ),
-                // Progression
                 SizedBox(
-                  width: 48,
+                  width: 50,
                   child: Column(
                     children: [
                       Text('${c.progression.toStringAsFixed(0)}%',
-                          style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                              color: cardColor)),
+                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: cardColor)),
                       const SizedBox(height: 4),
                       ClipRRect(
                         borderRadius: BorderRadius.circular(4),
                         child: LinearProgressIndicator(
                           value: c.progression / 100,
-                          backgroundColor: Colors.grey.shade100,
+                          backgroundColor: _borderLight,
                           valueColor: AlwaysStoppedAnimation(cardColor),
                           minHeight: 4,
                         ),
@@ -614,8 +590,7 @@ class _TabCours extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 8),
-                Icon(Icons.chevron_right_rounded,
-                    color: Colors.grey.shade300),
+                Icon(Icons.chevron_right_rounded, color: _textLight),
               ],
             ),
           ),
@@ -635,24 +610,17 @@ class _TabProgramme extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Vue condensée du programme (objectifs + modules basés sur les cours)
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Résumé visuel
           Container(
             padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  accentColor.withOpacity(0.08),
-                  accentColor.withOpacity(0.03),
-                ],
-              ),
+              color: _white,
               borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: accentColor.withOpacity(0.15)),
+              border: Border.all(color: _borderLight, width: 1),
             ),
             child: Row(
               children: [
@@ -663,27 +631,21 @@ class _TabProgramme extends StatelessWidget {
                       icon: Icons.book_rounded,
                       color: accentColor),
                 ),
-                Container(
-                    width: 1, height: 50,
-                    color: Colors.grey.shade200),
+                Container(width: 1, height: 50, color: _borderLight),
                 Expanded(
                   child: _ProgramStatBlock(
-                      value: dept.dureeFormation.isEmpty
-                          ? 'Flexible'
-                          : dept.dureeFormation,
+                      value: dept.dureeFormation.isEmpty ? 'Flexible' : dept.dureeFormation,
                       label: 'Durée',
                       icon: Icons.timer_rounded,
                       color: _blue),
                 ),
-                Container(
-                    width: 1, height: 50,
-                    color: Colors.grey.shade200),
+                Container(width: 1, height: 50, color: _borderLight),
                 Expanded(
                   child: _ProgramStatBlock(
                       value: dept.estCertifiante ? 'Oui' : 'Non',
                       label: 'Certifiante',
                       icon: Icons.verified_rounded,
-                      color: dept.estCertifiante ? _gold : Colors.grey),
+                      color: dept.estCertifiante ? _gold : _textLight),
                 ),
               ],
             ),
@@ -691,7 +653,6 @@ class _TabProgramme extends StatelessWidget {
 
           const SizedBox(height: 24),
 
-          // Liste des cours comme modules
           if (dept.cours.isNotEmpty) ...[
             _SectionHeader(
                 title: 'Modules de formation',
@@ -700,8 +661,14 @@ class _TabProgramme extends StatelessWidget {
             const SizedBox(height: 12),
             ...List.generate(dept.cours.length, (i) {
               final c = dept.cours[i];
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 8),
+              return Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: _white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: _borderLight, width: 1),
+                ),
                 child: Row(
                   children: [
                     Container(
@@ -712,10 +679,7 @@ class _TabProgramme extends StatelessWidget {
                       ),
                       child: Center(
                         child: Text('${i + 1}',
-                            style: TextStyle(
-                                color: accentColor,
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold)),
+                            style: TextStyle(color: accentColor, fontSize: 12, fontWeight: FontWeight.bold)),
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -724,49 +688,40 @@ class _TabProgramme extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(c.title,
-                              style: const TextStyle(
-                                  fontSize: 14, fontWeight: FontWeight.w600)),
+                              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: _textDark)),
                           Text('${c.lessons} leçons · ${c.assignments} devoirs',
-                              style: TextStyle(
-                                  fontSize: 11, color: Colors.grey.shade500)),
+                              style: TextStyle(fontSize: 11, color: _textLight)),
                         ],
                       ),
                     ),
                     if (c.progression == 100)
-                      Icon(Icons.check_circle_rounded,
-                          size: 20, color: _green)
+                      Icon(Icons.check_circle_rounded, size: 20, color: _green)
                     else if (c.progression > 0)
-                      Icon(Icons.radio_button_checked_rounded,
-                          size: 20, color: accentColor)
+                      Icon(Icons.radio_button_checked_rounded, size: 20, color: accentColor)
                     else
-                      Icon(Icons.radio_button_unchecked_rounded,
-                          size: 20, color: Colors.grey.shade300),
+                      Icon(Icons.radio_button_unchecked_rounded, size: 20, color: _textLight),
                   ],
                 ),
               );
             }),
           ],
 
-          // Prérequis recap
           if (dept.prerequis.isNotEmpty) ...[
             const SizedBox(height: 24),
             _SectionHeader(
                 title: 'Prérequis',
                 icon: Icons.checklist_rounded,
-                color: Colors.orange),
+                color: _orange),
             const SizedBox(height: 10),
             Container(
-              padding: const EdgeInsets.all(14),
+              padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.orange.withOpacity(0.05),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(
-                    color: Colors.orange.withOpacity(0.2)),
+                color: _white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: _borderLight, width: 1),
               ),
               child: Text(dept.prerequis,
-                  style: const TextStyle(
-                      fontSize: 13, height: 1.6,
-                      color: Color(0xFF374151))),
+                  style: const TextStyle(fontSize: 13, height: 1.6, color: _textMedium)),
             ),
           ],
         ],
@@ -789,11 +744,10 @@ class _SectionHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Icon(icon, size: 16, color: color),
+        Icon(icon, size: 18, color: color),
         const SizedBox(width: 8),
         Text(title,
-            style: TextStyle(
-                fontSize: 15, fontWeight: FontWeight.bold, color: color)),
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: color)),
       ],
     );
   }
@@ -812,29 +766,34 @@ class _BulletList extends StatelessWidget {
         .where((s) => s.isNotEmpty)
         .toList();
 
-    return Column(
-      children: lignes.map((l) {
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 8),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 6, height: 6,
-                margin: const EdgeInsets.only(top: 6, right: 10),
-                decoration: BoxDecoration(
-                    color: color, shape: BoxShape.circle),
-              ),
-              Expanded(
-                child: Text(l,
-                    style: const TextStyle(
-                        fontSize: 14, height: 1.5,
-                        color: Color(0xFF374151))),
-              ),
-            ],
-          ),
-        );
-      }).toList(),
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: _white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _borderLight, width: 1),
+      ),
+      child: Column(
+        children: lignes.map((l) {
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 6, height: 6,
+                  margin: const EdgeInsets.only(top: 6, right: 12),
+                  decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+                ),
+                Expanded(
+                  child: Text(l,
+                      style: const TextStyle(fontSize: 14, height: 1.5, color: _textMedium)),
+                ),
+              ],
+            ),
+          );
+        }).toList(),
+      ),
     );
   }
 }
@@ -847,14 +806,16 @@ class _PratiqueCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final items = <_ItemPratique>[];
-    if (dept.dureeFormation.isNotEmpty)
+    if (dept.dureeFormation.isNotEmpty) {
       items.add(_ItemPratique(
           icon: Icons.schedule_rounded, label: 'Durée',
           value: dept.dureeFormation, color: _blue));
-    if (dept.modeFormation.isNotEmpty)
+    }
+    if (dept.modeFormation.isNotEmpty) {
       items.add(_ItemPratique(
           icon: Icons.devices_rounded, label: 'Mode',
           value: dept.modeFormationLabel, color: _purple));
+    }
     if (dept.ville.isNotEmpty)
       items.add(_ItemPratique(
           icon: Icons.location_on_rounded, label: 'Lieu',
@@ -864,9 +825,7 @@ class _PratiqueCard extends StatelessWidget {
           icon: Icons.category_rounded, label: 'Domaine',
           value: dept.domaine, color: _orange));
     items.add(_ItemPratique(
-        icon: dept.prix == 0
-            ? Icons.lock_open_rounded
-            : Icons.lock_rounded,
+        icon: dept.prix == 0 ? Icons.lock_open_rounded : Icons.lock_rounded,
         label: 'Accès',
         value: dept.prix == 0 ? 'Gratuit' : '${dept.prix} FCFA',
         color: dept.prix == 0 ? _green : _gold));
@@ -875,12 +834,9 @@ class _PratiqueCard extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: _white,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.04),
-              blurRadius: 8, offset: const Offset(0, 2)),
-        ],
+        border: Border.all(color: _borderLight, width: 1),
       ),
       child: Column(
         children: List.generate(items.length, (i) {
@@ -889,25 +845,22 @@ class _PratiqueCard extends StatelessWidget {
             children: [
               ListTile(
                 leading: Container(
-                  width: 38, height: 38,
+                  width: 40, height: 40,
                   decoration: BoxDecoration(
                     color: item.color.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: item.color.withOpacity(0.2), width: 0.8),
                   ),
                   child: Icon(item.icon, color: item.color, size: 18),
                 ),
                 title: Text(item.label,
-                    style: TextStyle(
-                        fontSize: 10, color: Colors.grey.shade400)),
+                    style: TextStyle(fontSize: 11, color: _textLight)),
                 subtitle: Text(item.value,
-                    style: const TextStyle(
-                        fontSize: 14, fontWeight: FontWeight.w600,
-                        color: Color(0xFF1F2937))),
+                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: _textDark)),
                 dense: true,
               ),
               if (i < items.length - 1)
-                Divider(height: 1, indent: 68,
-                    color: Colors.grey.shade100),
+                Divider(height: 1, indent: 68, color: _borderLight),
             ],
           );
         }),
@@ -933,22 +886,20 @@ class _CertifCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [_gold.withOpacity(0.12), _gold.withOpacity(0.05)],
-        ),
+        color: _white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _gold.withOpacity(0.3)),
+        border: Border.all(color: _gold.withOpacity(0.3), width: 1),
       ),
       child: Row(
         children: [
           Container(
-            width: 48, height: 48,
+            width: 50, height: 50,
             decoration: BoxDecoration(
-              color: _gold.withOpacity(0.2),
+              color: _gold.withOpacity(0.1),
               borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: _gold.withOpacity(0.2), width: 0.8),
             ),
-            child: const Icon(Icons.card_membership_rounded,
-                color: _gold, size: 24),
+            child: const Icon(Icons.card_membership_rounded, color: _gold, size: 24),
           ),
           const SizedBox(width: 14),
           Expanded(
@@ -956,13 +907,9 @@ class _CertifCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text('Certificat délivré',
-                    style: TextStyle(
-                        fontSize: 11, color: Colors.grey,
-                        fontWeight: FontWeight.w500)),
+                    style: TextStyle(fontSize: 11, color: _textLight, fontWeight: FontWeight.w500)),
                 Text(dept.certificatDelivre,
-                    style: const TextStyle(
-                        fontSize: 14, fontWeight: FontWeight.bold,
-                        color: Color(0xFF1F2937))),
+                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: _textDark)),
               ],
             ),
           ),
@@ -990,15 +937,12 @@ class _QuickStatWidget extends StatelessWidget {
     return Column(
       children: [
         Icon(stat.icon, color: stat.color, size: 22),
-        const SizedBox(height: 4),
+        const SizedBox(height: 6),
         Text(stat.value,
-            style: TextStyle(
-                fontSize: 14, fontWeight: FontWeight.bold,
-                color: stat.color),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis),
+            style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: stat.color),
+            maxLines: 1, overflow: TextOverflow.ellipsis),
         Text(stat.label,
-            style: TextStyle(fontSize: 10, color: Colors.grey.shade500)),
+            style: TextStyle(fontSize: 10, color: _textLight)),
       ],
     );
   }
@@ -1017,15 +961,12 @@ class _ProgramStatBlock extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         Icon(icon, color: color, size: 20),
-        const SizedBox(height: 4),
+        const SizedBox(height: 6),
         Text(value,
-            style: TextStyle(
-                fontSize: 15, fontWeight: FontWeight.bold,
-                color: color),
-            maxLines: 1, overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.center),
+            style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: color),
+            maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center),
         Text(label,
-            style: TextStyle(fontSize: 10, color: Colors.grey.shade500)),
+            style: TextStyle(fontSize: 10, color: _textLight)),
       ],
     );
   }

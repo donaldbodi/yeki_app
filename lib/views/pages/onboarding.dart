@@ -13,10 +13,10 @@ class _OnboardingPageState extends State<OnboardingPage> {
   final PageController _ctrl = PageController();
   int _current = 0;
 
-  // Palette : Ta couleur + Couleur chaude contrastée
-  static const Color mainBlue = Color(0xFF2884A0); 
-  static const Color darkBlue = Color(0xFF164A5A); // Version sombre pour le dégradé
-  static const Color accentWarm = Color(0xFFF39C12); // Orange chaud pour les boutons
+  // --- NOUVELLE PALETTE HARMONISÉE ---
+  static const Color brandBackground = Color(0xFF135F74); 
+  static const Color actionOrange = Color(0xFFFF6B00); 
+  static const Color glassFill = Color(0x1AFFFFFF);
 
   final List<Map<String, String>> _pages = [
     {
@@ -39,47 +39,36 @@ class _OnboardingPageState extends State<OnboardingPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
-        // Dégradé utilisant ta couleur principale
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topRight,
-            end: Alignment.bottomLeft,
-            colors: [mainBlue, darkBlue],
-          ),
-        ),
-        child: Stack(
-          children: [
-            // Effet de grain ou halo pour la texture
-            Positioned(
-              bottom: -50,
-              right: -50,
-              child: CircleAvatar(
-                radius: 150,
-                backgroundColor: Colors.white.withOpacity(0.05),
-              ),
-            ),
-            
-            SafeArea(
-              child: Column(
-                children: [
-                  _buildHeader(),
-                  Expanded(
-                    child: PageView.builder(
-                      controller: _ctrl,
-                      onPageChanged: (i) => setState(() => _current = i),
-                      itemCount: _pages.length,
-                      itemBuilder: (context, i) => _buildPage(_pages[i]),
-                    ),
+      backgroundColor: brandBackground,
+      body: Stack(
+        children: [
+          // ÉLÉMENTS DÉCORATIFS (Cercles subtils)
+          Positioned(top: -100, right: -100, child: _buildCircle(300, Colors.white.withOpacity(0.03))),
+          Positioned(bottom: -50, left: -50, child: _buildCircle(200, actionOrange.withOpacity(0.05))),
+          
+          SafeArea(
+            child: Column(
+              children: [
+                _buildHeader(),
+                Expanded(
+                  child: PageView.builder(
+                    controller: _ctrl,
+                    onPageChanged: (i) => setState(() => _current = i),
+                    itemCount: _pages.length,
+                    itemBuilder: (context, i) => _buildPage(_pages[i]),
                   ),
-                  _buildFooter(),
-                ],
-              ),
+                ),
+                _buildFooter(),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
+  }
+
+  Widget _buildCircle(double size, Color color) {
+    return Container(width: size, height: size, decoration: BoxDecoration(shape: BoxShape.circle, color: color));
   }
 
   Widget _buildHeader() {
@@ -89,11 +78,11 @@ class _OnboardingPageState extends State<OnboardingPage> {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           const Text('YEKI', 
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, letterSpacing: 2, fontSize: 18)),
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, letterSpacing: 4, fontSize: 20)),
           TextButton(
             onPressed: () => YekiAuth.finishOnboarding(context),
-            child: Text('Passer', 
-              style: TextStyle(color: Colors.white.withOpacity(0.7), fontWeight: FontWeight.w600)),
+            style: TextButton.styleFrom(foregroundColor: Colors.white.withOpacity(0.5)),
+            child: const Text('Passer', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
           ),
         ],
       ),
@@ -106,44 +95,57 @@ class _OnboardingPageState extends State<OnboardingPage> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          // Illustration avec bordure fine et légère ombre
-          Container(
-            height: 260,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(24),
-              border: Border.all(color: Colors.white.withOpacity(0.2)),
-              boxShadow: [
-                BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 20, offset: const Offset(0, 10)),
-              ],
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(24),
-              child: Image.asset(
-                data['image']!,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => Icon(Icons.auto_awesome_motion, size: 80, color: Colors.white.withOpacity(0.5)),
+          // Illustration avec Glassmorphism
+          ClipRRect(
+            borderRadius: BorderRadius.circular(30),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+              child: Container(
+                height: 280,
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  color: glassFill,
+                  borderRadius: BorderRadius.circular(30),
+                  border: Border.all(color: Colors.white.withOpacity(0.1)),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(15.0),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(20),
+                    child: Image.asset(
+                      data['image']!,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Icon(Icons.auto_awesome_motion, size: 80, color: Colors.white.withOpacity(0.2)),
+                    ),
+                  ),
+                ),
               ),
             ),
           ),
-          const SizedBox(height: 40),
+          const SizedBox(height: 50),
           Text(
             data['title']!,
             textAlign: TextAlign.center,
             style: const TextStyle(
               color: Colors.white,
-              fontSize: 28,
-              fontWeight: FontWeight.w800,
+              fontSize: 26,
+              fontWeight: FontWeight.w900,
               height: 1.2,
+              letterSpacing: -0.5,
             ),
           ),
-          const SizedBox(height: 15),
-          Text(
-            data['desc']!,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: Colors.white.withOpacity(0.9),
-              fontSize: 16,
-              height: 1.5,
+          const SizedBox(height: 20),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            child: Text(
+              data['desc']!,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.7),
+                fontSize: 15,
+                fontWeight: FontWeight.w400,
+                height: 1.6,
+              ),
             ),
           ),
         ],
@@ -158,46 +160,52 @@ class _OnboardingPageState extends State<OnboardingPage> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          // Indicateurs blancs pour le contraste sur fond bleu
+          // Indicateurs de progression épurés
           Row(
             children: List.generate(_pages.length, (i) => AnimatedContainer(
               duration: const Duration(milliseconds: 300),
               margin: const EdgeInsets.only(right: 8),
-              width: i == _current ? 24 : 8,
-              height: 4,
+              width: i == _current ? 28 : 8,
+              height: 6,
               decoration: BoxDecoration(
-                color: i == _current ? Colors.white : Colors.white.withOpacity(0.3),
-                borderRadius: BorderRadius.circular(2),
+                color: i == _current ? actionOrange : Colors.white.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(3),
               ),
             )),
           ),
 
-          // Bouton avec la couleur CHAUDE (Orange/Ambre)
+          // Bouton d'action "Premium"
           GestureDetector(
             onTap: () {
               if (!isLast) {
-                _ctrl.nextPage(duration: const Duration(milliseconds: 400), curve: Curves.easeOut);
+                _ctrl.nextPage(duration: const Duration(milliseconds: 500), curve: Curves.easeInOutQuart);
               } else {
                 YekiAuth.finishOnboarding(context);
               }
             },
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 300),
-              padding: EdgeInsets.symmetric(horizontal: isLast ? 24 : 16, vertical: 16),
+              padding: EdgeInsets.symmetric(horizontal: isLast ? 28 : 20, vertical: 18),
               decoration: BoxDecoration(
-                color: accentWarm,
-                borderRadius: BorderRadius.circular(16),
+                color: actionOrange,
+                borderRadius: BorderRadius.circular(20),
                 boxShadow: [
-                  BoxShadow(color: accentWarm.withOpacity(0.4), blurRadius: 15, offset: const Offset(0, 5)),
+                  BoxShadow(
+                    color: actionOrange.withOpacity(0.3), 
+                    blurRadius: 20, 
+                    offset: const Offset(0, 10)
+                  ),
                 ],
               ),
               child: Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   if (isLast) ...[
-                    const Text('Commencer', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
-                    const SizedBox(width: 10),
+                    const Text('Démarrer', 
+                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 15, letterSpacing: 1)),
+                    const SizedBox(width: 12),
                   ],
-                  const Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 24),
+                  const Icon(Icons.arrow_forward_ios_rounded, color: Colors.white, size: 18),
                 ],
               ),
             ),

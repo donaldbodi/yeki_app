@@ -1,18 +1,31 @@
 // lib/views/pages/enseignants/dashboard_principal_page.dart
+
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
-const String _baseUrl = 'https://yeki.pythonanywhere.com/api';
+// Palette harmonisée
 const Color _primary = Color(0xFF2884A0);
-const Color _dark    = Color(0xFF1E293B);
-const Color _bg      = Color(0xFFF1F5F9);
+//const Color _primaryLight = Color(0xFF39A0C2);
+//const Color _dark = Color(0xFF1E293B);
+const Color _textDark = Color(0xFF1A1C1E);
+const Color _textMedium = Color(0xFF5A5C5E);
+const Color _textLight = Color(0xFF8A8C8E);
+const Color _borderLight = Color(0xFFE0E4E8);
+const Color _bgLight = Color(0xFFF8FAFC);
+const Color _white = Color(0xFFFFFFFF);
+const Color _green = Color(0xFF10B981);
+const Color _orange = Color(0xFFF97316);
+const Color _red = Color(0xFFEF4444);
+const Color _purple = Color(0xFF8B5CF6);
+
+const String _baseUrl = 'https://yeki.pythonanywhere.com/api';
 
 class DashboardPrincipalPage extends StatefulWidget {
   final String nomEnseignant;
   final String roleEnseignant;
-  final List<dynamic>? extraInfo; // ← cours passés depuis la page parente
+  final List<dynamic>? extraInfo;
 
   const DashboardPrincipalPage({
     super.key,
@@ -27,11 +40,7 @@ class DashboardPrincipalPage extends StatefulWidget {
 
 class _DashboardPrincipalPageState extends State<DashboardPrincipalPage>
     with SingleTickerProviderStateMixin {
-
   late TabController _tabCtrl;
-
-  // ✅ Même logique que l'ancien : on travaille sur une copie locale
-  //    de extraInfo, exactement comme _localExtraInfo dans l'ancien code.
   late List<dynamic> _localExtraInfo;
   List<Map<String, dynamic>> _enseignantsSecondaires = [];
   bool _isLoading = false;
@@ -39,8 +48,7 @@ class _DashboardPrincipalPageState extends State<DashboardPrincipalPage>
   @override
   void initState() {
     super.initState();
-    _tabCtrl       = TabController(length: 3, vsync: this);
-    // ✅ Copie défensive — même pattern que l'ancien
+    _tabCtrl = TabController(length: 3, vsync: this);
     _localExtraInfo = List<dynamic>.from(widget.extraInfo ?? const []);
     _fetchEnseignantsSecondaires();
   }
@@ -51,7 +59,6 @@ class _DashboardPrincipalPageState extends State<DashboardPrincipalPage>
     super.dispose();
   }
 
-  // ── Auth ──────────────────────────────────────────────────────────
   Future<Map<String, String>> _authHeaders() async {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('token');
@@ -61,7 +68,6 @@ class _DashboardPrincipalPageState extends State<DashboardPrincipalPage>
     };
   }
 
-  // ✅ Même helper que l'ancien _asListOfMap
   List<Map<String, dynamic>> _asListOfMap(List<dynamic>? raw) {
     if (raw == null) return [];
     return raw
@@ -74,20 +80,18 @@ class _DashboardPrincipalPageState extends State<DashboardPrincipalPage>
         .toList();
   }
 
-  // ── Stats calculées sur _localExtraInfo ──────────────────────────
   Map<String, dynamic> get _stats {
     final cours = _asListOfMap(_localExtraInfo);
     return {
-      'nb_cours':      cours.length,
-      'nb_lecons':     cours.fold<int>(0, (s, c) => s + _toInt(c['nb_lecons'])),
-      'nb_devoirs':    cours.fold<int>(0, (s, c) => s + _toInt(c['nb_devoirs'])),
+      'nb_cours': cours.length,
+      'nb_lecons': cours.fold<int>(0, (s, c) => s + _toInt(c['nb_lecons'])),
+      'nb_devoirs': cours.fold<int>(0, (s, c) => s + _toInt(c['nb_devoirs'])),
       'nb_apprenants': cours.fold<int>(0, (s, c) => s + _toInt(c['nb_apprenants'])),
     };
   }
 
   int _toInt(dynamic v) => (v as num? ?? 0).toInt();
 
-  // ── Chargement enseignants secondaires disponibles ────────────────
   Future<void> _fetchEnseignantsSecondaires() async {
     try {
       final headers = await _authHeaders();
@@ -98,7 +102,6 @@ class _DashboardPrincipalPageState extends State<DashboardPrincipalPage>
       if (res.statusCode == 200) {
         final body = jsonDecode(res.body);
         setState(() {
-          // robuste : accepte List directe ou objet enveloppant
           if (body is List) {
             _enseignantsSecondaires = _asListOfMap(body);
           } else if (body is Map) {
@@ -114,9 +117,6 @@ class _DashboardPrincipalPageState extends State<DashboardPrincipalPage>
     } catch (_) {}
   }
 
-  // ══════════════════════════════════════════════════════════════════
-  //  AJOUT enseignant secondaire (multi-select, même logique ancien)
-  // ══════════════════════════════════════════════════════════════════
   Future<void> _ajouterEnseignantSecondaire(int coursId) async {
     List<int> selectedIds = [];
 
@@ -140,32 +140,33 @@ class _DashboardPrincipalPageState extends State<DashboardPrincipalPage>
 
           return Container(
             height: MediaQuery.of(context).size.height * 0.72,
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+            decoration: BoxDecoration(
+              color: _white,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
             ),
             padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
             child: Column(children: [
               _sheetHandle(),
-              const SizedBox(height: 16),
+              const SizedBox(height: 20),
               Text('Assigner des assistants',
                   style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
-                      color: _dark)),
+                      color: _textDark)),
               Text('${candidats.length} enseignant(s) disponible(s)',
-                  style: const TextStyle(fontSize: 12, color: Colors.grey)),
-              const SizedBox(height: 16),
+                  style: const TextStyle(fontSize: 12, color: _textLight)),
+              const SizedBox(height: 20),
               Expanded(
                 child: candidats.isEmpty
                     ? const Center(
-                        child: Text('Tous les enseignants sont déjà assignés.'))
+                        child: Text('Tous les enseignants sont déjà assignés.',
+                            style: TextStyle(color: _textLight)))
                     : ListView.builder(
                         itemCount: candidats.length,
                         itemBuilder: (_, i) {
-                          final ens       = candidats[i];
+                          final ens = candidats[i];
                           final isSelected = selectedIds.contains(ens['id']);
-                          final username  =
+                          final username =
                               ens['user']?['username'] ?? ens['username'] ?? '';
                           final email =
                               ens['user']?['email'] ?? ens['email'] ?? '';
@@ -173,13 +174,14 @@ class _DashboardPrincipalPageState extends State<DashboardPrincipalPage>
                             margin: const EdgeInsets.only(bottom: 8),
                             decoration: BoxDecoration(
                               color: isSelected
-                                  ? _primary.withOpacity(0.07)
-                                  : const Color(0xFFF8FAFC),
+                                  ? _primary.withOpacity(0.05)
+                                  : _bgLight,
                               borderRadius: BorderRadius.circular(14),
                               border: Border.all(
                                 color: isSelected
-                                    ? _primary.withOpacity(0.4)
-                                    : Colors.transparent,
+                                    ? _primary.withOpacity(0.3)
+                                    : _borderLight,
+                                width: 1,
                               ),
                             ),
                             child: CheckboxListTile(
@@ -189,9 +191,12 @@ class _DashboardPrincipalPageState extends State<DashboardPrincipalPage>
                               title: Text(username,
                                   style: const TextStyle(
                                       fontWeight: FontWeight.w600,
-                                      fontSize: 14)),
-                              subtitle: Text(email,
-                                  style: const TextStyle(fontSize: 12)),
+                                      fontSize: 14,
+                                      color: _textDark)),
+                              subtitle: email.isNotEmpty
+                                  ? Text(email,
+                                      style: const TextStyle(fontSize: 12, color: _textLight))
+                                  : null,
                               value: isSelected,
                               onChanged: (v) => setS(() {
                                 if (v == true) {
@@ -205,7 +210,7 @@ class _DashboardPrincipalPageState extends State<DashboardPrincipalPage>
                         },
                       ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 20),
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
@@ -214,6 +219,7 @@ class _DashboardPrincipalPageState extends State<DashboardPrincipalPage>
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(14)),
                     padding: const EdgeInsets.symmetric(vertical: 16),
+                    elevation: 0,
                   ),
                   onPressed: selectedIds.isEmpty || _isLoading
                       ? null
@@ -239,7 +245,6 @@ class _DashboardPrincipalPageState extends State<DashboardPrincipalPage>
                             }
                           }
 
-                          // ✅ Mise à jour locale immédiate (même logique ancien)
                           if (success) {
                             setState(() {
                               for (var c in _localExtraInfo) {
@@ -269,11 +274,11 @@ class _DashboardPrincipalPageState extends State<DashboardPrincipalPage>
                           height: 20,
                           width: 20,
                           child: CircularProgressIndicator(
-                              color: Colors.white, strokeWidth: 2))
+                              color: _white, strokeWidth: 2))
                       : Text(
                           'Ajouter ${selectedIds.length} sélection(s)',
                           style: const TextStyle(
-                              color: Colors.white,
+                              color: _white,
                               fontSize: 15,
                               fontWeight: FontWeight.bold),
                         ),
@@ -286,27 +291,26 @@ class _DashboardPrincipalPageState extends State<DashboardPrincipalPage>
     );
   }
 
-  // ══════════════════════════════════════════════════════════════════
-  //  RETRAIT enseignant secondaire
-  // ══════════════════════════════════════════════════════════════════
   Future<void> _retirerEnseignant(
       int coursId, int enseignantId, String nom) async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text("Retirer l'assistant"),
-        content: Text('Voulez-vous retirer "$nom" de ce cours ?'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        backgroundColor: _white,
+        title: const Text("Retirer l'assistant",
+            style: TextStyle(fontWeight: FontWeight.bold, color: _textDark)),
+        content: Text('Voulez-vous retirer "$nom" de ce cours ?',
+            style: const TextStyle(color: _textMedium)),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Annuler')),
+              child: const Text('Annuler', style: TextStyle(color: _textMedium))),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: _red, foregroundColor: _white, elevation: 0),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Retirer',
-                style: TextStyle(color: Colors.white)),
+            child: const Text('Retirer'),
           ),
         ],
       ),
@@ -321,7 +325,6 @@ class _DashboardPrincipalPageState extends State<DashboardPrincipalPage>
         body: jsonEncode({'enseignant_id': enseignantId}),
       );
       if (res.statusCode == 200 || res.statusCode == 204) {
-        // ✅ Mise à jour locale immédiate
         setState(() {
           for (var c in _localExtraInfo) {
             if ((c as Map)['id'] == coursId) {
@@ -342,13 +345,10 @@ class _DashboardPrincipalPageState extends State<DashboardPrincipalPage>
     }
   }
 
-  // ══════════════════════════════════════════════════════════════════
-  //  BUILD
-  // ══════════════════════════════════════════════════════════════════
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _bg,
+      backgroundColor: _bgLight,
       body: NestedScrollView(
         headerSliverBuilder: (_, __) => [
           _buildAppBar(),
@@ -362,68 +362,97 @@ class _DashboardPrincipalPageState extends State<DashboardPrincipalPage>
     );
   }
 
-  // ── AppBar ───────────────────────────────────────────────────────
   SliverAppBar _buildAppBar() {
     final stats = _stats;
     return SliverAppBar(
-      expandedHeight: 220,
+      expandedHeight: 250,
       pinned: true,
       backgroundColor: _primary,
       flexibleSpace: FlexibleSpaceBar(
+        collapseMode: CollapseMode.parallax,
         background: Container(
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             gradient: LinearGradient(
-              colors: [Color(0xFF1A5276), _primary],
+              colors: [_primary, _primary.withOpacity(0.85)],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
           ),
           child: SafeArea(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+              padding: const EdgeInsets.fromLTRB(24, 16, 24, 20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  const Text('Tableau de bord',
-                      style:
-                          TextStyle(color: Colors.white70, fontSize: 13)),
-                  const SizedBox(height: 4),
+                  // Badge "ENSEIGNANT"
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFD700).withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: const Text(
+                      "ENSEIGNANT PRINCIPAL",
+                      style: TextStyle(
+                        color: Color(0xFFFFD700),
+                        fontSize: 9,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  // Nom de l'enseignant
                   Text(
                     widget.nomEnseignant.isEmpty
                         ? 'Enseignant Principal'
                         : widget.nomEnseignant,
                     style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold),
+                      color: _white,
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 8),
-                  _roleBadge('Enseignant Principal'),
-                  const SizedBox(height: 10),
-                  Row(children: [
-                    _miniStatBadge(
-                        '${stats['nb_cours']}', 'cours', Icons.book),
-                    const SizedBox(width: 12),
-                    _miniStatBadge(
-                        '${stats['nb_apprenants']}', 'apprenants', Icons.people),
-                    const SizedBox(width: 12),
-                    _miniStatBadge(
-                        '${stats['nb_lecons']}', 'leçons', Icons.article),
-                  ]),
+                  // Badge rôle
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: _white.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: const Text(
+                      'Enseignant Principal',
+                      style: TextStyle(
+                        color: _white,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  // Statistiques miniatures
+                  Row(
+                    children: [
+                      _miniStatBadge('${stats['nb_cours']}', 'cours', Icons.book),
+                      const SizedBox(width: 16),
+                      _miniStatBadge('${stats['nb_apprenants']}', 'apprenants', Icons.people),
+                      const SizedBox(width: 16),
+                      _miniStatBadge('${stats['nb_lecons']}', 'leçons', Icons.article),
+                    ],
+                  ),
                 ],
               ),
             ),
           ),
         ),
-        title: const Text('Dashboard Principal',
-            style: TextStyle(fontSize: 16, color: Colors.white)),
-        titlePadding: const EdgeInsets.only(left: 16, bottom: 16),
-        collapseMode: CollapseMode.parallax,
       ),
       actions: [
         IconButton(
-          icon: const Icon(Icons.refresh, color: Colors.white),
+          icon: const Icon(Icons.refresh, color: _white),
           onPressed: _fetchEnseignantsSecondaires,
         ),
       ],
@@ -437,15 +466,16 @@ class _DashboardPrincipalPageState extends State<DashboardPrincipalPage>
         TabBar(
           controller: _tabCtrl,
           labelColor: _primary,
-          unselectedLabelColor: Colors.grey,
+          unselectedLabelColor: _textLight,
           indicatorColor: _primary,
+          labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
           tabs: const [
             Tab(text: 'Mes Cours'),
             Tab(text: 'Suivi'),
             Tab(text: 'Statistiques'),
           ],
         ),
-        backgroundColor: Colors.white,
+        backgroundColor: _white,
       ),
     );
   }
@@ -456,10 +486,21 @@ class _DashboardPrincipalPageState extends State<DashboardPrincipalPage>
     if (cours.isEmpty) {
       return Center(
         child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Icon(Icons.book_outlined, size: 60, color: Colors.grey.shade300),
-          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: _primary.withOpacity(0.08),
+              shape: BoxShape.circle,
+              border: Border.all(color: _primary.withOpacity(0.2), width: 1),
+            ),
+            child: Icon(Icons.book_outlined, size: 48, color: _primary),
+          ),
+          const SizedBox(height: 16),
           const Text('Aucun cours assigné',
-              style: TextStyle(color: Colors.grey, fontSize: 16)),
+              style: TextStyle(color: _textMedium, fontSize: 16, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 8),
+          const Text('Les cours vous seront attribués par votre cadre',
+              style: TextStyle(color: _textLight, fontSize: 13)),
         ]),
       );
     }
@@ -471,8 +512,8 @@ class _DashboardPrincipalPageState extends State<DashboardPrincipalPage>
 
   Widget _buildCoursCard(Map<String, dynamic> c) {
     final assistants = _asListOfMap(c['enseignants'] as List?);
-    final int lecons     = _toInt(c['nb_lecons']);
-    final int devoirs    = _toInt(c['nb_devoirs']);
+    final int lecons = _toInt(c['nb_lecons']);
+    final int devoirs = _toInt(c['nb_devoirs']);
     final int apprenants = _toInt(c['nb_apprenants']);
     final Color cardColor =
         _hexColor(c['color_code'] as String? ?? '#2884A0');
@@ -480,28 +521,25 @@ class _DashboardPrincipalPageState extends State<DashboardPrincipalPage>
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: _white,
         borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withOpacity(0.05), blurRadius: 10),
-        ],
+        border: Border.all(color: _borderLight, width: 1),
       ),
       child: Column(children: [
         // ── Header coloré ──────────────────────────────────────
         Container(
           decoration: BoxDecoration(
-            color: cardColor.withOpacity(0.12),
-            borderRadius:
-                const BorderRadius.vertical(top: Radius.circular(20)),
+            color: cardColor.withOpacity(0.05),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
           ),
           padding: const EdgeInsets.all(16),
           child: Row(children: [
             Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: cardColor.withOpacity(0.2),
+                color: cardColor.withOpacity(0.15),
                 borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: cardColor.withOpacity(0.2), width: 0.8),
               ),
               child: Icon(Icons.book, color: cardColor, size: 22),
             ),
@@ -514,49 +552,43 @@ class _DashboardPrincipalPageState extends State<DashboardPrincipalPage>
                         style: const TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 15,
-                            color: _dark)),
+                            color: _textDark)),
                     Text(c['niveau'] ?? '',
                         style: TextStyle(
-                            fontSize: 12, color: Colors.grey.shade600)),
+                            fontSize: 12, color: _textLight)),
                   ]),
             ),
           ]),
         ),
         // ── Badges stats ───────────────────────────────────────
         Padding(
-          padding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           child: Row(children: [
-            _badge2(Icons.article,    '$lecons Leçons',    Colors.blue),
+            _badge2(Icons.article, '$lecons Leçons', Colors.blue),
             const SizedBox(width: 8),
-            _badge2(Icons.assignment, '$devoirs Devoirs',  Colors.orange),
+            _badge2(Icons.assignment, '$devoirs Devoirs', Colors.orange),
             const SizedBox(width: 8),
-            _badge2(Icons.people,     '$apprenants Élèves', Colors.teal),
+            _badge2(Icons.people, '$apprenants Élèves', Colors.teal),
           ]),
         ),
         // ── Équipe (expansible) ────────────────────────────────
         Theme(
-          data:
-              Theme.of(context).copyWith(dividerColor: Colors.transparent),
+          data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
           child: ExpansionTile(
             title: Text(
               'Équipe (${assistants.length} assistant(s))',
               style: const TextStyle(
-                  fontSize: 13, fontWeight: FontWeight.bold),
+                  fontSize: 13, fontWeight: FontWeight.bold, color: _textDark),
             ),
-            leading:
-                Icon(Icons.people_outline, color: cardColor, size: 20),
-            tilePadding:
-                const EdgeInsets.symmetric(horizontal: 16),
-            childrenPadding:
-                const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            leading: Icon(Icons.people_outline, color: cardColor, size: 20),
+            tilePadding: const EdgeInsets.symmetric(horizontal: 16),
+            childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
             children: [
               if (assistants.isEmpty)
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 8),
                   child: Text('Aucun assistant assigné.',
-                      style: TextStyle(
-                          color: Colors.grey.shade400, fontSize: 13)),
+                      style: TextStyle(color: _textLight, fontSize: 13)),
                 ),
               ...assistants.map((e) {
                 final username =
@@ -565,11 +597,11 @@ class _DashboardPrincipalPageState extends State<DashboardPrincipalPage>
                     e['user']?['email'] ?? e['email'] ?? '';
                 return Container(
                   margin: const EdgeInsets.only(bottom: 8),
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 12, vertical: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF8FAFC),
+                    color: _bgLight,
                     borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: _borderLight, width: 1),
                   ),
                   child: Row(children: [
                     CircleAvatar(
@@ -593,17 +625,17 @@ class _DashboardPrincipalPageState extends State<DashboardPrincipalPage>
                             Text(username,
                                 style: const TextStyle(
                                     fontWeight: FontWeight.w600,
-                                    fontSize: 13)),
+                                    fontSize: 13,
+                                    color: _textDark)),
                             if (email.isNotEmpty)
                               Text(email,
                                   style: const TextStyle(
-                                      fontSize: 11,
-                                      color: Colors.grey)),
+                                      fontSize: 11, color: _textLight)),
                           ]),
                     ),
                     IconButton(
                       icon: const Icon(Icons.remove_circle_outline,
-                          color: Colors.red, size: 20),
+                          color: _red, size: 20),
                       tooltip: 'Retirer',
                       onPressed: () => _retirerEnseignant(
                           c['id'] as int,
@@ -658,11 +690,11 @@ class _DashboardPrincipalPageState extends State<DashboardPrincipalPage>
 
   Widget _buildKPIRow() {
     return Row(children: [
-      _kpiCard('Rendu',   '88%',  Icons.assignment_turned_in, Colors.green),
+      _kpiCard('Rendu', '88%', Icons.assignment_turned_in, _green),
       const SizedBox(width: 12),
-      _kpiCard('Moyenne', '14.2', Icons.analytics,            _primary),
+      _kpiCard('Moyenne', '14.2', Icons.analytics, _primary),
       const SizedBox(width: 12),
-      _kpiCard('Retards', '05',   Icons.timer_outlined,       Colors.orange),
+      _kpiCard('Retards', '05', Icons.timer_outlined, _orange),
     ]);
   }
 
@@ -671,23 +703,18 @@ class _DashboardPrincipalPageState extends State<DashboardPrincipalPage>
         child: Container(
           padding: const EdgeInsets.all(15),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: _white,
             borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                  color: color.withOpacity(0.1),
-                  blurRadius: 8,
-                  offset: const Offset(0, 3)),
-            ],
+            border: Border.all(color: _borderLight, width: 1),
           ),
           child: Column(children: [
             Icon(icon, color: color, size: 22),
             const SizedBox(height: 8),
             Text(value,
-                style: const TextStyle(
-                    fontSize: 18, fontWeight: FontWeight.bold)),
+                style: TextStyle(
+                    fontSize: 18, fontWeight: FontWeight.bold, color: _textDark)),
             Text(label,
-                style: const TextStyle(fontSize: 10, color: Colors.grey)),
+                style: const TextStyle(fontSize: 10, color: _textLight)),
           ]),
         ),
       );
@@ -696,10 +723,10 @@ class _DashboardPrincipalPageState extends State<DashboardPrincipalPage>
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-          color: Colors.white, borderRadius: BorderRadius.circular(20)),
+          color: _white, borderRadius: BorderRadius.circular(20), border: Border.all(color: _borderLight, width: 1)),
       child: Column(children: [
         _homeworkRow('Mathématiques : Matrices', 0.75, '22/30 élèves'),
-        const Divider(height: 28),
+        const Divider(height: 28, color: _borderLight),
         _homeworkRow('Physique : Dynamique', 0.40, '12/30 élèves'),
       ]),
     );
@@ -711,7 +738,7 @@ class _DashboardPrincipalPageState extends State<DashboardPrincipalPage>
         Expanded(
           child: Text(title,
               style: const TextStyle(
-                  fontWeight: FontWeight.w600, fontSize: 14)),
+                  fontWeight: FontWeight.w600, fontSize: 14, color: _textDark)),
         ),
         Text(detail,
             style: TextStyle(
@@ -721,12 +748,12 @@ class _DashboardPrincipalPageState extends State<DashboardPrincipalPage>
       ]),
       const SizedBox(height: 10),
       ClipRRect(
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(8),
         child: LinearProgressIndicator(
           value: progress,
           minHeight: 6,
-          backgroundColor: _bg,
-          color: progress > 0.5 ? _primary : Colors.orange,
+          backgroundColor: _bgLight,
+          color: progress > 0.5 ? _primary : _orange,
         ),
       ),
     ]);
@@ -735,11 +762,11 @@ class _DashboardPrincipalPageState extends State<DashboardPrincipalPage>
   Widget _buildAtRiskStudents() {
     return Container(
       decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20)),
+          color: _white, borderRadius: BorderRadius.circular(20), border: Border.all(color: _borderLight, width: 1)),
       child: Column(children: [
-        _riskTile('Awa Diop', '3 retards consécutifs', Colors.red),
-        _riskTile('Kevin N.', 'Moyenne en baisse',      Colors.orange),
+        _riskTile('Awa Diop', '3 retards consécutifs', _red),
+        const Divider(height: 1, color: _borderLight),
+        _riskTile('Kevin N.', 'Moyenne en baisse', _orange),
       ]),
     );
   }
@@ -748,25 +775,22 @@ class _DashboardPrincipalPageState extends State<DashboardPrincipalPage>
     leading: CircleAvatar(
       backgroundColor: color.withOpacity(0.1),
       child: Text(name[0],
-          style: TextStyle(
-              color: color, fontWeight: FontWeight.bold)),
+          style: TextStyle(color: color, fontWeight: FontWeight.bold)),
     ),
     title: Text(name,
-        style: const TextStyle(
-            fontSize: 14, fontWeight: FontWeight.w600)),
-    subtitle:
-        Text(reason, style: const TextStyle(fontSize: 12)),
-    trailing: const Icon(Icons.arrow_forward_ios, size: 12),
+        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: _textDark)),
+    subtitle: Text(reason, style: const TextStyle(fontSize: 12, color: _textLight)),
+    trailing: const Icon(Icons.arrow_forward_ios, size: 12, color: _textLight),
   );
 
   // ── TAB 3 : Statistiques ─────────────────────────────────────────
   Widget _tabStats() {
     final stats = _stats;
     final items = [
-      _StatInfo('Cours',      '${stats['nb_cours']}',      Icons.book,                const Color(0xFF2884A0)),
-      _StatInfo('Apprenants', '${stats['nb_apprenants']}', Icons.people,              const Color(0xFF6A1B9A)),
-      _StatInfo('Leçons',     '${stats['nb_lecons']}',     Icons.article,             const Color(0xFF00897B)),
-      _StatInfo('Devoirs',    '${stats['nb_devoirs']}',    Icons.assignment_outlined, const Color(0xFFE65100)),
+      _StatInfo('Cours', '${stats['nb_cours']}', Icons.book, _primary),
+      _StatInfo('Apprenants', '${stats['nb_apprenants']}', Icons.people, _purple),
+      _StatInfo('Leçons', '${stats['nb_lecons']}', Icons.article, Colors.teal),
+      _StatInfo('Devoirs', '${stats['nb_devoirs']}', Icons.assignment_outlined, _orange),
     ];
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
@@ -790,14 +814,9 @@ class _DashboardPrincipalPageState extends State<DashboardPrincipalPage>
 
   Widget _buildStatCard(_StatInfo item) => Container(
     decoration: BoxDecoration(
-      color: Colors.white,
+      color: _white,
       borderRadius: BorderRadius.circular(18),
-      boxShadow: [
-        BoxShadow(
-            color: item.color.withOpacity(0.12),
-            blurRadius: 12,
-            offset: const Offset(0, 4)),
-      ],
+      border: Border.all(color: _borderLight, width: 1),
     ),
     padding: const EdgeInsets.all(16),
     child: Column(
@@ -805,20 +824,22 @@ class _DashboardPrincipalPageState extends State<DashboardPrincipalPage>
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Container(
-          padding: const EdgeInsets.all(8),
+          padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
               color: item.color.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(10)),
-          child: Icon(item.icon, color: item.color, size: 20),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: item.color.withOpacity(0.2), width: 0.8)),
+          child: Icon(item.icon, color: item.color, size: 22),
         ),
+        const SizedBox(height: 12),
         Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(item.value,
               style: TextStyle(
-                  fontSize: 24,
+                  fontSize: 26,
                   fontWeight: FontWeight.bold,
                   color: item.color)),
           Text(item.label,
-              style: const TextStyle(fontSize: 12, color: Colors.grey)),
+              style: const TextStyle(fontSize: 12, color: _textLight)),
         ]),
       ],
     ),
@@ -830,7 +851,7 @@ class _DashboardPrincipalPageState extends State<DashboardPrincipalPage>
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [_primary.withOpacity(0.85), _primary],
+          colors: [_primary, _primary.withOpacity(0.85)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -838,19 +859,16 @@ class _DashboardPrincipalPageState extends State<DashboardPrincipalPage>
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         const Row(children: [
-          Icon(Icons.bar_chart, color: Colors.white, size: 20),
+          Icon(Icons.bar_chart, color: _white, size: 20),
           SizedBox(width: 8),
           Text('Résumé de vos cours',
-              style: TextStyle(color: Colors.white70, fontSize: 14)),
+              style: TextStyle(color: _white, fontSize: 14)),
         ]),
-        const SizedBox(height: 12),
+        const SizedBox(height: 16),
         Row(children: [
-          Expanded(
-              child: _perfItem('${stats['nb_cours']}',   'Cours actifs')),
-          Expanded(
-              child: _perfItem('${stats['nb_lecons']}',  'Leçons publiées')),
-          Expanded(
-              child: _perfItem('${stats['nb_devoirs']}', 'Devoirs créés')),
+          Expanded(child: _perfItem('${stats['nb_cours']}', 'Cours actifs')),
+          Expanded(child: _perfItem('${stats['nb_lecons']}', 'Leçons publiées')),
+          Expanded(child: _perfItem('${stats['nb_devoirs']}', 'Devoirs créés')),
         ]),
       ]),
     );
@@ -859,11 +877,11 @@ class _DashboardPrincipalPageState extends State<DashboardPrincipalPage>
   Widget _perfItem(String value, String label) => Column(children: [
     Text(value,
         style: const TextStyle(
-            color: Colors.white,
+            color: _white,
             fontSize: 22,
             fontWeight: FontWeight.bold)),
     Text(label,
-        style: const TextStyle(color: Colors.white70, fontSize: 11),
+        style: const TextStyle(color: _white, fontSize: 11),
         textAlign: TextAlign.center),
   ]);
 
@@ -880,34 +898,23 @@ class _DashboardPrincipalPageState extends State<DashboardPrincipalPage>
     child: Container(
       width: 40, height: 4,
       decoration: BoxDecoration(
-          color: Colors.grey.shade300,
+          color: _borderLight,
           borderRadius: BorderRadius.circular(10)),
     ),
   );
 
-  Widget _roleBadge(String text) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-    decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.2),
-        borderRadius: BorderRadius.circular(20)),
-    child: Text(text,
-        style: const TextStyle(color: Colors.white, fontSize: 12)),
-  );
-
   Widget _miniStatBadge(String value, String label, IconData icon) =>
       Container(
-        padding:
-            const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.15),
+          color: _white.withOpacity(0.12),
           borderRadius: BorderRadius.circular(10),
         ),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
-          Icon(icon, color: Colors.white70, size: 12),
+          Icon(icon, color: _white, size: 12),
           const SizedBox(width: 5),
           Text('$value $label',
-              style: const TextStyle(
-                  color: Colors.white, fontSize: 11)),
+              style: const TextStyle(color: _white, fontSize: 11, fontWeight: FontWeight.w500)),
         ]),
       );
 
@@ -927,24 +934,35 @@ class _DashboardPrincipalPageState extends State<DashboardPrincipalPage>
 
   Widget _sectionTitle(String title) => Text(title,
       style: const TextStyle(
-          fontSize: 17, fontWeight: FontWeight.bold, color: _dark));
+          fontSize: 17, fontWeight: FontWeight.bold, color: _textDark));
 
   void _showError(String msg) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(msg), backgroundColor: Colors.red));
+      SnackBar(
+        content: Text(msg, style: const TextStyle(color: _white)),
+        backgroundColor: _red,
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.all(16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
   }
 
   void _showSuccess(String msg) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(msg), backgroundColor: Colors.green));
+      SnackBar(
+        content: Text(msg, style: const TextStyle(color: _white)),
+        backgroundColor: _green,
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.all(16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
   }
 }
 
-// ─────────────────────────────────────────────────────────────────
-// Helpers classes
-// ─────────────────────────────────────────────────────────────────
 class _StatInfo {
   final String label, value;
   final IconData icon;
@@ -957,8 +975,10 @@ class _TabBarDelegate extends SliverPersistentHeaderDelegate {
   final Color backgroundColor;
   const _TabBarDelegate(this.tabBar, {this.backgroundColor = Colors.white});
 
-  @override double get minExtent => tabBar.preferredSize.height;
-  @override double get maxExtent => tabBar.preferredSize.height;
+  @override
+  double get minExtent => tabBar.preferredSize.height;
+  @override
+  double get maxExtent => tabBar.preferredSize.height;
 
   @override
   Widget build(BuildContext ctx, double shrinkOffset, bool overlaps) =>

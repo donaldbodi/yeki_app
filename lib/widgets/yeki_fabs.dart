@@ -61,7 +61,7 @@ class YekiFabs extends StatefulWidget {
     this.sourceTitre = '',
     this.tabController,
     this.forumTabIndex = 3,
-    this.onForumNavigate,
+    this.onForumNavigate, required int coursColor,
   });
 
   @override

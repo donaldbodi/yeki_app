@@ -1,5 +1,3 @@
-// lib/views/pages/apprenants/details_question_forum.dart
-
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -12,15 +10,44 @@ import 'package:yeki/views/pages/apprenants/lecture_lecon_page.dart';
 import 'package:yeki/views/pages/apprenants/passer_exercice.dart';
 import 'package:yeki/views/pages/apprenants/resultat_devoir_page.dart';
 
+// Palette harmonisée
+const Color brandBackground = Color(0xFF135F74);
+const Color actionOrange = Color(0xFFFF6B00);
+const Color _textDark = Color(0xFF1A1C1E);
+const Color _textMedium = Color(0xFF5A5C5E);
+const Color _textLight = Color(0xFF8A8C8E);
+const Color _borderLight = Color(0xFFE0E4E8);
+//const Color _borderMedium = Color(0xFFD0D4D8);
+const Color _bgLight = Color(0xFFF8FAFC);
+const Color _white = Color(0xFFFFFFFF);
+const Color _green = Color(0xFF10B981);
+const Color _blue = Color(0xFF3B82F6);
+const Color _purple = Color(0xFFA855F7);
+const Color _orange = Color(0xFFF97316);
+const Color _red = Color(0xFFEF4444);
+
 const String _base = 'https://yeki.pythonanywhere.com/api';
-const Color _teal = Color(0xFF2884A0);
-const Color _tealLight = Color(0xFF39A0C2);
-const Color _dark = Color(0xFF0D1117);
-const Color _surface = Color(0xFF161B22);
-const Color _card = Color(0xFF1C2128);
-const Color _border = Color(0xFF30363D);
-const Color _green = Color(0xFF22C55E);
-//const Color _red = Color(0xFFEF4444);
+
+const Map<String, Color> _srcColor = {
+  'lecon': _blue,
+  'exercice': _purple,
+  'devoir': _orange,
+  'libre': _green,
+};
+
+const Map<String, IconData> _srcIcon = {
+  'lecon': Icons.play_lesson_rounded,
+  'exercice': Icons.edit_note_rounded,
+  'devoir': Icons.assignment_rounded,
+  'libre': Icons.chat_bubble_outline_rounded,
+};
+
+const Map<String, String> _srcLabel = {
+  'lecon': 'Leçon',
+  'exercice': 'Exercice',
+  'devoir': 'Devoir',
+  'libre': 'Libre',
+};
 
 Future<String?> _getToken() async {
   final prefs = await SharedPreferences.getInstance();
@@ -54,11 +81,13 @@ String _getInitials(String nom, String username) {
 class DetailQuestionForumPage extends StatefulWidget {
   final int questionId;
   final QForum? question;
+  final int? coursColor;
 
   const DetailQuestionForumPage({
     super.key,
     required this.questionId,
     this.question,
+    this.coursColor,
   });
 
   @override
@@ -71,6 +100,8 @@ class _DetailQuestionForumPageState extends State<DetailQuestionForumPage> {
   final TextEditingController _reponseCtrl = TextEditingController();
   bool _sending = false;
   File? _selectedImage;
+
+  Color get _accentColor => widget.coursColor != null ? Color(widget.coursColor!) : brandBackground;
 
   @override
   void initState() {
@@ -135,7 +166,6 @@ class _DetailQuestionForumPageState extends State<DetailQuestionForumPage> {
       final uri = Uri.parse('$_base/forum/questions/${widget.questionId}/repondre/');
 
       if (_selectedImage != null) {
-        // Envoi avec image
         final request = http.MultipartRequest('POST', uri);
         request.headers['Authorization'] = 'Token $token';
         request.fields['contenu'] = texte;
@@ -152,7 +182,6 @@ class _DetailQuestionForumPageState extends State<DetailQuestionForumPage> {
           await _loadQuestion();
         }
       } else {
-        // Envoi simple
         final response = await http.post(
           uri,
           headers: _getHeaders(token),
@@ -249,6 +278,7 @@ class _DetailQuestionForumPageState extends State<DetailQuestionForumPage> {
             leconId: q.leconId!,
             coursId: q.coursId!,
             coursTitre: q.coursTitre,
+            coursColor: widget.coursColor ?? _accentColor.value,
           ),
         ),
       );
@@ -281,22 +311,23 @@ class _DetailQuestionForumPageState extends State<DetailQuestionForumPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _dark,
+      backgroundColor: _bgLight,
       appBar: AppBar(
-        backgroundColor: _surface,
+        backgroundColor: _white,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: _textDark),
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text(
           'Question',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 16),
+          style: TextStyle(color: _textDark, fontWeight: FontWeight.w700, fontSize: 16),
         ),
+        centerTitle: false,
         actions: [
           if (_question != null && _question!.source != 'libre')
             IconButton(
-              icon: const Icon(Icons.open_in_new_rounded, color: Colors.white54),
+              icon: const Icon(Icons.open_in_new_rounded, color: _textMedium),
               onPressed: _navigateToSource,
               tooltip: 'Retour à la source',
             ),
@@ -309,7 +340,7 @@ class _DetailQuestionForumPageState extends State<DetailQuestionForumPage> {
         ],
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator(color: _teal))
+          ? const Center(child: CircularProgressIndicator())
           : _question == null
               ? _buildErrorState()
               : _buildContent(),
@@ -321,17 +352,22 @@ class _DetailQuestionForumPageState extends State<DetailQuestionForumPage> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.error_outline_rounded, size: 64, color: Colors.grey.shade600),
+          Icon(Icons.error_outline_rounded, size: 64, color: _textLight),
           const SizedBox(height: 16),
           const Text(
             'Question introuvable',
-            style: TextStyle(color: Colors.white54, fontSize: 16),
+            style: TextStyle(color: _textMedium, fontSize: 16),
           ),
           const SizedBox(height: 24),
           ElevatedButton(
             onPressed: () => Navigator.pop(context),
-            style: ElevatedButton.styleFrom(backgroundColor: _teal),
-            child: const Text('Retour', style: TextStyle(color: Colors.white)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: _accentColor,
+              foregroundColor: _white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              elevation: 0,
+            ),
+            child: const Text('Retour'),
           ),
         ],
       ),
@@ -340,7 +376,7 @@ class _DetailQuestionForumPageState extends State<DetailQuestionForumPage> {
 
   Widget _buildContent() {
     final q = _question!;
-    final color = _srcColor[q.source] ?? _teal;
+    final color = _srcColor[q.source] ?? _accentColor;
     final icon = _srcIcon[q.source] ?? Icons.chat_bubble_outline_rounded;
     final label = _srcLabel[q.source] ?? 'Libre';
 
@@ -352,7 +388,6 @@ class _DetailQuestionForumPageState extends State<DetailQuestionForumPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Bandeau source
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
@@ -364,7 +399,7 @@ class _DetailQuestionForumPageState extends State<DetailQuestionForumPage> {
                     children: [
                       Container(
                         padding: const EdgeInsets.all(6),
-                        decoration: BoxDecoration(color: color.withOpacity(0.2), shape: BoxShape.circle),
+                        decoration: BoxDecoration(color: color.withOpacity(0.15), shape: BoxShape.circle),
                         child: Icon(icon, size: 16, color: color),
                       ),
                       const SizedBox(width: 12),
@@ -374,8 +409,9 @@ class _DetailQuestionForumPageState extends State<DetailQuestionForumPage> {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                           decoration: BoxDecoration(
-                            color: color.withOpacity(0.12),
+                            color: color.withOpacity(0.08),
                             borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: color.withOpacity(0.2)),
                           ),
                           child: Text(
                             q.contexteLabel,
@@ -388,8 +424,9 @@ class _DetailQuestionForumPageState extends State<DetailQuestionForumPage> {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                           decoration: BoxDecoration(
-                            color: _green.withOpacity(0.15),
+                            color: _green.withOpacity(0.1),
                             borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: _green.withOpacity(0.3)),
                           ),
                           child: const Row(
                             mainAxisSize: MainAxisSize.min,
@@ -404,20 +441,19 @@ class _DetailQuestionForumPageState extends State<DetailQuestionForumPage> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                // Contenu de la question
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: _card,
+                    color: _white,
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: _border),
+                    border: Border.all(color: _borderLight),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         q.contenu,
-                        style: const TextStyle(color: Colors.white, fontSize: 16, height: 1.5),
+                        style: const TextStyle(color: _textDark, fontSize: 16, height: 1.5),
                       ),
                       if (q.imageUrl != null) ...[
                         const SizedBox(height: 12),
@@ -442,16 +478,16 @@ class _DetailQuestionForumPageState extends State<DetailQuestionForumPage> {
                               children: [
                                 Text(
                                   q.auteurNom.isNotEmpty ? q.auteurNom : q.auteurUsername,
-                                  style: const TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w600),
+                                  style: const TextStyle(color: _textMedium, fontSize: 13, fontWeight: FontWeight.w600),
                                 ),
                                 if (q.auteurEstEnseignant)
-                                  const Text('Enseignant', style: TextStyle(color: _tealLight, fontSize: 11, fontWeight: FontWeight.w700)),
+                                  Text('Enseignant', style: TextStyle(color: _accentColor, fontSize: 11, fontWeight: FontWeight.w700)),
                               ],
                             ),
                           ),
                           Text(
                             _formatTimeAgo(q.creeLe),
-                            style: const TextStyle(color: Colors.white38, fontSize: 11),
+                            style: const TextStyle(color: _textLight, fontSize: 11),
                           ),
                         ],
                       ),
@@ -459,15 +495,14 @@ class _DetailQuestionForumPageState extends State<DetailQuestionForumPage> {
                   ),
                 ),
                 const SizedBox(height: 24),
-                // Réponses
                 if (q.reponses.isNotEmpty) ...[
                   Row(
                     children: [
-                      const Icon(Icons.forum_rounded, size: 18, color: Colors.white54),
+                      const Icon(Icons.forum_rounded, size: 18, color: _textMedium),
                       const SizedBox(width: 8),
                       Text(
                         '${q.reponses.length} réponse${q.reponses.length > 1 ? 's' : ''}',
-                        style: const TextStyle(color: Colors.white70, fontSize: 14, fontWeight: FontWeight.w700),
+                        style: const TextStyle(color: _textDark, fontSize: 14, fontWeight: FontWeight.w700),
                       ),
                     ],
                   ),
@@ -477,18 +512,18 @@ class _DetailQuestionForumPageState extends State<DetailQuestionForumPage> {
                   Container(
                     padding: const EdgeInsets.all(24),
                     decoration: BoxDecoration(
-                      color: _card,
+                      color: _white,
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: _border),
+                      border: Border.all(color: _borderLight),
                     ),
                     child: const Center(
                       child: Column(
                         children: [
-                          Icon(Icons.chat_bubble_outline_rounded, size: 32, color: Colors.white24),
+                          Icon(Icons.chat_bubble_outline_rounded, size: 32, color: _textLight),
                           SizedBox(height: 8),
                           Text(
                             'Aucune réponse pour le moment',
-                            style: TextStyle(color: Colors.white38, fontSize: 13),
+                            style: TextStyle(color: _textLight, fontSize: 13),
                           ),
                         ],
                       ),
@@ -499,7 +534,6 @@ class _DetailQuestionForumPageState extends State<DetailQuestionForumPage> {
             ),
           ),
         ),
-        // Zone de réponse
         _buildReponseInput(),
       ],
     );
@@ -508,16 +542,17 @@ class _DetailQuestionForumPageState extends State<DetailQuestionForumPage> {
   Widget _buildReponseCard(RepForum reponse, QForum question) {
     final isAuteur = reponse.auteurUsername == question.auteurUsername;
     final isEnseignant = reponse.auteurEstEnseignant;
-    //final color = isEnseignant ? _tealLight : Colors.grey;
+    final color = _srcColor[question.source] ?? _accentColor;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: _card,
+        color: _white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: reponse.estSolution ? _green.withOpacity(0.5) : _border,
+          color: reponse.estSolution ? _green.withOpacity(0.5) : _borderLight,
+          width: reponse.estSolution ? 1.5 : 1,
         ),
       ),
       child: Column(
@@ -529,7 +564,7 @@ class _DetailQuestionForumPageState extends State<DetailQuestionForumPage> {
                 reponse.auteurNom,
                 reponse.auteurUsername,
                 isEnseignant,
-                _teal,
+                color,
                 18,
               ),
               const SizedBox(width: 10),
@@ -540,13 +575,13 @@ class _DetailQuestionForumPageState extends State<DetailQuestionForumPage> {
                     Text(
                       reponse.auteurNom.isNotEmpty ? reponse.auteurNom : reponse.auteurUsername,
                       style: TextStyle(
-                        color: isEnseignant ? _tealLight : Colors.white70,
+                        color: isEnseignant ? _accentColor : _textDark,
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
                     if (isEnseignant)
-                      const Text('Enseignant', style: TextStyle(color: _tealLight, fontSize: 10, fontWeight: FontWeight.w700)),
+                      Text('Enseignant', style: TextStyle(color: _accentColor, fontSize: 10, fontWeight: FontWeight.w700)),
                   ],
                 ),
               ),
@@ -554,8 +589,9 @@ class _DetailQuestionForumPageState extends State<DetailQuestionForumPage> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: _green.withOpacity(0.15),
+                    color: _green.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: _green.withOpacity(0.3)),
                   ),
                   child: const Row(
                     mainAxisSize: MainAxisSize.min,
@@ -568,14 +604,14 @@ class _DetailQuestionForumPageState extends State<DetailQuestionForumPage> {
                 ),
               Text(
                 _formatTimeAgo(reponse.creeLe),
-                style: const TextStyle(color: Colors.white38, fontSize: 10),
+                style: const TextStyle(color: _textLight, fontSize: 10),
               ),
             ],
           ),
           const SizedBox(height: 10),
           Text(
             reponse.contenu,
-            style: const TextStyle(color: Colors.white, fontSize: 14, height: 1.5),
+            style: const TextStyle(color: _textDark, fontSize: 14, height: 1.5),
           ),
           if (reponse.imageUrl != null) ...[
             const SizedBox(height: 10),
@@ -593,7 +629,6 @@ class _DetailQuestionForumPageState extends State<DetailQuestionForumPage> {
           const SizedBox(height: 10),
           Row(
             children: [
-              // Bouton like
               GestureDetector(
                 onTap: () => _likerReponse(reponse),
                 child: Row(
@@ -601,18 +636,17 @@ class _DetailQuestionForumPageState extends State<DetailQuestionForumPage> {
                     Icon(
                       reponse.monLike ? Icons.favorite_rounded : Icons.favorite_border_rounded,
                       size: 16,
-                      color: reponse.monLike ? Colors.red.shade300 : Colors.grey.shade500,
+                      color: reponse.monLike ? _red : _textLight,
                     ),
                     const SizedBox(width: 4),
                     Text(
                       '${reponse.nbLikes}',
-                      style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+                      style: TextStyle(fontSize: 11, color: _textLight),
                     ),
                   ],
                 ),
               ),
               const SizedBox(width: 20),
-              // Bouton marquer comme solution (seulement pour l'auteur de la question)
               if (isAuteur && !question.estResolue && !reponse.estSolution)
                 GestureDetector(
                   onTap: () => _marquerSolution(reponse),
@@ -635,8 +669,8 @@ class _DetailQuestionForumPageState extends State<DetailQuestionForumPage> {
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
       decoration: BoxDecoration(
-        color: _surface,
-        border: Border(top: BorderSide(color: _border)),
+        color: _white,
+        border: Border(top: BorderSide(color: _borderLight)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,
@@ -646,13 +680,13 @@ class _DetailQuestionForumPageState extends State<DetailQuestionForumPage> {
             child: Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: _card,
+                color: _bgLight,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: _border),
+                border: Border.all(color: _borderLight),
               ),
               child: Icon(
                 _selectedImage != null ? Icons.check_circle : Icons.image_outlined,
-                color: _selectedImage != null ? _green : Colors.white54,
+                color: _selectedImage != null ? _green : _textLight,
                 size: 20,
               ),
             ),
@@ -661,17 +695,17 @@ class _DetailQuestionForumPageState extends State<DetailQuestionForumPage> {
           Expanded(
             child: Container(
               decoration: BoxDecoration(
-                color: _card,
+                color: _bgLight,
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: _border),
+                border: Border.all(color: _borderLight),
               ),
               child: TextField(
                 controller: _reponseCtrl,
                 maxLines: null,
-                style: const TextStyle(color: Colors.white, fontSize: 14),
+                style: const TextStyle(color: _textDark, fontSize: 14),
                 decoration: const InputDecoration(
                   hintText: 'Écrire une réponse...',
-                  hintStyle: TextStyle(color: Colors.white38),
+                  hintStyle: TextStyle(color: _textLight),
                   border: InputBorder.none,
                   contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 ),
@@ -684,16 +718,16 @@ class _DetailQuestionForumPageState extends State<DetailQuestionForumPage> {
             child: Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: _teal,
+                color: _accentColor,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: _sending
                   ? const SizedBox(
                       width: 20,
                       height: 20,
-                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                      child: CircularProgressIndicator(color: _white, strokeWidth: 2),
                     )
-                  : const Icon(Icons.send_rounded, color: Colors.white, size: 20),
+                  : const Icon(Icons.send_rounded, color: _white, size: 20),
             ),
           ),
         ],
@@ -706,12 +740,12 @@ class _DetailQuestionForumPageState extends State<DetailQuestionForumPage> {
       children: [
         CircleAvatar(
           radius: radius,
-          backgroundColor: estEnseignant ? _teal.withOpacity(0.3) : color.withOpacity(0.2),
+          backgroundColor: estEnseignant ? _accentColor.withOpacity(0.15) : color.withOpacity(0.1),
           child: Text(
             _getInitials(nom, username),
             style: TextStyle(
               fontSize: radius * 0.75,
-              color: estEnseignant ? _tealLight : color,
+              color: estEnseignant ? _accentColor : color,
               fontWeight: FontWeight.w800,
             ),
           ),
@@ -723,9 +757,10 @@ class _DetailQuestionForumPageState extends State<DetailQuestionForumPage> {
             child: Container(
               width: radius * 0.4,
               height: radius * 0.4,
-              decoration: const BoxDecoration(
-                color: _tealLight,
+              decoration: BoxDecoration(
+                color: _accentColor,
                 shape: BoxShape.circle,
+                border: Border.all(color: _white, width: 1.5),
               ),
             ),
           ),
@@ -733,25 +768,3 @@ class _DetailQuestionForumPageState extends State<DetailQuestionForumPage> {
     );
   }
 }
-
-// ── Import des constantes depuis forum_page.dart ─────────────────
-const Map<String, Color> _srcColor = {
-  'lecon': Color(0xFF3B82F6),
-  'exercice': Color(0xFFA855F7),
-  'devoir': Color(0xFFF97316),
-  'libre': Color(0xFF22C55E),
-};
-
-const Map<String, IconData> _srcIcon = {
-  'lecon': Icons.play_lesson_rounded,
-  'exercice': Icons.edit_note_rounded,
-  'devoir': Icons.assignment_rounded,
-  'libre': Icons.chat_bubble_outline_rounded,
-};
-
-const Map<String, String> _srcLabel = {
-  'lecon': 'Leçon',
-  'exercice': 'Exercice',
-  'devoir': 'Devoir',
-  'libre': 'Libre',
-};

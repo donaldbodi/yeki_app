@@ -1,12 +1,9 @@
+// lib/widgets/creer_olympiade_sheet.dart
+
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-
-// ─────────────────────────────────────────────────────────────────
-// CRÉER OLYMPIADE SHEET
-// Accessible uniquement par un enseignant cadre
-// ─────────────────────────────────────────────────────────────────
 
 const String _baseUrlO = 'https://yeki.pythonanywhere.com/api';
 const Color _primaryO = Color(0xFF6A1B9A);
@@ -30,7 +27,6 @@ class CreerOlympiadeSheet extends StatefulWidget {
 
 class _CreerOlympiadeSheetState extends State<CreerOlympiadeSheet>
     with SingleTickerProviderStateMixin {
-  final _formKey = GlobalKey<FormState>();
   bool _loading = false;
   late TabController _tabCtrl;
 
@@ -112,7 +108,6 @@ class _CreerOlympiadeSheetState extends State<CreerOlympiadeSheet>
     return p.getString('token');
   }
 
-  // ── Valider les 3 étapes ────────────────────────────────────────
   bool _validerEtape1() {
     return _titreCtrl.text.trim().isNotEmpty && _matiere.isNotEmpty;
   }
@@ -132,7 +127,6 @@ class _CreerOlympiadeSheetState extends State<CreerOlympiadeSheet>
     return duree > 0 && nbQ > 0;
   }
 
-  // ── Soumission ─────────────────────────────────────────────────
   Future<void> _soumettre() async {
     if (!_validerEtape1()) {
       _showError('Remplissez le titre et la matière (onglet 1)');
@@ -152,6 +146,11 @@ class _CreerOlympiadeSheetState extends State<CreerOlympiadeSheet>
 
     setState(() => _loading = true);
     final token = await _getToken();
+
+    // Vérifier si l'olympiade est gratuite (aucun prix renseigné)
+    final aDesPrix = _prix1Ctrl.text.trim().isNotEmpty ||
+        _prix2Ctrl.text.trim().isNotEmpty ||
+        _prix3Ctrl.text.trim().isNotEmpty;
 
     try {
       final body = {
@@ -188,7 +187,12 @@ class _CreerOlympiadeSheetState extends State<CreerOlympiadeSheet>
       if (res.statusCode == 201) {
         if (mounted) Navigator.pop(context);
         widget.onSuccess();
-        _showSuccess('Olympiade créée avec succès !');
+        
+        if (!aDesPrix) {
+          _showSuccess('Olympiade créée ! En attente de validation par l\'administrateur du parcours.');
+        } else {
+          _showSuccess('Olympiade créée avec succès !');
+        }
       } else {
         final err = jsonDecode(res.body);
         _showError(err['detail'] ?? 'Erreur lors de la création');
@@ -200,7 +204,6 @@ class _CreerOlympiadeSheetState extends State<CreerOlympiadeSheet>
     }
   }
 
-  // ── Sélecteur de date/heure ────────────────────────────────────
   Future<DateTime?> _pickDateTime(BuildContext ctx, {DateTime? initial}) async {
     final date = await showDatePicker(
       context: ctx,
@@ -242,18 +245,29 @@ class _CreerOlympiadeSheetState extends State<CreerOlympiadeSheet>
   void _showError(String msg) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg), backgroundColor: Colors.red),
+      SnackBar(
+        content: Text(msg),
+        backgroundColor: Colors.red,
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.all(16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
     );
   }
 
   void _showSuccess(String msg) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg), backgroundColor: Colors.green),
+      SnackBar(
+        content: Text(msg),
+        backgroundColor: Colors.green,
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.all(16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
     );
   }
 
-  // ── BUILD ───────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -264,7 +278,6 @@ class _CreerOlympiadeSheetState extends State<CreerOlympiadeSheet>
       ),
       child: Column(
         children: [
-          // ── Handle ─────────────────────────────────────────────
           const SizedBox(height: 12),
           Center(
             child: Container(
@@ -277,8 +290,6 @@ class _CreerOlympiadeSheetState extends State<CreerOlympiadeSheet>
             ),
           ),
           const SizedBox(height: 16),
-
-          // ── En-tête ────────────────────────────────────────────
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 24),
             child: Row(
@@ -317,8 +328,6 @@ class _CreerOlympiadeSheetState extends State<CreerOlympiadeSheet>
             ),
           ),
           const SizedBox(height: 16),
-
-          // ── TabBar ─────────────────────────────────────────────
           Container(
             margin: const EdgeInsets.symmetric(horizontal: 16),
             decoration: BoxDecoration(
@@ -344,8 +353,6 @@ class _CreerOlympiadeSheetState extends State<CreerOlympiadeSheet>
             ),
           ),
           const SizedBox(height: 8),
-
-          // ── Contenu ────────────────────────────────────────────
           Expanded(
             child: TabBarView(
               controller: _tabCtrl,
@@ -356,8 +363,6 @@ class _CreerOlympiadeSheetState extends State<CreerOlympiadeSheet>
               ],
             ),
           ),
-
-          // ── Bouton soumettre ───────────────────────────────────
           Padding(
             padding: EdgeInsets.fromLTRB(
                 24, 12, 24, MediaQuery.of(context).viewInsets.bottom + 20),
@@ -408,11 +413,9 @@ class _CreerOlympiadeSheetState extends State<CreerOlympiadeSheet>
           _buildLabel('Titre de l\'olympiade *'),
           _buildField(controller: _titreCtrl, hint: 'Ex: Grand Prix de Mathématiques 2025'),
           const SizedBox(height: 14),
-
           _buildLabel('Édition'),
           _buildField(controller: _editionCtrl, hint: 'Ex: 2025-1'),
           const SizedBox(height: 14),
-
           _buildLabel('Description'),
           _buildField(
             controller: _descCtrl,
@@ -420,7 +423,6 @@ class _CreerOlympiadeSheetState extends State<CreerOlympiadeSheet>
             maxLines: 3,
           ),
           const SizedBox(height: 14),
-
           _buildLabel('Matière *'),
           _buildDropdown(
             value: _matiere,
@@ -428,7 +430,6 @@ class _CreerOlympiadeSheetState extends State<CreerOlympiadeSheet>
             onChanged: (v) => setState(() => _matiere = v!),
           ),
           const SizedBox(height: 14),
-
           _buildLabel('Niveau *'),
           _buildDropdown(
             value: _niveau,
@@ -436,9 +437,27 @@ class _CreerOlympiadeSheetState extends State<CreerOlympiadeSheet>
             onChanged: (v) => setState(() => _niveau = v!),
           ),
           const SizedBox(height: 20),
-
-          // ── Prix ───────────────────────────────────────────────
-          _buildSectionTitle('🏆 Prix & Récompenses'),
+          _buildSectionTitle('🏆 Prix & Récompenses (optionnel)'),
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: Colors.blue.shade50,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Row(
+              children: [
+                Icon(Icons.info_outline, size: 14, color: Colors.blue),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Si aucun prix n\'est renseigné, l\'olympiade sera gratuite et devra être validée par l\'administrateur du parcours.',
+                    style: TextStyle(fontSize: 11, color: Colors.blue),
+                  ),
+                ),
+              ],
+            ),
+          ),
           const SizedBox(height: 12),
           _buildPrixField('1er Prix', _prix1Ctrl, const Color(0xFFFFD700)),
           const SizedBox(height: 10),
@@ -504,8 +523,6 @@ class _CreerOlympiadeSheetState extends State<CreerOlympiadeSheet>
             },
           ),
           const SizedBox(height: 20),
-
-          // ── Validation visuelle ───────────────────────────────
           if (_dateOuvInscription != null &&
               _dateCloInscription != null &&
               _dateDebutOlympiade != null &&
@@ -526,7 +543,6 @@ class _CreerOlympiadeSheetState extends State<CreerOlympiadeSheet>
         children: [
           _buildSectionTitle('⚙️ Paramètres de composition'),
           const SizedBox(height: 16),
-
           Row(
             children: [
               Expanded(
@@ -559,7 +575,6 @@ class _CreerOlympiadeSheetState extends State<CreerOlympiadeSheet>
             ],
           ),
           const SizedBox(height: 14),
-
           _buildLabel('Pertes de focus max (avant soumission auto)'),
           _buildField(
             controller: _maxFocusCtrl,
@@ -567,10 +582,8 @@ class _CreerOlympiadeSheetState extends State<CreerOlympiadeSheet>
             keyboardType: TextInputType.number,
           ),
           const SizedBox(height: 20),
-
           _buildSectionTitle('🎲 Sécurité & Mélange'),
           const SizedBox(height: 8),
-
           _buildSwitchTile(
             title: 'Mélanger les questions',
             subtitle: 'Ordre différent pour chaque participant',
@@ -593,8 +606,6 @@ class _CreerOlympiadeSheetState extends State<CreerOlympiadeSheet>
             onChanged: (v) => setState(() => _uneSeuleSession = v),
           ),
           const SizedBox(height: 20),
-
-          // ── Info note sur ────────────────────────────────────
           Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(

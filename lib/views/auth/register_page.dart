@@ -12,10 +12,10 @@ class RegisterPage extends StatefulWidget {
 }
 
 class _RegisterPageState extends State<RegisterPage> with SingleTickerProviderStateMixin {
-  // --- PALETTE PREMIUM & BOUSSOLE VISUELLE ---
-  static const Color mainBlue = Color(0xFF2884A0); 
-  static const Color darkBlue = Color(0xFF164A5A);
-  static const Color accentWarm = Color(0xFFF39C12);
+  // --- NOUVELLE PALETTE HARMONISÉE ---
+  static const Color brandBackground = Color(0xFF135F74); 
+  static const Color actionOrange = Color(0xFFFF6B00); 
+  static const Color glassFill = Color(0x1AFFFFFF);
 
   // --- CONTROLLERS ---
   final _nameController = TextEditingController();
@@ -66,7 +66,7 @@ class _RegisterPageState extends State<RegisterPage> with SingleTickerProviderSt
     super.dispose();
   }
 
-  // --- LOGIQUE API ---
+  // --- LOGIQUE API (CONSERVÉE) ---
   Future<void> _fetchCursus() async {
     setState(() => loadingCursus = true);
     try {
@@ -127,7 +127,7 @@ class _RegisterPageState extends State<RegisterPage> with SingleTickerProviderSt
 
   void _submitRegistration() async {
     if (_passwordController.text != _confirmPasswordController.text) {
-      _showSnackBar("Les mots de passe ne correspondent pas", Colors.orange);
+      _showSnackBar("Les mots de passe ne correspondent pas", actionOrange);
       return;
     }
     setState(() => _isLoading = true);
@@ -151,7 +151,7 @@ class _RegisterPageState extends State<RegisterPage> with SingleTickerProviderSt
       );
 
       if (response.statusCode == 201) {
-        _showSnackBar("Compte créé avec succès !", mainBlue);
+        _showSnackBar("Compte créé avec succès !", Colors.greenAccent);
         if (!mounted) return;
         Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const LoginPage()));
       } else {
@@ -167,8 +167,8 @@ class _RegisterPageState extends State<RegisterPage> with SingleTickerProviderSt
   void _showSnackBar(String msg, Color color) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(msg, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-        backgroundColor: color,
+        content: Text(msg, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
+        backgroundColor: color.withOpacity(0.9),
         behavior: SnackBarBehavior.floating,
         margin: const EdgeInsets.all(24),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -179,45 +179,37 @@ class _RegisterPageState extends State<RegisterPage> with SingleTickerProviderSt
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
-        width: double.infinity,
-        height: double.infinity,
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topRight,
-            end: Alignment.bottomLeft,
-            colors: [mainBlue, darkBlue],
-          ),
-        ),
-        child: Stack(
-          children: [
-            // ÉLÉMENTS DÉCORATIFS
-            Positioned(top: -40, right: -40, child: CircleAvatar(radius: 100, backgroundColor: Colors.white.withOpacity(0.05))),
-            Positioned(bottom: 50, left: -30, child: CircleAvatar(radius: 60, backgroundColor: accentWarm.withOpacity(0.02))),
+      backgroundColor: brandBackground,
+      body: Stack(
+        children: [
+          // ÉLÉMENTS DÉCORATIFS
+          Positioned(top: -40, left: -40, child: _buildCircle(180, Colors.white.withOpacity(0.03))),
+          Positioned(bottom: 20, right: -30, child: _buildCircle(120, Colors.white.withOpacity(0.02))),
 
-            SafeArea(
-              child: FadeTransition(
-                opacity: _fadeAnim,
+          SafeArea(
+            child: FadeTransition(
+              opacity: _fadeAnim,
+              child: Center(
                 child: SingleChildScrollView(
                   physics: const BouncingScrollPhysics(),
                   padding: const EdgeInsets.symmetric(horizontal: 40),
                   child: Column(
                     children: [
-                      const SizedBox(height: 30),
+                      const SizedBox(height: 20),
                       _buildHeader(),
                       const SizedBox(height: 40),
                       
                       // FORMULAIRE
                       _buildSectionLabel("IDENTITÉ"),
-                      _buildGlassField(controller: _nameController, label: "Nom complet", icon: Icons.person_outline),
+                      _buildModernField(controller: _nameController, label: "Nom complet", icon: Icons.person_outline_rounded),
                       const SizedBox(height: 15),
-                      _buildGlassField(controller: _emailController, label: "Email académique", icon: Icons.alternate_email),
+                      _buildModernField(controller: _emailController, label: "Email académique", icon: Icons.alternate_email_rounded),
                       const SizedBox(height: 15),
-                      _buildGlassField(controller: _usernameController, label: "Nom d'utilisateur", icon: Icons.badge_outlined),
+                      _buildModernField(controller: _usernameController, label: "Nom d'utilisateur", icon: Icons.badge_outlined),
                       
                       const SizedBox(height: 30),
                       _buildSectionLabel("VOTRE STATUT"),
-                      _buildGlassDropdown<String>(
+                      _buildModernDropdown<String>(
                         label: "Vous êtes ?",
                         value: selectedUserType,
                         items: ["Apprenant", "Enseignant"].map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
@@ -231,8 +223,8 @@ class _RegisterPageState extends State<RegisterPage> with SingleTickerProviderSt
                       if (selectedUserType == "Apprenant") ...[
                         const SizedBox(height: 15),
                         loadingCursus 
-                          ? const LinearProgressIndicator(color: Colors.white24, backgroundColor: Colors.transparent)
-                          : _buildGlassDropdown<String>(
+                          ? const Padding(padding: EdgeInsets.symmetric(vertical: 10), child: LinearProgressIndicator(color: Colors.white24, backgroundColor: Colors.transparent))
+                          : _buildModernDropdown<String>(
                               label: "Parcours",
                               value: selectedCursus,
                               items: cursusOptions.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
@@ -246,7 +238,7 @@ class _RegisterPageState extends State<RegisterPage> with SingleTickerProviderSt
                           const SizedBox(height: 15),
                           loadingDepartements
                           ? const LinearProgressIndicator(color: Colors.white24, backgroundColor: Colors.transparent)
-                          : _buildGlassDropdown<int>(
+                          : _buildModernDropdown<int>(
                               label: "Département",
                               value: selectedDepartementId,
                               items: departementOptions.map((d) => DropdownMenuItem(value: d['id'] as int, child: Text(d['nom']))).toList(),
@@ -260,7 +252,7 @@ class _RegisterPageState extends State<RegisterPage> with SingleTickerProviderSt
                           const SizedBox(height: 15),
                           loadingNiveaux
                           ? const LinearProgressIndicator(color: Colors.white24, backgroundColor: Colors.transparent)
-                          : _buildGlassDropdown<String>(
+                          : _buildModernDropdown<String>(
                               label: "Niveau d'étude",
                               value: selectedNiveau,
                               items: niveauOptions.map((n) => DropdownMenuItem(value: n, child: Text(n))).toList(),
@@ -271,16 +263,16 @@ class _RegisterPageState extends State<RegisterPage> with SingleTickerProviderSt
 
                       const SizedBox(height: 30),
                       _buildSectionLabel("SÉCURITÉ"),
-                      _buildGlassField(
+                      _buildModernField(
                         controller: _passwordController, 
                         label: "Mot de passe", 
-                        icon: Icons.lock_outline, 
+                        icon: Icons.lock_outline_rounded, 
                         isPassword: true, 
                         obscure: _obscurePassword, 
                         onToggle: () => setState(() => _obscurePassword = !_obscurePassword)
                       ),
                       const SizedBox(height: 15),
-                      _buildGlassField(
+                      _buildModernField(
                         controller: _confirmPasswordController, 
                         label: "Confirmation", 
                         icon: Icons.shield_outlined, 
@@ -292,10 +284,10 @@ class _RegisterPageState extends State<RegisterPage> with SingleTickerProviderSt
                       const SizedBox(height: 45),
                       
                       _isLoading 
-                        ? const CircularProgressIndicator(color: Colors.white, strokeWidth: 2)
+                        ? const CircularProgressIndicator(color: Colors.white, strokeWidth: 3)
                         : _buildSubmitButton(),
                       
-                      const SizedBox(height: 25),
+                      const SizedBox(height: 30),
                       _buildFooterLink(),
                       const SizedBox(height: 40),
                     ],
@@ -303,19 +295,23 @@ class _RegisterPageState extends State<RegisterPage> with SingleTickerProviderSt
                 ),
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
+  }
+
+  Widget _buildCircle(double size, Color color) {
+    return Container(width: size, height: size, decoration: BoxDecoration(shape: BoxShape.circle, color: color));
   }
 
   Widget _buildHeader() {
     return Column(
       children: [
         const Text('REJOINDRE YEKI', 
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, letterSpacing: 8, fontSize: 16)),
-        const SizedBox(height: 6),
-        Container(width: 40, height: 2, decoration: BoxDecoration(color: accentWarm, borderRadius: BorderRadius.circular(2))),
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, letterSpacing: 8, fontSize: 18)),
+        const SizedBox(height: 10),
+        Container(width: 40, height: 3, decoration: BoxDecoration(color: actionOrange, borderRadius: BorderRadius.circular(2))),
       ],
     );
   }
@@ -324,14 +320,14 @@ class _RegisterPageState extends State<RegisterPage> with SingleTickerProviderSt
     return Align(
       alignment: Alignment.centerLeft,
       child: Padding(
-        padding: const EdgeInsets.only(left: 15, bottom: 10),
+        padding: const EdgeInsets.only(left: 5, bottom: 12),
         child: Text(label, 
-          style: TextStyle(color: Colors.white.withOpacity(0.3), fontSize: 9, fontWeight: FontWeight.w900, letterSpacing: 2)),
+          style: TextStyle(color: Colors.white.withOpacity(0.3), fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 2)),
       ),
     );
   }
 
-  Widget _buildGlassField({
+  Widget _buildModernField({
     required TextEditingController controller, 
     required String label, 
     required IconData icon, 
@@ -339,78 +335,68 @@ class _RegisterPageState extends State<RegisterPage> with SingleTickerProviderSt
     bool? obscure, 
     VoidCallback? onToggle
   }) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(20),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-        child: Container(
-          width: 300,
-          child: TextFormField(
-            controller: controller,
-            obscureText: isPassword && (obscure ?? true),
-            style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500),
-            decoration: InputDecoration(
-              labelText: label,
-              labelStyle: TextStyle(color: Colors.white.withOpacity(0.3), fontSize: 11),
-              floatingLabelStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
-              prefixIcon: Icon(icon, color: Colors.white.withOpacity(0.5), size: 16),
-              suffixIcon: isPassword ? IconButton(
-                icon: Icon(obscure! ? Icons.visibility_off_rounded : Icons.visibility_rounded, color: Colors.white24, size: 16), 
-                onPressed: onToggle
-              ) : null,
-              filled: true,
-              fillColor: Colors.white.withOpacity(0.05),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(20), 
-                borderSide: BorderSide(color: Colors.white.withOpacity(0.1))
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(20), 
-                borderSide: const BorderSide(color: Colors.white, width: 0.8)
-              ),
-            ),
+    return SizedBox(
+      width: 320,
+      child: TextFormField(
+        controller: controller,
+        obscureText: isPassword && (obscure ?? true),
+        style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w500),
+        cursorColor: Colors.white,
+        decoration: InputDecoration(
+          labelText: label,
+          labelStyle: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 13),
+          floatingLabelStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+          prefixIcon: Icon(icon, color: Colors.white.withOpacity(0.7), size: 18),
+          suffixIcon: isPassword ? IconButton(
+            icon: Icon(obscure! ? Icons.visibility_off_rounded : Icons.visibility_rounded, color: Colors.white24, size: 18), 
+            onPressed: onToggle
+          ) : null,
+          filled: true,
+          fillColor: glassFill,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(15), 
+            borderSide: BorderSide(color: Colors.white.withOpacity(0.05))
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(15), 
+            borderSide: const BorderSide(color: Colors.white, width: 1.5)
           ),
         ),
       ),
     );
   }
 
-  Widget _buildGlassDropdown<T>({
+  Widget _buildModernDropdown<T>({
     required String label, 
     required T? value, 
     required List<DropdownMenuItem<T>> items, 
     required ValueChanged<T?> onChanged
   }) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(20),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-        child: Container(
-          width: 300,
-          padding: const EdgeInsets.only(right: 10),
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.05),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: Colors.white.withOpacity(0.1)),
+    return SizedBox(
+      width: 320,
+      child: DropdownButtonFormField<T>(
+        value: value,
+        items: items,
+        onChanged: onChanged,
+        dropdownColor: brandBackground,
+        icon: const Icon(Icons.expand_more_rounded, color: Colors.white38),
+        style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w500),
+        decoration: InputDecoration(
+          labelText: label,
+          labelStyle: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 13),
+          floatingLabelStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+          prefixIcon: const Icon(Icons.account_tree_outlined, color: Colors.white38, size: 18),
+          filled: true,
+          fillColor: glassFill,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(15), 
+            borderSide: BorderSide(color: Colors.white.withOpacity(0.05))
           ),
-          child: DropdownButtonHideUnderline(
-            child: DropdownButtonFormField<T>(
-              value: value,
-              items: items,
-              onChanged: onChanged,
-              dropdownColor: darkBlue,
-              style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500),
-              icon: const Icon(Icons.expand_more_rounded, color: Colors.white24, size: 20),
-              decoration: InputDecoration(
-                labelText: label,
-                labelStyle: TextStyle(color: Colors.white.withOpacity(0.3), fontSize: 11),
-                floatingLabelStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
-                prefixIcon: const Icon(Icons.account_tree_outlined, color: Colors.white24, size: 16),
-                border: InputBorder.none,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-              ),
-            ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(15), 
+            borderSide: const BorderSide(color: Colors.white, width: 1.5)
           ),
         ),
       ),
@@ -421,19 +407,18 @@ class _RegisterPageState extends State<RegisterPage> with SingleTickerProviderSt
     return GestureDetector(
       onTap: _submitRegistration,
       child: Container(
-        width: 300,
-        padding: const EdgeInsets.symmetric(vertical: 18),
+        width: 320,
+        height: 60,
+        alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: accentWarm,
-          borderRadius: BorderRadius.circular(30),
+          color: actionOrange,
+          borderRadius: BorderRadius.circular(15),
           boxShadow: [
-            BoxShadow(color: accentWarm.withOpacity(0.35), blurRadius: 20, offset: const Offset(0, 8)),
+            BoxShadow(color: actionOrange.withOpacity(0.3), blurRadius: 15, offset: const Offset(0, 8)),
           ],
         ),
-        child: const Center(
-          child: Text('CRÉER MON COMPTE', 
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 12, letterSpacing: 1.5)),
-        ),
+        child: const Text('CRÉER MON COMPTE', 
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 1.5)),
       ),
     );
   }
@@ -443,10 +428,10 @@ class _RegisterPageState extends State<RegisterPage> with SingleTickerProviderSt
       onPressed: () => Navigator.pop(context),
       child: RichText(
         text: TextSpan(
-          style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 12),
+          style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 14),
           children: const [
             TextSpan(text: "Déjà membre ? "),
-            TextSpan(text: "CONNEXION", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            TextSpan(text: "CONNEXION", style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, decoration: TextDecoration.underline)),
           ],
         ),
       ),

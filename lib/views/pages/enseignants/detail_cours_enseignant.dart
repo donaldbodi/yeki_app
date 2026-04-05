@@ -5,11 +5,22 @@ import 'package:yeki/views/pages/apprenants/lecons_cours.dart';
 import 'package:yeki/views/pages/apprenants/devoirs_cours_page.dart';
 import 'package:yeki/views/pages/enseignants/interface_enseignant_page.dart';
 
+// Palette harmonisée
+const Color brandBackground = Color(0xFF135F74);
+const Color actionOrange = Color(0xFFFF6B00);
+//const Color _textDark = Color(0xFF1A1C1E);
+//const Color _textMedium = Color(0xFF5A5C5E);
+const Color _textLight = Color(0xFF8A8C8E);
+//const Color _borderLight = Color(0xFFE0E4E8);
+const Color _bgLight = Color(0xFFF8FAFC);
+const Color _white = Color(0xFFFFFFFF);
+
 class DetailCoursEnseignantPage extends StatefulWidget {
   final String coursId;
   final String titre;
   final bool estEnseignantPrincipal;
   final RoleEnseignant role;
+  final Color courseColor;
 
   const DetailCoursEnseignantPage({
     super.key,
@@ -17,6 +28,7 @@ class DetailCoursEnseignantPage extends StatefulWidget {
     required this.titre,
     required this.estEnseignantPrincipal,
     required this.role,
+    required this.courseColor,
   });
 
   @override
@@ -27,10 +39,9 @@ class _DetailCoursEnseignantPageState extends State<DetailCoursEnseignantPage>
     with TickerProviderStateMixin {
   late TabController _tabController;
 
-  // Couleurs harmonisées
-  final Color primaryColor = const Color(0xFF2884A0);
-  final Color secondaryColor = const Color(0xFF005F66);
-  final Color accentColor = const Color(0xFFFF7F77);
+  Color get primaryColor => widget.courseColor;
+  Color get secondaryColor => widget.courseColor.withOpacity(0.7);
+  Color get accentColor => actionOrange;
 
   @override
   void initState() {
@@ -47,7 +58,7 @@ class _DetailCoursEnseignantPageState extends State<DetailCoursEnseignantPage>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFB),
+      backgroundColor: _bgLight,
       body: NestedScrollView(
         headerSliverBuilder: (BuildContext context, bool innerBoxIsScrolled) {
           return <Widget>[
@@ -59,7 +70,14 @@ class _DetailCoursEnseignantPageState extends State<DetailCoursEnseignantPage>
                 elevation: 0,
                 backgroundColor: primaryColor,
                 leading: IconButton(
-                  icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 20),
+                  icon: Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: Colors.black26,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.arrow_back_ios_new, color: _white, size: 16),
+                  ),
                   onPressed: () => Navigator.pop(context),
                 ),
                 flexibleSpace: FlexibleSpaceBar(
@@ -81,12 +99,12 @@ class _DetailCoursEnseignantPageState extends State<DetailCoursEnseignantPage>
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                                 decoration: BoxDecoration(
-                                  color: Colors.white.withOpacity(0.2),
+                                  color: _white.withOpacity(0.2),
                                   borderRadius: BorderRadius.circular(8),
                                 ),
                                 child: Text(
                                   widget.estEnseignantPrincipal ? "Principal" : "Assistant",
-                                  style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                                  style: const TextStyle(color: _white, fontSize: 10, fontWeight: FontWeight.bold),
                                 ),
                               ),
                             ],
@@ -95,7 +113,7 @@ class _DetailCoursEnseignantPageState extends State<DetailCoursEnseignantPage>
                           Text(
                             widget.titre,
                             style: const TextStyle(
-                              color: Colors.white,
+                              color: _white,
                               fontSize: 22,
                               fontWeight: FontWeight.bold,
                             ),
@@ -110,16 +128,16 @@ class _DetailCoursEnseignantPageState extends State<DetailCoursEnseignantPage>
                 bottom: PreferredSize(
                   preferredSize: const Size.fromHeight(60),
                   child: Container(
-                    decoration: const BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+                    decoration: BoxDecoration(
+                      color: _white,
+                      borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
                     ),
                     child: TabBar(
                       controller: _tabController,
                       indicatorColor: accentColor,
                       indicatorWeight: 3,
                       labelColor: primaryColor,
-                      unselectedLabelColor: Colors.grey,
+                      unselectedLabelColor: _textLight,
                       labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                       tabs: const [
                         Tab(text: "Leçons"),
@@ -139,21 +157,24 @@ class _DetailCoursEnseignantPageState extends State<DetailCoursEnseignantPage>
           children: [
             _buildTabContent(LeconsCoursPage(
               coursId: widget.coursId,
-              coursTitre: widget.titre,  // ← Ajout du paramètre requis
+              coursTitre: widget.titre,
               role: widget.role,
               tabController: _tabController,
+              isPremium: true,
+              courseColor: primaryColor,
             )),
             _buildTabContent(ExercicesCoursPage(
               coursId: widget.coursId, 
               role: widget.role, 
               coursTitre: widget.titre,
+              courseColor: primaryColor,
             )),
             _buildTabContent(DevoirsCoursPage(
-                coursId: widget.coursId,
-                coursTitre: widget.titre,
-                isEnseignantPrincipal: widget.estEnseignantPrincipal,
-                //estEnseignantPrincipal: widget.estEnseignantPrincipal,
-              )),
+              coursId: widget.coursId,
+              coursTitre: widget.titre,
+              isEnseignantPrincipal: widget.estEnseignantPrincipal,
+              courseColor: primaryColor,
+            )),
             _buildForumContent(),
           ],
         ),
@@ -161,7 +182,6 @@ class _DetailCoursEnseignantPageState extends State<DetailCoursEnseignantPage>
     );
   }
 
-  // Permet de gérer le scroll correctement dans les onglets avec le NestedScrollView
   Widget _buildTabContent(Widget page) {
     return Builder(
       builder: (BuildContext context) {
@@ -181,18 +201,19 @@ class _DetailCoursEnseignantPageState extends State<DetailCoursEnseignantPage>
     );
   }
 
-  // Contenu spécifique pour le Forum (correction du layout injecteur)
   Widget _buildForumContent() {
     return Builder(
       builder: (context) {
         return Column(
           children: [
-            // Récupère la hauteur exacte de l'espace occupé par le SliverAppBar
             SizedBox(
               height: MediaQuery.of(context).padding.top + kToolbarHeight + 60, 
             ),
             Expanded(
-              child: ForumPage(),
+              child: ForumPage(
+                preoccupationCoursId: int.tryParse(widget.coursId),
+                preoccupationCoursTitre: widget.titre,
+              ),
             ),
           ],
         );

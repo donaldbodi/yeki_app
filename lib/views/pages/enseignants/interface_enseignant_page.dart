@@ -1,10 +1,14 @@
 // lib/views/pages/enseignants/interface_enseignant_page.dart
+
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:yeki/views/pages/enseignants/cadre_dashboard_page.dart';
 import 'package:yeki/views/pages/enseignants/enseignant_admin_dashboard_page.dart';
+import 'package:yeki/views/pages/enseignants/principal_dashboard_page.dart';
+import 'package:yeki/views/pages/enseignants/secondaire_dashboard_page.dart';
 import 'package:yeki/views/pages/shared/profil_page.dart';
 import 'package:yeki/views/pages/shared/notifications_page.dart';
 
@@ -47,6 +51,7 @@ class _EnseignantHomePageState extends State<EnseignantHomePage>
   List<Widget> _pages = [];
   Map<String, dynamic> _profil = {};
   int _nbNotifs = 0;
+  List<dynamic> _coursList = [];
 
   late AnimationController _navAnimCtrl;
 
@@ -66,18 +71,77 @@ class _EnseignantHomePageState extends State<EnseignantHomePage>
     try {
       final role = await _fetchUserRole();
       await _fetchProfil();
-      setState(() {
-        _currentRole = role;
-        _pages = [
-          _getDashboardPage(role),
-          MesCoursPage(role: role),
-          const HistoriquePage(),
-          const ProfilPage(),
-        ];
-        _isLoading = false;
-      });
+      
+      // Charger les cours selon le rôle
+      await _loadCoursByRole(role);
+      
+      // S'assurer que _pages est initialisé avec au moins 4 éléments
+      final dashboardPage = _getDashboardPage(role);
+      
+      if (mounted) {
+        setState(() {
+          _currentRole = role;
+          _pages = [
+            dashboardPage,
+            MesCoursPage(role: role),
+            const HistoriquePage(),
+            const ProfilPage(),
+          ];
+          _isLoading = false;
+        });
+      }
     } catch (e) {
-      setState(() => _isLoading = false);
+      debugPrint("Erreur chargement: $e");
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  Future<void> _loadCoursByRole(RoleEnseignant role) async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('token');
+    if (token == null) return;
+
+    String endpoint;
+    switch (role) {
+      case RoleEnseignant.enseignantPrincipal:
+        endpoint = '/api/enseignant_principal/cours/';
+        break;
+      case RoleEnseignant.enseignantCadre:
+        endpoint = '/api/enseignant/cadre/cours/';
+        break;
+      case RoleEnseignant.enseignantSecondaire:
+        endpoint = '/api/enseignant/cours/';
+        break;
+      default:
+        endpoint = '/api/enseignant/cours/';
+    }
+
+    try {
+      final response = await http.get(
+        Uri.parse('https://yeki.pythonanywhere.com$endpoint'),
+        headers: {'Authorization': 'Token $token'},
+      );
+      
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data is List) {
+          _coursList = data;
+        } else if (data is Map && data.containsKey('cours')) {
+          _coursList = data['cours'] as List? ?? [];
+        } else if (data is Map && data.containsKey('results')) {
+          _coursList = data['results'] as List? ?? [];
+        }
+        debugPrint("Cours chargés: ${_coursList.length}");
+      } else {
+        debugPrint("Erreur chargement cours: ${response.statusCode}");
+        // En cas d'erreur, initialiser avec une liste vide
+        _coursList = [];
+      }
+    } catch (e) {
+      debugPrint("Exception chargement cours: $e");
+      _coursList = [];
     }
   }
 
@@ -85,14 +149,19 @@ class _EnseignantHomePageState extends State<EnseignantHomePage>
     try {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('token');
+      if (token == null) return;
+      
       final res = await http.get(
         Uri.parse('https://yeki.pythonanywhere.com/api/profil/me/'),
         headers: {'Authorization': 'Token $token'},
       );
       if (res.statusCode == 200 && mounted) {
-        setState(() => _profil = jsonDecode(res.body) as Map<String, dynamic>);
+        final data = jsonDecode(res.body) as Map<String, dynamic>;
+        setState(() => _profil = data);
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint("Erreur chargement profil: $e");
+    }
   }
 
   Future<RoleEnseignant> _fetchUserRole() async {
@@ -107,11 +176,17 @@ class _EnseignantHomePageState extends State<EnseignantHomePage>
 
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
-      nom = data['nom'] ?? '';
-      parcours    = data['parcours'] ?? [];
-      departements= data['departements'] ?? [];
-      cours       = data['cours'] ?? [];
-      final roleStr = data['role'] ?? '';
+      nom = data['nom']?.toString() ?? '';
+      parcours = data['parcours'] ?? [];
+      departements = data['departements'] ?? [];
+      cours = data['cours'] ?? [];
+      
+      // Si les cours sont déjà dans la réponse, les utiliser
+      if (cours.isNotEmpty && _coursList.isEmpty) {
+        _coursList = List.from(cours);
+      }
+      
+      final roleStr = data['role']?.toString() ?? '';
       switch (roleStr) {
         case 'admin':               return RoleEnseignant.administrateurGeneral;
         case 'enseignant_admin':    return RoleEnseignant.enseignantAdministrateur;
@@ -146,20 +221,30 @@ class _EnseignantHomePageState extends State<EnseignantHomePage>
 
   Widget _getDashboardPage(RoleEnseignant role) {
     switch (role) {
-      case RoleEnseignant.administrateurGeneral:    return const AdminGeneralPage();
-      case RoleEnseignant.enseignantAdministrateur: return const EnseignantAdminDashboardPage();
-      case RoleEnseignant.enseignantCadre:
-        return const Center(child: Text('Dashboard Cadre'));
-      case RoleEnseignant.enseignantPrincipal:
-        return const Center(child: Text('Dashboard Principal'));
-      default:
-        return const Center(child: Text('Dashboard Enseignant'));
+      case RoleEnseignant.administrateurGeneral:    
+        return const AdminGeneralPage();
+      case RoleEnseignant.enseignantAdministrateur: 
+        return const EnseignantAdminDashboardPage();
+      case RoleEnseignant.enseignantCadre: 
+        return const CadreDashboardPage();
+      case RoleEnseignant.enseignantPrincipal: 
+        return DashboardPrincipalPage(
+          nomEnseignant: nom.isNotEmpty ? nom : 'Enseignant',
+          roleEnseignant: _getRoleLabel(role),
+          extraInfo: _coursList, // ✅ Passage des cours chargés
+        );
+      default: 
+        return const SecondaireDashboardPage();
     }
   }
 
   String get _nomAffiche {
     final fn = _profil['first_name']?.toString() ?? '';
-    return fn.isNotEmpty ? fn : nom.split(' ').first;
+    final ln = _profil['last_name']?.toString() ?? '';
+    if (fn.isNotEmpty) return fn;
+    if (ln.isNotEmpty) return ln;
+    if (nom.isNotEmpty) return nom.split(' ').first;
+    return 'Enseignant';
   }
 
   String? get _avatarUrl => _profil['avatar']?.toString();
@@ -182,13 +267,29 @@ class _EnseignantHomePageState extends State<EnseignantHomePage>
       );
     }
 
+    // Vérifier que _pages n'est pas vide avant d'accéder à l'index
+    if (_pages.isEmpty || _selectedIndex >= _pages.length) {
+      return Scaffold(
+        backgroundColor: _eBg,
+        body: const Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(height: 16),
+              Text('Chargement...'),
+            ],
+          ),
+        ),
+      );
+    }
+
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.light,
       child: Scaffold(
         extendBody: true,
         backgroundColor: _eBg,
         body: Stack(children: [
-          // ── Fond dégradé haut ──────────────────────────
           Container(
             height: 200,
             decoration: const BoxDecoration(
@@ -221,7 +322,7 @@ class _EnseignantHomePageState extends State<EnseignantHomePage>
                   ),
                   child: KeyedSubtree(
                     key: ValueKey(_selectedIndex),
-                    child: _pages[_selectedIndex],
+                    child: _pages.isNotEmpty ? _pages[_selectedIndex] : const SizedBox(),
                   ),
                 ),
               ),
@@ -233,14 +334,12 @@ class _EnseignantHomePageState extends State<EnseignantHomePage>
     );
   }
 
-  // ── Header ───────────────────────────────────────────────────
   Widget _buildHeader() {
     final roleColor = _currentRole != null ? _getRoleColor(_currentRole!) : _eBlue;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
       child: Row(children: [
-        // ── Avatar ───────────────────────────────────────
         GestureDetector(
           onTap: () => setState(() => _selectedIndex = 3),
           child: Stack(children: [
@@ -286,7 +385,6 @@ class _EnseignantHomePageState extends State<EnseignantHomePage>
             ),
           ),
         ])),
-        // ── Notifications ─────────────────────────────────
         GestureDetector(
           onTap: () => Navigator.push(context,
               MaterialPageRoute(builder: (_) => const NotificationsPage())),
@@ -319,7 +417,6 @@ class _EnseignantHomePageState extends State<EnseignantHomePage>
       color: Colors.white, fontSize: 18, fontWeight: FontWeight.w800))),
   );
 
-  // ── Navigation flottante ──────────────────────────────────────
   Widget _buildFloatingNav() {
     final items = [
       (Icons.grid_view_rounded,      Icons.grid_view_outlined,       'Accueil'),

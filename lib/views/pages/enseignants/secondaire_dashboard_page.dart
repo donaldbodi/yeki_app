@@ -1,18 +1,26 @@
+// lib/views/pages/enseignants/secondaire_dashboard_page.dart
+
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:yeki/views/pages/enseignants/interface_enseignant_page.dart';
 
-// ─────────────────────────────────────────────────────────────────
-// DASHBOARD ENSEIGNANT SECONDAIRE
-// Visualise les statistiques des cours qui lui sont assignés
-// ─────────────────────────────────────────────────────────────────
+// Palette harmonisée
+const Color _primary = Color(0xFF2884A0);
+//const Color _primaryLight = Color(0xFF39A0C2);
+const Color _textDark = Color(0xFF1A1C1E);
+//const Color _textMedium = Color(0xFF5A5C5E);
+const Color _textLight = Color(0xFF8A8C8E);
+const Color _borderLight = Color(0xFFE0E4E8);
+const Color _bgLight = Color(0xFFF8FAFC);
+const Color _white = Color(0xFFFFFFFF);
+//const Color _green = Color(0xFF10B981);
+const Color _orange = Color(0xFFF97316);
+const Color _purple = Color(0xFF8B5CF6);
+const Color _teal = Color(0xFF008088);
 
 const String _baseUrl = 'https://yeki.pythonanywhere.com/api';
-const Color _primary  = Color(0xFF2884A0);
-const Color _dark     = Color(0xFF0D1B2A);
-const Color _bg       = Color(0xFFF4F9FB);
 
 class SecondaireDashboardPage extends StatefulWidget {
   const SecondaireDashboardPage({super.key});
@@ -41,7 +49,10 @@ class _SecondaireDashboardPageState extends State<SecondaireDashboardPage> {
   Future<void> _charger() async {
     setState(() => _loading = true);
     final token = await _getToken();
-    if (token == null) { setState(() => _loading = false); return; }
+    if (token == null) {
+      setState(() => _loading = false);
+      return;
+    }
     try {
       final res = await http.get(
         Uri.parse('$_baseUrl/enseignant/dashboard/'),
@@ -50,23 +61,38 @@ class _SecondaireDashboardPageState extends State<SecondaireDashboardPage> {
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         setState(() {
-          _stats = data['stats'] ?? {};
-          _cours = data['cours'] ?? [];
-          _nomEnseignant = data['nom'] ?? '';
+          _stats = data['stats'] != null ? Map<String, dynamic>.from(data['stats']) : {};
+          _cours = data['cours'] != null ? List.from(data['cours']) : [];
+          _nomEnseignant = data['nom']?.toString() ?? '';
           _loading = false;
         });
       } else {
         setState(() => _loading = false);
+        _showError('Erreur chargement (${res.statusCode})');
       }
-    } catch (_) {
+    } catch (e) {
       setState(() => _loading = false);
+      _showError('Erreur réseau');
     }
+  }
+
+  void _showError(String msg) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg, style: const TextStyle(color: _white)),
+        backgroundColor: Colors.red,
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.all(16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _bg,
+      backgroundColor: _bgLight,
       body: _loading
           ? const Center(child: CircularProgressIndicator(color: _primary))
           : RefreshIndicator(
@@ -82,7 +108,7 @@ class _SecondaireDashboardPageState extends State<SecondaireDashboardPage> {
                         _buildStatCards(),
                         const SizedBox(height: 28),
                         _buildSectionTitle('Mes cours assignés', Icons.school_outlined),
-                        const SizedBox(height: 14),
+                        const SizedBox(height: 16),
                         ..._cours.map((c) => _buildCoursCard(c)).toList(),
                         const SizedBox(height: 80),
                       ]),
@@ -96,64 +122,120 @@ class _SecondaireDashboardPageState extends State<SecondaireDashboardPage> {
 
   SliverAppBar _buildAppBar() {
     return SliverAppBar(
-      expandedHeight: 160,
+      expandedHeight: 220,
       pinned: true,
       backgroundColor: _primary,
       flexibleSpace: FlexibleSpaceBar(
+        collapseMode: CollapseMode.parallax,
         background: Container(
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             gradient: LinearGradient(
-              colors: [Color(0xFF1A5F7A), _primary],
+              colors: [_primary, _primary.withOpacity(0.85)],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
           ),
           child: SafeArea(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
+              padding: const EdgeInsets.fromLTRB(24, 16, 24, 20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  const Text('Tableau de bord', style: TextStyle(color: Colors.white70, fontSize: 13)),
-                  const SizedBox(height: 4),
-                  Text(
-                    _nomEnseignant.isEmpty ? 'Enseignant Secondaire' : _nomEnseignant,
-                    style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 6),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
+                      color: const Color(0xFFFFD700).withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: const Text(
+                      "ENSEIGNANT SECONDAIRE",
+                      style: TextStyle(
+                        color: Color(0xFFFFD700),
+                        fontSize: 9,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    _nomEnseignant.isEmpty ? 'Enseignant Secondaire' : _nomEnseignant,
+                    style: const TextStyle(
+                      color: _white,
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: _white.withOpacity(0.15),
                       borderRadius: BorderRadius.circular(20),
                     ),
-                    child: const Text('Enseignant Secondaire', style: TextStyle(color: Colors.white, fontSize: 12)),
+                    child: const Text(
+                      'Enseignant Secondaire',
+                      style: TextStyle(
+                        color: _white,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      _miniStatBadge('${_stats['nb_cours'] ?? _cours.length}', 'cours', Icons.book),
+                      const SizedBox(width: 16),
+                      _miniStatBadge('${_stats['nb_apprenants'] ?? 0}', 'apprenants', Icons.people),
+                      const SizedBox(width: 16),
+                      _miniStatBadge('${_stats['nb_lecons'] ?? 0}', 'leçons', Icons.play_lesson),
+                    ],
                   ),
                 ],
               ),
             ),
           ),
         ),
-        title: const Text('Mon Dashboard', style: TextStyle(fontSize: 16, color: Colors.white)),
-        titlePadding: const EdgeInsets.only(left: 16, bottom: 16),
-        collapseMode: CollapseMode.parallax,
       ),
       actions: [
         IconButton(
-          icon: const Icon(Icons.refresh, color: Colors.white),
+          icon: const Icon(Icons.refresh, color: _white),
           onPressed: _charger,
         ),
       ],
     );
   }
 
+  Widget _miniStatBadge(String value, String label, IconData icon) =>
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: _white.withOpacity(0.12),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(icon, color: _white, size: 12),
+          const SizedBox(width: 5),
+          Text('$value $label',
+              style: const TextStyle(color: _white, fontSize: 11, fontWeight: FontWeight.w500)),
+        ]),
+      );
+
   Widget _buildStatCards() {
+    final nbCours = _stats['nb_cours'] ?? _cours.length;
+    final nbApprenants = _stats['nb_apprenants'] ?? 0;
+    final nbLecons = _stats['nb_lecons'] ?? 0;
+    final nbExercices = _stats['nb_exercices'] ?? 0;
+
     final items = [
-      _StatItem('Cours assignés', (_stats['nb_cours'] ?? _cours.length).toString(), Icons.book_outlined, const Color(0xFF2884A0)),
-      _StatItem('Apprenants', (_stats['nb_apprenants'] ?? 0).toString(), Icons.people_outline, const Color(0xFF008088)),
-      _StatItem('Leçons', (_stats['nb_lecons'] ?? 0).toString(), Icons.play_lesson_outlined, const Color(0xFF6A1B9A)),
-      _StatItem('Exercices', (_stats['nb_exercices'] ?? 0).toString(), Icons.edit_note_rounded, const Color(0xFFE65100)),
+      _StatItem('Cours assignés', nbCours.toString(), Icons.book_outlined, _primary),
+      _StatItem('Apprenants', nbApprenants.toString(), Icons.people_outline, _teal),
+      _StatItem('Leçons', nbLecons.toString(), Icons.play_lesson_outlined, _purple),
+      _StatItem('Exercices', nbExercices.toString(), Icons.edit_note_rounded, _orange),
     ];
     return GridView.count(
       crossAxisCount: 2,
@@ -169,9 +251,9 @@ class _SecondaireDashboardPageState extends State<SecondaireDashboardPage> {
   Widget _buildStatCard(_StatItem item) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: _white,
         borderRadius: BorderRadius.circular(18),
-        boxShadow: [BoxShadow(color: item.color.withOpacity(0.12), blurRadius: 12, offset: const Offset(0, 4))],
+        border: Border.all(color: _borderLight, width: 1),
       ),
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -179,15 +261,22 @@ class _SecondaireDashboardPageState extends State<SecondaireDashboardPage> {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(color: item.color.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
-            child: Icon(item.icon, color: item.color, size: 20),
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: item.color.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: item.color.withOpacity(0.2), width: 0.8),
+            ),
+            child: Icon(item.icon, color: item.color, size: 22),
           ),
+          const SizedBox(height: 12),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(item.value, style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: item.color)),
-              Text(item.label, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+              Text(item.value,
+                  style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: item.color)),
+              Text(item.label,
+                  style: const TextStyle(fontSize: 12, color: _textLight)),
             ],
           ),
         ],
@@ -200,7 +289,8 @@ class _SecondaireDashboardPageState extends State<SecondaireDashboardPage> {
       children: [
         Icon(icon, color: _primary, size: 20),
         const SizedBox(width: 8),
-        Text(title, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: _dark)),
+        Text(title,
+            style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: _textDark)),
       ],
     );
   }
@@ -209,15 +299,26 @@ class _SecondaireDashboardPageState extends State<SecondaireDashboardPage> {
     final taux = (cours['taux_completion'] as num? ?? 0).toDouble();
     final nbApp = cours['nb_apprenants'] ?? 0;
     final nbLecons = cours['nb_lecons'] ?? 0;
+    final departement = cours['departement']?.toString() ?? '';
+
+    // Couleur du cours
+    final colorHex = (cours['color_code'] as String? ?? '#2884A0').replaceAll('#', '');
+    Color courseColor;
+    try {
+      courseColor = Color(int.parse('FF$colorHex', radix: 16));
+    } catch (_) {
+      courseColor = _primary;
+    }
+
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)],
+        color: _white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: _borderLight, width: 1),
       ),
       child: InkWell(
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(20),
         onTap: () => _ouvrirCours(cours),
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -228,24 +329,36 @@ class _SecondaireDashboardPageState extends State<SecondaireDashboardPage> {
                 children: [
                   Container(
                     padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(color: _primary.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
-                    child: const Icon(Icons.book, color: _primary, size: 22),
+                    decoration: BoxDecoration(
+                      color: courseColor.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: courseColor.withOpacity(0.2), width: 0.8),
+                    ),
+                    child: Icon(Icons.book, color: courseColor, size: 22),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(cours['titre'] ?? '', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: _dark)),
+                        Text(
+                          cours['titre']?.toString() ?? '',
+                          style: const TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 15, color: _textDark),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                         const SizedBox(height: 2),
-                        Text(cours['departement'] ?? '', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                        if (departement.isNotEmpty)
+                          Text(departement,
+                              style: const TextStyle(fontSize: 12, color: _textLight)),
                       ],
                     ),
                   ),
-                  const Icon(Icons.chevron_right, color: Colors.grey),
+                  Icon(Icons.chevron_right, color: _textLight),
                 ],
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 16),
               Row(
                 children: [
                   _miniStat(Icons.people_outline, '$nbApp', 'apprenants'),
@@ -258,21 +371,23 @@ class _SecondaireDashboardPageState extends State<SecondaireDashboardPage> {
                 children: [
                   Expanded(
                     child: ClipRRect(
-                      borderRadius: BorderRadius.circular(10),
+                      borderRadius: BorderRadius.circular(8),
                       child: LinearProgressIndicator(
                         value: taux / 100,
-                        backgroundColor: Colors.grey.shade100,
-                        color: _primary,
-                        minHeight: 8,
+                        backgroundColor: _borderLight,
+                        color: courseColor,
+                        minHeight: 6,
                       ),
                     ),
                   ),
                   const SizedBox(width: 10),
-                  Text('${taux.toStringAsFixed(0)}%', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: _primary)),
+                  Text('${taux.toStringAsFixed(0)}%',
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: courseColor)),
                 ],
               ),
               const SizedBox(height: 4),
-              const Text('Taux de complétion', style: TextStyle(fontSize: 11, color: Colors.grey)),
+              const Text('Taux de complétion',
+                  style: TextStyle(fontSize: 11, color: _textLight)),
             ],
           ),
         ),
@@ -283,10 +398,11 @@ class _SecondaireDashboardPageState extends State<SecondaireDashboardPage> {
   Widget _miniStat(IconData icon, String val, String label) {
     return Row(
       children: [
-        Icon(icon, size: 14, color: Colors.grey),
+        Icon(icon, size: 14, color: _textLight),
         const SizedBox(width: 4),
-        Text('$val ', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: _dark)),
-        Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+        Text('$val ',
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: _textDark)),
+        Text(label, style: const TextStyle(fontSize: 12, color: _textLight)),
       ],
     );
   }
