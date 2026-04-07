@@ -231,7 +231,7 @@ class _EnseignantHomePageState extends State<EnseignantHomePage>
         return DashboardPrincipalPage(
           nomEnseignant: nom.isNotEmpty ? nom : 'Enseignant',
           roleEnseignant: _getRoleLabel(role),
-          extraInfo: _coursList, // ✅ Passage des cours chargés
+          extraInfo: (role == RoleEnseignant.enseignantCadre) ? departements : cours,
         );
       default: 
         return const SecondaireDashboardPage();

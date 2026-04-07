@@ -105,7 +105,7 @@ class _YekiHeaderState extends State<YekiHeader> {
             // ── Logo Yéki ─────────────────────────────────────
             ShaderMask(
               shaderCallback: (bounds) => LinearGradient(
-                colors: [brandBackground, brandBackground.withOpacity(0.7)],
+                colors: [brandBackground, brandBackground],
               ).createShader(bounds),
               child: const Text(
                 'Yéki',

@@ -12,7 +12,7 @@ const Color _nBg     = Color(0xFFF8FAFC);
 const Color _nGold   = Color(0xFFE2A84B);
 const Color _nGreen  = Color(0xFF10B981);
 const Color _nPurple = Color(0xFF8B5CF6);
-const Color _nRed    = Color(0xFFEF4444);
+//const Color _nRed    = Color(0xFFEF4444);
 const Color _nOrange = Color(0xFFF97316);
 
 // Mapping type → couleur + icône

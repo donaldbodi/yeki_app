@@ -12,10 +12,12 @@ class RegisterPage extends StatefulWidget {
 }
 
 class _RegisterPageState extends State<RegisterPage> with SingleTickerProviderStateMixin {
-  // --- NOUVELLE PALETTE HARMONISÉE ---
+  // --- PALETTE HARMONISÉE ---
   static const Color brandBackground = Color(0xFF135F74); 
   static const Color actionOrange = Color(0xFFFF6B00); 
   static const Color glassFill = Color(0x1AFFFFFF);
+  static const Color errorRed = Color(0xFFEF4444);
+  static const Color successGreen = Color(0xFF10B981);
 
   // --- CONTROLLERS ---
   final _nameController = TextEditingController();
@@ -43,6 +45,12 @@ class _RegisterPageState extends State<RegisterPage> with SingleTickerProviderSt
   String? selectedNiveau;
   bool loadingNiveaux = false;
 
+  // ✅ États pour les erreurs de validation en temps réel
+  String? _emailError;
+  String? _usernameError;
+  String? _passwordError;
+  String? _confirmError;
+
   late AnimationController _animCtrl;
   late Animation<double> _fadeAnim;
 
@@ -53,6 +61,12 @@ class _RegisterPageState extends State<RegisterPage> with SingleTickerProviderSt
     _fadeAnim = CurvedAnimation(parent: _animCtrl, curve: Curves.easeIn);
     _animCtrl.forward();
     _fetchCursus();
+    
+    // ✅ Ajout des listeners pour validation en temps réel
+    _emailController.addListener(_validateEmail);
+    _usernameController.addListener(_validateUsername);
+    _passwordController.addListener(_validatePassword);
+    _confirmPasswordController.addListener(_validateConfirmPassword);
   }
 
   @override
@@ -66,7 +80,64 @@ class _RegisterPageState extends State<RegisterPage> with SingleTickerProviderSt
     super.dispose();
   }
 
-  // --- LOGIQUE API (CONSERVÉE) ---
+  // ✅ Validation email en temps réel
+  void _validateEmail() {
+    final email = _emailController.text.trim();
+    if (email.isEmpty) {
+      setState(() => _emailError = null);
+      return;
+    }
+    
+    final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+    if (!emailRegex.hasMatch(email)) {
+      setState(() => _emailError = "Email invalide");
+    } else {
+      setState(() => _emailError = null);
+    }
+  }
+
+  void _validateUsername() {
+    final username = _usernameController.text.trim();
+    if (username.isEmpty) {
+      setState(() => _usernameError = null);
+      return;
+    }
+    if (username.length < 3) {
+      setState(() => _usernameError = "Au moins 3 caractères");
+    } else {
+      setState(() => _usernameError = null);
+    }
+  }
+
+  void _validatePassword() {
+    final password = _passwordController.text;
+    if (password.isEmpty) {
+      setState(() => _passwordError = null);
+      return;
+    }
+    if (password.length < 6) {
+      setState(() => _passwordError = "Au moins 6 caractères");
+    } else {
+      setState(() => _passwordError = null);
+    }
+    _validateConfirmPassword();
+  }
+
+  void _validateConfirmPassword() {
+    final password = _passwordController.text;
+    final confirm = _confirmPasswordController.text;
+    if (confirm.isEmpty) {
+      setState(() => _confirmError = null);
+      return;
+    }
+    if (password != confirm) {
+      setState(() => _confirmError = "Les mots de passe ne correspondent pas");
+    } else {
+      setState(() => _confirmError = null);
+    }
+  }
+
+  // --- LOGIQUE API ---
   Future<void> _fetchCursus() async {
     setState(() => loadingCursus = true);
     try {
@@ -125,11 +196,25 @@ class _RegisterPageState extends State<RegisterPage> with SingleTickerProviderSt
     }
   }
 
+  bool _isFormValid() {
+    return _nameController.text.trim().isNotEmpty &&
+           _usernameController.text.trim().isNotEmpty &&
+           _usernameError == null &&
+           _emailController.text.trim().isNotEmpty &&
+           _emailError == null &&
+           _passwordController.text.isNotEmpty &&
+           _passwordError == null &&
+           _confirmError == null &&
+           selectedUserType != null;
+  }
+
   void _submitRegistration() async {
-    if (_passwordController.text != _confirmPasswordController.text) {
-      _showSnackBar("Les mots de passe ne correspondent pas", actionOrange);
+    // ✅ Validation finale avant envoi
+    if (!_isFormValid()) {
+      _showSnackBar("Veuillez remplir correctement tous les champs", errorRed);
       return;
     }
+
     setState(() => _isLoading = true);
     HapticFeedback.lightImpact();
 
@@ -140,8 +225,8 @@ class _RegisterPageState extends State<RegisterPage> with SingleTickerProviderSt
         "password": _passwordController.text,
         "name": _nameController.text.trim(),
         "user_type": selectedUserType?.toLowerCase(),
-        "cursus": selectedCursus,
-        "niveau": selectedNiveau,
+        "cursus": selectedUserType == "Apprenant" ? selectedCursus : null,
+        "niveau": selectedUserType == "Apprenant" ? selectedNiveau : null,
       };
 
       final response = await Dio().post(
@@ -151,14 +236,39 @@ class _RegisterPageState extends State<RegisterPage> with SingleTickerProviderSt
       );
 
       if (response.statusCode == 201) {
-        _showSnackBar("Compte créé avec succès !", Colors.greenAccent);
+        _showSnackBar("Compte créé avec succès !", successGreen);
         if (!mounted) return;
         Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const LoginPage()));
       } else {
-        _showSnackBar("Erreur lors de l'inscription", Colors.redAccent);
+        final data = response.data;
+        final errorMessage = data?['detail'] ?? "Erreur lors de l'inscription";
+        
+        // ✅ Gestion spécifique de l'erreur email existant
+        if (data?['error_type'] == 'email_exists' || 
+            errorMessage.contains("email") || 
+            errorMessage.contains("déjà utilisée")) {
+          _showSnackBar("❌ Cette adresse email est déjà utilisée. Veuillez en utiliser une autre.", errorRed);
+          setState(() => _emailError = "Email déjà utilisé");
+        } else {
+          _showSnackBar(errorMessage, errorRed);
+        }
+      }
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 400) {
+        final data = e.response?.data;
+        final errorMessage = data?['detail'] ?? "Email déjà utilisé ou données invalides";
+        
+        if (errorMessage.contains("email") || errorMessage.contains("déjà")) {
+          _showSnackBar("❌ Cette adresse email est déjà utilisée.", errorRed);
+          setState(() => _emailError = "Email déjà utilisé");
+        } else {
+          _showSnackBar(errorMessage, errorRed);
+        }
+      } else {
+        _showSnackBar("Problème de connexion. Vérifiez votre réseau.", errorRed);
       }
     } catch (e) {
-      _showSnackBar("Problème de connexion", Colors.redAccent);
+      _showSnackBar("Une erreur est survenue. Veuillez réessayer.", errorRed);
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -172,6 +282,7 @@ class _RegisterPageState extends State<RegisterPage> with SingleTickerProviderSt
         behavior: SnackBarBehavior.floating,
         margin: const EdgeInsets.all(24),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        duration: const Duration(seconds: 3),
       )
     );
   }
@@ -201,11 +312,28 @@ class _RegisterPageState extends State<RegisterPage> with SingleTickerProviderSt
                       
                       // FORMULAIRE
                       _buildSectionLabel("IDENTITÉ"),
-                      _buildModernField(controller: _nameController, label: "Nom complet", icon: Icons.person_outline_rounded),
+                      _buildModernField(
+                        controller: _nameController, 
+                        label: "Nom complet", 
+                        icon: Icons.person_outline_rounded,
+                      ),
                       const SizedBox(height: 15),
-                      _buildModernField(controller: _emailController, label: "Email académique", icon: Icons.alternate_email_rounded),
+                      
+                      // ✅ Email avec validation visuelle
+                      _buildModernField(
+                        controller: _emailController, 
+                        label: "Email académique", 
+                        icon: Icons.alternate_email_rounded,
+                        errorText: _emailError,
+                      ),
                       const SizedBox(height: 15),
-                      _buildModernField(controller: _usernameController, label: "Nom d'utilisateur", icon: Icons.badge_outlined),
+                      
+                      _buildModernField(
+                        controller: _usernameController, 
+                        label: "Nom d'utilisateur", 
+                        icon: Icons.badge_outlined,
+                        errorText: _usernameError,
+                      ),
                       
                       const SizedBox(height: 30),
                       _buildSectionLabel("VOTRE STATUT"),
@@ -269,7 +397,8 @@ class _RegisterPageState extends State<RegisterPage> with SingleTickerProviderSt
                         icon: Icons.lock_outline_rounded, 
                         isPassword: true, 
                         obscure: _obscurePassword, 
-                        onToggle: () => setState(() => _obscurePassword = !_obscurePassword)
+                        onToggle: () => setState(() => _obscurePassword = !_obscurePassword),
+                        errorText: _passwordError,
                       ),
                       const SizedBox(height: 15),
                       _buildModernField(
@@ -278,7 +407,8 @@ class _RegisterPageState extends State<RegisterPage> with SingleTickerProviderSt
                         icon: Icons.shield_outlined, 
                         isPassword: true, 
                         obscure: _obscureConfirm, 
-                        onToggle: () => setState(() => _obscureConfirm = !_obscureConfirm)
+                        onToggle: () => setState(() => _obscureConfirm = !_obscureConfirm),
+                        errorText: _confirmError,
                       ),
 
                       const SizedBox(height: 45),
@@ -333,36 +463,52 @@ class _RegisterPageState extends State<RegisterPage> with SingleTickerProviderSt
     required IconData icon, 
     bool isPassword = false, 
     bool? obscure, 
-    VoidCallback? onToggle
+    VoidCallback? onToggle,
+    String? errorText,
   }) {
     return SizedBox(
       width: 320,
-      child: TextFormField(
-        controller: controller,
-        obscureText: isPassword && (obscure ?? true),
-        style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w500),
-        cursorColor: Colors.white,
-        decoration: InputDecoration(
-          labelText: label,
-          labelStyle: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 13),
-          floatingLabelStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
-          prefixIcon: Icon(icon, color: Colors.white.withOpacity(0.7), size: 18),
-          suffixIcon: isPassword ? IconButton(
-            icon: Icon(obscure! ? Icons.visibility_off_rounded : Icons.visibility_rounded, color: Colors.white24, size: 18), 
-            onPressed: onToggle
-          ) : null,
-          filled: true,
-          fillColor: glassFill,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(15), 
-            borderSide: BorderSide(color: Colors.white.withOpacity(0.05))
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          TextFormField(
+            controller: controller,
+            obscureText: isPassword && (obscure ?? true),
+            style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w500),
+            cursorColor: Colors.white,
+            decoration: InputDecoration(
+              labelText: label,
+              labelStyle: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 13),
+              floatingLabelStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+              prefixIcon: Icon(icon, color: Colors.white.withOpacity(0.7), size: 18),
+              suffixIcon: isPassword ? IconButton(
+                icon: Icon(obscure! ? Icons.visibility_off_rounded : Icons.visibility_rounded, color: Colors.white24, size: 18), 
+                onPressed: onToggle
+              ) : null,
+              filled: true,
+              fillColor: glassFill,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(15), 
+                borderSide: BorderSide(color: Colors.white.withOpacity(0.05))
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(15), 
+                borderSide: const BorderSide(color: Colors.white, width: 1.5)
+              ),
+              errorBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(15),
+                borderSide: BorderSide(color: errorRed.withOpacity(0.5), width: 1),
+              ),
+              focusedErrorBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(15),
+                borderSide: const BorderSide(color: errorRed, width: 1.5),
+              ),
+              errorText: errorText,
+              errorStyle: const TextStyle(color: errorRed, fontSize: 11),
+            ),
           ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(15), 
-            borderSide: const BorderSide(color: Colors.white, width: 1.5)
-          ),
-        ),
+        ],
       ),
     );
   }
@@ -404,18 +550,19 @@ class _RegisterPageState extends State<RegisterPage> with SingleTickerProviderSt
   }
 
   Widget _buildSubmitButton() {
+    final isValid = _isFormValid();
     return GestureDetector(
-      onTap: _submitRegistration,
+      onTap: isValid ? _submitRegistration : null,
       child: Container(
         width: 320,
         height: 60,
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: actionOrange,
+          color: isValid ? actionOrange : Colors.grey.shade600,
           borderRadius: BorderRadius.circular(15),
-          boxShadow: [
+          boxShadow: isValid ? [
             BoxShadow(color: actionOrange.withOpacity(0.3), blurRadius: 15, offset: const Offset(0, 8)),
-          ],
+          ] : [],
         ),
         child: const Text('CRÉER MON COMPTE', 
           style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 1.5)),
