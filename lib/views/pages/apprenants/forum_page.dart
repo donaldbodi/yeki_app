@@ -1,3 +1,6 @@
+// lib/views/pages/apprenants/forum_page.dart
+// Version avec WebSocket AJOUTÉ (sans modifier la logique existante)
+
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
@@ -8,6 +11,7 @@ import 'package:yeki/views/pages/apprenants/details_question_forum.dart';
 import 'package:yeki/views/pages/apprenants/lecture_lecon_page.dart';
 import 'package:yeki/views/pages/apprenants/passer_exercice.dart';
 import 'package:yeki/views/pages/apprenants/resultat_devoir_page.dart';
+import 'package:yeki/services/websocket_service.dart';  // AJOUTÉ
 
 // Palette harmonisée
 const Color brandBackground = Color(0xFF135F74);
@@ -185,7 +189,7 @@ class RepForum {
 }
 
 // ════════════════════════════════════════════════════════════════
-// PAGE FORUM
+// PAGE FORUM AVEC WEBSOCKET (AJOUTÉ SANS MODIFIER LA LOGIQUE)
 // ════════════════════════════════════════════════════════════════
 class ForumPage extends StatefulWidget {
   final int? scrollToQuestionId;
@@ -236,6 +240,11 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin {
   bool _sending = false;
   String _composerSource = 'libre';
 
+  // ========== AJOUT WEBSOCKET ==========
+  final WebSocketService _wsService = WebSocketService.instance;
+  bool _wsConnected = false;
+  // =====================================
+
   Color get _accentColor => widget.coursColor != null ? Color(widget.coursColor!) : brandBackground;
 
   @override
@@ -243,6 +252,10 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin {
     super.initState();
     timeago.setLocaleMessages('fr', timeago.FrMessages());
     _listCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 600));
+    
+    // AJOUT: Initialiser WebSocket en arrière-plan
+    _initWebSocket();
+    
     _loadQuestions();
 
     _poll = Timer.periodic(const Duration(seconds: 15), (_) => _loadQuestions(silent: true));
@@ -256,6 +269,69 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin {
     }
   }
 
+  // ========== AJOUT: Initialisation WebSocket ==========
+  Future<void> _initWebSocket() async {
+    final token = await _getToken();
+    if (token != null) {
+      _wsService.connect(room: widget.preoccupationCoursId?.toString() ?? 'global');
+      _wsService.subscribe('new_question', _onWebSocketNewQuestion);
+      _wsService.subscribe('new_reponse', _onWebSocketNewReponse);
+      _wsService.subscribe('like_updated', _onWebSocketLikeUpdated);
+      setState(() => _wsConnected = true);
+    }
+  }
+  
+  // ========== AJOUT: Gestionnaires WebSocket ==========
+  void _onWebSocketNewQuestion(Map<String, dynamic> data) {
+    if (!mounted) return;
+    final questionData = data['question'] as Map<String, dynamic>;
+    final nouvelleQuestion = QForum.fromJson(questionData);
+    
+    // Vérifier si la question n'existe pas déjà
+    final exists = _questions.any((q) => q.id == nouvelleQuestion.id);
+    if (!exists) {
+      setState(() {
+        _questions.insert(0, nouvelleQuestion);
+      });
+      _listCtrl.forward(from: 0);
+    }
+  }
+  
+  void _onWebSocketNewReponse(Map<String, dynamic> data) {
+    if (!mounted) return;
+    final questionId = data['question_id'] as int;
+    final reponseData = data['reponse'] as Map<String, dynamic>;
+    final nouvelleReponse = RepForum.fromJson(reponseData);
+    
+    final index = _questions.indexWhere((q) => q.id == questionId);
+    if (index != -1) {
+      setState(() {
+        _questions[index].nbReponses++;
+        _questions[index].reponses.add(nouvelleReponse);
+      });
+    }
+  }
+  
+  void _onWebSocketLikeUpdated(Map<String, dynamic> data) {
+    if (!mounted) return;
+    final reponseId = data['reponse_id'] as int;
+    final liked = data['liked'] as bool;
+    final count = data['count'] as int;
+    
+    for (int i = 0; i < _questions.length; i++) {
+      for (int j = 0; j < _questions[i].reponses.length; j++) {
+        if (_questions[i].reponses[j].id == reponseId) {
+          setState(() {
+            _questions[i].reponses[j].nbLikes = count;
+            _questions[i].reponses[j].monLike = liked;
+          });
+          return;
+        }
+      }
+    }
+  }
+  // =========================================================
+
   @override
   void dispose() {
     _poll?.cancel();
@@ -263,6 +339,10 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin {
     _searchCtrl.dispose();
     _scrollCtrl.dispose();
     _composerCtrl.dispose();
+    // AJOUT: Nettoyer WebSocket
+    _wsService.unsubscribe('new_question', _onWebSocketNewQuestion);
+    _wsService.unsubscribe('new_reponse', _onWebSocketNewReponse);
+    _wsService.unsubscribe('like_updated', _onWebSocketLikeUpdated);
     super.dispose();
   }
 
@@ -405,10 +485,33 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin {
       );
 
       if (response.statusCode == 201) {
+        final data = jsonDecode(response.body);
+        final nouvelleQuestion = QForum.fromJson(data);
+        
+        // AJOUT: Envoyer via WebSocket si connecté
+        if (_wsConnected) {
+          _wsService.sendNewQuestion(
+            contenu: texte,
+            source: _composerSource,
+            coursId: widget.preoccupationCoursId,
+            leconId: widget.preoccupationLeconId,
+            leconTitre: widget.preoccupationLeconTitre,
+            exerciceId: widget.preoccupationExerciceId,
+            exerciceTitre: widget.preoccupationExerciceTitre,
+            devoirId: widget.preoccupationDevoirId,
+            devoirTitre: widget.preoccupationDevoirTitre,
+          );
+        }
+        
+        // AJOUT: Ajouter localement immédiatement
+        setState(() {
+          _questions.insert(0, nouvelleQuestion);
+        });
+        
         _composerCtrl.clear();
         setState(() => _composerVisible = false);
-        await _loadQuestions();
-
+        _listCtrl.forward(from: 0);
+        
         if (_scrollCtrl.hasClients) {
           _scrollCtrl.animateTo(
             0,
@@ -518,6 +621,10 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin {
   }
 
   Widget _buildHeader() {
+    // AJOUT: Indicateur de connexion WebSocket
+    final wsStatus = _wsConnected ? 'En ligne' : 'Hors ligne';
+    final wsColor = _wsConnected ? _green : Colors.grey;
+    
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 10),
       decoration: BoxDecoration(
@@ -543,9 +650,24 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin {
                   'Forum',
                   style: TextStyle(color: _textDark, fontSize: 18, fontWeight: FontWeight.w800),
                 ),
-                Text(
-                  '${_questions.length} préoccupation${_questions.length > 1 ? 's' : ''}',
-                  style: const TextStyle(color: _textLight, fontSize: 12),
+                Row(
+                  children: [
+                    Text(
+                      '${_questions.length} préoccupation${_questions.length > 1 ? 's' : ''}',
+                      style: const TextStyle(color: _textLight, fontSize: 12),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      width: 6,
+                      height: 6,
+                      decoration: BoxDecoration(color: wsColor, shape: BoxShape.circle),
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      wsStatus,
+                      style: TextStyle(color: wsColor, fontSize: 10),
+                    ),
+                  ],
                 ),
               ],
             ),

@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:yeki/main.dart'; 
+import 'package:yeki/main.dart';
 import 'package:yeki/views/auth/forgot_password_flow.dart';
 import 'register_page.dart';
 

@@ -1,4 +1,5 @@
 // lib/services/update_service.dart
+// Version corrigée pour awesome_notifications 0.11.0
 
 import 'dart:convert';
 import 'dart:io';
@@ -10,33 +11,14 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:workmanager/workmanager.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:crypto/crypto.dart';
-
-// Callback pour WorkManager
-@pragma('vm:entry-point')
-void callbackDispatcher() {
-  Workmanager().executeTask((task, inputData) async {
-    switch (task) {
-      case 'scheduledUpdateCheck':
-        await UpdateService.checkForUpdateInBackground();
-        break;
-      case 'scheduledDownload':
-        await UpdateService.processPendingDownloads();
-        break;
-    }
-    return Future.value(true);
-  });
-}
+import 'package:awesome_notifications/awesome_notifications.dart';
 
 class UpdateService {
   static const String API_URL = "https://yeki.pythonanywhere.com/api/latest-version/";
   static const String PREF_LAST_CHECK = 'last_update_check';
   static const String PREF_PENDING_DOWNLOAD = 'pending_download';
-  static const String PREF_UPDATE_SCHEDULED = 'update_scheduled';
-  
-  static final FlutterLocalNotificationsPlugin _notifications = FlutterLocalNotificationsPlugin();
+  static const String PREF_SKIP_VERSION = 'skip_version';
   
   // ─────────────────────────────────────────────────────────────
   //  INITIALISATION
@@ -49,31 +31,42 @@ class UpdateService {
     );
     
     // Initialiser les notifications
-    const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
-    const iosSettings = DarwinInitializationSettings();
-    const initSettings = InitializationSettings(android: androidSettings, iOS: iosSettings);
-    await _notifications.initialize(initSettings);
+    await _initializeAwesomeNotifications();
     
-    // Initialiser WorkManager pour les tâches planifiées
-    await Workmanager().initialize(callbackDispatcher, isInDebugMode: false);
-    
-    // Planifier la vérification quotidienne
-    await Workmanager().registerPeriodicTask(
-      "scheduledUpdateCheck",
-      "scheduledUpdateCheck",
-      frequency: Duration(hours: 24),
-      constraints: Constraints(
-        networkType: NetworkType.connected,
-        requiresBatteryNotLow: true,
-      ),
+    // Vérifier les permissions au démarrage
+    await _requestPermissions();
+  }
+  
+  // Initialisation awesome_notifications
+  static Future<void> _initializeAwesomeNotifications() async {
+    await AwesomeNotifications().initialize(
+      null,
+      [
+        NotificationChannel(
+          channelKey: 'update_channel',
+          channelName: 'Mises à jour',
+          channelDescription: 'Notifications de mise à jour',
+          defaultColor: const Color(0xFF135F74),
+          ledColor: Colors.white,
+          importance: NotificationImportance.Default,
+          playSound: true,
+          enableVibration: true,
+        ),
+        NotificationChannel(
+          channelKey: 'download_channel',
+          channelName: 'Téléchargements',
+          channelDescription: 'Téléchargements terminés',
+          defaultColor: const Color(0xFF10B981),
+          ledColor: Colors.white,
+          importance: NotificationImportance.High,
+          playSound: true,
+          enableVibration: true,
+        ),
+      ],
     );
     
-    // Planifier le traitement des téléchargements en attente
-    await Workmanager().registerPeriodicTask(
-      "scheduledDownload",
-      "scheduledDownload",
-      frequency: Duration(hours: 6),
-    );
+    // Demander la permission
+    await AwesomeNotifications().requestPermissionToSendNotifications();
   }
   
   // ─────────────────────────────────────────────────────────────
@@ -88,6 +81,7 @@ class UpdateService {
       final prefs = await SharedPreferences.getInstance();
       final lastCheck = prefs.getInt(PREF_LAST_CHECK) ?? 0;
       final now = DateTime.now().millisecondsSinceEpoch;
+      final skippedVersion = prefs.getString(PREF_SKIP_VERSION);
       
       // Vérifier au maximum toutes les heures
       if (!showNoUpdate && (now - lastCheck) < 3600000) {
@@ -109,7 +103,11 @@ class UpdateService {
         final versionName = data['version_name'] as String? ?? 'v1.0.0';
         final minVersion = data['min_version'] as int? ?? 1;
         
-        // Vérifier si mise à jour obligatoire
+        // Vérifier si l'utilisateur a ignoré cette version
+        if (!forceUpdate && skippedVersion == versionName) {
+          return null;
+        }
+        
         final isForceUpdate = forceUpdate || (currentVersion < minVersion);
         
         if (latestVersion > currentVersion) {
@@ -120,7 +118,6 @@ class UpdateService {
             downloadUrl: downloadUrl,
             changelog: changelog,
             forceUpdate: isForceUpdate,
-            isIncremental: _isIncrementalUpdate(currentVersion, latestVersion),
           );
         } else if (showNoUpdate) {
           return UpdateInfo.noUpdate(currentVersion);
@@ -133,28 +130,15 @@ class UpdateService {
   }
   
   // ─────────────────────────────────────────────────────────────
-  //  VÉRIFICATION EN ARRIÈRE-PLAN
+  //  TÉLÉCHARGEMENT
   // ─────────────────────────────────────────────────────────────
-  static Future<void> checkForUpdateInBackground() async {
-    final updateInfo = await checkForUpdate();
-    if (updateInfo != null && !updateInfo.forceUpdate) {
-      // Notification silencieuse
-      await _showBackgroundNotification(updateInfo);
-    }
-  }
-  
-  // ─────────────────────────────────────────────────────────────
-  //  TÉLÉCHARGEMENT EN ARRIÈRE-PLAN
-  // ─────────────────────────────────────────────────────────────
-  static Future<bool> downloadInBackground(UpdateInfo info) async {
-    // Vérifier les permissions
+  static Future<bool> downloadUpdate(UpdateInfo info) async {
     if (!await _requestPermissions()) {
       debugPrint("Permissions refusées");
       return false;
     }
     
     try {
-      // Obtenir le répertoire de téléchargement
       final directory = await _getDownloadDirectory();
       final fileName = _getFileName(info.downloadUrl);
       final savePath = '${directory.path}/$fileName';
@@ -165,12 +149,6 @@ class UpdateService {
         await existingFile.delete();
       }
       
-      // Calculer le hash du fichier existant pour mise à jour incrémentale
-      String? existingHash;
-      if (info.isIncremental && await existingFile.exists()) {
-        existingHash = await _calculateFileHash(existingFile);
-      }
-      
       // Démarrer le téléchargement
       final taskId = await FlutterDownloader.enqueue(
         url: info.downloadUrl,
@@ -178,15 +156,13 @@ class UpdateService {
         fileName: fileName,
         showNotification: true,
         openFileFromNotification: true,
-        headers: info.isIncremental && existingHash != null
-            ? {'If-None-Match': existingHash}
-            : {},
       );
       
       // Sauvegarder les infos de téléchargement
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(PREF_PENDING_DOWNLOAD, taskId!);
       await prefs.setString('pending_version', info.versionName);
+      await prefs.setString('pending_path', savePath);
       
       // Écouter la progression
       FlutterDownloader.registerCallback((id, status, progress) {
@@ -194,6 +170,9 @@ class UpdateService {
           _onDownloadProgress(id, status as DownloadTaskStatus, progress, savePath, info);
         }
       });
+      
+      // Afficher une notification de début (sans progress bar)
+      await _showDownloadStartedNotification(info);
       
       return true;
     } catch (e) {
@@ -217,9 +196,11 @@ class UpdateService {
     
     // Vérifier le hash
     final hash = await _calculateFileHash(file);
-    if (hash != await _getExpectedHash(info.downloadUrl)) {
+    final expectedHash = await _getExpectedHash(info.downloadUrl);
+    if (expectedHash.isNotEmpty && hash != expectedHash) {
       debugPrint("Hash mismatch - fichier corrompu");
       await file.delete();
+      await _showCorruptedNotification(info);
       return;
     }
     
@@ -234,12 +215,13 @@ class UpdateService {
   
   static void _onDownloadFailed() {
     debugPrint("Téléchargement échoué");
+    _showDownloadFailedNotification();
   }
   
   // ─────────────────────────────────────────────────────────────
-  //  INSTALLATION AUTOMATIQUE
+  //  INSTALLATION
   // ─────────────────────────────────────────────────────────────
-  static Future<bool> installAutomatically(String apkPath) async {
+  static Future<bool> installUpdate(String apkPath) async {
     if (Platform.isAndroid) {
       // Vérifier la permission d'installation
       if (!await Permission.requestInstallPackages.isGranted) {
@@ -249,163 +231,91 @@ class UpdateService {
         }
       }
       
-      // Ouvrir le fichier pour installation
       final file = File(apkPath);
       if (!await file.exists()) return false;
       
-      // Utiliser intent pour lancer l'installation
       return true;
     } else if (Platform.isIOS) {
-      // Sur iOS, rediriger vers l'App Store
       return false;
     }
     return false;
   }
   
   // ─────────────────────────────────────────────────────────────
-  //  MISE À JOUR PLANIFIÉE
+  //  IGNORER UNE VERSION
   // ─────────────────────────────────────────────────────────────
-  static Future<void> scheduleUpdate(UpdateInfo info, {DateTime? scheduledTime}) async {
+  static Future<void> skipVersion(String versionName) async {
     final prefs = await SharedPreferences.getInstance();
-    final scheduleTime = scheduledTime ?? _getOptimalUpdateTime();
-    
-    await prefs.setString(PREF_UPDATE_SCHEDULED, jsonEncode({
-      'version': info.versionName,
-      'url': info.downloadUrl,
-      'time': scheduleTime.toIso8601String(),
-    }));
-    
-    // Planifier la tâche
-    await Workmanager().registerOneOffTask(
-      "scheduledDownload",
-      "scheduledDownload",
-      initialDelay: scheduleTime.difference(DateTime.now()),
-      constraints: Constraints(
-        networkType: NetworkType.connected,
-        requiresBatteryNotLow: true,
-        requiresCharging: true,
-      ),
-    );
-    
-    // Notifier l'utilisateur
-    await _showScheduledNotification(scheduleTime);
-  }
-  
-  static DateTime _getOptimalUpdateTime() {
-    final now = DateTime.now();
-    // Planifier entre 2h et 5h du matin
-    DateTime optimal = DateTime(now.year, now.month, now.day, 3, 0);
-    if (optimal.isBefore(now)) {
-      optimal = optimal.add(const Duration(days: 1));
-    }
-    return optimal;
-  }
-  
-  static Future<void> processPendingDownloads() async {
-    final prefs = await SharedPreferences.getInstance();
-    final pendingJson = prefs.getString(PREF_UPDATE_SCHEDULED);
-    if (pendingJson == null) return;
-    
-    final pending = jsonDecode(pendingJson);
-    final scheduledTime = DateTime.parse(pending['time']);
-    
-    if (DateTime.now().isAfter(scheduledTime)) {
-      // Télécharger et installer
-      final info = UpdateInfo(
-        latestVersion: 0,
-        currentVersion: 0,
-        versionName: pending['version'],
-        downloadUrl: pending['url'],
-        changelog: '',
-        forceUpdate: false,
-        isIncremental: false,
-      );
-      await downloadInBackground(info);
-      await prefs.remove(PREF_UPDATE_SCHEDULED);
-    }
-  }
-  
-  // ─────────────────────────────────────────────────────────────
-  //  MISE À JOUR INCRÉMENTALE
-  // ─────────────────────────────────────────────────────────────
-  static bool _isIncrementalUpdate(int currentVersion, int latestVersion) {
-    // Mise à jour incrémentale seulement si écart <= 2 versions
-    return (latestVersion - currentVersion) <= 2;
-  }
-  
-  static Future<String> _calculateFileHash(File file) async {
-    final bytes = await file.readAsBytes();
-    final digest = sha256.convert(bytes);
-    return digest.toString();
-  }
-  
-  static Future<String> _getExpectedHash(String url) async {
-    try {
-      final response = await http.get(Uri.parse("$url.sha256"));
-      if (response.statusCode == 200) {
-        return response.body.trim();
-      }
-    } catch (_) {}
-    return '';
+    await prefs.setString(PREF_SKIP_VERSION, versionName);
   }
   
   // ─────────────────────────────────────────────────────────────
   //  NOTIFICATIONS
   // ─────────────────────────────────────────────────────────────
-  static Future<void> _showBackgroundNotification(UpdateInfo info) async {
-    const androidDetails = AndroidNotificationDetails(
-      'update_channel',
-      'Mises à jour',
-      channelDescription: 'Notifications de mise à jour',
-      importance: Importance.low,
-      priority: Priority.low,
-    );
-    const iosDetails = DarwinNotificationDetails();
-    const details = NotificationDetails(android: androidDetails, iOS: iosDetails);
-    
-    await _notifications.show(
-      Random().nextInt(9999),
-      'Nouvelle mise à jour disponible',
-      'Yéki ${info.versionName} est disponible',
-      details,
+  static Future<void> _showDownloadStartedNotification(UpdateInfo info) async {
+    await AwesomeNotifications().createNotification(
+      content: NotificationContent(
+        id: Random().nextInt(9999),
+        channelKey: 'download_channel',
+        title: 'Téléchargement en cours',
+        body: 'Téléchargement de Yéki ${info.versionName}...',
+        notificationLayout: NotificationLayout.Default,
+        displayOnBackground: true,
+        displayOnForeground: true,
+        color: const Color(0xFF135F74),
+      ),
     );
   }
   
   static Future<void> _showDownloadCompleteNotification(String path, UpdateInfo info) async {
-    const androidDetails = AndroidNotificationDetails(
-      'download_channel',
-      'Téléchargements',
-      channelDescription: 'Téléchargements terminés',
-      importance: Importance.high,
-      priority: Priority.high,
-    );
-    const iosDetails = DarwinNotificationDetails();
-    const details = NotificationDetails(android: androidDetails, iOS: iosDetails);
-    
-    await _notifications.show(
-      Random().nextInt(9999),
-      'Téléchargement terminé',
-      'Yéki ${info.versionName} est prêt à être installé',
-      details,
-      payload: path,
+    await AwesomeNotifications().createNotification(
+      content: NotificationContent(
+        id: Random().nextInt(9999),
+        channelKey: 'download_channel',
+        title: 'Téléchargement terminé ✅',
+        body: 'Yéki ${info.versionName} est prêt à être installé',
+        notificationLayout: NotificationLayout.Default,
+        displayOnBackground: true,
+        displayOnForeground: true,
+        color: const Color(0xFF10B981),
+      ),
+      actionButtons: [
+        NotificationActionButton(
+          key: 'INSTALL',
+          label: 'Installer maintenant',
+          autoDismissible: true,
+        ),
+      ],
     );
   }
   
-  static Future<void> _showScheduledNotification(DateTime time) async {
-    const androidDetails = AndroidNotificationDetails(
-      'schedule_channel',
-      'Mises à jour planifiées',
-      channelDescription: 'Mise à jour programmée',
-      importance: Importance.defaultImportance,
+  static Future<void> _showDownloadFailedNotification() async {
+    await AwesomeNotifications().createNotification(
+      content: NotificationContent(
+        id: Random().nextInt(9999),
+        channelKey: 'download_channel',
+        title: 'Téléchargement échoué ❌',
+        body: 'Une erreur est survenue lors du téléchargement. Veuillez réessayer.',
+        notificationLayout: NotificationLayout.Default,
+        displayOnBackground: true,
+        displayOnForeground: true,
+        color: const Color(0xFFEF4444),
+      ),
     );
-    const iosDetails = DarwinNotificationDetails();
-    const details = NotificationDetails(android: androidDetails, iOS: iosDetails);
-    
-    await _notifications.show(
-      Random().nextInt(9999),
-      'Mise à jour programmée',
-      'La mise à jour sera installée ce soir à ${time.hour}:${time.minute}',
-      details,
+  }
+  
+  static Future<void> _showCorruptedNotification(UpdateInfo info) async {
+    await AwesomeNotifications().createNotification(
+      content: NotificationContent(
+        id: Random().nextInt(9999),
+        channelKey: 'download_channel',
+        title: 'Fichier corrompu ⚠️',
+        body: 'Le fichier téléchargé est corrompu. Veuillez réessayer.',
+        notificationLayout: NotificationLayout.Default,
+        displayOnBackground: true,
+        displayOnForeground: true,
+        color: const Color(0xFFF97316),
+      ),
     );
   }
   
@@ -414,19 +324,23 @@ class UpdateService {
   // ─────────────────────────────────────────────────────────────
   static Future<bool> _requestPermissions() async {
     if (Platform.isAndroid) {
-      final statuses = await [
+      final permissions = [
         Permission.storage,
         Permission.notification,
-      ].request();
+      ];
+      
+      // Pour Android 8+ (API 26+)
+      if (await Permission.requestInstallPackages.status.isDenied) {
+        permissions.add(Permission.requestInstallPackages);
+      }
+      
+      final statuses = await permissions.request();
       
       final allGranted = statuses.values.every((status) => status.isGranted);
       
       if (!allGranted) {
-        // Demander à nouveau
-        final again = await [
-          Permission.storage,
-          Permission.notification,
-        ].request();
+        // Deuxième tentative
+        final again = await permissions.request();
         return again.values.every((status) => status.isGranted);
       }
       return true;
@@ -445,7 +359,14 @@ class UpdateService {
   
   static Future<Directory> _getDownloadDirectory() async {
     if (Platform.isAndroid) {
-      return await getExternalStorageDirectory() ?? await getApplicationDocumentsDirectory();
+      final downloadDir = await getExternalStorageDirectory();
+      if (downloadDir != null) {
+        final yekiDir = Directory('${downloadDir.path}/Yeki');
+        if (!await yekiDir.exists()) {
+          await yekiDir.create(recursive: true);
+        }
+        return yekiDir;
+      }
     }
     return await getApplicationDocumentsDirectory();
   }
@@ -453,7 +374,28 @@ class UpdateService {
   static String _getFileName(String url) {
     final uri = Uri.parse(url);
     final segments = uri.pathSegments;
-    return segments.isNotEmpty ? segments.last : 'yeki_update.apk';
+    final fileName = segments.isNotEmpty ? segments.last : 'yeki_update.apk';
+    return fileName.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
+  }
+  
+  static Future<String> _calculateFileHash(File file) async {
+    try {
+      final bytes = await file.readAsBytes();
+      final digest = sha256.convert(bytes);
+      return digest.toString();
+    } catch (e) {
+      return '';
+    }
+  }
+  
+  static Future<String> _getExpectedHash(String url) async {
+    try {
+      final response = await http.get(Uri.parse("$url.sha256"));
+      if (response.statusCode == 200) {
+        return response.body.trim();
+      }
+    } catch (_) {}
+    return '';
   }
   
   // ─────────────────────────────────────────────────────────────
@@ -484,7 +426,7 @@ class UpdateService {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Row(
           children: [
-            Icon(Icons.system_update_alt, color: Color(0xFF2884A0), size: 28),
+            Icon(Icons.system_update_alt, color: Color(0xFF135F74), size: 28),
             SizedBox(width: 10),
             Text('Mise à jour obligatoire'),
           ],
@@ -498,29 +440,17 @@ class UpdateService {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: const Color(0xFF2884A0).withOpacity(0.08),
+                color: const Color(0xFF135F74).withOpacity(0.08),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Nouveautés :', style: TextStyle(fontWeight: FontWeight.bold)),
+                  const Text('📋 Nouveautés :', style: TextStyle(fontWeight: FontWeight.bold)),
                   const SizedBox(height: 5),
                   Text(info.changelog),
                 ],
               ),
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                const Icon(Icons.wifi_rounded, size: 14, color: Colors.grey),
-                const SizedBox(width: 5),
-                const Text('Téléchargement en arrière-plan', style: TextStyle(fontSize: 11)),
-                const Spacer(),
-                const Icon(Icons.schedule_rounded, size: 14, color: Colors.grey),
-                const SizedBox(width: 5),
-                const Text('Installation automatique', style: TextStyle(fontSize: 11)),
-              ],
             ),
           ],
         ),
@@ -528,24 +458,18 @@ class UpdateService {
           ElevatedButton(
             onPressed: () async {
               Navigator.pop(ctx);
-              final success = await downloadInBackground(info);
+              final success = await downloadUpdate(info);
               if (success && context.mounted) {
                 _showDownloadStartedSnackbar(context);
+              } else if (context.mounted) {
+                _showErrorSnackbar(context);
               }
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF2884A0),
+              backgroundColor: const Color(0xFF135F74),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
             child: const Text('Télécharger maintenant'),
-          ),
-          TextButton(
-            onPressed: () async {
-              await scheduleUpdate(info);
-              Navigator.pop(ctx);
-              _showScheduledSnackbar(context);
-            },
-            child: const Text('Programmer pour plus tard'),
           ),
         ],
       ),
@@ -560,7 +484,7 @@ class UpdateService {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Row(
           children: [
-            Icon(Icons.system_update_alt, color: Color(0xFF2884A0), size: 24),
+            Icon(Icons.system_update_alt, color: Color(0xFF135F74), size: 24),
             SizedBox(width: 10),
             Text('Nouvelle mise à jour'),
           ],
@@ -574,13 +498,13 @@ class UpdateService {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: const Color(0xFF2884A0).withOpacity(0.08),
+                color: const Color(0xFF135F74).withOpacity(0.08),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Nouveautés :', style: TextStyle(fontWeight: FontWeight.bold)),
+                  const Text('📋 Nouveautés :', style: TextStyle(fontWeight: FontWeight.bold)),
                   const SizedBox(height: 5),
                   Text(info.changelog),
                 ],
@@ -590,39 +514,47 @@ class UpdateService {
         ),
         actions: [
           TextButton(
+            onPressed: () async {
+              await skipVersion(info.versionName);
+              Navigator.pop(ctx, false);
+            },
+            child: const Text('Ignorer cette version'),
+          ),
+          TextButton(
             onPressed: () => Navigator.pop(ctx, false),
             child: const Text('Plus tard'),
           ),
-          TextButton(
+          ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF135F74),
+            ),
             child: const Text('Mettre à jour'),
-          ),
-          TextButton(
-            onPressed: () async {
-              await scheduleUpdate(info);
-              Navigator.pop(ctx, false);
-              _showScheduledSnackbar(context);
-            },
-            child: const Text('Programmer'),
           ),
         ],
       ),
     );
     
     if (result == true) {
-      final success = await downloadInBackground(info);
+      final success = await downloadUpdate(info);
       if (success && context.mounted) {
         _showDownloadStartedSnackbar(context);
+      } else if (context.mounted) {
+        _showErrorSnackbar(context);
       }
     }
   }
   
+  // ─────────────────────────────────────────────────────────────
+  //  SNACKBARS
+  // ─────────────────────────────────────────────────────────────
   static void _showNoUpdateSnackbar(BuildContext context) {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text('✓ Vous utilisez déjà la dernière version'),
-        backgroundColor: Colors.green,
+        backgroundColor: Color(0xFF10B981),
         behavior: SnackBarBehavior.floating,
+        duration: Duration(seconds: 2),
       ),
     );
   }
@@ -631,18 +563,18 @@ class UpdateService {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text('📥 Téléchargement en arrière-plan...'),
-        backgroundColor: Color(0xFF2884A0),
+        backgroundColor: Color(0xFF135F74),
         behavior: SnackBarBehavior.floating,
         duration: Duration(seconds: 3),
       ),
     );
   }
   
-  static void _showScheduledSnackbar(BuildContext context) {
+  static void _showErrorSnackbar(BuildContext context) {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('⏰ Mise à jour programmée pour cette nuit'),
-        backgroundColor: Color(0xFFE2A84B),
+        content: Text('❌ Erreur lors du téléchargement'),
+        backgroundColor: Color(0xFFEF4444),
         behavior: SnackBarBehavior.floating,
         duration: Duration(seconds: 3),
       ),
@@ -660,7 +592,6 @@ class UpdateInfo {
   final String downloadUrl;
   final String changelog;
   final bool forceUpdate;
-  final bool isIncremental;
   final bool isNoUpdate;
   
   UpdateInfo({
@@ -670,7 +601,6 @@ class UpdateInfo {
     required this.downloadUrl,
     required this.changelog,
     required this.forceUpdate,
-    this.isIncremental = false,
     this.isNoUpdate = false,
   });
   
@@ -680,6 +610,5 @@ class UpdateInfo {
         downloadUrl = '',
         changelog = '',
         forceUpdate = false,
-        isIncremental = false,
         isNoUpdate = true;
 }

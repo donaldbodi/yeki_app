@@ -227,7 +227,7 @@ class _EnseignantHomePageState extends State<EnseignantHomePage>
         return const EnseignantAdminDashboardPage();
       case RoleEnseignant.enseignantCadre: 
         return const CadreDashboardPage();
-      case RoleEnseignant.enseignantPrincipal: 
+      case RoleEnseignant.enseignantPrincipal:
         return DashboardPrincipalPage(
           nomEnseignant: nom.isNotEmpty ? nom : 'Enseignant',
           roleEnseignant: _getRoleLabel(role),

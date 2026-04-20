@@ -1,3 +1,6 @@
+// lib/views/pages/enseignants/cadre_dashboard_page.dart
+// Version avec MULTI-DÉPARTEMENTS (ajouté sans modifier la logique existante)
+
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -5,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:yeki/widgets/creer_cours_sheet.dart';
 import 'package:yeki/widgets/modifier_cours_sheet.dart';
 import 'package:yeki/widgets/creer_olympiade_sheet.dart';
+import 'package:yeki/views/pages/enseignants/detail_departement_page.dart'; // AJOUTÉ
 
 // Palette harmonisée
 const Color _primary = Color(0xFF6A1B9A);
@@ -32,12 +36,21 @@ class CadreDashboardPage extends StatefulWidget {
 class _CadreDashboardPageState extends State<CadreDashboardPage>
     with SingleTickerProviderStateMixin {
   bool _loading = true;
+  
+  // ========== MODIFICATIONS MULTI-DÉPARTEMENTS ==========
+  // AVANT: Map<String, dynamic> _departement = {};
+  // APRÈS: List<Map<String, dynamic>> _departements = [];
+  List<Map<String, dynamic>> _departements = [];  // MODIFIÉ: Liste de départements
+  // =====================================================
+  
   Map<String, dynamic> _stats = {};
-  Map<String, dynamic> _departement = {};
   List _cours = [];
   List _enseignantsPrincipaux = [];
   String _nomEnseignant = '';
   late TabController _tabCtrl;
+  
+  // AJOUTÉ: Département sélectionné pour les actions
+  int? _selectedDeptId;
 
   @override
   void initState() {
@@ -73,11 +86,19 @@ class _CadreDashboardPageState extends State<CadreDashboardPage>
         final data = jsonDecode(res.body);
         setState(() {
           _stats = Map<String, dynamic>.from(data['stats'] ?? {});
-          _departement = Map<String, dynamic>.from(data['departement'] ?? {});
+          // MODIFIÉ: Récupérer la liste des départements
+          _departements = List<Map<String, dynamic>>.from(data['departements'] ?? []);
+          // Garder l'ancienne variable pour compatibilité (premier département)
+          // _departement = _departements.isNotEmpty ? _departements[0] : {};
           _cours = data['cours'] ?? [];
           _enseignantsPrincipaux = data['enseignants_principaux'] ?? [];
           _nomEnseignant = data['nom'] ?? '';
           _loading = false;
+          
+          // AJOUTÉ: Sélectionner le premier département par défaut
+          if (_selectedDeptId == null && _departements.isNotEmpty) {
+            _selectedDeptId = _departements[0]['id'];
+          }
         });
       } else {
         setState(() => _loading = false);
@@ -87,6 +108,30 @@ class _CadreDashboardPageState extends State<CadreDashboardPage>
       setState(() => _loading = false);
       _showError('Erreur réseau');
     }
+  }
+
+  // AJOUTÉ: Méthode pour obtenir le département actuellement sélectionné
+  Map<String, dynamic>? get _currentDepartement {
+    if (_selectedDeptId == null || _departements.isEmpty) return null;
+    try {
+      return _departements.firstWhere((d) => d['id'] == _selectedDeptId);
+    } catch (_) {
+      return _departements.isNotEmpty ? _departements[0] : null;
+    }
+  }
+
+  // AJOUTÉ: Ouvrir le détail d'un département
+  void _ouvrirDetailDepartement(Map<String, dynamic> dept) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => DetailDepartementPage(
+          departementId: dept['id'],
+          departementNom: dept['nom'],
+          departement: dept,
+        ),
+      ),
+    ).then((_) => _charger());
   }
 
   void _changerEnseignantPrincipal(Map cours) async {
@@ -237,13 +282,15 @@ class _CadreDashboardPageState extends State<CadreDashboardPage>
     }
   }
 
+  // MODIFIÉ: Utiliser le département sélectionné
   void ouvrirFormulaireCreerCours({
     required BuildContext context,
     required int departementId,
     required String departementNom,
     required VoidCallback onSuccess,
   }) {
-    if (_departement.isEmpty) {
+    final currentDept = _currentDepartement;
+    if (currentDept == null) {
       _showError('Aucun département assigné. Contactez votre administrateur.');
       return;
     }
@@ -274,8 +321,10 @@ class _CadreDashboardPageState extends State<CadreDashboardPage>
     );
   }
 
+  // MODIFIÉ: Utiliser le département sélectionné
   void _ouvrirCreerOlympiade() {
-    if (_departement.isEmpty) {
+    final currentDept = _currentDepartement;
+    if (currentDept == null) {
       _showError('Aucun département assigné. Contactez votre administrateur.');
       return;
     }
@@ -285,8 +334,8 @@ class _CadreDashboardPageState extends State<CadreDashboardPage>
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (_) => CreerOlympiadeSheet(
-        departementId: _departement['id'] as int,
-        departementNom: _departement['nom'] as String? ?? '',
+        departementId: currentDept['id'] as int,
+        departementNom: currentDept['nom'] as String? ?? '',
         onSuccess: () {
           _showSuccess('Olympiade créée ! Ajoutez les questions depuis la section Olympiades.');
         },
@@ -294,57 +343,100 @@ class _CadreDashboardPageState extends State<CadreDashboardPage>
     );
   }
 
+  // MODIFIÉ: Menu avec sélecteur de département
   void _afficherMenuActions() {
+    if (_departements.isEmpty) {
+      _showError('Aucun département assigné');
+      return;
+    }
+    
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
-        decoration: BoxDecoration(
-          color: _white,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _sheetHandle(),
-            const SizedBox(height: 16),
-            const Text(
-              'Actions rapides',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: _textDark,
+      isScrollControlled: true,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setS) => Container(
+          decoration: BoxDecoration(
+            color: _white,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _sheetHandle(),
+              const SizedBox(height: 16),
+              const Text(
+                'Actions rapides',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: _textDark,
+                ),
               ),
-            ),
-            const SizedBox(height: 20),
-            _buildActionTile(
-              icon: Icons.book_outlined,
-              label: 'Créer un cours',
-              subtitle: 'Ajouter un nouveau cours au département',
-              color: _primary,
-              onTap: () {
-                Navigator.pop(ctx);
-                ouvrirFormulaireCreerCours(
-                  context: context,
-                  departementId: _departement['id'],
-                  departementNom: _departement['nom'],
-                  onSuccess: _charger,
-                );
-              },
-            ),
-            const SizedBox(height: 10),
-            _buildActionTile(
-              icon: Icons.emoji_events,
-              label: 'Créer une olympiade',
-              subtitle: 'Organiser une compétition académique',
-              color: _gold,
-              onTap: () {
-                Navigator.pop(ctx);
-                _ouvrirCreerOlympiade();
-              },
-            ),
-          ],
+              const SizedBox(height: 20),
+              
+              // AJOUTÉ: Sélecteur de département (si plusieurs)
+              if (_departements.length > 1) ...[
+                Container(
+                  margin: const EdgeInsets.only(bottom: 16),
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  decoration: BoxDecoration(
+                    color: _bgLight,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: _borderLight),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<int>(
+                      value: _selectedDeptId,
+                      isExpanded: true,
+                      hint: const Text('Sélectionner un département'),
+                      items: _departements.map((dept) {
+                        return DropdownMenuItem<int>(
+                          value: dept['id'],
+                          child: Text(dept['nom'] ?? 'Département'),
+                        );
+                      }).toList(),
+                      onChanged: (value) {
+                        setS(() => _selectedDeptId = value);
+                      },
+                    ),
+                  ),
+                ),
+              ],
+              
+              _buildActionTile(
+                icon: Icons.book_outlined,
+                label: 'Créer un cours',
+                subtitle: 'Ajouter un nouveau cours au département',
+                color: _primary,
+                onTap: () {
+                  final currentDept = _departements.firstWhere(
+                    (d) => d['id'] == _selectedDeptId,
+                    orElse: () => _departements[0],
+                  );
+                  Navigator.pop(ctx);
+                  ouvrirFormulaireCreerCours(
+                    context: context,
+                    departementId: currentDept['id'],
+                    departementNom: currentDept['nom'],
+                    onSuccess: _charger,
+                  );
+                },
+              ),
+              const SizedBox(height: 10),
+              _buildActionTile(
+                icon: Icons.emoji_events,
+                label: 'Créer une olympiade',
+                subtitle: 'Organiser une compétition académique',
+                color: _gold,
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _ouvrirCreerOlympiade();
+                },
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -405,16 +497,19 @@ class _CadreDashboardPageState extends State<CadreDashboardPage>
 
   @override
   Widget build(BuildContext context) {
+    // AJOUTÉ: Vérifier si des départements existent pour le FAB
+    final hasDepartements = _departements.isNotEmpty;
+    
     return Scaffold(
       backgroundColor: _bgLight,
-      floatingActionButton: _departement.isEmpty
-          ? null
-          : FloatingActionButton(
+      floatingActionButton: hasDepartements
+          ? FloatingActionButton(
               backgroundColor: _primary,
               elevation: 4,
               onPressed: _afficherMenuActions,
               child: const Icon(Icons.add_rounded, color: _white, size: 28),
-            ),
+            )
+          : null,
       body: _loading
           ? const Center(child: CircularProgressIndicator(color: _primary))
           : NestedScrollView(
@@ -428,8 +523,11 @@ class _CadreDashboardPageState extends State<CadreDashboardPage>
   }
 
   SliverAppBar _buildAppBar() {
-    final nomDept = _departement['nom'] as String?;
-    final nomParcours = _departement['parcours'] as String?;
+    // MODIFIÉ: Utiliser le premier département ou null
+    final currentDept = _currentDepartement;
+    final nomDept = currentDept?['nom'] as String?;
+    final nomParcours = currentDept?['parcours'] as String?;
+    final nbDepts = _departements.length;
 
     return SliverAppBar(
       expandedHeight: nomDept != null ? 250 : 200,
@@ -501,7 +599,7 @@ class _CadreDashboardPageState extends State<CadreDashboardPage>
                     ),
                   ),
                   const SizedBox(height: 12),
-                  // Badge département ou alerte
+                  // Badge département(s) ou alerte
                   if (nomDept == null)
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
@@ -525,6 +623,26 @@ class _CadreDashboardPageState extends State<CadreDashboardPage>
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        // AJOUTÉ: Indicateur du nombre de départements
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: _white.withOpacity(0.12),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.domain_rounded, color: _gold, size: 12),
+                              const SizedBox(width: 6),
+                              Text(
+                                nbDepts > 1 ? '$nbDepts départements' : '1 département',
+                                style: const TextStyle(color: _white, fontSize: 11),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 8),
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                           decoration: BoxDecoration(
@@ -538,11 +656,8 @@ class _CadreDashboardPageState extends State<CadreDashboardPage>
                               const SizedBox(width: 6),
                               Flexible(
                                 child: Text(
-                                  'Cadre du département $nomDept',
-                                  style: const TextStyle(
-                                    color: _white,
-                                    fontSize: 11,
-                                  ),
+                                  'Cadre : $nomDept',
+                                  style: const TextStyle(color: _white, fontSize: 11),
                                   overflow: TextOverflow.ellipsis,
                                 ),
                               ),
@@ -577,7 +692,7 @@ class _CadreDashboardPageState extends State<CadreDashboardPage>
         ),
       ),
       actions: [
-        if (_departement.isNotEmpty)
+        if (_departements.isNotEmpty)
           IconButton(
             icon: Icon(Icons.emoji_events, color: _gold, size: 22),
             tooltip: 'Créer une olympiade',
@@ -612,9 +727,9 @@ class _CadreDashboardPageState extends State<CadreDashboardPage>
     );
   }
 
-  // ─── TAB 1 : Cours ───────────────────────────────────────────────
+  // ─── TAB 1 : Cours (MODIFIÉ: Afficher tous les départements) ───
   Widget _tabCours() {
-    if (_departement.isEmpty) {
+    if (_departements.isEmpty) {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(32),
@@ -652,73 +767,217 @@ class _CadreDashboardPageState extends State<CadreDashboardPage>
       );
     }
 
+    // AJOUTÉ: Affichage de tous les départements en liste
     return RefreshIndicator(
       onRefresh: _charger,
       color: _primary,
-      child: ListView(
+      child: ListView.builder(
         padding: const EdgeInsets.all(16),
-        children: [
-          _buildDeptBannerCard(),
-          const SizedBox(height: 16),
-          if (_cours.isEmpty)
-            Center(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 40),
-                child: Column(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(24),
-                      decoration: BoxDecoration(
-                        color: _primary.withOpacity(0.08),
-                        shape: BoxShape.circle,
-                        border: Border.all(color: _primary.withOpacity(0.2), width: 1),
-                      ),
-                      child: Icon(Icons.book_outlined, size: 48, color: _primary),
-                    ),
-                    const SizedBox(height: 16),
-                    const Text(
-                      'Aucun cours créé',
-                      style: TextStyle(color: _textMedium, fontSize: 16, fontWeight: FontWeight.w600),
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Commencez par créer votre premier cours',
-                      style: TextStyle(color: _textLight, fontSize: 13),
-                    ),
-                    const SizedBox(height: 20),
-                    ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: _primary,
-                        foregroundColor: _white,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        elevation: 0,
-                      ),
-                      icon: const Icon(Icons.add, size: 18),
-                      label: const Text('Créer un cours'),
-                      onPressed: () {
-                        ouvrirFormulaireCreerCours(
-                          context: context,
-                          departementId: _departement['id'],
-                          departementNom: _departement['nom'],
-                          onSuccess: _charger,
-                        );
-                      },
-                    ),
-                  ],
-                ),
+        itemCount: _departements.length,
+        itemBuilder: (context, index) => _buildDepartementCard(_departements[index]),
+      ),
+    );
+  }
+
+  // AJOUTÉ: Carte pour un département (remplace l'ancienne bannière unique)
+  Widget _buildDepartementCard(Map<String, dynamic> dept) {
+    final taux = (dept['taux_moyen'] as num?)?.toDouble() ?? 0.0;
+    final nbCours = dept['nb_cours'] ?? 0;
+    final nbApprenants = dept['nb_apprenants'] ?? 0;
+    final typeDept = dept['type_departement'] ?? 'cursus';
+    final couleur = dept['couleur'] ?? '#6A1B9A';
+    
+    Color cardColor;
+    try {
+      cardColor = Color(int.parse('FF${couleur.replaceAll('#', '')}', radix: 16));
+    } catch (_) {
+      cardColor = _primary;
+    }
+
+    return GestureDetector(
+      onTap: () => _ouvrirDetailDepartement(dept),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 16),
+        decoration: BoxDecoration(
+          color: _white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: _borderLight, width: 1),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.04),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header coloré
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: cardColor.withOpacity(0.05),
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
               ),
-            )
-          else
-            ..._cours.map((c) => _buildCoursCard(c as Map)),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: cardColor.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: cardColor.withOpacity(0.2), width: 0.8),
+                    ),
+                    child: _getTypeIcon(typeDept, cardColor),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          dept['nom'] ?? 'Département',
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: _textDark),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          _getTypeLabel(typeDept),
+                          style: TextStyle(fontSize: 11, color: cardColor, fontWeight: FontWeight.w600),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: cardColor.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      '$nbCours cours',
+                      style: TextStyle(fontSize: 11, color: cardColor, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (dept['description'] != null && dept['description'].toString().isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: Text(
+                        dept['description'],
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 13, color: _textMedium, height: 1.4),
+                      ),
+                    ),
+                  
+                  Row(
+                    children: [
+                      _infoChip(Icons.people_rounded, '$nbApprenants apprenants', _purple),
+                      const SizedBox(width: 8),
+                      if (dept['ville'] != null && dept['ville'].toString().isNotEmpty)
+                        _infoChip(Icons.location_on_rounded, dept['ville'], _orange),
+                      if (dept['prix'] != null && dept['prix'] > 0)
+                        _infoChip(Icons.attach_money_rounded, '${dept['prix']} FCFA', _gold),
+                      if (dept['prix'] == 0)
+                        _infoChip(Icons.lock_open_rounded, 'Gratuit', _green),
+                    ],
+                  ),
+                  
+                  const SizedBox(height: 12),
+                  
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: LinearProgressIndicator(
+                            value: taux / 100,
+                            backgroundColor: _borderLight,
+                            color: cardColor,
+                            minHeight: 6,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Text(
+                        '${taux.toStringAsFixed(0)}%',
+                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: cardColor),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // AJOUTÉ: Icône par type de département
+  Widget _getTypeIcon(String type, Color color) {
+    switch (type) {
+      case 'prepa_concours':
+        return Icon(Icons.emoji_events_rounded, color: color, size: 22);
+      case 'formation_metier':
+        return Icon(Icons.work_rounded, color: color, size: 22);
+      case 'formation_classique':
+        return Icon(Icons.account_balance_rounded, color: color, size: 22);
+      default:
+        return Icon(Icons.domain_rounded, color: color, size: 22);
+    }
+  }
+
+  // AJOUTÉ: Label par type de département
+  String _getTypeLabel(String type) {
+    switch (type) {
+      case 'prepa_concours':
+        return 'Prépa Concours';
+      case 'formation_metier':
+        return 'Formation Métier';
+      case 'formation_classique':
+        return 'Formation Classique';
+      default:
+        return 'Département';
+    }
+  }
+
+  // AJOUTÉ: Chip d'information
+  Widget _infoChip(IconData icon, String label, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withOpacity(0.15), width: 0.5),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 11, color: color),
+          const SizedBox(width: 4),
+          Text(label, style: TextStyle(fontSize: 11, color: color, fontWeight: FontWeight.w500)),
         ],
       ),
     );
   }
 
+  // ─── GARDE L'ANCIENNE MÉTHODE POUR COMPATIBILITÉ ───
   Widget _buildDeptBannerCard() {
-    final nomDept = _departement['nom'] as String? ?? '';
-    final nomParcours = _departement['parcours'] as String? ?? '';
-    final desc = _departement['description'] as String? ?? '';
+    // Cette méthode est gardée mais plus utilisée
+    final currentDept = _currentDepartement;
+    final nomDept = currentDept?['nom'] as String? ?? '';
+    final nomParcours = currentDept?['parcours'] as String? ?? '';
+    final desc = currentDept?['description'] as String? ?? '';
     final nbCours = _cours.length;
     final nbApp = (_stats['nb_apprenants'] as num? ?? 0).toInt();
 
@@ -826,6 +1085,7 @@ class _CadreDashboardPageState extends State<CadreDashboardPage>
     );
   }
 
+  // ─── CARTE COURS (inchangée) ───
   Widget _buildCoursCard(Map cours) {
     final taux = (cours['taux_completion'] as num? ?? 0).toDouble();
     final nbApp = cours['nb_apprenants'] ?? 0;
@@ -1005,7 +1265,7 @@ class _CadreDashboardPageState extends State<CadreDashboardPage>
     );
   }
 
-  // ─── TAB 2 : Enseignants Principaux ──────────────────────────────
+  // ─── TAB 2 : Enseignants Principaux (inchangé) ───
   Widget _tabEnseignants() {
     if (_enseignantsPrincipaux.isEmpty) {
       return Center(
@@ -1131,17 +1391,166 @@ class _CadreDashboardPageState extends State<CadreDashboardPage>
     );
   }
 
-  // ─── TAB 3 : Statistiques ────────────────────────────────────────
+  // ─── TAB 3 : Statistiques (MODIFIÉ: stats globales) ───
   Widget _tabStats() {
+    final nbDepts = _stats['nb_departements'] ?? _departements.length;
+    final nbCours = _stats['nb_cours'] ?? 0;
+    final nbApprenants = _stats['nb_apprenants'] ?? 0;
+    final nbEnseignants = _stats['nb_enseignants'] ?? 0;
+    final tauxMoyen = (_stats['taux_moyen'] as num? ?? 0).toDouble();
+
+    final items = [
+      _StatInfo('Départements', '$nbDepts', Icons.domain_rounded, _primary),
+      _StatInfo('Cours', '$nbCours', Icons.book_rounded, Colors.blue),
+      _StatInfo('Apprenants', '$nbApprenants', Icons.people_rounded, const Color(0xFF2884A0)),
+      _StatInfo('Enseignants', '$nbEnseignants', Icons.person_outline_rounded, Colors.teal),
+    ];
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
         children: [
-          _statsGrid(),
+          GridView.count(
+            crossAxisCount: 2,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            crossAxisSpacing: 12,
+            mainAxisSpacing: 12,
+            childAspectRatio: 1.5,
+            children: items.map((i) => _buildInfoCard(i)).toList(),
+          ),
           const SizedBox(height: 20),
-          _buildDeptCardStats(),
+          _buildTauxCard(tauxMoyen),
+          const SizedBox(height: 20),
+          _buildClassementDepartements(),
           const SizedBox(height: 20),
           _buildRaccourcisActions(),
+        ],
+      ),
+    );
+  }
+
+  // AJOUTÉ: Carte du taux global
+  Widget _buildTauxCard(double tauxMoyen) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [_primary, _primary.withOpacity(0.85)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.bar_chart_rounded, color: _white, size: 20),
+              SizedBox(width: 8),
+              Text('Taux de complétion moyen', style: TextStyle(color: _white, fontSize: 14, fontWeight: FontWeight.w600)),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: LinearProgressIndicator(
+                    value: tauxMoyen / 100,
+                    backgroundColor: _white.withOpacity(0.2),
+                    valueColor: const AlwaysStoppedAnimation<Color>(_gold),
+                    minHeight: 8,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                '${tauxMoyen.toStringAsFixed(0)}%',
+                style: const TextStyle(color: _white, fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // AJOUTÉ: Classement des départements
+  Widget _buildClassementDepartements() {
+    if (_departements.isEmpty) return const SizedBox();
+    
+    // Trier les départements par taux de complétion
+    final sortedDepts = List<Map<String, dynamic>>.from(_departements);
+    sortedDepts.sort((a, b) {
+      final tauxA = (a['taux_moyen'] as num?)?.toDouble() ?? 0;
+      final tauxB = (b['taux_moyen'] as num?)?.toDouble() ?? 0;
+      return tauxB.compareTo(tauxA);
+    });
+    
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: _white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: _borderLight, width: 1),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.leaderboard_rounded, color: _gold, size: 20),
+              SizedBox(width: 8),
+              Text('Classement des départements', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: _textDark)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          ...sortedDepts.asMap().entries.map((entry) {
+            final index = entry.key;
+            final dept = entry.value;
+            final taux = (dept['taux_moyen'] as num?)?.toDouble() ?? 0;
+            final color = index == 0 ? _gold : (index == 1 ? Colors.grey.shade400 : _orange);
+            
+            return Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: index % 2 == 0 ? _bgLight : _white,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 28,
+                    height: 28,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: color.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      '${index + 1}',
+                      style: TextStyle(fontWeight: FontWeight.bold, color: color, fontSize: 12),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      dept['nom'] ?? 'Département',
+                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: _textDark),
+                    ),
+                  ),
+                  Text(
+                    '${taux.toStringAsFixed(0)}%',
+                    style: TextStyle(fontWeight: FontWeight.bold, color: color, fontSize: 13),
+                  ),
+                ],
+              ),
+            );
+          }),
         ],
       ),
     );
@@ -1174,12 +1583,17 @@ class _CadreDashboardPageState extends State<CadreDashboardPage>
                   icon: Icons.add_circle_outline,
                   label: 'Nouveau cours',
                   color: _primary,
-                  onTap: () => ouvrirFormulaireCreerCours(
-                    context: context,
-                    departementId: _departement['id'],
-                    departementNom: _departement['nom'],
-                    onSuccess: _charger,
-                  ),
+                  onTap: () {
+                    final currentDept = _currentDepartement;
+                    if (currentDept != null) {
+                      ouvrirFormulaireCreerCours(
+                        context: context,
+                        departementId: currentDept['id'],
+                        departementNom: currentDept['nom'],
+                        onSuccess: _charger,
+                      );
+                    }
+                  },
                 ),
               ),
               const SizedBox(width: 10),
@@ -1314,9 +1728,13 @@ class _CadreDashboardPageState extends State<CadreDashboardPage>
   }
 
   Widget _buildDeptCardStats() {
-    if (_departement.isEmpty) return const SizedBox();
-    final desc = _departement['description'] as String? ?? '';
-    final nomParcours = _departement['parcours'] as String? ?? '';
+    // Méthode gardée pour compatibilité mais plus utilisée
+    if (_departements.isEmpty) return const SizedBox();
+    final currentDept = _currentDepartement;
+    if (currentDept == null) return const SizedBox();
+    
+    final desc = currentDept['description'] as String? ?? '';
+    final nomParcours = currentDept['parcours'] as String? ?? '';
 
     return Container(
       decoration: BoxDecoration(
@@ -1343,7 +1761,7 @@ class _CadreDashboardPageState extends State<CadreDashboardPage>
           ),
           const SizedBox(height: 10),
           Text(
-            _departement['nom'] ?? '',
+            currentDept['nom'] ?? '',
             style: const TextStyle(
               color: _white,
               fontSize: 20,
@@ -1429,6 +1847,9 @@ class _CadreDashboardPageState extends State<CadreDashboardPage>
     );
   }
 }
+
+// AJOUTÉ: Constante pour la couleur purple (utilisée dans _infoChip)
+const Color _purple = Color(0xFF8B5CF6);
 
 class _StatInfo {
   final String label, value;

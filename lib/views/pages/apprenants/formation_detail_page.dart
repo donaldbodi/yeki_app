@@ -234,7 +234,7 @@ class _FormationDetailPageState extends State<FormationDetailPage>
                   Text(dept.domaine,
                       style: TextStyle(color: _white.withOpacity(0.8), fontSize: 13)),
                 if (dept.cadre != null)
-                  Text('Cadre : ${dept.cadre!.nom}',
+                  Text('Cadre : ${dept.cadre!['nom'] ?? ''}',
                       style: TextStyle(color: _white.withOpacity(0.7), fontSize: 12)),
                 if (dept.estCertifiante)
                   Padding(

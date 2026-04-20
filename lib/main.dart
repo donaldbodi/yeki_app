@@ -4,11 +4,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:yeki/services/cache_manager.dart';
+import 'package:yeki/services/offline_service.dart';
+import 'package:yeki/services/sync_service.dart';
 import 'package:yeki/services/recharge_wallet_page.dart';
-
-import 'package:yeki/views/pages/apprenants/dasboard.dart';
+import 'package:yeki/views/pages/apprenants/cursus_page.dart';
 import 'package:yeki/views/pages/apprenants/profil_page.dart';
+import 'package:yeki/views/pages/enseignants/admin_general_page.dart';
+import 'package:yeki/views/pages/enseignants/enseignant_admin_dashboard_page.dart';
+import 'package:yeki/views/pages/enseignants/cadre_dashboard_page.dart';
 import 'package:yeki/views/pages/enseignants/interface_enseignant_page.dart';
+import 'package:yeki/views/pages/enseignants/principal_dashboard_page.dart';
+import 'package:yeki/views/pages/enseignants/secondaire_dashboard_page.dart';
 import 'package:yeki/views/pages/onboarding.dart';
 import 'package:yeki/views/auth/login_page.dart';
 import 'package:yeki/services/update_service.dart';
@@ -30,10 +37,10 @@ import 'package:yeki/widgets/wallet_page.dart';
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 final ThemeData appTheme = ThemeData(
-  primaryColor: const Color(0xFF2884A0),
+  primaryColor: const Color(0xFF135F74),
   colorScheme: ColorScheme.fromSwatch(
     primarySwatch: Colors.teal,
-    accentColor: Colors.orange,
+    accentColor: const Color(0xFFC5A059),
     backgroundColor: Colors.white,
   ),
   elevatedButtonTheme: ElevatedButtonThemeData(
@@ -61,14 +68,22 @@ final ThemeData appTheme = ThemeData(
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
     statusBarColor: Colors.transparent,
     statusBarIconBrightness: Brightness.dark,
   ));
+  
   await SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
   ]);
+  
+  // Initialisation des services offline
+  await OfflineService.init();
+  await CacheManager().init();
+  SyncService().startAutoSync();
+  
   runApp(const YekiApp());
 }
 
@@ -84,8 +99,6 @@ class YekiApp extends StatelessWidget {
       navigatorKey: navigatorKey,
       routes: {
         '/login':      (_) => const LoginPage(),
-        '/apprenant':  (_) => const Dashboard(),
-        '/enseignant': (_) => const EnseignantHomePage(),
         '/onboarding': (_) => const OnboardingPage(),
         '/wallet':     (_) => const WalletPage(),
         '/recharge':   (_) => const RechargeWalletPage(),
@@ -120,7 +133,6 @@ class _SplashScreenState extends State<_SplashScreen> {
   }
 
   Future<void> _checkForUpdate() async {
-    // Attendre que l'utilisateur voie le splash un instant
     await Future.delayed(const Duration(seconds: 2));
     final updateInfo = await UpdateService.checkForUpdate();
     if (updateInfo != null && mounted) {
@@ -233,9 +245,32 @@ class YekiAuth {
 
   // ── Helpers privés ────────────────────────────────────────────
   static Widget _widgetFromRole(String role) {
-    if (role == 'apprenant')   return const Dashboard();
-    if (_isEnseignant(role))   return const EnseignantHomePage();
+    if (role == 'apprenant') {
+      return const CursusPage();
+    }
+    if (_isEnseignant(role)) {
+      return _getEnseignantDashboard(role);
+    }
     return const LoginPage();
+  }
+
+  static Widget _getEnseignantDashboard(String role) {
+    if (role == 'admin') {
+      return const AdminGeneralPage();
+    } else if (role == 'enseignant_admin') {
+      return const EnseignantAdminDashboardPage();
+    } else if (role == 'enseignant_cadre') {
+      return const CadreDashboardPage();
+    } else if (role == 'enseignant_principal') {
+      return DashboardPrincipalPage(
+        nomEnseignant: '',
+        roleEnseignant: 'Enseignant Principal',
+        extraInfo: null,
+      );
+    } else if (role == 'enseignant') {
+      return const SecondaireDashboardPage();
+    }
+    return const EnseignantHomePage();
   }
 
   static bool _isEnseignant(String role) => {
