@@ -2,12 +2,14 @@
 // ════════════════════════════════════════════════════════════════
 // DÉTAIL PRÉPA CONCOURS — Design Light Harmonisé
 // Affiche arrêté, date examen, places, frais, débouchés, cours…
+// CORRIGÉ - Version avec DateTime?
 // ════════════════════════════════════════════════════════════════
 
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:intl/intl.dart'; // ← AJOUTÉ pour le formatage de date
 import 'package:yeki/views/pages/apprenants/cours_detail_page.dart';
 import 'formations_models.dart';
 
@@ -226,8 +228,9 @@ class _DetailConcoursPageState extends State<DetailConcoursPage>
                 if (dept.nom != dept.nomConcours && dept.nom.isNotEmpty)
                   Text(dept.nom,
                       style: TextStyle(color: _white.withOpacity(0.8), fontSize: 13)),
+                // ✅ CORRECTION ICI : cadre est un Map
                 if (dept.cadre != null)
-                  Text('Cadre : ${dept.cadre!.nom}',
+                  Text('Cadre : ${dept.cadre!['nom']}',
                       style: TextStyle(color: _white.withOpacity(0.7), fontSize: 12)),
               ],
             ),
@@ -425,40 +428,36 @@ class _TabInfos extends StatelessWidget {
 }
 
 // ── Carte des dates ───────────────────────────────────────────
+// ✅ ENTIÈREMENT CORRIGÉE : DateTime? au lieu de String?
 class _DatesCard extends StatelessWidget {
   final DepartementItem dept;
   final Color accentColor;
   const _DatesCard({required this.dept, required this.accentColor});
 
-  String _fmt(String? iso) {
-    if (iso == null || iso.isEmpty) return 'Non définie';
-    try {
-      final d = DateTime.parse(iso);
-      const months = ['', 'jan', 'fév', 'mar', 'avr', 'mai', 'juin',
-                      'juil', 'août', 'sep', 'oct', 'nov', 'déc'];
-      return '${d.day} ${months[d.month]} ${d.year}';
-    } catch (_) {
-      return iso;
-    }
+  // ✅ Formatage avec DateTime?
+  String _fmt(DateTime? date) {
+    if (date == null) return 'Non définie';
+    final format = DateFormat('dd MMMM yyyy', 'fr_FR');
+    return format.format(date);
   }
 
-  bool _isPast(String? iso) {
-    if (iso == null) return false;
-    try { return DateTime.parse(iso).isBefore(DateTime.now()); } catch (_) { return false; }
+  // ✅ Vérification avec DateTime?
+  bool _isPast(DateTime? date) {
+    if (date == null) return false;
+    return date.isBefore(DateTime.now());
   }
 
-  bool _isSoon(String? iso) {
-    if (iso == null) return false;
-    try {
-      final d = DateTime.parse(iso);
-      final diff = d.difference(DateTime.now()).inDays;
-      return diff >= 0 && diff <= 30;
-    } catch (_) { return false; }
+  // ✅ Vérification avec DateTime?
+  bool _isSoon(DateTime? date) {
+    if (date == null) return false;
+    final diff = date.difference(DateTime.now()).inDays;
+    return diff >= 0 && diff <= 30;
   }
 
   @override
   Widget build(BuildContext context) {
     final rows = <_DateRow>[];
+    
     if (dept.dateLimiteInscription != null) {
       final past = _isPast(dept.dateLimiteInscription);
       final soon = _isSoon(dept.dateLimiteInscription);
@@ -470,6 +469,7 @@ class _DatesCard extends StatelessWidget {
         badge: past ? 'Fermé' : soon ? 'Bientôt' : null,
       ));
     }
+    
     if (dept.dateExamen != null) {
       final past = _isPast(dept.dateExamen);
       rows.add(_DateRow(
@@ -480,6 +480,7 @@ class _DatesCard extends StatelessWidget {
         badge: past ? 'Passé' : null,
       ));
     }
+    
     if (rows.isEmpty) {
       return Container(
         padding: const EdgeInsets.all(16),
@@ -492,6 +493,7 @@ class _DatesCard extends StatelessWidget {
             style: TextStyle(color: _textLight, fontSize: 13)),
       );
     }
+    
     return Container(
       decoration: BoxDecoration(
         color: _white,

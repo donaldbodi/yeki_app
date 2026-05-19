@@ -463,6 +463,9 @@ class _EnseignantAdminDashboardPageState
     final color = _typeDeptColors[typeDept] ?? brandPrimary;
     final icon = _typeDeptIcons[typeDept] ?? Icons.domain_rounded;
     final label = _typeDeptLabels[typeDept] ?? 'Département';
+    
+    // ⚠️ CORRECTION : Récupérer le statut de validation depuis les données
+    final statutValidation = dept['statut_validation'] as String? ?? (estValide ? 'valide' : 'attente');
 
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
@@ -534,40 +537,11 @@ class _EnseignantAdminDashboardPageState
               const SizedBox(width: 4),
               Text('$nbIns inscrits', style: TextStyle(color: textSub, fontSize: 12)),
               const Spacer(),
-              if (!estValide)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: _orange.withOpacity(0.08),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: _orange.withOpacity(0.3)),
-                  ),
-                  child: Row(mainAxisSize: MainAxisSize.min, children: [
-                    const Icon(Icons.hourglass_top_rounded, size: 11, color: _orange),
-                    const SizedBox(width: 4),
-                    const Text('À valider', style: TextStyle(fontSize: 10, color: _orange, fontWeight: FontWeight.w700)),
-                    const SizedBox(width: 6),
-                    GestureDetector(
-                      onTap: () => _validerDepartement(dept['id'] as int, dept['nom'] ?? ''),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                        decoration: BoxDecoration(color: _green, borderRadius: BorderRadius.circular(6)),
-                        child: const Text('Valider',
-                            style: TextStyle(color: _white, fontSize: 9, fontWeight: FontWeight.w800)),
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    GestureDetector(
-                      onTap: () => _showRefusDialogDepartement(dept['id'] as int, dept['nom'] ?? ''),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                        decoration: BoxDecoration(color: _red, borderRadius: BorderRadius.circular(6)),
-                        child: const Text('Refuser',
-                            style: TextStyle(color: _white, fontSize: 9, fontWeight: FontWeight.w800)),
-                      ),
-                    ),
-                  ]),
-                )
+              // ⚠️ CORRECTION : Affichage conditionnel basé sur statutValidation
+              if (statutValidation == 'attente')
+                _buildBoutonsValidation(dept)
+              else if (statutValidation == 'refuse')
+                _buildRefuseBadge(dept)
               else
                 Row(children: [
                   Icon(Icons.check_circle_rounded, size: 13, color: _green),
@@ -578,6 +552,72 @@ class _EnseignantAdminDashboardPageState
           ]),
         ),
       ),
+    );
+  }
+
+  // ⚠️ AJOUT : Widget extrait pour les boutons de validation
+  Widget _buildBoutonsValidation(Map<String, dynamic> dept) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: _orange.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: _orange.withOpacity(0.3)),
+      ),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        const Icon(Icons.hourglass_top_rounded, size: 11, color: _orange),
+        const SizedBox(width: 4),
+        const Text('À valider', style: TextStyle(fontSize: 10, color: _orange, fontWeight: FontWeight.w700)),
+        const SizedBox(width: 6),
+        GestureDetector(
+          onTap: () => _validerDepartement(dept['id'] as int, dept['nom'] ?? ''),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+            decoration: BoxDecoration(color: _green, borderRadius: BorderRadius.circular(6)),
+            child: const Text('Valider',
+                style: TextStyle(color: _white, fontSize: 9, fontWeight: FontWeight.w800)),
+          ),
+        ),
+        const SizedBox(width: 6),
+        GestureDetector(
+          onTap: () => _showRefusDialogDepartement(dept['id'] as int, dept['nom'] ?? ''),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+            decoration: BoxDecoration(color: _red, borderRadius: BorderRadius.circular(6)),
+            child: const Text('Refuser',
+                style: TextStyle(color: _white, fontSize: 9, fontWeight: FontWeight.w800)),
+          ),
+        ),
+      ]),
+    );
+  }
+
+  // ⚠️ AJOUT : Widget pour badge "Refusé"
+  Widget _buildRefuseBadge(Map<String, dynamic> dept) {
+    final motifRefus = dept['motif_refus'] as String? ?? '';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          decoration: BoxDecoration(
+            color: _red.withOpacity(0.08),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: _red.withOpacity(0.3)),
+          ),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            const Icon(Icons.cancel_rounded, size: 11, color: _red),
+            const SizedBox(width: 4),
+            const Text('Refusé', style: TextStyle(fontSize: 10, color: _red, fontWeight: FontWeight.w700)),
+          ]),
+        ),
+        if (motifRefus.isNotEmpty) ...[
+          const SizedBox(height: 4),
+          Text('Motif : $motifRefus',
+              style: const TextStyle(fontSize: 10, color: _red, fontStyle: FontStyle.italic),
+              maxLines: 1, overflow: TextOverflow.ellipsis),
+        ],
+      ],
     );
   }
 
@@ -765,37 +805,39 @@ class _EnseignantAdminDashboardPageState
           Text('Cadre : ${cadre['nom'] ?? ''}',
               style: const TextStyle(color: textSub, fontSize: 12)),
         ],
-        const SizedBox(height: 12),
-        Row(children: [
-          Expanded(
-            child: ElevatedButton.icon(
-              onPressed: () => _validerDepartement(dept['id'] as int, nom),
-              icon: const Icon(Icons.check_rounded, size: 16),
-              label: const Text('Valider'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: _green,
-                foregroundColor: _white,
-                elevation: 0,
-                padding: const EdgeInsets.symmetric(vertical: 10),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        if (statutValidation == 'attente') ...[
+          const SizedBox(height: 12),
+          Row(children: [
+            Expanded(
+              child: ElevatedButton.icon(
+                onPressed: () => _validerDepartement(dept['id'] as int, nom),
+                icon: const Icon(Icons.check_rounded, size: 16),
+                label: const Text('Valider'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _green,
+                  foregroundColor: _white,
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
               ),
             ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: OutlinedButton.icon(
-              onPressed: () => _showRefusDialogDepartement(dept['id'] as int, nom),
-              icon: const Icon(Icons.close_rounded, size: 16),
-              label: const Text('Refuser'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: _red,
-                side: const BorderSide(color: _red),
-                padding: const EdgeInsets.symmetric(vertical: 10),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            const SizedBox(width: 10),
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: () => _showRefusDialogDepartement(dept['id'] as int, nom),
+                icon: const Icon(Icons.close_rounded, size: 16),
+                label: const Text('Refuser'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: _red,
+                  side: const BorderSide(color: _red),
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
               ),
             ),
-          ),
-        ]),
+          ]),
+        ],
       ]),
     );
   }
@@ -875,37 +917,39 @@ class _EnseignantAdminDashboardPageState
           Text('Cadre : ${cadre['nom'] ?? ''}',
               style: const TextStyle(color: textSub, fontSize: 12)),
         ],
-        const SizedBox(height: 12),
-        Row(children: [
-          Expanded(
-            child: ElevatedButton.icon(
-              onPressed: () => _validerOlympiade(olympiade['id'] as int, nom, 'valider'),
-              icon: const Icon(Icons.check_rounded, size: 16),
-              label: const Text('Valider'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: _green,
-                foregroundColor: _white,
-                elevation: 0,
-                padding: const EdgeInsets.symmetric(vertical: 10),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        if (statutValidation == 'attente') ...[
+          const SizedBox(height: 12),
+          Row(children: [
+            Expanded(
+              child: ElevatedButton.icon(
+                onPressed: () => _validerOlympiade(olympiade['id'] as int, nom, 'valider'),
+                icon: const Icon(Icons.check_rounded, size: 16),
+                label: const Text('Valider'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _green,
+                  foregroundColor: _white,
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
               ),
             ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: OutlinedButton.icon(
-              onPressed: () => _showRefusDialogOlympiade(olympiade['id'] as int, nom),
-              icon: const Icon(Icons.close_rounded, size: 16),
-              label: const Text('Refuser'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: _red,
-                side: const BorderSide(color: _red),
-                padding: const EdgeInsets.symmetric(vertical: 10),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            const SizedBox(width: 10),
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: () => _showRefusDialogOlympiade(olympiade['id'] as int, nom),
+                icon: const Icon(Icons.close_rounded, size: 16),
+                label: const Text('Refuser'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: _red,
+                  side: const BorderSide(color: _red),
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
               ),
             ),
-          ),
-        ]),
+          ]),
+        ],
       ]),
     );
   }
@@ -1079,27 +1123,30 @@ class _EnseignantAdminDashboardPageState
                   ),
                   const SizedBox(height: 16),
                 ],
-                _field(prixCtrl, 'Prix (FCFA)', Icons.attach_money_rounded,
-                    '0 = gratuit (validation requise)'),
-                const SizedBox(height: 12),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: brandPrimary.withOpacity(0.05),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: brandPrimary.withOpacity(0.15), width: 1),
-                  ),
-                  child: Row(children: [
-                    Icon(Icons.info_outline_rounded, size: 14, color: brandPrimary),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'Prix = 0 : requiert votre validation avant d\'être visible.\nPrix > 0 : validé automatiquement.',
-                        style: TextStyle(fontSize: 11, color: brandPrimary),
-                      ),
+                // ⚠️ CORRECTION : Prix visible seulement pour prepa et formation
+                if (_typeParcours == 'prepa' || _typeParcours == 'formation') ...[
+                  _field(prixCtrl, 'Prix (FCFA)', Icons.attach_money_rounded,
+                      '0 = gratuit (validation requise)'),
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: brandPrimary.withOpacity(0.05),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: brandPrimary.withOpacity(0.15), width: 1),
                     ),
-                  ]),
-                ),
+                    child: Row(children: [
+                      Icon(Icons.info_outline_rounded, size: 14, color: brandPrimary),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Prix = 0 : requiert votre validation avant d\'être visible.\nPrix > 0 : validé automatiquement.',
+                          style: TextStyle(fontSize: 11, color: brandPrimary),
+                        ),
+                      ),
+                    ]),
+                  ),
+                ],
                 const SizedBox(height: 24),
                 SizedBox(
                   width: double.infinity,
@@ -1123,9 +1170,9 @@ class _EnseignantAdminDashboardPageState
                       }
                       try {
                         int prix = 0;
-                        try {
-                          prix = int.parse(prixCtrl.text.trim());
-                        } catch (_) {}
+                        if (_typeParcours == 'prepa' || _typeParcours == 'formation') {
+                          try { prix = int.parse(prixCtrl.text.trim()); } catch (_) {}
+                        }
                         final body = <String, dynamic>{
                           'nom': nomCtrl.text.trim(),
                           'parcours_id': _idParcours,
@@ -1144,7 +1191,7 @@ class _EnseignantAdminDashboardPageState
                         setS(() => isLoading = false);
                         if (res.statusCode == 201) {
                           if (ctx.mounted) Navigator.pop(ctx);
-                          if (prix == 0) {
+                          if (prix == 0 && (_typeParcours == 'formation')) {
                             _showMsg('Département créé ! En attente de validation.', success: true);
                           } else {
                             _showMsg('Département créé avec succès !', success: true);
@@ -1546,7 +1593,7 @@ class _EnseignantAdminDashboardPageState
   }
 }
 
-// Détail département sheet (inchangé, garder l'existant)
+// Détail département sheet (INCHANGÉ)
 class _DetailDeptSheet extends StatefulWidget {
   final Map dept;
   const _DetailDeptSheet({required this.dept});

@@ -16,6 +16,7 @@ const Color _gold = Color(0xFFC5A059);
 const Color _bg = Color(0xFFF8FAFC);
 const Color _white = Color(0xFFFFFFFF);
 const Color _textDark = Color(0xFF1A1C1E);
+//const Color _textMedium = Color(0xFF5A5C5E);
 const Color _textLight = Color(0xFF8A8C8E);
 const Color _green = Color(0xFF10B981);
 const Color _red = Color(0xFFEF4444);

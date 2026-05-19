@@ -8,7 +8,7 @@ import 'package:yeki/services/cache_manager.dart';
 import 'package:yeki/services/offline_service.dart';
 import 'package:yeki/services/sync_service.dart';
 import 'package:yeki/services/recharge_wallet_page.dart';
-import 'package:yeki/views/pages/apprenants/cursus_page.dart';
+import 'package:yeki/views/pages/apprenants/dasboard.dart';
 import 'package:yeki/views/pages/apprenants/profil_page.dart';
 import 'package:yeki/views/pages/enseignants/admin_general_page.dart';
 import 'package:yeki/views/pages/enseignants/enseignant_admin_dashboard_page.dart';
@@ -246,10 +246,10 @@ class YekiAuth {
   // ── Helpers privés ────────────────────────────────────────────
   static Widget _widgetFromRole(String role) {
     if (role == 'apprenant') {
-      return const CursusPage();
+      return const Dashboard();
     }
     if (_isEnseignant(role)) {
-      return _getEnseignantDashboard(role);
+      return EnseignantHomePage();
     }
     return const LoginPage();
   }

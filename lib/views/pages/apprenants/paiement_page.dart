@@ -14,6 +14,7 @@ const String _baseUrl = 'https://yeki.pythonanywhere.com/api';
 
 // Palette harmonisée
 const Color _primary = Color(0xFF135F74);
+//const Color _gold = Color(0xFFC5A059);
 const Color _bg = Color(0xFFF8FAFC);
 const Color _white = Color(0xFFFFFFFF);
 const Color _textDark = Color(0xFF1A1C1E);

@@ -496,7 +496,7 @@ class _PremiumConcoursCard extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       _infoIcon(Icons.calendar_today_rounded, 
-                        dept.dateExamen?.substring(0,10) ?? "Date à définir"),
+                        dept.dateExamen?.toString().substring(0,10) ?? "Date à définir"),
                       if (dept.placesDisponibles != null)
                         _infoIcon(Icons.people_outline_rounded, "${dept.placesDisponibles} Places"),
                       _infoIcon(Icons.menu_book_outlined, "${dept.nbCours} Modules"),
