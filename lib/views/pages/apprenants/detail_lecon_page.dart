@@ -696,7 +696,28 @@ class _DetailLeconPageState extends State<DetailLeconPage>
     if (_toutesLecons.isEmpty) return const SizedBox.shrink();
     final lecon = _leconCourante;
     return Container(margin: const EdgeInsets.fromLTRB(20, 0, 20, 20), decoration: BoxDecoration(color: YekiColors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: YekiColors.borderLight, width: 1)), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Padding(padding: const EdgeInsets.all(16), child: Row(children: [Icon(Icons.format_list_numbered_rounded, size: 18, color: _courseColor), const SizedBox(width: 8), const Text('Déroulé du cours', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800)), const Spacer(), Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: _courseColor.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(20)), child: Text('${_toutesLecons.length} chapitres', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800))])),
+      Padding(
+  padding: const EdgeInsets.all(16), 
+  child: Row(
+    children: [
+      Icon(Icons.format_list_numbered_rounded, size: 18, color: _courseColor), 
+      const SizedBox(width: 8), 
+      const Text('Déroulé du cours', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800)), 
+      const Spacer(), 
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), 
+        decoration: BoxDecoration(
+          color: _courseColor.withValues(alpha: 0.08), 
+          borderRadius: BorderRadius.circular(20)
+        ), 
+        child: Text(
+          '${_toutesLecons.length} chapitres', 
+          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800)
+        )
+      )
+    ]
+  )
+),
       const Divider(color: YekiColors.borderLight, height: 1), const SizedBox(height: 6),
       ListView.separated(shrinkWrap: true, padding: const EdgeInsets.symmetric(vertical: 4), physics: const NeverScrollableScrollPhysics(), itemCount: _toutesLecons.length, separatorBuilder: (context, index) => const SizedBox(height: 4), itemBuilder: (ctx, idx) => _buildLeconTile(_toutesLecons[idx], lecon)),
       const SizedBox(height: 8),

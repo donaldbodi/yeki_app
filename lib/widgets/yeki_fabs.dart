@@ -1,7 +1,6 @@
 // lib/widgets/yeki_fabs.dart
 // ════════════════════════════════════════════════════════════════
 // TRIPLE FAB — Répétiteur · Yéki IA · Forum
-// ✅ CORRIGÉ : Import conditionnel pour record
 // ════════════════════════════════════════════════════════════════
 
 import 'dart:convert';
@@ -13,41 +12,37 @@ import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:yeki/views/pages/apprenants/yeki_ia_chat_page.dart';
 import 'package:yeki/views/pages/apprenants/forum_page.dart';
+import 'package:yeki/core/design/yeki_design.dart';
+import 'package:yeki/core/constants/api_constants.dart';
 
-// ✅ Import conditionnel pour record (évite les erreurs de compilation)
+// Import conditionnel pour record
 import 'package:record/record.dart' 
     if (dart.library.html) 'package:yeki/widgets/record_stub.dart';
 
-const String _fabBase = 'https://yeki.pythonanywhere.com/api';
+// Couleurs locales (non définies dans yeki_design.dart)
+const Color _kLocalPurple = Color(0xFF8B5CF6);
+const Color _kLocalGreen = Color(0xFF10B981);
 
 // Source colors
-const Map<String, Color> _fc = {
-  'lecon':    Color(0xFF3B82F6),
-  'exercice': Color(0xFFA855F7),
-  'devoir':   Color(0xFFF97316),
-  'libre':    Color(0xFF22C55E),
+final Map<String, Color> _fc = {
+  'lecon':    const Color(0xFF3B82F6),
+  'exercice': _kLocalPurple,
+  'devoir':   kAccent,
+  'libre':    _kLocalGreen,
 };
 
 Future<String?> _tok() async =>
     (await SharedPreferences.getInstance()).getString('token');
-Map<String, String> _hdrs(String? t) =>
-    {'Content-Type': 'application/json', if (t != null) 'Authorization': 'Token $t'};
-
 
 // ════════════════════════════════════════════════════════════════
 // WIDGET PRINCIPAL
 // ════════════════════════════════════════════════════════════════
 class YekiFabs extends StatefulWidget {
-  // Contexte du cours
   final int    coursId;
   final String coursTitre;
-
-  // Source (leçon / exercice / devoir)
   final String source;        // 'lecon' | 'exercice' | 'devoir' | 'libre'
   final int?   sourceId;
   final String sourceTitre;
-
-  // Pour rediriger vers le forum onglet
   final TabController? tabController;
   final int            forumTabIndex;
   final void Function(int questionId)? onForumNavigate;
@@ -61,7 +56,8 @@ class YekiFabs extends StatefulWidget {
     this.sourceTitre = '',
     this.tabController,
     this.forumTabIndex = 3,
-    this.onForumNavigate, required int coursColor,
+    this.onForumNavigate,
+    required int coursColor,
   });
 
   @override
@@ -93,8 +89,7 @@ class _YekiFabsState extends State<YekiFabs> with TickerProviderStateMixin {
       builder: (ctx) => Container(
         decoration: BoxDecoration(
           color: const Color(0xFF161B22),
-          borderRadius:
-              const BorderRadius.vertical(top: Radius.circular(24)),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(kRadiusXl)),
           border: Border.all(color: const Color(0xFF30363D)),
         ),
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
@@ -105,7 +100,7 @@ class _YekiFabsState extends State<YekiFabs> with TickerProviderStateMixin {
               width: 36, height: 4,
               decoration: BoxDecoration(
                 color: Colors.white24,
-                borderRadius: BorderRadius.circular(4)),
+                borderRadius: BorderRadius.circular(kRadiusSm)),
             ),
             const SizedBox(height: 20),
             Row(
@@ -118,7 +113,7 @@ class _YekiFabsState extends State<YekiFabs> with TickerProviderStateMixin {
                         colors: [Color(0xFF008088), Color(0xFF39A0C2)],
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight),
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(kRadiusMd),
                   ),
                   child: const Center(
                     child: Text('YIA',
@@ -160,7 +155,7 @@ class _YekiFabsState extends State<YekiFabs> with TickerProviderStateMixin {
               icon: Icons.psychology_rounded,
               label: 'Poser une préoccupation',
               subtitle: 'Expliquer un problème avec image',
-              color: const Color(0xFF8B5CF6),
+              color: _kLocalPurple,
               onTap: () {
                 Navigator.pop(ctx);
                 _ouvrirFormPreoccupation(
@@ -198,7 +193,6 @@ class _YekiFabsState extends State<YekiFabs> with TickerProviderStateMixin {
         sourceTitre: widget.sourceTitre,
         onSoumis: (int? questionId) {
           if (isIA) {
-            // Rediriger vers le chat IA
             Navigator.push(context, MaterialPageRoute(
               builder: (_) => YekiIAChatPage(
                 coursId:         widget.coursId,
@@ -209,8 +203,7 @@ class _YekiFabsState extends State<YekiFabs> with TickerProviderStateMixin {
               ),
             ));
           } else {
-            // Rediriger vers le forum
-            if (widget.tabController != null) {
+            if (widget.tabController != null && mounted) {
               widget.tabController!.animateTo(widget.forumTabIndex);
               if (questionId != null && widget.onForumNavigate != null) {
                 widget.onForumNavigate!(questionId);
@@ -249,7 +242,7 @@ class _YekiFabsState extends State<YekiFabs> with TickerProviderStateMixin {
         // Bouton 1 — Répétiteur (à développer)
         _FabButton(
           icon: Icons.record_voice_over_rounded,
-          color: const Color(0xFFE2A84B),
+          color: kGold,
           tooltip: 'Répétiteur',
           delay: 0.0,
           ctrl: _enterCtrl,
@@ -329,11 +322,11 @@ class _FabButton extends StatelessWidget {
             width: 46, height: 46,
             decoration: BoxDecoration(
               gradient: gradient ?? LinearGradient(
-                  colors: [color, color.withOpacity(0.8)]),
+                  colors: [color, color.withOpacityValue(0.8)]),
               shape: BoxShape.circle,
               boxShadow: [
                 BoxShadow(
-                    color: color.withOpacity(0.4),
+                    color: color.withOpacityValue(0.4),
                     blurRadius: 12,
                     offset: const Offset(0, 4)),
               ],
@@ -391,23 +384,29 @@ class _PreoccupationFormState extends State<_PreoccupationForm> {
     final picker = ImagePicker();
     final picked = await picker.pickImage(
         source: ImageSource.gallery, imageQuality: 70);
-    if (picked != null && mounted) setState(() => _image = File(picked.path));
+    if (picked != null && mounted) {
+      setState(() => _image = File(picked.path));
+    }
   }
 
   Future<void> _toggleRecording() async {
     if (_recording) {
       final path = await _recorder.stop();
-      setState(() { _recording = false; _audioPath = path; });
+      if (mounted) {
+        setState(() { _recording = false; _audioPath = path; });
+      }
     } else {
       if (await _recorder.hasPermission()) {
         final dir = await getTemporaryDirectory();
         final path = '${dir.path}/preoccupation_${DateTime.now().millisecondsSinceEpoch}.m4a';
         await _recorder.start(const RecordConfig(), path: path);
-        setState(() => _recording = true);
-      } else {
+        if (mounted) {
+          setState(() => _recording = true);
+        }
+      } else if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text('Permission microphone refusée'),
-          backgroundColor: Colors.red,
+          backgroundColor: kAccent,
         ));
       }
     }
@@ -423,7 +422,9 @@ class _PreoccupationFormState extends State<_PreoccupationForm> {
     try {
       if (widget.isIA) {
         // Pour l'IA : on ferme le sheet et redirige vers le chat IA
-        Navigator.pop(context);
+        if (mounted) {
+          Navigator.pop(context);
+        }
         widget.onSoumis(null);
         return;
       }
@@ -431,15 +432,17 @@ class _PreoccupationFormState extends State<_PreoccupationForm> {
       // Pour le Forum : créer la question via API
       final request = http.MultipartRequest(
         'POST',
-        Uri.parse('$_fabBase/forum/questions/'),
+        Uri.parse('${ApiConstants.baseUrl}/forum/questions/'),
       );
       request.headers['Authorization'] = 'Token ${token ?? ''}';
       request.fields['contenu']  = texte.isNotEmpty ? texte : '(voir image/audio)';
       request.fields['source']   = widget.source;
-      if (widget.sourceId != null)
+      if (widget.sourceId != null) {
         request.fields['lecon_id'] = '${widget.sourceId}';
-      if (widget.sourceTitre.isNotEmpty)
+      }
+      if (widget.sourceTitre.isNotEmpty) {
         request.fields['lecon_titre'] = widget.sourceTitre;
+      }
       request.fields['cours_id']    = '${widget.coursId}';
       request.fields['cours_titre'] = widget.coursTitre;
 
@@ -466,19 +469,21 @@ class _PreoccupationFormState extends State<_PreoccupationForm> {
 
       if ((res.statusCode == 200 || res.statusCode == 201) && mounted) {
         final data = jsonDecode(res.body);
-        Navigator.pop(context);
+        if (mounted) {
+          Navigator.pop(context);
+        }
         widget.onSoumis(data['id'] as int?);
-      } else {
+      } else if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text('Erreur ${res.statusCode}'),
-          backgroundColor: Colors.red,
+          backgroundColor: kAccent,
         ));
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text('Erreur réseau'),
-          backgroundColor: Colors.red,
+          backgroundColor: kAccent,
         ));
       }
     }
@@ -496,7 +501,7 @@ class _PreoccupationFormState extends State<_PreoccupationForm> {
     return Container(
       decoration: BoxDecoration(
         color: const Color(0xFF161B22),
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(kRadiusXl)),
         border: Border.all(color: const Color(0xFF30363D)),
       ),
       padding: EdgeInsets.only(
@@ -514,7 +519,7 @@ class _PreoccupationFormState extends State<_PreoccupationForm> {
                 width: 36, height: 4,
                 decoration: BoxDecoration(
                   color: Colors.white24,
-                  borderRadius: BorderRadius.circular(4)),
+                  borderRadius: BorderRadius.circular(kRadiusSm)),
               ),
             ),
             const SizedBox(height: 16),
@@ -525,8 +530,8 @@ class _PreoccupationFormState extends State<_PreoccupationForm> {
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: _accentColor.withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(10),
+                    color: _accentColor.withOpacityValue(0.15),
+                    borderRadius: BorderRadius.circular(kRadiusMd),
                   ),
                   child: Icon(
                     widget.isIA ? Icons.psychology_rounded : Icons.forum_rounded,
@@ -551,9 +556,9 @@ class _PreoccupationFormState extends State<_PreoccupationForm> {
                 padding: const EdgeInsets.symmetric(
                     horizontal: 12, vertical: 8),
                 decoration: BoxDecoration(
-                  color: srcColor.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: srcColor.withOpacity(0.3)),
+                  color: srcColor.withOpacityValue(0.1),
+                  borderRadius: BorderRadius.circular(kRadiusMd),
+                  border: Border.all(color: srcColor.withOpacityValue(0.3)),
                 ),
                 child: Row(
                   children: [
@@ -580,7 +585,7 @@ class _PreoccupationFormState extends State<_PreoccupationForm> {
             Container(
               decoration: BoxDecoration(
                 color: const Color(0xFF1C2128),
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(kRadiusLg),
                 border: Border.all(color: const Color(0xFF30363D)),
               ),
               child: TextField(
@@ -610,7 +615,7 @@ class _PreoccupationFormState extends State<_PreoccupationForm> {
                       ? Icons.check_circle_rounded
                       : Icons.image_outlined,
                   label: _image != null ? 'Image ajoutée' : 'Image',
-                  color: _image != null ? Colors.green : Colors.white54,
+                  color: _image != null ? _kLocalGreen : Colors.white54,
                   onTap: _pickImage,
                 ),
                 const SizedBox(width: 8),
@@ -627,9 +632,9 @@ class _PreoccupationFormState extends State<_PreoccupationForm> {
                           ? 'Audio OK'
                           : 'Enregistrer',
                   color: _recording
-                      ? Colors.red
+                      ? kAccent
                       : _audioPath != null
-                          ? Colors.green
+                          ? _kLocalGreen
                           : Colors.white54,
                   onTap: _toggleRecording,
                 ),
@@ -660,7 +665,7 @@ class _PreoccupationFormState extends State<_PreoccupationForm> {
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 15),
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14)),
+                      borderRadius: BorderRadius.circular(kRadiusMd)),
                   elevation: 0,
                 ),
                 child: _sending
@@ -735,9 +740,9 @@ class _ToolButton extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          color: color.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: color.withOpacity(0.3)),
+          color: color.withOpacityValue(0.1),
+          borderRadius: BorderRadius.circular(kRadiusMd),
+          border: Border.all(color: color.withOpacityValue(0.3)),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -777,17 +782,17 @@ class _SheetOption extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: color.withOpacity(0.08),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: color.withOpacity(0.25)),
+          color: color.withOpacityValue(0.08),
+          borderRadius: BorderRadius.circular(kRadiusMd),
+          border: Border.all(color: color.withOpacityValue(0.25)),
         ),
         child: Row(
           children: [
             Container(
               width: 44, height: 44,
               decoration: BoxDecoration(
-                color: color.withOpacity(0.15),
-                borderRadius: BorderRadius.circular(12),
+                color: color.withOpacityValue(0.15),
+                borderRadius: BorderRadius.circular(kRadiusMd),
               ),
               child: Icon(icon, color: color, size: 22),
             ),
@@ -807,7 +812,7 @@ class _SheetOption extends StatelessWidget {
                 ],
               ),
             ),
-            Icon(Icons.chevron_right_rounded, color: color.withOpacity(0.6)),
+            Icon(Icons.chevron_right_rounded, color: color.withOpacityValue(0.6)),
           ],
         ),
       ),
