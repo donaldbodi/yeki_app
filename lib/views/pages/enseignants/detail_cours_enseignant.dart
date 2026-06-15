@@ -1,19 +1,15 @@
+// lib/views/pages/enseignants/detail_cours_enseignant.dart
+// ═══════════════════════════════════════════════════════════════════════════
+// DÉTAIL COURS ENSEIGNANT — CORRIGÉ
+// ═══════════════════════════════════════════════════════════════════════════
+
 import 'package:flutter/material.dart';
 import 'package:yeki/views/pages/apprenants/exercices_cours.dart';
 import 'package:yeki/views/pages/apprenants/forum_page.dart';
 import 'package:yeki/views/pages/apprenants/lecons_cours.dart';
 import 'package:yeki/views/pages/apprenants/devoirs_cours_page.dart';
 import 'package:yeki/views/pages/enseignants/interface_enseignant_page.dart';
-
-// Palette harmonisée
-const Color brandBackground = Color(0xFF135F74);
-const Color actionOrange = Color(0xFFFF6B00);
-//const Color _textDark = Color(0xFF1A1C1E);
-//const Color _textMedium = Color(0xFF5A5C5E);
-const Color _textLight = Color(0xFF8A8C8E);
-//const Color _borderLight = Color(0xFFE0E4E8);
-const Color _bgLight = Color(0xFFF8FAFC);
-const Color _white = Color(0xFFFFFFFF);
+import 'package:yeki/core/theme/app_theme.dart';
 
 class DetailCoursEnseignantPage extends StatefulWidget {
   final String coursId;
@@ -40,8 +36,8 @@ class _DetailCoursEnseignantPageState extends State<DetailCoursEnseignantPage>
   late TabController _tabController;
 
   Color get primaryColor => widget.courseColor;
-  Color get secondaryColor => widget.courseColor.withOpacity(0.7);
-  Color get accentColor => actionOrange;
+  Color get secondaryColor => widget.courseColor.withValues(alpha: 0.7);
+  Color get accentColor => YekiColors.accent;
 
   @override
   void initState() {
@@ -58,7 +54,7 @@ class _DetailCoursEnseignantPageState extends State<DetailCoursEnseignantPage>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _bgLight,
+      backgroundColor: YekiColors.backgroundLight,
       body: NestedScrollView(
         headerSliverBuilder: (BuildContext context, bool innerBoxIsScrolled) {
           return <Widget>[
@@ -73,10 +69,10 @@ class _DetailCoursEnseignantPageState extends State<DetailCoursEnseignantPage>
                   icon: Container(
                     padding: const EdgeInsets.all(6),
                     decoration: BoxDecoration(
-                      color: Colors.black26,
-                      borderRadius: BorderRadius.circular(10),
+                      color: YekiColors.black.withValues(alpha: 0.26),
+                      borderRadius: BorderRadius.circular(8),
                     ),
-                    child: const Icon(Icons.arrow_back_ios_new, color: _white, size: 16),
+                    child: const Icon(Icons.arrow_back_ios_new, color: YekiColors.white, size: 16),
                   ),
                   onPressed: () => Navigator.pop(context),
                 ),
@@ -99,12 +95,12 @@ class _DetailCoursEnseignantPageState extends State<DetailCoursEnseignantPage>
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                                 decoration: BoxDecoration(
-                                  color: _white.withOpacity(0.2),
+                                  color: YekiColors.white.withValues(alpha: 0.2),
                                   borderRadius: BorderRadius.circular(8),
                                 ),
                                 child: Text(
                                   widget.estEnseignantPrincipal ? "Principal" : "Assistant",
-                                  style: const TextStyle(color: _white, fontSize: 10, fontWeight: FontWeight.bold),
+                                  style: const TextStyle(color: YekiColors.white, fontSize: 10, fontWeight: FontWeight.bold),
                                 ),
                               ),
                             ],
@@ -113,7 +109,7 @@ class _DetailCoursEnseignantPageState extends State<DetailCoursEnseignantPage>
                           Text(
                             widget.titre,
                             style: const TextStyle(
-                              color: _white,
+                              color: YekiColors.white,
                               fontSize: 22,
                               fontWeight: FontWeight.bold,
                             ),
@@ -129,7 +125,7 @@ class _DetailCoursEnseignantPageState extends State<DetailCoursEnseignantPage>
                   preferredSize: const Size.fromHeight(60),
                   child: Container(
                     decoration: BoxDecoration(
-                      color: _white,
+                      color: YekiColors.white,
                       borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
                     ),
                     child: TabBar(
@@ -137,7 +133,7 @@ class _DetailCoursEnseignantPageState extends State<DetailCoursEnseignantPage>
                       indicatorColor: accentColor,
                       indicatorWeight: 3,
                       labelColor: primaryColor,
-                      unselectedLabelColor: _textLight,
+                      unselectedLabelColor: YekiColors.textLight,
                       labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                       tabs: const [
                         Tab(text: "Leçons"),

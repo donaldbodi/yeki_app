@@ -2,12 +2,12 @@
 // Version avec méthodes statiques
 
 import 'dart:async';
-import 'dart:io';
 import 'dart:convert';
 import 'package:hive/hive.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
+import 'package:yeki/services/download_manager.dart';
 
 // Modèles pour le stockage local
 @HiveType(typeId: 0)
@@ -130,6 +130,12 @@ class OfflineService {
   
   static void addConnectionListener(void Function(bool isOnline) listener) {
     _connectionListeners.add(listener);
+  }
+
+  static String? getDownloadedFilePath(String fileId) {
+    // Cette méthode était appelée mais inexistante
+    final downloadManager = DownloadManager();
+    return downloadManager.getDownloadedPath(fileId);
   }
   
   static void removeConnectionListener(void Function(bool isOnline) listener) {

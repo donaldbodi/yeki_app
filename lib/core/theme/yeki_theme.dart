@@ -1,26 +1,23 @@
-// lib/core/theme/yeki_design.dart
+// lib/core/theme/yeki_theme.dart
 // ═══════════════════════════════════════════════════════════════════
-//  YEKI DESIGN SYSTEM — tokens, couleurs, typographie, composants
+//  YEKI DESIGN SYSTEM — CORRIGÉ
 // ═══════════════════════════════════════════════════════════════════
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 // ── Tokens de couleur ────────────────────────────────────────────
 class YColors {
-  // Primaires
   static const blue      = Color(0xFF2884A0);
   static const blueDark  = Color(0xFF1F6580);
   static const teal      = Color(0xFF2A657D);
   static const tealLight = Color(0xFF39A0C2);
 
-  // Accents
   static const gold      = Color(0xFFE2A84B);
   static const coral     = Color(0xFFFF7F77);
   static const green     = Color(0xFF10B981);
   static const purple    = Color(0xFF8B5CF6);
   static const orange    = Color(0xFFF97316);
 
-  // Neutres
   static const dark      = Color(0xFF0D1B2A);
   static const darkMid   = Color(0xFF1E293B);
   static const grey      = Color(0xFF64748B);
@@ -29,11 +26,23 @@ class YColors {
   static const bgMid     = Color(0xFFF1F5F9);
   static const white     = Color(0xFFFFFFFF);
 
-  // Surface sombre (forum / mode sombre)
   static const inkBg     = Color(0xFF0D1117);
   static const inkSurf   = Color(0xFF161B22);
   static const inkCard   = Color(0xFF1C2128);
   static const inkBorder = Color(0xFF30363D);
+}
+
+// ── Extension pour faciliter l'utilisation des couleurs ──────────
+extension YColorsExtension on Color {
+  /// Utilisation: color.withValues(alpha: 0.5)
+  Color withValues({double? alpha}) {
+    return withAlpha((alpha ?? 1.0 * 255).round().clamp(0, 255));
+  }
+  
+  /// Version simplifiée pour la compatibilité
+  Color opacity(double value) {
+    return withValues(alpha: value);
+  }
 }
 
 // ── Typographie ──────────────────────────────────────────────────
@@ -50,14 +59,15 @@ class YText {
 
 // ── Ombres ───────────────────────────────────────────────────────
 class YShadow {
+  // ✅ CORRIGÉ : withValues(alpha: 0.07) au lieu de withValues(0.07)
   static List<BoxShadow> card = [
-    BoxShadow(color: YColors.blue.withOpacity(0.07), blurRadius: 16, offset: const Offset(0, 6)),
+    BoxShadow(color: YColors.blue.withValues(alpha: 0.07), blurRadius: 16, offset: const Offset(0, 6)),
   ];
   static List<BoxShadow> float = [
-    BoxShadow(color: YColors.dark.withOpacity(0.12), blurRadius: 24, offset: const Offset(0, 8)),
+    BoxShadow(color: YColors.dark.withValues(alpha: 0.12), blurRadius: 24, offset: const Offset(0, 8)),
   ];
   static List<BoxShadow> subtle = [
-    BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 2)),
+    BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 2)),
   ];
 }
 
@@ -133,7 +143,8 @@ class YButton extends StatelessWidget {
         borderRadius: BorderRadius.circular(YRadius.md),
         boxShadow: [
           BoxShadow(
-            color: (color ?? YColors.blue).withOpacity(0.3),
+            // ✅ CORRIGÉ : withValues(alpha: 0.3)
+            color: (color ?? YColors.blue).withValues(alpha: 0.3),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -189,9 +200,11 @@ class YChip extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
         decoration: BoxDecoration(
-          color: color.withOpacity(0.12),
+          // ✅ CORRIGÉ : withValues(alpha: 0.12)
+          color: color.withValues(alpha: 0.12),
           borderRadius: BorderRadius.circular(YRadius.full),
-          border: Border.all(color: color.withOpacity(0.3)),
+          // ✅ CORRIGÉ : withValues(alpha: 0.3)
+          border: Border.all(color: color.withValues(alpha: 0.3)),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -274,7 +287,8 @@ class YAvatar extends StatelessWidget {
       children: [
         CircleAvatar(
           radius: radius,
-          backgroundColor: bg.withOpacity(0.15),
+          // ✅ CORRIGÉ : withValues(alpha: 0.15)
+          backgroundColor: bg.withValues(alpha: 0.15),
           backgroundImage: photoUrl != null ? NetworkImage(photoUrl!) : null,
           child: photoUrl == null
               ? Text(_initials, style: TextStyle(
@@ -314,9 +328,11 @@ class YStatusBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.12),
+        // ✅ CORRIGÉ : withValues(alpha: 0.12)
+        color: color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(YRadius.full),
-        border: Border.all(color: color.withOpacity(0.3)),
+        // ✅ CORRIGÉ : withValues(alpha: 0.3)
+        border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -430,7 +446,7 @@ class _YSkeletonState extends State<YSkeleton> with SingleTickerProviderStateMix
   Widget build(BuildContext context) {
     return AnimatedBuilder(
       animation: _anim,
-      builder: (_, __) => Container(
+      builder: (_, _) => Container(
         width: widget.width,
         height: widget.height,
         decoration: BoxDecoration(

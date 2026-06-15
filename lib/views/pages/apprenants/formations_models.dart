@@ -1,8 +1,20 @@
-// lib/views/pages/apprenants/formations_models.dart (corrigé)
+// lib/views/pages/apprenants/formations_models.dart
+// ════════════════════════════════════════════════════════════════
+// MODÈLES POUR FORMATIONS, CONCOURS ET OLYMPIADES
+// AVEC GESTION DES NIVEAUX ACCESSIBLES
+// ════════════════════════════════════════════════════════════════
+
+import 'dart:convert';
+
+import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
 const String kBaseUrl = 'https://yeki.pythonanywhere.com/api';
 
-// Modèle de cours pour les formations
+// ================================================================
+// MODÈLE COURS ITEM (pour les formations)
+// ================================================================
 class CoursItem {
   final int id;
   final String title;
@@ -44,7 +56,9 @@ class CoursItem {
   }
 }
 
-// Modèle de département/formation
+// ================================================================
+// MODÈLE DÉPARTEMENT/FORMATION
+// ================================================================
 class DepartementItem {
   final int id;
   final String nom;
@@ -62,6 +76,7 @@ class DepartementItem {
   final String arreteMinisteriel;
   final String lienOfficiel;
   final String niveauxCibles;
+  final List<String> niveauxAccessibles;
   final int? placesDisponibles;
   final int fraisDossier;
   final String debouches;
@@ -97,6 +112,7 @@ class DepartementItem {
     required this.arreteMinisteriel,
     required this.lienOfficiel,
     required this.niveauxCibles,
+    required this.niveauxAccessibles,
     this.placesDisponibles,
     required this.fraisDossier,
     required this.debouches,
@@ -138,6 +154,7 @@ class DepartementItem {
       arreteMinisteriel: json['arrete_ministeriel'] ?? '',
       lienOfficiel: json['lien_officiel'] ?? '',
       niveauxCibles: json['niveaux_cibles'] ?? '',
+      niveauxAccessibles: (json['niveaux_accessibles'] as List?)?.cast<String>() ?? [],
       placesDisponibles: json['places_disponibles'],
       fraisDossier: json['frais_dossier'] ?? 0,
       debouches: json['debouches'] ?? '',
@@ -166,258 +183,177 @@ class DepartementItem {
       default: return '';
     }
   }
-}
-
-// Modèle pour les formations classiques
-class FormationClassique {
-  final int id;
-  final String ecole;
-  final String parcours;
-  final String ville;
-  final String pays;
-  final String? imageUrl;
-  final String description;
-  final String type;
-  final bool estPublique;
-  final int nbCours;
-  final int nbEtudiants;
-  final List<String> niveaux;
-  final List<String> matieres;
-  final List<CoursClassique> cours;
-  final bool estInscrit;
   
-  FormationClassique({
-    required this.id,
-    required this.ecole,
-    required this.parcours,
-    required this.ville,
-    required this.pays,
-    this.imageUrl,
-    required this.description,
-    required this.type,
-    required this.estPublique,
-    required this.nbCours,
-    required this.nbEtudiants,
-    required this.niveaux,
-    required this.matieres,
-    required this.cours,
-    required this.estInscrit,
-  });
-  
-  factory FormationClassique.fromJson(Map<String, dynamic> json) {
-    return FormationClassique(
-      id: json['id'] ?? 0,
-      ecole: json['ecole'] ?? '',
-      parcours: json['parcours'] ?? '',
-      ville: json['ville'] ?? '',
-      pays: json['pays'] ?? '',
-      imageUrl: json['image_url'],
-      description: json['description'] ?? '',
-      type: json['type'] ?? 'universite',
-      estPublique: json['est_publique'] ?? false,
-      nbCours: json['nb_cours'] ?? 0,
-      nbEtudiants: json['nb_etudiants'] ?? 0,
-      niveaux: List<String>.from(json['niveaux'] ?? []),
-      matieres: List<String>.from(json['matieres'] ?? []),
-      cours: (json['cours'] as List?)?.map((c) => CoursClassique.fromJson(c)).toList() ?? [],
-      estInscrit: json['est_inscrit'] ?? false,
-    );
+  bool get estAccessibleParNiveau {
+    if (niveauxAccessibles.isEmpty) return true;
+    // La vérification réelle se fait côté backend
+    return true;
   }
 }
 
-class CoursClassique {
+// ================================================================
+// MODÈLE OLYMPIADE
+// ================================================================
+class OlympiadeItem {
   final int id;
+  final int devoirId;
   final String titre;
   final String matiere;
   final String niveau;
-  final String enseignant;
-  final int nbLecons;
-  final String duree;
-  final int ordre;
+  final String phase;
+  final DateTime datFinInscription;
+  final DateTime datDebutCompetition;
+  final DateTime datFinCompetition;
+  final String reglement;
+  final String prixDescription;
+  final bool estInscrit;
+  final String statutApprenant;
+  final double? note;
+  final double? noteMax;
+  final int? rang;
+  final int dureeMinutes;
+  final bool afficherClassement;
+  final List<String> niveauxAccessibles;
   
-  CoursClassique({
+  OlympiadeItem({
     required this.id,
+    required this.devoirId,
     required this.titre,
     required this.matiere,
     required this.niveau,
-    required this.enseignant,
-    required this.nbLecons,
-    required this.duree,
-    required this.ordre,
-  });
-  
-  factory CoursClassique.fromJson(Map<String, dynamic> json) {
-    return CoursClassique(
-      id: json['id'] ?? 0,
-      titre: json['titre'] ?? '',
-      matiere: json['matiere'] ?? '',
-      niveau: json['niveau'] ?? '',
-      enseignant: json['enseignant'] ?? '',
-      nbLecons: json['nb_lecons'] ?? 0,
-      duree: json['duree'] ?? '',
-      ordre: json['ordre'] ?? 0,
-    );
-  }
-}
-
-// Modèle pour les formations métier
-class FormationMetier {
-  final int id;
-  final String nom;
-  final String description;
-  final String domaine;
-  final String niveau;
-  final double prix;
-  final int dureeJours;
-  final bool incubateur;
-  final double noteMoyenne;
-  final int nbInscrits;
-  final int nbCours;
-  final List<String> competences;
-  final List<Map<String, String>> fondateurs;
-  final List<ModuleMetier> cours;
-  final bool estInscrit;
-  final int? monRang;
-  final List<EntreeClassement> classement;
-  final String objectif;
-  final String? imageUrl;
-  
-  FormationMetier({
-    required this.id,
-    required this.nom,
-    required this.description,
-    required this.domaine,
-    required this.niveau,
-    required this.prix,
-    required this.dureeJours,
-    required this.incubateur,
-    required this.noteMoyenne,
-    required this.nbInscrits,
-    required this.nbCours,
-    required this.competences,
-    required this.fondateurs,
-    required this.cours,
+    required this.phase,
+    required this.datFinInscription,
+    required this.datDebutCompetition,
+    required this.datFinCompetition,
+    required this.reglement,
+    required this.prixDescription,
     required this.estInscrit,
-    this.monRang,
-    required this.classement,
-    required this.objectif,
-    this.imageUrl,
+    required this.statutApprenant,
+    this.note,
+    this.noteMax,
+    this.rang,
+    required this.dureeMinutes,
+    required this.afficherClassement,
+    required this.niveauxAccessibles,
   });
   
-  factory FormationMetier.fromJson(Map<String, dynamic> json) {
-    return FormationMetier(
-      id: json['id'] ?? 0,
-      nom: json['nom'] ?? json['titre'] ?? '',
-      description: json['description'] ?? '',
-      domaine: json['domaine'] ?? '',
-      niveau: json['niveau'] ?? '',
-      prix: (json['prix'] as num?)?.toDouble() ?? 0.0,
-      dureeJours: json['duree_jours'] ?? json['duree'] ?? 0,
-      incubateur: json['incubateur'] ?? false,
-      noteMoyenne: (json['note_moyenne'] as num?)?.toDouble() ?? 0.0,
-      nbInscrits: json['nb_inscrits'] ?? 0,
-      nbCours: json['nb_cours'] ?? 0,
-      competences: List<String>.from(json['competences'] ?? []),
-      fondateurs: List<Map<String, String>>.from(
-        (json['fondateurs'] as List?)?.map((f) => Map<String, String>.from(f)) ?? []
-      ),
-      cours: (json['cours'] as List?)?.map((c) => ModuleMetier.fromJson(c)).toList() ?? [],
-      estInscrit: json['est_inscrit'] ?? false,
-      monRang: json['mon_rang'],
-      classement: (json['classement'] as List?)?.map((c) => EntreeClassement.fromJson(c)).toList() ?? [],
-      objectif: json['objectif'] ?? '',
-      imageUrl: json['image_url'],
-    );
-  }
-}
-
-class ModuleMetier {
-  final int id;
-  final String titre;
-  final String description;
-  final String duree;
-  final int ordre;
-  final String statut;
-  final bool locked;
-  
-  ModuleMetier({
-    required this.id,
-    required this.titre,
-    required this.description,
-    required this.duree,
-    required this.ordre,
-    required this.statut,
-    required this.locked,
-  });
-  
-  factory ModuleMetier.fromJson(Map<String, dynamic> json) {
-    return ModuleMetier(
-      id: json['id'] ?? 0,
-      titre: json['titre'] ?? '',
-      description: json['description'] ?? '',
-      duree: json['duree'] ?? '',
-      ordre: json['ordre'] ?? 0,
-      statut: json['statut'] ?? 'non_commence',
-      locked: json['locked'] ?? false,
-    );
-  }
-}
-
-class EntreeClassement {
-  final int rang;
-  final String nom;
-  final double score;
-  
-  EntreeClassement({
-    required this.rang,
-    required this.nom,
-    required this.score,
-  });
-  
-  factory EntreeClassement.fromJson(Map<String, dynamic> json) {
-    return EntreeClassement(
-      rang: json['rang'] ?? 0,
-      nom: json['nom'] ?? '',
-      score: (json['score'] as num?)?.toDouble() ?? 0.0,
-    );
-  }
-}
-
-// Service pour gérer le niveau de l'apprenant
-class NiveauService {
-  static const Map<String, int> niveauxOrdre = {
-    '6eme': 1,
-    '5eme': 2,
-    '4eme': 3,
-    '3eme': 4,
-    'seconde': 5,
-    'premiere': 6,
-    'terminale': 7,
-    'licence1': 8,
-    'licence2': 9,
-    'licence3': 10,
-    'master1': 11,
-    'master2': 12,
-  };
-  
-  static Future<String?> getNiveau() async {
-    // À implémenter avec SharedPreferences
-    return null;
-  }
-  
-  static bool estAccessible(String niveauApprenant, String niveauxCibles) {
-    if (niveauxCibles.isEmpty) return true;
-    
-    final niveauScore = niveauxOrdre[niveauApprenant] ?? 0;
-    
-    // Extraire les niveaux cibles
-    for (final niveau in niveauxOrdre.keys) {
-      if (niveauxCibles.toLowerCase().contains(niveau.toLowerCase())) {
-        final cibleScore = niveauxOrdre[niveau] ?? 0;
-        if (cibleScore <= niveauScore) return true;
+  factory OlympiadeItem.fromJson(Map<String, dynamic> j) {
+    DateTime _d(String? s) {
+      if (s == null || s.isEmpty) return DateTime.now().add(const Duration(days: 30));
+      try {
+        return DateTime.parse(s).toLocal();
+      } catch (_) {
+        return DateTime.now();
       }
     }
     
+    final statut = j['statut'] as String? ?? 'inscription';
+    final phase = switch (statut) {
+      'inscription' => 'inscription',
+      'en_cours' => 'competition',
+      'terminee' => 'terminee',
+      _ => 'attente',
+    };
+    
+    return OlympiadeItem(
+      id: j['id'] ?? 0,
+      devoirId: j['devoir_id'] ?? 0,
+      titre: j['titre'] ?? '',
+      matiere: j['matiere'] ?? '',
+      niveau: j['niveau'] ?? '',
+      phase: phase,
+      datFinInscription: _d(j['date_cloture_inscription']),
+      datDebutCompetition: _d(j['date_debut_olympiade']),
+      datFinCompetition: _d(j['date_fin_olympiade']),
+      reglement: j['description'] ?? '',
+      prixDescription: '${j['prix_1er'] ?? ''} / ${j['prix_2eme'] ?? ''} / ${j['prix_3eme'] ?? ''}',
+      estInscrit: j['est_inscrit'] ?? false,
+      statutApprenant: (j['inscription']?['statut'] as String?) ?? 'non_commence',
+      note: j['inscription']?['note'] != null ? (j['inscription']['note'] as num).toDouble() : null,
+      noteMax: (j['note_sur'] as num? ?? 20).toDouble(),
+      rang: j['inscription']?['classement'] as int?,
+      dureeMinutes: j['duree_minutes'] ?? 120,
+      afficherClassement: j['statut'] == 'terminee',
+      niveauxAccessibles: (j['niveaux_accessibles'] as List?)?.cast<String>() ?? [],
+    );
+  }
+}
+
+// ================================================================
+// SERVICE POUR GÉRER LE NIVEAU DE L'APPRENANT
+// ================================================================
+class NiveauService {
+  static const Map<String, int> niveauxOrdre = {
+    '6ème': 1, '6eme': 1,
+    '5ème': 2, '5eme': 2,
+    '4ème': 3, '4eme': 3,
+    '3ème': 4, '3eme': 4,
+    'seconde': 5,
+    'première': 6, 'premiere': 6,
+    'terminale': 7,
+    'licence 1': 8, 'licence1': 8,
+    'licence 2': 9, 'licence2': 9,
+    'licence 3': 10, 'licence3': 10,
+    'master 1': 11, 'master1': 11,
+    'master 2': 12, 'master2': 12,
+    'débutant': 1, 'debutant': 1,
+    'intermédiaire': 5, 'intermediaire': 5,
+    'avancé': 9, 'avance': 9,
+  };
+  
+  static String? _cachedNiveau;
+  
+  static Future<String?> getNiveau() async {
+    if (_cachedNiveau != null) return _cachedNiveau;
+    
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('token');
+      if (token == null) return null;
+      
+      final response = await http.get(
+        Uri.parse('$kBaseUrl/profil/me/'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Token $token',
+        },
+      );
+      
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        _cachedNiveau = data['niveau']?.toString();
+        return _cachedNiveau;
+      }
+    } catch (e) {
+      debugPrint('Erreur récupération niveau: $e');
+    }
+    return null;
+  }
+  
+  static void clearCache() {
+    _cachedNiveau = null;
+  }
+  
+  static bool estAccessible(String? niveauApprenant, String niveauxCibles) {
+    if (niveauxCibles.isEmpty) return true;
+    if (niveauApprenant == null || niveauApprenant.isEmpty) return true;
+    
+    final niveauScore = niveauxOrdre[niveauApprenant.toLowerCase()] ?? 0;
+    if (niveauScore == 0) return true;
+    
+    for (final entry in niveauxOrdre.entries) {
+      if (niveauxCibles.toLowerCase().contains(entry.key.toLowerCase())) {
+        if (entry.value <= niveauScore) return true;
+      }
+    }
     return false;
+  }
+  
+  static bool estAccessibleParListe(String? niveauApprenant, List<String> niveauxAccessibles) {
+    if (niveauxAccessibles.isEmpty) return true;
+    if (niveauApprenant == null || niveauApprenant.isEmpty) return true;
+    
+    final niveauLower = niveauApprenant.toLowerCase();
+    return niveauxAccessibles.any((n) => n.toLowerCase() == niveauLower);
   }
 }

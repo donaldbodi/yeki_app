@@ -1,34 +1,29 @@
+// lib/views/pages/apprenants/composer_devoir_page.dart
+// ═══════════════════════════════════════════════════════════════════════════
+
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:yeki/core/theme/app_theme.dart';
+import 'package:yeki/core/constants/api_constants.dart';
+import 'package:yeki/utils/error_handler.dart';
 
-const String _baseC = 'https://yeki.pythonanywhere.com/api';
-
-// ─── Palette ──────────────────────────────────────────────────
-const Color _teal   = Color(0xFF008088);
-const Color _dark   = Color(0xFF1A1C1E);
-const Color _accent = Color(0xFFFF7F77);
-const Color _gold   = Color(0xFFE2A84B);
-const Color _bg     = Color(0xFFF5F7FA);
-
-// ─── Modèles locaux ───────────────────────────────────────────
 class _Choix {
-  final int    id;
+  final int id;
   final String texte;
   const _Choix({required this.id, required this.texte});
-  factory _Choix.fromJson(Map j) =>
-      _Choix(id: j['id'], texte: j['texte'] ?? '');
+  factory _Choix.fromJson(Map j) => _Choix(id: j['id'], texte: j['texte'] ?? '');
 }
 
 class _Question {
-  final int         id;
-  final String      texte;
-  final String      type; // qcm | texte
-  final int         points;
-  final int         ordre;
+  final int id;
+  final String texte;
+  final String type;
+  final int points;
+  final int ordre;
   final List<_Choix> choix;
   const _Question({
     required this.id,
@@ -39,23 +34,20 @@ class _Question {
     required this.choix,
   });
   factory _Question.fromJson(Map j) => _Question(
-    id:     j['id'],
-    texte:  j['texte'] ?? '',
-    type:   j['type_question'] ?? 'texte',
+    id: j['id'],
+    texte: j['texte'] ?? '',
+    type: j['type_question'] ?? 'texte',
     points: j['points'] ?? 1,
-    ordre:  j['ordre'] ?? 0,
-    choix:  (j['choix'] as List? ?? [])
-                .map((c) => _Choix.fromJson(c))
-                .toList(),
+    ordre: j['ordre'] ?? 0,
+    choix: (j['choix'] as List? ?? []).map((c) => _Choix.fromJson(c)).toList(),
   );
 }
 
-// ═════════════════════════════════════════════════════════════
 class ComposerDevoirPage extends StatefulWidget {
-  final int    devoirId;
+  final int devoirId;
   final String titre;
-  final int    dureeMin;
-  final int    noteSur;
+  final int dureeMin;
+  final int noteSur;
 
   const ComposerDevoirPage({
     super.key,
@@ -72,27 +64,21 @@ class ComposerDevoirPage extends StatefulWidget {
 class _ComposerDevoirPageState extends State<ComposerDevoirPage>
     with WidgetsBindingObserver {
 
-  bool              _loading    = true;
-  bool              _submitting = false;
-  List<_Question>   _questions  = [];
-  bool              _qParQ      = false;
-  bool              _estOlymp   = false;
-  int               _nbSortiesMax = 0;
+  bool _loading = true;
+  bool _submitting = false;
+  List<_Question> _questions = [];
+  bool _qParQ = false;
+  bool _estOlymp = false;
+  int _nbSortiesMax = 0;
 
-  // Réponses {question_id: valeur}
-  final Map<String, String>             _reponses = {};
-  final Map<int, TextEditingController> _ctrls    = {};
+  final Map<String, String> _reponses = {};
+  final Map<int, TextEditingController> _ctrls = {};
 
-  // Navigation Q par Q
   int _idx = 0;
-
-  // Minuteur
   Timer? _timer;
-  int    _secsLeft = 0;
-  bool   _soumis   = false;
-
-  // Anti-triche
-  int  _nbSorties   = 0;
+  int _secsLeft = 0;
+  bool _soumis = false;
+  int _nbSorties = 0;
   bool _forceSubmit = false;
 
   @override
@@ -114,8 +100,7 @@ class _ComposerDevoirPageState extends State<ComposerDevoirPage>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (_estOlymp && !_soumis && !_forceSubmit) {
-      if (state == AppLifecycleState.paused ||
-          state == AppLifecycleState.inactive) {
+      if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
         _signalerSortie();
       }
     }
@@ -126,60 +111,50 @@ class _ComposerDevoirPageState extends State<ComposerDevoirPage>
     return p.getString('token');
   }
 
-  // ── Init ──────────────────────────────────────────────────
   Future<void> _init() async {
     setState(() => _loading = true);
     await _demarrer();
     await _chargerDetail();
-    setState(() => _loading = false);
+    if (mounted) setState(() => _loading = false);
   }
 
   Future<void> _demarrer() async {
     final token = await _token();
     await http.post(
-      Uri.parse('$_baseC/devoirs/${widget.devoirId}/demarrer/'),
-      headers: {
-        'Content-Type': 'application/json',
-        if (token != null) 'Authorization': 'Token $token',
-      },
+      Uri.parse(ApiConstants.devoirDemarrer(widget.devoirId)),
+      headers: ApiHeaders.auth(token),
     );
   }
 
   Future<void> _chargerDetail() async {
     final token = await _token();
     final res = await http.get(
-      Uri.parse('$_baseC/devoirs/${widget.devoirId}/'),
-      headers: {
-        'Content-Type': 'application/json',
-        if (token != null) 'Authorization': 'Token $token',
-      },
+      Uri.parse(ApiConstants.devoirDetail(widget.devoirId)),
+      headers: ApiHeaders.auth(token),
     );
 
     if (res.statusCode == 200) {
       final data = jsonDecode(res.body) as Map<String, dynamic>;
 
       final olymp = data['olympiade'] as Map<String, dynamic>?;
-      _estOlymp       = (data['type_devoir'] ?? '') == 'olympiade';
-      _qParQ          = olymp?['question_par_question'] == true;
-      _nbSortiesMax   = olymp?['nb_sorties_tolerees'] ?? 0;
+      _estOlymp = (data['type_devoir'] ?? '') == 'olympiade';
+      _qParQ = olymp?['question_par_question'] == true;
+      _nbSortiesMax = olymp?['nb_sorties_tolerees'] ?? 0;
 
       _questions = (data['questions'] as List? ?? [])
           .map((q) => _Question.fromJson(q))
           .toList();
 
-      // Controllers texte
       for (final q in _questions) {
         if (q.type == 'texte') _ctrls[q.id] = TextEditingController();
       }
 
-      // Minuteur (priorité : temps_restant du backend, sinon duree_minutes)
       final tr = data['temps_restant'] as int?;
       if (widget.dureeMin > 0) {
         _secsLeft = tr ?? (widget.dureeMin * 60);
         _startTimer();
       }
 
-      // UI immersive olympiade
       if (_estOlymp) {
         SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
       }
@@ -188,6 +163,7 @@ class _ComposerDevoirPageState extends State<ComposerDevoirPage>
 
   void _startTimer() {
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
       if (_secsLeft <= 0) {
         _timer?.cancel();
         if (!_soumis && !_forceSubmit) _soumettreAuto('Temps écoulé');
@@ -197,51 +173,42 @@ class _ComposerDevoirPageState extends State<ComposerDevoirPage>
     });
   }
 
-  // ── Anti-triche ──────────────────────────────────────────
   Future<void> _signalerSortie() async {
     if (_forceSubmit || _soumis) return;
     _nbSorties++;
     final token = await _token();
     final res = await http.post(
-      Uri.parse('$_baseC/devoirs/${widget.devoirId}/focus-perdu/'),
-      headers: {
-        'Content-Type': 'application/json',
-        if (token != null) 'Authorization': 'Token $token',
-      },
+      Uri.parse(ApiConstants.devoirFocusPerdu(widget.devoirId)),
+      headers: ApiHeaders.auth(token),
     );
-    if (res.statusCode == 200) {
+    if (res.statusCode == 200 && mounted) {
       final data = jsonDecode(res.body);
       if (data['force_submit'] == true) {
         _forceSubmit = true;
         _timer?.cancel();
-        _snack('Trop de sorties — devoir soumis automatiquement', Colors.red);
+        if (mounted) ErrorHandler.showWarning(context, 'Trop de sorties — devoir soumis automatiquement');
         setState(() => _soumis = true);
         await Future.delayed(const Duration(seconds: 1));
         if (mounted) Navigator.pop(context, true);
       } else {
-        final nb  = data['nb_focus_perdu'] ?? _nbSorties;
+        final nb = data['nb_focus_perdu'] ?? _nbSorties;
         final max = (_nbSortiesMax) + 1;
-        _snack('Sortie $nb/$max détectée !', Colors.orange);
+        if (mounted) ErrorHandler.showWarning(context, 'Sortie $nb/$max détectée !');
       }
     }
   }
 
-  // ── Soumission ────────────────────────────────────────────
   Future<void> _soumettre() async {
-    // Synchroniser texte libre
     for (final e in _ctrls.entries) {
       _reponses[e.key.toString()] = e.value.text;
     }
 
-    final nb    = _questions.length;
+    final nb = _questions.length;
     final nbRep = _reponses.values.where((v) => v.isNotEmpty).length;
 
     if (nbRep < nb) {
-      final ok = await _confirmer(
-        'Questions incomplètes',
-        '$nbRep/$nb répondues. Soumettre quand même ?',
-      );
-      if (!ok) return;
+      final ok = await _confirmer('Questions incomplètes', '$nbRep/$nb répondues. Soumettre quand même ?');
+      if (ok != true) return;
     }
     await _envoyerSoumission();
   }
@@ -250,7 +217,7 @@ class _ComposerDevoirPageState extends State<ComposerDevoirPage>
     for (final e in _ctrls.entries) {
       _reponses[e.key.toString()] = e.value.text;
     }
-    _snack(raison, Colors.orange);
+    if (mounted) ErrorHandler.showWarning(context, raison);
     await _envoyerSoumission();
   }
 
@@ -259,116 +226,97 @@ class _ComposerDevoirPageState extends State<ComposerDevoirPage>
     final token = await _token();
     try {
       final res = await http.post(
-        Uri.parse('$_baseC/devoirs/${widget.devoirId}/soumettre/'),
-        headers: {
-          'Content-Type': 'application/json',
-          if (token != null) 'Authorization': 'Token $token',
-        },
+        Uri.parse(ApiConstants.devoirSoumettre(widget.devoirId)),
+        headers: ApiHeaders.auth(token),
         body: jsonEncode({'reponses': _reponses}),
       );
 
       if (res.statusCode == 200 || res.statusCode == 201) {
         _timer?.cancel();
-        setState(() { _soumis = true; _submitting = false; });
-        SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-        _snack('Devoir soumis avec succès !', _teal);
-        await Future.delayed(const Duration(milliseconds: 700));
-        if (mounted) Navigator.pop(context, true);
+        if (mounted) {
+          setState(() { _soumis = true; _submitting = false; });
+          SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+          ErrorHandler.showSuccess(context, 'Devoir soumis avec succès !');
+          await Future.delayed(const Duration(milliseconds: 700));
+          if (mounted) Navigator.pop(context, true);
+        }
       } else {
         final body = jsonDecode(res.body);
-        _snack(body['detail'] ?? 'Erreur lors de la soumission.', Colors.red);
+        if (mounted) ErrorHandler.showError(context, body['detail'] ?? 'Erreur lors de la soumission.');
       }
     } catch (_) {
-      _snack('Erreur réseau.', Colors.red);
+      if (mounted) ErrorHandler.showError(context, 'Erreur réseau.');
     }
-    setState(() => _submitting = false);
+    if (mounted) setState(() => _submitting = false);
   }
 
-  Future<bool> _confirmer(String titre, String msg) async {
-    return await showDialog<bool>(
-          context: context,
-          builder: (_) => AlertDialog(
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20)),
-            title: Text(titre,
-                style: const TextStyle(fontWeight: FontWeight.w800)),
-            content: Text(msg),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text('Annuler'),
-              ),
-              ElevatedButton(
-                onPressed: () => Navigator.pop(context, true),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _accent,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
-                ),
-                child: const Text('Confirmer',
-                    style: TextStyle(color: Colors.white)),
-              ),
-            ],
+  Future<bool?> _confirmer(String titre, String msg) async {
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: YekiRadius.borderRadiusXl),
+        backgroundColor: YekiColors.white,
+        title: Text(titre, style: const TextStyle(fontWeight: FontWeight.w800)),
+        content: Text(msg),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Annuler', style: TextStyle(color: YekiColors.textMedium)),
           ),
-        ) ??
-        false;
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: YekiColors.accent,
+              shape: RoundedRectangleBorder(borderRadius: YekiRadius.borderRadiusMd),
+            ),
+            child: const Text('Confirmer', style: TextStyle(color: YekiColors.white)),
+          ),
+        ],
+      ),
+    );
   }
 
-  void _snack(String msg, Color color) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(msg),
-      backgroundColor: color,
-      behavior: SnackBarBehavior.floating,
-      shape:
-          RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-    ));
-  }
-
-  // ── Build ─────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return const Scaffold(
-        backgroundColor: _bg,
-        body: Center(
+      return Scaffold(
+        backgroundColor: YekiColors.backgroundLight,
+        body: const Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              CircularProgressIndicator(color: _teal),
+              YekiLoader(),
               SizedBox(height: 16),
               Text('Chargement du devoir…',
-                  style: TextStyle(color: Colors.blueGrey, fontSize: 13)),
+                  style: TextStyle(fontSize: 13)),
             ],
           ),
         ),
       );
     }
 
-    return WillPopScope(
-      onWillPop: () async {
-        if (_estOlymp && !_soumis) {
-          final ok = await _confirmer(
-            'Quitter l\'olympiade ?',
-            'Une sortie sera comptabilisée. Continuer ?',
-          );
-          if (ok) _signalerSortie();
-          return false;
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (!didPop && mounted) {
+          if (_estOlymp && !_soumis) {
+            final ok = await _confirmer('Quitter l\'olympiade ?', 'Une sortie sera comptabilisée. Continuer ?');
+            if (ok == true) _signalerSortie();
+            if (ok == true && mounted) Navigator.pop(context);
+          } else if (!_soumis) {
+            final ok = await _confirmer('Quitter ?', 'Ta progression est sauvegardée. Quitter maintenant ?');
+            if (ok == true && mounted) Navigator.pop(context);
+          } else {
+            if (mounted) Navigator.pop(context);
+          }
         }
-        if (!_soumis) {
-          return _confirmer('Quitter ?',
-              'Ta progression est sauvegardée. Quitter maintenant ?');
-        }
-        return true;
       },
       child: Scaffold(
-        backgroundColor: _bg,
+        backgroundColor: YekiColors.backgroundLight,
         body: Column(children: [
           _buildTopBar(),
           Expanded(
-            child: _qParQ
-                ? _buildModeQParQ()
-                : _buildModeTout(),
+            child: _qParQ ? _buildModeQParQ() : _buildModeTout(),
           ),
           if (!_qParQ) _buildBottomBar(),
         ]),
@@ -376,21 +324,16 @@ class _ComposerDevoirPageState extends State<ComposerDevoirPage>
     );
   }
 
-  // ── Top bar ───────────────────────────────────────────────
   Widget _buildTopBar() {
-    final topColor = _estOlymp ? const Color(0xFF7B2FBE) : _dark;
+    final topColor = _estOlymp ? YekiColors.purple : YekiColors.textDark;
     final progress = _questions.isEmpty
         ? 0.0
-        : _reponses.values.where((v) => v.isNotEmpty).length /
-              _questions.length;
+        : _reponses.values.where((v) => v.isNotEmpty).length / _questions.length;
 
     return Container(
       decoration: BoxDecoration(
         color: topColor,
-        boxShadow: [
-          BoxShadow(
-              color: topColor.withOpacity(0.3), blurRadius: 10)
-        ],
+        boxShadow: [BoxShadow(color: topColor.withValues(alpha: 0.3), blurRadius: 10)],
       ),
       child: SafeArea(
         bottom: false,
@@ -401,28 +344,22 @@ class _ComposerDevoirPageState extends State<ComposerDevoirPage>
               if (!_estOlymp)
                 GestureDetector(
                   onTap: () async {
-                    final ok = await _confirmer(
-                        'Quitter ?', 'Progression sauvegardée. Quitter ?');
-                    if (ok && mounted) Navigator.pop(context);
+                    final ok = await _confirmer('Quitter ?', 'Progression sauvegardée. Quitter ?');
+                    if (ok == true && mounted) Navigator.pop(context);
                   },
                   child: Container(
                     padding: const EdgeInsets.all(6),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(8),
+                      color: YekiColors.white.withValues(alpha: 0.15),
+                      borderRadius: YekiRadius.borderRadiusSm,
                     ),
-                    child: const Icon(Icons.arrow_back_ios_rounded,
-                        color: Colors.white, size: 16),
+                    child: const Icon(Icons.arrow_back_ios_rounded, size: 16),
                   ),
                 ),
               if (!_estOlymp) const SizedBox(width: 12),
               Expanded(
                 child: Text(widget.titre,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 15,
-                  ),
+                  style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -433,18 +370,16 @@ class _ComposerDevoirPageState extends State<ComposerDevoirPage>
               ],
             ]),
           ),
-          // Barre progression
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
             child: Row(children: [
               Expanded(
                 child: ClipRRect(
-                  borderRadius: BorderRadius.circular(4),
+                  borderRadius: YekiRadius.borderRadiusSm,
                   child: LinearProgressIndicator(
                     value: progress,
-                    backgroundColor: Colors.white.withOpacity(0.2),
-                    valueColor: AlwaysStoppedAnimation<Color>(
-                        _estOlymp ? _gold : _accent),
+                    backgroundColor: YekiColors.white.withValues(alpha: 0.2),
+                    valueColor: AlwaysStoppedAnimation<Color>(_estOlymp ? YekiColors.accent : YekiColors.accent),
                     minHeight: 4,
                   ),
                 ),
@@ -452,10 +387,7 @@ class _ComposerDevoirPageState extends State<ComposerDevoirPage>
               const SizedBox(width: 10),
               Text(
                 '${_reponses.values.where((v) => v.isNotEmpty).length}/${_questions.length}',
-                style: TextStyle(
-                    color: Colors.white.withOpacity(0.75),
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600),
+                style: TextStyle(color: YekiColors.white.withValues(alpha: 0.75), fontSize: 11, fontWeight: FontWeight.w600),
               ),
             ]),
           ),
@@ -465,41 +397,26 @@ class _ComposerDevoirPageState extends State<ComposerDevoirPage>
   }
 
   Widget _minuteur() {
-    final mins   = _secsLeft ~/ 60;
-    final secs   = _secsLeft % 60;
+    final mins = _secsLeft ~/ 60;
+    final secs = _secsLeft % 60;
     final urgent = _secsLeft <= 120;
     return Container(
-      padding:
-          const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: urgent
-            ? _accent
-            : Colors.white.withOpacity(0.15),
-        borderRadius: BorderRadius.circular(20),
+        color: urgent ? YekiColors.accent : YekiColors.white.withValues(alpha: 0.15),
+        borderRadius: YekiRadius.borderRadiusXl,
       ),
       child: Row(mainAxisSize: MainAxisSize.min, children: [
-        Icon(
-          urgent
-              ? Icons.warning_rounded
-              : Icons.timer_rounded,
-          color: Colors.white,
-          size: 14,
-        ),
+        Icon(urgent ? Icons.warning_rounded : Icons.timer_rounded, size: 14),
         const SizedBox(width: 5),
         Text(
           '${mins.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}',
-          style: const TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.w900,
-            fontSize: 14,
-            fontFeatures: [FontFeature.tabularFigures()],
-          ),
+          style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14, fontFeatures: [FontFeature.tabularFigures()]),
         ),
       ]),
     );
   }
 
-  // ── Mode Q par Q ──────────────────────────────────────────
   Widget _buildModeQParQ() {
     if (_questions.isEmpty) {
       return const Center(child: Text('Aucune question.'));
@@ -507,44 +424,28 @@ class _ComposerDevoirPageState extends State<ComposerDevoirPage>
     final q = _questions[_idx];
 
     return Column(children: [
-      // Header question
       Padding(
         padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
         child: Row(children: [
-          Text(
-            'Question ${_idx + 1} / ${_questions.length}',
-            style: TextStyle(
-                color: Colors.grey.shade500,
-                fontSize: 12,
-                fontWeight: FontWeight.w600),
-          ),
+          Text('Question ${_idx + 1} / ${_questions.length}',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
           const Spacer(),
           Text('${q.points} pt${q.points > 1 ? 's' : ''}',
-              style: const TextStyle(
-                  color: _teal,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700)),
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
         ]),
       ),
-      // Indicateurs mini
       Padding(
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
         child: Row(
           children: List.generate(_questions.length, (i) {
-            final rep =
-                _reponses[_questions[i].id.toString()] ?? '';
+            final rep = _reponses[_questions[i].id.toString()] ?? '';
             return Expanded(
               child: Container(
                 height: 4,
-                margin:
-                    const EdgeInsets.symmetric(horizontal: 2),
+                margin: const EdgeInsets.symmetric(horizontal: 2),
                 decoration: BoxDecoration(
-                  color: i == _idx
-                      ? _teal
-                      : rep.isNotEmpty
-                          ? _gold
-                          : Colors.grey.shade200,
-                  borderRadius: BorderRadius.circular(4),
+                  color: i == _idx ? YekiColors.primaryDark : (rep.isNotEmpty ? YekiColors.accent : YekiColors.borderLight),
+                  borderRadius: YekiRadius.borderRadiusSm,
                 ),
               ),
             );
@@ -557,39 +458,25 @@ class _ComposerDevoirPageState extends State<ComposerDevoirPage>
           child: _buildQuestion(q),
         ),
       ),
-      // Navigation
       Padding(
         padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
         child: Row(children: [
-          // Précédent (si pas strict olympiade)
           if (_idx > 0 && !_estOlymp) ...[
             Expanded(
-              child: _btn(
-                'Précédent',
-                Colors.grey.shade200,
-                Colors.grey.shade700,
-                () => setState(() => _idx--),
-              ),
+              child: _btn('Précédent', YekiColors.borderLight, YekiColors.textDark, () => setState(() => _idx--)),
             ),
             const SizedBox(width: 12),
           ],
           Expanded(
             child: _idx < _questions.length - 1
-                ? _btn('Question suivante', _teal, Colors.white,
-                    () => setState(() => _idx++))
-                : _btn(
-                    'Soumettre',
-                    _accent,
-                    Colors.white,
-                    _submitting ? null : _soumettre,
-                  ),
+                ? _btn('Question suivante', YekiColors.primaryDark, YekiColors.white, () => setState(() => _idx++))
+                : _btn('Soumettre', YekiColors.accent, YekiColors.white, _submitting ? null : _soumettre),
           ),
         ]),
       ),
     ]);
   }
 
-  // ── Mode tout ─────────────────────────────────────────────
   Widget _buildModeTout() {
     return ListView.builder(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
@@ -598,58 +485,34 @@ class _ComposerDevoirPageState extends State<ComposerDevoirPage>
     );
   }
 
-  // ── Question ──────────────────────────────────────────────
   Widget _buildQuestion(_Question q) {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 10)
-        ],
+        color: YekiColors.white,
+        borderRadius: YekiRadius.borderRadiusLg,
+        boxShadow: YekiShadows.subtle,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(children: [
             Container(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 8, vertical: 3),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
               decoration: BoxDecoration(
                 color: const Color(0xFFE0F4F4),
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: YekiRadius.borderRadiusSm,
               ),
-              child: Text(
-                '${q.points} pt${q.points > 1 ? 's' : ''}',
-                style: const TextStyle(
-                    fontSize: 10,
-                    color: _teal,
-                    fontWeight: FontWeight.w700),
-              ),
+              child: Text('${q.points} pt${q.points > 1 ? 's' : ''}',
+                  style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700)),
             ),
             const SizedBox(width: 8),
-            Text(
-              q.type == 'qcm' ? 'QCM' : 'Réponse libre',
-              style: TextStyle(
-                  fontSize: 10,
-                  color: Colors.grey.shade400,
-                  fontWeight: FontWeight.w600),
-            ),
+            Text(q.type == 'qcm' ? 'QCM' : 'Réponse libre',
+                style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600)),
           ]),
           const SizedBox(height: 10),
-          Text(
-            q.texte,
-            style: const TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w700,
-              color: _dark,
-              height: 1.5,
-            ),
-          ),
+          Text(q.texte, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, height: 1.5)),
           const SizedBox(height: 14),
           if (q.type == 'qcm')
             _buildQCM(q)
@@ -666,50 +529,31 @@ class _ComposerDevoirPageState extends State<ComposerDevoirPage>
       children: q.choix.map((c) {
         final isSel = sel == c.texte;
         return GestureDetector(
-          onTap: () =>
-              setState(() => _reponses[q.id.toString()] = c.texte),
+          onTap: () => setState(() => _reponses[q.id.toString()] = c.texte),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 140),
             margin: const EdgeInsets.only(bottom: 8),
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color:
-                  isSel ? const Color(0xFFE0F4F4) : Colors.grey.shade50,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: isSel ? _teal : Colors.grey.shade200,
-                width: isSel ? 2 : 1,
-              ),
+              color: isSel ? const Color(0xFFE0F4F4) : YekiColors.backgroundLight,
+              borderRadius: YekiRadius.borderRadiusMd,
+              border: Border.all(color: isSel ? YekiColors.primaryDark : YekiColors.borderLight, width: isSel ? 2 : 1),
             ),
             child: Row(children: [
               AnimatedContainer(
                 duration: const Duration(milliseconds: 140),
-                width: 20,
-                height: 20,
+                width: 20, height: 20,
                 decoration: BoxDecoration(
-                  color: isSel ? _teal : Colors.transparent,
+                  color: isSel ? YekiColors.primaryDark : Colors.transparent,
                   shape: BoxShape.circle,
-                  border: Border.all(
-                    color:
-                        isSel ? _teal : Colors.grey.shade300,
-                    width: 2,
-                  ),
+                  border: Border.all(color: isSel ? YekiColors.primaryDark : YekiColors.borderLight, width: 2),
                 ),
-                child: isSel
-                    ? const Icon(Icons.check_rounded,
-                        color: Colors.white, size: 13)
-                    : null,
+                child: isSel ? const Icon(Icons.check_rounded, size: 13) : null,
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: Text(
-                  c.texte,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    color: isSel ? _dark : Colors.grey.shade700,
-                  ),
-                ),
+                child: Text(c.texte,
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: isSel ? YekiColors.textDark : YekiColors.textMedium)),
               ),
             ]),
           ),
@@ -722,74 +566,50 @@ class _ComposerDevoirPageState extends State<ComposerDevoirPage>
     _ctrls.putIfAbsent(q.id, () => TextEditingController());
     return Container(
       decoration: BoxDecoration(
-        color: Colors.grey.shade50,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade200),
+        color: YekiColors.backgroundLight,
+        borderRadius: YekiRadius.borderRadiusMd,
+        border: Border.all(color: YekiColors.borderLight),
       ),
       child: TextField(
         controller: _ctrls[q.id],
         maxLines: 5,
         onChanged: (v) => _reponses[q.id.toString()] = v,
-        decoration: InputDecoration(
+        decoration: const InputDecoration(
           hintText: 'Rédigez votre réponse ici…',
-          hintStyle: TextStyle(
-              color: Colors.grey.shade400, fontSize: 13),
+          hintStyle: TextStyle(fontSize: 13),
           border: InputBorder.none,
-          contentPadding: const EdgeInsets.all(14),
+          contentPadding: EdgeInsets.all(14),
         ),
       ),
     );
   }
 
-  // ── Bottom bar (mode tout) ────────────────────────────────
   Widget _buildBottomBar() {
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
       decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.06),
-            blurRadius: 12,
-            offset: const Offset(0, -4),
-          )
-        ],
+        color: YekiColors.white,
+        boxShadow: YekiShadows.subtle,
       ),
       child: _submitting
-          ? const Center(
-              child: CircularProgressIndicator(color: _teal))
-          : _btn('Soumettre le devoir', _accent, Colors.white,
-              _soumettre),
+          ? const Center(child: YekiLoader())
+          : _btn('Soumettre le devoir', YekiColors.accent, YekiColors.white, _soumettre),
     );
   }
 
-  Widget _btn(
-      String label, Color bg, Color fg, VoidCallback? onTap) {
+  Widget _btn(String label, Color bg, Color fg, VoidCallback? onTap) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 14),
         decoration: BoxDecoration(
-          color: onTap != null ? bg : Colors.grey.shade200,
-          borderRadius: BorderRadius.circular(14),
-          boxShadow: onTap != null
-              ? [
-                  BoxShadow(
-                      color: bg.withOpacity(0.3),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4))
-                ]
-              : [],
+          color: onTap != null ? bg : YekiColors.borderLight,
+          borderRadius: YekiRadius.borderRadiusLg,
+          boxShadow: onTap != null ? [BoxShadow(color: bg.withValues(alpha: 0.3), blurRadius: 10, offset: const Offset(0, 4))] : [],
         ),
-        child: Text(
-          label,
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            color: onTap != null ? fg : Colors.grey.shade400,
-            fontWeight: FontWeight.w800,
-            fontSize: 14,
-          ),
-        ),
+        child: Text(label,
+            textAlign: TextAlign.center,
+            style: TextStyle(color: onTap != null ? fg : YekiColors.textLight, fontWeight: FontWeight.w800, fontSize: 14)),
       ),
     );
   }

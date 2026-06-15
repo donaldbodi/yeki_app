@@ -1,20 +1,24 @@
 // lib/views/pages/enseignants/interface_enseignant_page.dart
+// ═══════════════════════════════════════════════════════════════════════════
+// INTERFACE ENSEIGNANT — CORRIGÉE
+// ═══════════════════════════════════════════════════════════════════════════
 
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:yeki/views/pages/enseignants/admin_general_page.dart';
 import 'package:yeki/views/pages/enseignants/cadre_dashboard_page.dart';
 import 'package:yeki/views/pages/enseignants/enseignant_admin_dashboard_page.dart';
 import 'package:yeki/views/pages/enseignants/principal_dashboard_page.dart';
 import 'package:yeki/views/pages/enseignants/secondaire_dashboard_page.dart';
 import 'package:yeki/views/pages/shared/profil_page.dart';
 import 'package:yeki/views/pages/shared/notifications_page.dart';
-
-import 'admin_general_page.dart';
-import 'historique_page.dart';
-import 'mes_cours_page.dart';
+import 'package:yeki/views/pages/enseignants/historique_page.dart';
+import 'package:yeki/views/pages/enseignants/mes_cours_page.dart';
+import 'package:yeki/core/theme/app_theme.dart';
+import 'package:yeki/core/constants/api_constants.dart';
 
 enum RoleEnseignant {
   administrateurGeneral,
@@ -28,13 +32,6 @@ List<dynamic> parcours = [];
 List<dynamic> departements = [];
 List<dynamic> cours = [];
 String nom = '';
-
-// ── Palette enseignants ────────────────────────────────────────
-const Color _eBlue   = Color(0xFF2884A0);
-const Color _eTeal   = Color(0xFF2A657D);
-const Color _eGold   = Color(0xFFE2A84B);
-const Color _eDark   = Color(0xFF0D1B2A);
-const Color _eBg     = Color(0xFFF8FAFB);
 
 class EnseignantHomePage extends StatefulWidget {
   const EnseignantHomePage({super.key});
@@ -50,7 +47,7 @@ class _EnseignantHomePageState extends State<EnseignantHomePage>
   RoleEnseignant? _currentRole;
   List<Widget> _pages = [];
   Map<String, dynamic> _profil = {};
-  int _nbNotifs = 0;
+  final int _nbNotifs = 0;
   List<dynamic> _coursList = [];
 
   late AnimationController _navAnimCtrl;
@@ -66,16 +63,13 @@ class _EnseignantHomePageState extends State<EnseignantHomePage>
   @override
   void dispose() { _navAnimCtrl.dispose(); super.dispose(); }
 
-  // ── Chargement données ────────────────────────────────────────
   Future<void> _loadData() async {
     try {
       final role = await _fetchUserRole();
       await _fetchProfil();
       
-      // Charger les cours selon le rôle
       await _loadCoursByRole(role);
       
-      // S'assurer que _pages est initialisé avec au moins 4 éléments
       final dashboardPage = _getDashboardPage(role);
       
       if (mounted) {
@@ -106,22 +100,22 @@ class _EnseignantHomePageState extends State<EnseignantHomePage>
     String endpoint;
     switch (role) {
       case RoleEnseignant.enseignantPrincipal:
-        endpoint = '/api/enseignant_principal/cours/';
+        endpoint = ApiConstants.enseignantPrincipalCours;
         break;
       case RoleEnseignant.enseignantCadre:
-        endpoint = '/api/enseignant/cadre/cours/';
+        endpoint = ApiConstants.enseignantCadreCours;
         break;
       case RoleEnseignant.enseignantSecondaire:
-        endpoint = '/api/enseignant/cours/';
+        endpoint = ApiConstants.enseignantCours;
         break;
       default:
-        endpoint = '/api/enseignant/cours/';
+        endpoint = ApiConstants.enseignantCours;
     }
 
     try {
       final response = await http.get(
-        Uri.parse('https://yeki.pythonanywhere.com$endpoint'),
-        headers: {'Authorization': 'Token $token'},
+        Uri.parse(endpoint),
+        headers: ApiHeaders.auth(token),
       );
       
       if (response.statusCode == 200) {
@@ -136,7 +130,6 @@ class _EnseignantHomePageState extends State<EnseignantHomePage>
         debugPrint("Cours chargés: ${_coursList.length}");
       } else {
         debugPrint("Erreur chargement cours: ${response.statusCode}");
-        // En cas d'erreur, initialiser avec une liste vide
         _coursList = [];
       }
     } catch (e) {
@@ -152,8 +145,8 @@ class _EnseignantHomePageState extends State<EnseignantHomePage>
       if (token == null) return;
       
       final res = await http.get(
-        Uri.parse('https://yeki.pythonanywhere.com/api/profil/me/'),
-        headers: {'Authorization': 'Token $token'},
+        Uri.parse(ApiConstants.profilMe),
+        headers: ApiHeaders.auth(token),
       );
       if (res.statusCode == 200 && mounted) {
         final data = jsonDecode(res.body) as Map<String, dynamic>;
@@ -170,8 +163,8 @@ class _EnseignantHomePageState extends State<EnseignantHomePage>
     if (token == null) throw Exception('Token non trouvé');
 
     final response = await http.get(
-      Uri.parse('https://yeki.pythonanywhere.com/api/enseignant/dashboard/'),
-      headers: {'Content-Type': 'application/json', 'Authorization': 'Token $token'},
+      Uri.parse(ApiConstants.enseignantDashboard),
+      headers: ApiHeaders.auth(token),
     );
 
     if (response.statusCode == 200) {
@@ -181,7 +174,6 @@ class _EnseignantHomePageState extends State<EnseignantHomePage>
       departements = data['departements'] ?? [];
       cours = data['cours'] ?? [];
       
-      // Si les cours sont déjà dans la réponse, les utiliser
       if (cours.isNotEmpty && _coursList.isEmpty) {
         _coursList = List.from(cours);
       }
@@ -211,18 +203,18 @@ class _EnseignantHomePageState extends State<EnseignantHomePage>
 
   Color _getRoleColor(RoleEnseignant role) {
     switch (role) {
-      case RoleEnseignant.administrateurGeneral:   return Colors.deepOrange;
-      case RoleEnseignant.enseignantAdministrateur:return const Color(0xFF10B981);
-      case RoleEnseignant.enseignantCadre:         return _eGold;
-      case RoleEnseignant.enseignantPrincipal:     return const Color(0xFF8B5CF6);
-      default:                                     return _eTeal;
+      case RoleEnseignant.administrateurGeneral:   return YekiColors.error;
+      case RoleEnseignant.enseignantAdministrateur:return YekiColors.success;
+      case RoleEnseignant.enseignantCadre:         return YekiColors.accent;
+      case RoleEnseignant.enseignantPrincipal:     return YekiColors.purple;
+      default:                                     return YekiColors.primaryLight;
     }
   }
 
   Widget _getDashboardPage(RoleEnseignant role) {
     switch (role) {
       case RoleEnseignant.administrateurGeneral:    
-        return const AdminGeneralPage();
+        return const AdminDashboardPage();
       case RoleEnseignant.enseignantAdministrateur: 
         return const EnseignantAdminDashboardPage();
       case RoleEnseignant.enseignantCadre: 
@@ -255,27 +247,23 @@ class _EnseignantHomePageState extends State<EnseignantHomePage>
     return n[0].toUpperCase();
   }
 
-  // ════════════════════════════════════════════════════════════
-  //  BUILD
-  // ════════════════════════════════════════════════════════════
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
       return Scaffold(
-        backgroundColor: _eDark,
-        body: const Center(child: CircularProgressIndicator(color: _eBlue)),
+        backgroundColor: YekiColors.textDark,
+        body: const Center(child: YekiLoader()),
       );
     }
 
-    // Vérifier que _pages n'est pas vide avant d'accéder à l'index
     if (_pages.isEmpty || _selectedIndex >= _pages.length) {
       return Scaffold(
-        backgroundColor: _eBg,
+        backgroundColor: YekiColors.backgroundLight,
         body: const Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              CircularProgressIndicator(),
+              YekiLoader(),
               SizedBox(height: 16),
               Text('Chargement...'),
             ],
@@ -288,13 +276,13 @@ class _EnseignantHomePageState extends State<EnseignantHomePage>
       value: SystemUiOverlayStyle.light,
       child: Scaffold(
         extendBody: true,
-        backgroundColor: _eBg,
+        backgroundColor: YekiColors.backgroundLight,
         body: Stack(children: [
           Container(
             height: 200,
             decoration: const BoxDecoration(
               gradient: LinearGradient(
-                colors: [Color(0xFF0D2A3A), _eBlue],
+                colors: [Color(0xFF0D2A3A), YekiColors.primaryDark],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
@@ -335,7 +323,7 @@ class _EnseignantHomePageState extends State<EnseignantHomePage>
   }
 
   Widget _buildHeader() {
-    final roleColor = _currentRole != null ? _getRoleColor(_currentRole!) : _eBlue;
+    final roleColor = _currentRole != null ? _getRoleColor(_currentRole!) : YekiColors.primaryDark;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
@@ -347,20 +335,20 @@ class _EnseignantHomePageState extends State<EnseignantHomePage>
               width: 44, height: 44,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                border: Border.all(color: Colors.white.withOpacity(0.4), width: 2),
+                border: Border.all(color: YekiColors.white.withValues(alpha: 0.4), width: 2),
               ),
               child: ClipOval(
                 child: _avatarUrl != null
                     ? Image.network(_avatarUrl!, fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => _avatarFallback())
+                        errorBuilder: (_, _, _) => _avatarFallback())
                     : _avatarFallback(),
               ),
             ),
             Positioned(right: 0, bottom: 0, child: Container(
               width: 12, height: 12,
               decoration: const BoxDecoration(
-                color: Color(0xFF10B981), shape: BoxShape.circle,
-                border: Border.fromBorderSide(BorderSide(color: Colors.white, width: 1.5)),
+                color: YekiColors.success, shape: BoxShape.circle,
+                border: Border.fromBorderSide(BorderSide(color: YekiColors.white, width: 1.5)),
               ),
             )),
           ]),
@@ -368,19 +356,19 @@ class _EnseignantHomePageState extends State<EnseignantHomePage>
         const SizedBox(width: 12),
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text('Bonjour, $_nomAffiche 👋', style: const TextStyle(
-            color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700)),
+            color: YekiColors.white, fontSize: 16, fontWeight: FontWeight.w700)),
           const SizedBox(height: 3),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
             decoration: BoxDecoration(
-              color: roleColor.withOpacity(0.25),
-              borderRadius: BorderRadius.circular(100),
-              border: Border.all(color: roleColor.withOpacity(0.4)),
+              color: roleColor.withValues(alpha: 0.25),
+              borderRadius: YekiRadius.borderRadiusPill,
+              border: Border.all(color: roleColor.withValues(alpha: 0.4)),
             ),
             child: Text(
               _currentRole != null ? _getRoleLabel(_currentRole!) : 'Enseignant',
               style: TextStyle(
-                color: roleColor == _eGold ? _eGold : Colors.white,
+                color: roleColor == YekiColors.accent ? YekiColors.accent : YekiColors.white,
                 fontSize: 10, fontWeight: FontWeight.w800),
             ),
           ),
@@ -392,18 +380,17 @@ class _EnseignantHomePageState extends State<EnseignantHomePage>
             Container(
               width: 40, height: 40,
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.15),
+                color: YekiColors.white.withValues(alpha: 0.15),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.notifications_outlined, color: Colors.white, size: 20),
+              child: const Icon(Icons.notifications_outlined, color: YekiColors.white, size: 20),
             ),
             if (_nbNotifs > 0)
               Positioned(top: 4, right: 4, child: Container(
                 width: 16, height: 16,
-                decoration: const BoxDecoration(
-                  color: Color(0xFFEF4444), shape: BoxShape.circle),
+                decoration: const BoxDecoration(color: YekiColors.error, shape: BoxShape.circle),
                 child: Center(child: Text('$_nbNotifs', style: const TextStyle(
-                  color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold))),
+                  color: YekiColors.white, fontSize: 9, fontWeight: FontWeight.bold))),
               )),
           ]),
         ),
@@ -412,9 +399,9 @@ class _EnseignantHomePageState extends State<EnseignantHomePage>
   }
 
   Widget _avatarFallback() => Container(
-    color: _eBlue.withOpacity(0.3),
+    color: YekiColors.primaryDark.withValues(alpha: 0.3),
     child: Center(child: Text(_initials, style: const TextStyle(
-      color: Colors.white, fontSize: 18, fontWeight: FontWeight.w800))),
+      color: YekiColors.white, fontSize: 18, fontWeight: FontWeight.w800))),
   );
 
   Widget _buildFloatingNav() {
@@ -430,16 +417,16 @@ class _EnseignantHomePageState extends State<EnseignantHomePage>
       height: 68,
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [_eDark, Color(0xFF1A3A4A)],
+          colors: [YekiColors.textDark, Color(0xFF1A3A4A)],
           begin: Alignment.topLeft, end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.circular(26),
+        borderRadius: YekiRadius.borderRadiusXxl,
         boxShadow: [
           BoxShadow(
-            color: _eDark.withOpacity(0.4),
+            color: YekiColors.textDark.withValues(alpha: 0.4),
             blurRadius: 24, offset: const Offset(0, 8)),
           BoxShadow(
-            color: _eBlue.withOpacity(0.15),
+            color: YekiColors.primaryDark.withValues(alpha: 0.15),
             blurRadius: 16, offset: const Offset(0, 4)),
         ],
       ),
@@ -459,8 +446,8 @@ class _EnseignantHomePageState extends State<EnseignantHomePage>
               padding: EdgeInsets.symmetric(
                 horizontal: isSelected ? 18 : 12, vertical: 10),
               decoration: BoxDecoration(
-                color: isSelected ? _eBlue.withOpacity(0.25) : Colors.transparent,
-                borderRadius: BorderRadius.circular(18),
+                color: isSelected ? YekiColors.primaryDark.withValues(alpha: 0.25) : Colors.transparent,
+                borderRadius: YekiRadius.borderRadiusLg,
               ),
               child: Row(mainAxisSize: MainAxisSize.min, children: [
                 AnimatedSwitcher(
@@ -468,7 +455,7 @@ class _EnseignantHomePageState extends State<EnseignantHomePage>
                   child: Icon(
                     isSelected ? item.$1 : item.$2,
                     key: ValueKey(isSelected),
-                    color: isSelected ? _eGold : Colors.white54,
+                    color: isSelected ? YekiColors.accent : YekiColors.white.withValues(alpha: 0.54),
                     size: isSelected ? 22 : 20,
                   ),
                 ),
@@ -479,7 +466,7 @@ class _EnseignantHomePageState extends State<EnseignantHomePage>
                       ? Padding(
                           padding: const EdgeInsets.only(left: 7),
                           child: Text(item.$3, style: const TextStyle(
-                            color: _eGold, fontSize: 12, fontWeight: FontWeight.w800)))
+                            color: YekiColors.accent, fontSize: 12, fontWeight: FontWeight.w800)))
                       : const SizedBox.shrink(),
                 ),
               ]),

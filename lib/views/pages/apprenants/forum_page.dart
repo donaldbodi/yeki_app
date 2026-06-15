@@ -1,40 +1,27 @@
 // lib/views/pages/apprenants/forum_page.dart
-// Version avec WebSocket AJOUTÉ (sans modifier la logique existante)
+// ═══════════════════════════════════════════════════════════════════════════
 
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timeago/timeago.dart' as timeago;
 import 'package:yeki/views/pages/apprenants/details_question_forum.dart';
 import 'package:yeki/views/pages/apprenants/lecture_lecon_page.dart';
 import 'package:yeki/views/pages/apprenants/passer_exercice.dart';
 import 'package:yeki/views/pages/apprenants/resultat_devoir_page.dart';
-import 'package:yeki/services/websocket_service.dart';  // AJOUTÉ
-
-// Palette harmonisée
-const Color brandBackground = Color(0xFF135F74);
-const Color actionOrange = Color(0xFFFF6B00);
-const Color _textDark = Color(0xFF1A1C1E);
-const Color _textMedium = Color(0xFF5A5C5E);
-const Color _textLight = Color(0xFF8A8C8E);
-const Color _borderLight = Color(0xFFE0E4E8);
-//const Color _borderMedium = Color(0xFFD0D4D8);
-const Color _bgLight = Color(0xFFF8FAFC);
-const Color _white = Color(0xFFFFFFFF);
-const Color _green = Color(0xFF10B981);
-const Color _blue = Color(0xFF3B82F6);
-const Color _purple = Color(0xFFA855F7);
-const Color _orange = Color(0xFFF97316);
-
-const String _base = 'https://yeki.pythonanywhere.com/api';
+import 'package:yeki/core/theme/app_theme.dart';
+import 'package:yeki/core/constants/api_constants.dart';
+import 'package:yeki/utils/error_handler.dart';
 
 const Map<String, Color> _srcColor = {
-  'lecon': _blue,
-  'exercice': _purple,
-  'devoir': _orange,
-  'libre': _green,
+  'lecon': Colors.blue,
+  'exercice': YekiColors.purple,
+  'devoir': YekiColors.warning,
+  'libre': YekiColors.success,
 };
 const Map<String, IconData> _srcIcon = {
   'lecon': Icons.play_lesson_rounded,
@@ -53,11 +40,6 @@ Future<String?> _getToken() async {
   final prefs = await SharedPreferences.getInstance();
   return prefs.getString('token');
 }
-
-Map<String, String> _getHeaders(String? token) => {
-      'Content-Type': 'application/json',
-      if (token != null) 'Authorization': 'Token $token',
-    };
 
 String _formatTimeAgo(String iso) {
   try {
@@ -188,9 +170,52 @@ class RepForum {
       );
 }
 
-// ════════════════════════════════════════════════════════════════
-// PAGE FORUM AVEC WEBSOCKET (AJOUTÉ SANS MODIFIER LA LOGIQUE)
-// ════════════════════════════════════════════════════════════════
+// Lecteur audio simple
+class ForumAudioPlayer extends StatefulWidget {
+  final String audioUrl;
+  const ForumAudioPlayer({super.key, required this.audioUrl});
+  @override
+  State<ForumAudioPlayer> createState() => _ForumAudioPlayerState();
+}
+
+class _ForumAudioPlayerState extends State<ForumAudioPlayer> {
+  bool _isPlaying = false;
+  void _togglePlay() => setState(() => _isPlaying = !_isPlaying);
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        GestureDetector(
+          onTap: _togglePlay,
+          child: Icon(_isPlaying ? Icons.pause_circle_filled : Icons.play_circle_filled,
+              color: YekiColors.purple, size: 32),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            children: [
+              LinearProgressIndicator(
+                value: _isPlaying ? 0.5 : 0.0,
+                backgroundColor: YekiColors.borderLight,
+                valueColor: const AlwaysStoppedAnimation<Color>(YekiColors.purple),
+                minHeight: 3,
+              ),
+              const SizedBox(height: 4),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: const [
+                  Text('00:00', style: TextStyle(fontSize: 10)),
+                  Text('00:30', style: TextStyle(fontSize: 10)),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class ForumPage extends StatefulWidget {
   final int? scrollToQuestionId;
   final String? preoccupationContenu;
@@ -231,35 +256,26 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin {
   String _sourceFiltre = 'tous';
   String _searchText = '';
   Timer? _poll;
-  late AnimationController _listCtrl;
   final _searchCtrl = TextEditingController();
-  final _scrollCtrl = ScrollController();
 
   bool _composerVisible = false;
   final _composerCtrl = TextEditingController();
   bool _sending = false;
   String _composerSource = 'libre';
+  File? _selectedImage;
+  File? _selectedAudio;
+  final ImagePicker _picker = ImagePicker();
 
-  // ========== AJOUT WEBSOCKET ==========
-  final WebSocketService _wsService = WebSocketService.instance;
-  bool _wsConnected = false;
-  // =====================================
-
-  Color get _accentColor => widget.coursColor != null ? Color(widget.coursColor!) : brandBackground;
+  Color get _accentColor => widget.coursColor != null ? Color(widget.coursColor!) : YekiColors.primaryDark;
 
   @override
   void initState() {
     super.initState();
     timeago.setLocaleMessages('fr', timeago.FrMessages());
-    _listCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 600));
-    
-    // AJOUT: Initialiser WebSocket en arrière-plan
-    _initWebSocket();
-    
-    _loadQuestions();
-
-    _poll = Timer.periodic(const Duration(seconds: 15), (_) => _loadQuestions(silent: true));
-
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadQuestions();
+    });
+    _poll = Timer.periodic(const Duration(seconds: 30), (_) => _loadQuestions(silent: true));
     if (widget.preoccupationContenu != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _composerCtrl.text = widget.preoccupationContenu!;
@@ -269,140 +285,29 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin {
     }
   }
 
-  // ========== AJOUT: Initialisation WebSocket ==========
-  Future<void> _initWebSocket() async {
-    final token = await _getToken();
-    if (token != null) {
-      _wsService.connect(room: widget.preoccupationCoursId?.toString() ?? 'global');
-      _wsService.subscribe('new_question', _onWebSocketNewQuestion);
-      _wsService.subscribe('new_reponse', _onWebSocketNewReponse);
-      _wsService.subscribe('like_updated', _onWebSocketLikeUpdated);
-      setState(() => _wsConnected = true);
-    }
-  }
-  
-  // ========== AJOUT: Gestionnaires WebSocket ==========
-  void _onWebSocketNewQuestion(Map<String, dynamic> data) {
-    if (!mounted) return;
-    final questionData = data['question'] as Map<String, dynamic>;
-    final nouvelleQuestion = QForum.fromJson(questionData);
-    
-    // Vérifier si la question n'existe pas déjà
-    final exists = _questions.any((q) => q.id == nouvelleQuestion.id);
-    if (!exists) {
-      setState(() {
-        _questions.insert(0, nouvelleQuestion);
-      });
-      _listCtrl.forward(from: 0);
-    }
-  }
-  
-  void _onWebSocketNewReponse(Map<String, dynamic> data) {
-    if (!mounted) return;
-    final questionId = data['question_id'] as int;
-    final reponseData = data['reponse'] as Map<String, dynamic>;
-    final nouvelleReponse = RepForum.fromJson(reponseData);
-    
-    final index = _questions.indexWhere((q) => q.id == questionId);
-    if (index != -1) {
-      setState(() {
-        _questions[index].nbReponses++;
-        _questions[index].reponses.add(nouvelleReponse);
-      });
-    }
-  }
-  
-  void _onWebSocketLikeUpdated(Map<String, dynamic> data) {
-    if (!mounted) return;
-    final reponseId = data['reponse_id'] as int;
-    final liked = data['liked'] as bool;
-    final count = data['count'] as int;
-    
-    for (int i = 0; i < _questions.length; i++) {
-      for (int j = 0; j < _questions[i].reponses.length; j++) {
-        if (_questions[i].reponses[j].id == reponseId) {
-          setState(() {
-            _questions[i].reponses[j].nbLikes = count;
-            _questions[i].reponses[j].monLike = liked;
-          });
-          return;
-        }
-      }
-    }
-  }
-  // =========================================================
-
   @override
   void dispose() {
     _poll?.cancel();
-    _listCtrl.dispose();
     _searchCtrl.dispose();
-    _scrollCtrl.dispose();
     _composerCtrl.dispose();
-    // AJOUT: Nettoyer WebSocket
-    _wsService.unsubscribe('new_question', _onWebSocketNewQuestion);
-    _wsService.unsubscribe('new_reponse', _onWebSocketNewReponse);
-    _wsService.unsubscribe('like_updated', _onWebSocketLikeUpdated);
     super.dispose();
-  }
-
-  void _navigateToSource(QForum q) {
-    if (q.source == 'lecon' && q.leconId != null && q.coursId != null) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => LectureLeconPage(
-            leconId: q.leconId!,
-            coursId: q.coursId!,
-            coursTitre: q.coursTitre,
-            coursColor: widget.coursColor ?? _accentColor.value,
-          ),
-        ),
-      );
-    } else if (q.source == 'exercice' && q.exerciceId != null && q.coursId != null) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => PasserExercicePage(
-            exerciceId: q.exerciceId!,
-            coursId: q.coursId,
-            coursTitre: q.coursTitre,
-          ),
-        ),
-      );
-    } else if (q.source == 'devoir' && q.devoirId != null && q.coursId != null) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => ResultatDevoirPage(
-            devoirId: q.devoirId!,
-            titre: q.devoirTitre,
-            coursId: q.coursId,
-            coursTitre: q.coursTitre,
-          ),
-        ),
-      );
-    }
   }
 
   Future<void> _loadQuestions({bool silent = false}) async {
     if (!silent && mounted) setState(() => _loading = true);
-
     final token = await _getToken();
     if (token == null) {
       if (!silent && mounted) setState(() => _loading = false);
-      _showSnackBar('Veuillez vous reconnecter');
       return;
     }
 
     try {
       final params = <String, String>{};
       if (_sourceFiltre != 'tous') params['source'] = _sourceFiltre;
+      if (widget.preoccupationCoursId != null) params['cours_id'] = widget.preoccupationCoursId.toString();
 
-      final uri = Uri.parse('$_base/forum/questions/')
-          .replace(queryParameters: params.isNotEmpty ? params : null);
-
-      final response = await http.get(uri, headers: _getHeaders(token));
+      final uri = Uri.parse(ApiConstants.forumQuestions).replace(queryParameters: params.isNotEmpty ? params : null);
+      final response = await http.get(uri, headers: ApiHeaders.auth(token));
 
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(response.body);
@@ -413,136 +318,135 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin {
             _questions = questions;
             _loading = false;
           });
-          _listCtrl.forward(from: 0);
-
-          if (widget.scrollToQuestionId != null) {
-            final idx = questions.indexWhere((q) => q.id == widget.scrollToQuestionId);
-            if (idx >= 0) {
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (_scrollCtrl.hasClients) {
-                  _scrollCtrl.animateTo(
-                    idx * 170.0,
-                    duration: const Duration(milliseconds: 700),
-                    curve: Curves.easeOutCubic,
-                  );
-                }
-              });
-            }
-          }
         }
       } else {
         if (!silent && mounted) setState(() => _loading = false);
-        _showSnackBar('Erreur ${response.statusCode}');
       }
     } catch (e) {
-      debugPrint('Erreur chargement forum: $e');
       if (!silent && mounted) setState(() => _loading = false);
-      _showSnackBar('Erreur de connexion');
+    }
+  }
+
+  Future<void> _pickImage() async {
+    final XFile? picked = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 70);
+    if (picked != null && mounted) setState(() => _selectedImage = File(picked.path));
+  }
+
+  Future<void> _pickAudio() async {
+    final XFile? picked = await _picker.pickMedia();
+    if (picked != null && mounted) {
+      final ext = picked.path.split('.').last.toLowerCase();
+      if (ext == 'mp3' || ext == 'm4a' || ext == 'wav' || ext == 'aac') {
+        setState(() => _selectedAudio = File(picked.path));
+      } else {
+        ErrorHandler.showError(context, 'Format audio non supporté');
+      }
+    }
+  }
+
+  void _removeImage() => setState(() => _selectedImage = null);
+  void _removeAudio() => setState(() => _selectedAudio = null);
+
+  void _navigateToSource(QForum q) {
+    if (q.source == 'lecon' && q.leconId != null && q.coursId != null) {
+      Navigator.push(context, MaterialPageRoute(
+        builder: (_) => LectureLeconPage(
+          leconId: q.leconId!,
+          coursId: q.coursId!,
+          coursTitre: q.coursTitre,
+          coursColor: widget.coursColor ?? _accentColor.value,
+        ),
+      ));
+    } else if (q.source == 'exercice' && q.exerciceId != null && q.coursId != null) {
+      Navigator.push(context, MaterialPageRoute(
+        builder: (_) => PasserExercicePage(
+          exerciceId: q.exerciceId!,
+          coursId: q.coursId,
+          coursTitre: q.coursTitre,
+        ),
+      ));
+    } else if (q.source == 'devoir' && q.devoirId != null && q.coursId != null) {
+      Navigator.push(context, MaterialPageRoute(
+        builder: (_) => ResultatDevoirPage(
+          devoirId: q.devoirId!,
+          titre: q.devoirTitre,
+          coursId: q.coursId,
+          coursTitre: q.coursTitre,
+        ),
+      ));
     }
   }
 
   Future<void> _envoyerQuestion() async {
     final texte = _composerCtrl.text.trim();
-    if (texte.isEmpty) {
-      _showSnackBar('Veuillez écrire votre question');
+    if (texte.isEmpty && _selectedImage == null && _selectedAudio == null) {
+      ErrorHandler.showError(context, 'Veuillez écrire une question, ajouter une image ou un audio.');
       return;
     }
 
     setState(() => _sending = true);
-
     final token = await _getToken();
     if (token == null) {
       setState(() => _sending = false);
-      _showSnackBar('Veuillez vous reconnecter');
+      ErrorHandler.showError(context, 'Vous devez être connecté.');
       return;
     }
 
-    final body = <String, dynamic>{
-      'contenu': texte,
-      'source': _composerSource,
-    };
-
+    final request = http.MultipartRequest('POST', Uri.parse(ApiConstants.forumQuestions));
+    request.headers['Authorization'] = 'Token $token';
+    request.fields['contenu'] = texte.isEmpty ? '[Message avec média]' : texte;
+    request.fields['source'] = _composerSource;
+    if (widget.preoccupationCoursId != null) {
+      request.fields['cours_id'] = widget.preoccupationCoursId.toString();
+      request.fields['cours_titre'] = widget.preoccupationCoursTitre ?? '';
+    }
     if (widget.preoccupationLeconId != null) {
-      body['lecon_id'] = widget.preoccupationLeconId;
-      body['lecon_titre'] = widget.preoccupationLeconTitre ?? '';
-      body['cours_id'] = widget.preoccupationCoursId;
-      body['cours_titre'] = widget.preoccupationCoursTitre ?? '';
+      request.fields['lecon_id'] = widget.preoccupationLeconId.toString();
+      request.fields['lecon_titre'] = widget.preoccupationLeconTitre ?? '';
     }
     if (widget.preoccupationExerciceId != null) {
-      body['exercice_id'] = widget.preoccupationExerciceId;
-      body['exercice_titre'] = widget.preoccupationExerciceTitre ?? '';
+      request.fields['exercice_id'] = widget.preoccupationExerciceId.toString();
+      request.fields['exercice_titre'] = widget.preoccupationExerciceTitre ?? '';
     }
     if (widget.preoccupationDevoirId != null) {
-      body['devoir_id'] = widget.preoccupationDevoirId;
-      body['devoir_titre'] = widget.preoccupationDevoirTitre ?? '';
+      request.fields['devoir_id'] = widget.preoccupationDevoirId.toString();
+      request.fields['devoir_titre'] = widget.preoccupationDevoirTitre ?? '';
+    }
+
+    if (_selectedImage != null) {
+      final imageBytes = await _selectedImage!.readAsBytes();
+      request.files.add(http.MultipartFile.fromBytes('image', imageBytes,
+          filename: 'question_image_${DateTime.now().millisecondsSinceEpoch}.jpg'));
+    }
+    if (_selectedAudio != null) {
+      final audioBytes = await _selectedAudio!.readAsBytes();
+      request.files.add(http.MultipartFile.fromBytes('audio', audioBytes,
+          filename: 'question_audio_${DateTime.now().millisecondsSinceEpoch}.m4a'));
     }
 
     try {
-      final response = await http.post(
-        Uri.parse('$_base/forum/questions/'),
-        headers: _getHeaders(token),
-        body: jsonEncode(body),
-      );
-
+      final response = await request.send();
+      final responseBody = await response.stream.bytesToString();
       if (response.statusCode == 201) {
-        final data = jsonDecode(response.body);
+        final data = jsonDecode(responseBody);
         final nouvelleQuestion = QForum.fromJson(data);
-        
-        // AJOUT: Envoyer via WebSocket si connecté
-        if (_wsConnected) {
-          _wsService.sendNewQuestion(
-            contenu: texte,
-            source: _composerSource,
-            coursId: widget.preoccupationCoursId,
-            leconId: widget.preoccupationLeconId,
-            leconTitre: widget.preoccupationLeconTitre,
-            exerciceId: widget.preoccupationExerciceId,
-            exerciceTitre: widget.preoccupationExerciceTitre,
-            devoirId: widget.preoccupationDevoirId,
-            devoirTitre: widget.preoccupationDevoirTitre,
-          );
-        }
-        
-        // AJOUT: Ajouter localement immédiatement
         setState(() {
           _questions.insert(0, nouvelleQuestion);
         });
-        
         _composerCtrl.clear();
+        _selectedImage = null;
+        _selectedAudio = null;
         setState(() => _composerVisible = false);
-        _listCtrl.forward(from: 0);
-        
-        if (_scrollCtrl.hasClients) {
-          _scrollCtrl.animateTo(
-            0,
-            duration: const Duration(milliseconds: 400),
-            curve: Curves.easeOut,
-          );
-        }
-        _showSnackBar('✓ Question envoyée avec succès', isError: false);
+        ErrorHandler.showSuccess(context, '✓ Question envoyée avec succès');
       } else {
-        _showSnackBar('Erreur lors de l\'envoi');
+        final errorData = jsonDecode(responseBody);
+        ErrorHandler.showError(context, errorData['detail'] ?? 'Erreur lors de l\'envoi');
       }
     } catch (e) {
-      debugPrint('Erreur envoi: $e');
-      _showSnackBar('Erreur réseau');
+      ErrorHandler.showError(context, 'Erreur réseau: ${e.toString()}');
     } finally {
       if (mounted) setState(() => _sending = false);
     }
-  }
-
-  void _showSnackBar(String message, {bool isError = true}) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message, style: const TextStyle(color: _white)),
-        backgroundColor: isError ? Colors.red : _green,
-        behavior: SnackBarBehavior.floating,
-        margin: const EdgeInsets.all(16),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        duration: const Duration(seconds: 2),
-      ),
-    );
   }
 
   List<QForum> get _filteredQuestions {
@@ -560,160 +464,86 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      color: _bgLight,
-      child: Column(
-        children: [
-          _buildHeader(),
-          _buildFilters(),
-          _buildSearchBar(),
-          AnimatedSize(
-            duration: const Duration(milliseconds: 300),
-            curve: Curves.easeOutCubic,
-            child: _composerVisible ? _buildComposer() : const SizedBox.shrink(),
-          ),
-          Expanded(
-            child: _buildContent(),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildContent() {
     if (_loading) {
-      return const Center(
-        child: CircularProgressIndicator(),
+      return Container(
+        color: YekiColors.backgroundLight,
+        child: const Center(child: YekiLoader()),
       );
     }
 
     final filtered = _filteredQuestions;
 
-    if (filtered.isEmpty) {
-      return _buildEmptyState();
-    }
-
-    return RefreshIndicator(
-      color: _accentColor,
-      backgroundColor: _white,
-      onRefresh: () => _loadQuestions(),
-      child: ListView.builder(
-        controller: _scrollCtrl,
-        physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
-        padding: const EdgeInsets.fromLTRB(12, 8, 12, 100),
-        itemCount: filtered.length,
-        itemBuilder: (context, index) {
-          final delay = (index * 0.05).clamp(0.0, 1.0);
-          final animation = CurvedAnimation(
-            parent: _listCtrl,
-            curve: Interval(delay, 1.0, curve: Curves.easeOutCubic),
-          );
-          return FadeTransition(
-            opacity: animation,
-            child: SlideTransition(
-              position: Tween<Offset>(begin: const Offset(0, 0.2), end: Offset.zero).animate(animation),
-              child: _buildQuestionCard(filtered[index]),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildHeader() {
-    // AJOUT: Indicateur de connexion WebSocket
-    final wsStatus = _wsConnected ? 'En ligne' : 'Hors ligne';
-    final wsColor = _wsConnected ? _green : Colors.grey;
-    
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 10),
-      decoration: BoxDecoration(
-        color: _white,
-        border: Border(bottom: BorderSide(color: _borderLight)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(colors: [_accentColor, _accentColor.withOpacity(0.7)]),
-              borderRadius: BorderRadius.circular(12),
+      color: YekiColors.backgroundLight,
+      child: RefreshIndicator(
+        color: _accentColor,
+        backgroundColor: YekiColors.white,
+        onRefresh: () => _loadQuestions(),
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+          padding: const EdgeInsets.only(bottom: 100),
+          children: [
+            const SizedBox(height: 20),
+            _buildFilters(),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: _buildSearchBar(),
             ),
-            child: const Icon(Icons.forum_rounded, color: _white, size: 20),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Forum',
-                  style: TextStyle(color: _textDark, fontSize: 18, fontWeight: FontWeight.w800),
-                ),
-                Row(
-                  children: [
-                    Text(
-                      '${_questions.length} préoccupation${_questions.length > 1 ? 's' : ''}',
-                      style: const TextStyle(color: _textLight, fontSize: 12),
-                    ),
-                    const SizedBox(width: 8),
-                    Container(
-                      width: 6,
-                      height: 6,
-                      decoration: BoxDecoration(color: wsColor, shape: BoxShape.circle),
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      wsStatus,
-                      style: TextStyle(color: wsColor, fontSize: 10),
-                    ),
-                  ],
-                ),
-              ],
+            AnimatedSize(
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeOutCubic,
+              child: _composerVisible
+                  ? Padding(padding: const EdgeInsets.fromLTRB(16, 8, 16, 8), child: _buildComposer())
+                  : const SizedBox.shrink(),
             ),
-          ),
-          GestureDetector(
-            onTap: () => setState(() {
-              _composerVisible = !_composerVisible;
-              if (_composerVisible && widget.preoccupationContenu == null) {
-                _composerCtrl.clear();
-                _composerSource = 'libre';
-              }
-            }),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              decoration: BoxDecoration(
-                color: _composerVisible ? _accentColor : _accentColor.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: _accentColor.withOpacity(0.4)),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    _composerVisible ? Icons.close_rounded : Icons.add_rounded,
-                    color: _composerVisible ? _white : _accentColor,
-                    size: 16,
+            if (!_composerVisible)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                child: GestureDetector(
+                  onTap: () => setState(() => _composerVisible = true),
+                  child: Container(
+                    width: double.infinity,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: _accentColor,
+                      borderRadius: YekiRadius.borderRadiusMd,
+                    ),
+                    child: const Center(
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.add_rounded, color: YekiColors.white, size: 18),
+                          SizedBox(width: 8),
+                          Text('Poser une question', style: TextStyle(color: YekiColors.white, fontSize: 14, fontWeight: FontWeight.w800)),
+                        ],
+                      ),
+                    ),
                   ),
-                  const SizedBox(width: 5),
-                  Text(
-                    _composerVisible ? 'Annuler' : 'Question',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: _composerVisible ? _white : _accentColor,
+                ),
+              ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+              child: Row(
+                children: [
+                  const Text('Discussions',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, letterSpacing: -0.3)),
+                  const Spacer(),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: _accentColor.withValues(alpha: 0.08),
+                      borderRadius: YekiRadius.borderRadiusMd,
                     ),
+                    child: Text('${filtered.length} préoccupation${filtered.length > 1 ? 's' : ''}',
+                        style: TextStyle(color: _accentColor, fontSize: 11.5, fontWeight: FontWeight.w700)),
                   ),
                 ],
               ),
             ),
-          ),
-          IconButton(
-            onPressed: () => _loadQuestions(),
-            icon: Icon(Icons.refresh_rounded, color: _textMedium, size: 20),
-          ),
-        ],
+            if (filtered.isEmpty) _buildEmptyState(),
+            ...List.generate(filtered.length, (index) => _buildQuestionCard(filtered[index])),
+          ],
+        ),
       ),
     );
   }
@@ -727,9 +557,8 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin {
       ('libre', 'Libres', _srcColor['libre']!),
     ];
 
-    return Container(
-      color: _white,
-      padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: Row(
@@ -742,22 +571,17 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin {
                 _loadQuestions();
               },
               child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
+                duration: const Duration(milliseconds: 250),
                 margin: const EdgeInsets.only(right: 8),
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 decoration: BoxDecoration(
-                  color: isSelected ? color.withOpacity(0.1) : Colors.transparent,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: isSelected ? color : _borderLight),
+                  color: isSelected ? color.withValues(alpha: 0.12) : YekiColors.backgroundAlt,
+                  borderRadius: YekiRadius.borderRadiusXl,
+                  border: Border.all(color: isSelected ? color.withValues(alpha: 0.35) : Colors.transparent, width: 1.5),
                 ),
-                child: Text(
-                  item.$2,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: isSelected ? color : _textMedium,
-                  ),
-                ),
+                child: Text(item.$2,
+                    style: TextStyle(fontSize: 12.5, fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                        color: isSelected ? color : YekiColors.textLight)),
               ),
             );
           }).toList(),
@@ -768,34 +592,27 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin {
 
   Widget _buildSearchBar() {
     return Container(
-      color: _white,
-      padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-      child: Container(
-        decoration: BoxDecoration(
-          color: _bgLight,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: _borderLight),
-        ),
-        child: TextField(
-          controller: _searchCtrl,
-          onChanged: (value) => setState(() => _searchText = value),
-          style: const TextStyle(color: _textDark, fontSize: 14),
-          decoration: InputDecoration(
-            hintText: 'Rechercher une préoccupation...',
-            hintStyle: const TextStyle(color: _textLight),
-            prefixIcon: const Icon(Icons.search_rounded, color: _textLight, size: 18),
-            suffixIcon: _searchText.isNotEmpty
-                ? IconButton(
-                    icon: const Icon(Icons.clear, color: _textLight, size: 16),
-                    onPressed: () {
-                      _searchCtrl.clear();
-                      setState(() => _searchText = '');
-                    },
-                  )
-                : null,
-            border: InputBorder.none,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          ),
+      margin: const EdgeInsets.symmetric(vertical: 4),
+      decoration: BoxDecoration(
+        color: YekiColors.white,
+        borderRadius: YekiRadius.borderRadiusXxl,
+        border: Border.all(color: YekiColors.borderLight, width: 1.0),
+        boxShadow: YekiShadows.subtle,
+      ),
+      child: TextField(
+        controller: _searchCtrl,
+        onChanged: (value) => setState(() => _searchText = value),
+        style: YekiTextStyles.bodyMedium,
+        decoration: InputDecoration(
+          hintText: 'Rechercher une préoccupation...',
+          hintStyle: YekiTextStyles.bodySmall,
+          prefixIcon: Icon(Icons.search_rounded, color: _accentColor, size: 22),
+          suffixIcon: _searchText.isNotEmpty
+              ? GestureDetector(onTap: () { _searchCtrl.clear(); setState(() => _searchText = ''); },
+                  child: Icon(Icons.close_rounded, size: 18, color: YekiColors.textLight))
+              : null,
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
         ),
       ),
     );
@@ -803,12 +620,11 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin {
 
   Widget _buildComposer() {
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: _white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: _accentColor.withOpacity(0.4), width: 1.5),
+        color: YekiColors.white,
+        borderRadius: YekiRadius.borderRadiusXl,
+        border: Border.all(color: _accentColor.withValues(alpha: 0.2), width: 1),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -816,14 +632,20 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin {
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(color: _accentColor.withOpacity(0.1), shape: BoxShape.circle),
-                child: Icon(Icons.edit_rounded, color: _accentColor, size: 14),
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(color: _accentColor.withValues(alpha: 0.08), borderRadius: YekiRadius.borderRadiusSm),
+                child: Icon(Icons.edit_rounded, color: _accentColor, size: 16),
               ),
-              const SizedBox(width: 8),
-              Text(
-                'Nouvelle préoccupation',
-                style: const TextStyle(color: _textDark, fontSize: 14, fontWeight: FontWeight.w700),
+              const SizedBox(width: 10),
+              const Text('Nouvelle préoccupation', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
+              const Spacer(),
+              GestureDetector(
+                onTap: () => setState(() => _composerVisible = false),
+                child: Container(
+                  width: 32, height: 32,
+                  decoration: BoxDecoration(color: YekiColors.backgroundLight, borderRadius: YekiRadius.borderRadiusSm),
+                  child: const Icon(Icons.close_rounded, size: 16),
+                ),
               ),
             ],
           ),
@@ -833,8 +655,7 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin {
               source: widget.preoccupationSource!,
               contextLabel: widget.preoccupationLeconTitre ??
                   widget.preoccupationDevoirTitre ??
-                  widget.preoccupationExerciceTitre ??
-                  '',
+                  widget.preoccupationExerciceTitre ?? '',
             ),
           ],
           const SizedBox(height: 12),
@@ -849,25 +670,20 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin {
                     onTap: () => setState(() => _composerSource = s),
                     child: Container(
                       margin: const EdgeInsets.only(right: 6),
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                       decoration: BoxDecoration(
-                        color: isSelected ? color.withOpacity(0.1) : Colors.transparent,
-                        borderRadius: BorderRadius.circular(100),
-                        border: Border.all(color: isSelected ? color : _borderLight),
+                        color: isSelected ? color.withValues(alpha: 0.08) : YekiColors.backgroundLight,
+                        borderRadius: YekiRadius.borderRadiusXl,
+                        border: Border.all(color: isSelected ? color.withValues(alpha: 0.3) : YekiColors.borderLight, width: 1),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(_srcIcon[s]!, size: 11, color: isSelected ? color : _textMedium),
-                          const SizedBox(width: 4),
-                          Text(
-                            _srcLabel[s]!,
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              color: isSelected ? color : _textMedium,
-                            ),
-                          ),
+                          Icon(_srcIcon[s]!, size: 12, color: isSelected ? color : YekiColors.textLight),
+                          const SizedBox(width: 5),
+                          Text(_srcLabel[s]!,
+                              style: TextStyle(fontSize: 12, fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                                  color: isSelected ? color : YekiColors.textMedium)),
                         ],
                       ),
                     ),
@@ -879,56 +695,114 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin {
           ],
           Container(
             decoration: BoxDecoration(
-              color: _bgLight,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: _borderLight),
+              color: YekiColors.backgroundLight,
+              borderRadius: YekiRadius.borderRadiusLg,
+              border: Border.all(color: YekiColors.borderLight),
             ),
             child: TextField(
               controller: _composerCtrl,
               maxLines: 4,
-              style: const TextStyle(color: _textDark, fontSize: 14, height: 1.5),
+              style: const TextStyle(fontSize: 14, height: 1.5),
               decoration: const InputDecoration(
                 hintText: 'Décrivez votre question ou difficulté...',
-                hintStyle: TextStyle(color: _textLight, fontSize: 13),
+                hintStyle: TextStyle(fontSize: 13),
                 border: InputBorder.none,
                 contentPadding: EdgeInsets.all(14),
               ),
             ),
           ),
           const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            child: GestureDetector(
-              onTap: _sending ? null : _envoyerQuestion,
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 13),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(colors: [_accentColor, _accentColor.withOpacity(0.8)]),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    if (_sending)
-                      const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(color: _white, strokeWidth: 2),
-                      )
-                    else ...[
-                      const Icon(Icons.send_rounded, color: _white, size: 16),
-                      const SizedBox(width: 8),
-                      const Text(
-                        'Poster la préoccupation',
-                        style: TextStyle(color: _white, fontSize: 13, fontWeight: FontWeight.bold),
+          Row(
+            children: [
+              _buildMediaButton(icon: Icons.image_outlined, label: 'Image', color: Colors.blue, onTap: _pickImage),
+              const SizedBox(width: 12),
+              _buildMediaButton(icon: Icons.audiotrack_rounded, label: 'Audio', color: YekiColors.purple, onTap: _pickAudio),
+            ],
+          ),
+          if (_selectedImage != null) ...[
+            const SizedBox(height: 10),
+            Container(
+              height: 80,
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: YekiColors.backgroundLight,
+                borderRadius: YekiRadius.borderRadiusSm,
+                border: Border.all(color: YekiColors.borderLight),
+              ),
+              child: Stack(
+                children: [
+                  ClipRRect(
+                    borderRadius: YekiRadius.borderRadiusSm,
+                    child: Image.file(_selectedImage!, width: double.infinity, height: 80, fit: BoxFit.cover),
+                  ),
+                  Positioned(
+                    top: 4, right: 4,
+                    child: GestureDetector(
+                      onTap: _removeImage,
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(color: YekiColors.black, borderRadius: YekiRadius.borderRadiusXl),
+                        child: const Icon(Icons.close_rounded, size: 16, color: YekiColors.white),
                       ),
-                    ],
-                  ],
-                ),
+                    ),
+                  ),
+                ],
               ),
             ),
+          ],
+          if (_selectedAudio != null) ...[
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: YekiColors.backgroundLight,
+                borderRadius: YekiRadius.borderRadiusSm,
+                border: Border.all(color: YekiColors.borderLight),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.audiotrack_rounded, color: YekiColors.purple, size: 18),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(_selectedAudio!.path.split('/').last, style: const TextStyle(fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  ),
+                  GestureDetector(onTap: _removeAudio, child: const Icon(Icons.close_rounded, size: 18)),
+                ],
+              ),
+            ),
+          ],
+          const SizedBox(height: 12),
+          YekiButton(
+            label: 'Poster la préoccupation',
+            icon: Icons.send_rounded,
+            onPressed: _sending ? null : _envoyerQuestion,
+            isLoading: _sending,
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildMediaButton({required IconData icon, required String label, required Color color, required VoidCallback onTap}) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.08),
+            borderRadius: YekiRadius.borderRadiusSm,
+            border: Border.all(color: color.withValues(alpha: 0.2), width: 1),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 14, color: color),
+              const SizedBox(width: 6),
+              Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: color)),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -939,21 +813,18 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withOpacity(0.3)),
+        color: color.withValues(alpha: 0.06),
+        borderRadius: YekiRadius.borderRadiusSm,
+        border: Border.all(color: color.withValues(alpha: 0.2)),
       ),
       child: Row(
         children: [
           Icon(icon, size: 12, color: color),
           const SizedBox(width: 8),
           Expanded(
-            child: Text(
-              '${_srcLabel[source] ?? source} : $contextLabel',
-              style: TextStyle(fontSize: 11, color: color, fontWeight: FontWeight.w600),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
+            child: Text('${_srcLabel[source] ?? source} : $contextLabel',
+                style: TextStyle(fontSize: 11, color: color, fontWeight: FontWeight.w600),
+                maxLines: 1, overflow: TextOverflow.ellipsis),
           ),
         ],
       ),
@@ -967,160 +838,99 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin {
     final isHighlighted = q.id == widget.scrollToQuestionId;
 
     return GestureDetector(
-      onTap: () => Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => DetailQuestionForumPage(questionId: q.id, question: q),
-        ),
-      ).then((_) => _loadQuestions()),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 300),
-        margin: const EdgeInsets.only(bottom: 10),
+      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => DetailQuestionForumPage(questionId: q.id, question: q)))
+          .then((_) => _loadQuestions()),
+      child: Container(
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
         decoration: BoxDecoration(
-          color: _white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: isHighlighted ? color.withOpacity(0.5) : _borderLight,
-            width: isHighlighted ? 1.5 : 1,
-          ),
+          color: YekiColors.white,
+          borderRadius: YekiRadius.borderRadiusLg,
+          border: Border.all(color: isHighlighted ? color.withValues(alpha: 0.4) : YekiColors.borderLight, width: 1),
+          boxShadow: YekiShadows.subtle,
         ),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.05),
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-                border: Border(left: BorderSide(color: color, width: 3)),
-              ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 12, 14, 0),
               child: Row(
                 children: [
                   Container(
-                    padding: const EdgeInsets.all(5),
-                    decoration: BoxDecoration(color: color.withOpacity(0.15), shape: BoxShape.circle),
-                    child: Icon(icon, size: 12, color: color),
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(color: color.withValues(alpha: 0.08), borderRadius: YekiRadius.borderRadiusSm),
+                    child: Icon(icon, size: 14, color: color),
                   ),
                   const SizedBox(width: 8),
                   Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: color)),
                   if (q.source != 'libre' && q.contexteLabel.isNotEmpty) ...[
                     const SizedBox(width: 6),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: color.withOpacity(0.08),
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: color.withOpacity(0.2)),
-                      ),
-                      child: Text(
-                        q.contexteLabel,
-                        style: TextStyle(fontSize: 10, color: color, fontWeight: FontWeight.w700),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
+                    Expanded(
+                      child: Text(q.contexteLabel, style: TextStyle(fontSize: 11), maxLines: 1, overflow: TextOverflow.ellipsis),
                     ),
                   ],
-                  const Spacer(),
                   if (q.estResolue)
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: _green.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: _green.withOpacity(0.3)),
-                      ),
-                      child: const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.check_circle_rounded, size: 10, color: _green),
-                          SizedBox(width: 4),
-                          Text('Résolue', style: TextStyle(fontSize: 10, color: _green, fontWeight: FontWeight.w700)),
-                        ],
-                      ),
+                      decoration: BoxDecoration(color: YekiColors.success.withValues(alpha: 0.08), borderRadius: YekiRadius.borderRadiusSm),
+                      child: Text('Résolue', style: TextStyle(fontSize: 10, color: YekiColors.success, fontWeight: FontWeight.w700)),
                     ),
                 ],
               ),
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
+              child: Text(q.contenu, maxLines: 3, overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 14, height: 1.5)),
+            ),
+            if (q.imageUrl != null && q.imageUrl!.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                child: ClipRRect(
+                  borderRadius: YekiRadius.borderRadiusMd,
+                  child: Image.network(q.imageUrl!, height: 160, width: double.infinity, fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Container(height: 160, color: YekiColors.backgroundLight,
+                        child: const Center(child: Icon(Icons.broken_image, size: 40))),
+                  ),
+                ),
+              ),
+            ],
+            if (q.audioUrl != null && q.audioUrl!.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: YekiColors.backgroundLight,
+                    borderRadius: YekiRadius.borderRadiusSm,
+                    border: Border.all(color: YekiColors.borderLight),
+                  ),
+                  child: ForumAudioPlayer(audioUrl: q.audioUrl!),
+                ),
+              ),
+            ],
+            const SizedBox(height: 12),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
+              child: Row(
                 children: [
-                  Text(
-                    q.contenu,
-                    maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: _textDark, fontSize: 14, fontWeight: FontWeight.w500, height: 1.55),
+                  _buildAvatar(q.auteurNom, q.auteurUsername, q.auteurEstEnseignant, color, 16),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(q.auteurNom.isNotEmpty ? q.auteurNom : q.auteurUsername,
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis),
                   ),
-                  if (q.imageUrl != null) ...[
-                    const SizedBox(height: 8),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(10),
-                      child: Image.network(
-                        q.imageUrl!,
-                        height: 100,
-                        width: double.infinity,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => const SizedBox.shrink(),
-                      ),
-                    ),
-                  ],
-                  if (q.audioUrl != null) ...[
-                    const SizedBox(height: 6),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                      decoration: BoxDecoration(
-                        color: _bgLight,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: _borderLight),
-                      ),
-                      child: const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.mic_rounded, size: 13, color: _textLight),
-                          SizedBox(width: 5),
-                          Text('Message audio', style: TextStyle(color: _textLight, fontSize: 11)),
-                        ],
-                      ),
-                    ),
-                  ],
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      _buildAvatar(q.auteurNom, q.auteurUsername, q.auteurEstEnseignant, color, 14),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              q.auteurNom.isNotEmpty ? q.auteurNom : q.auteurUsername,
-                              style: const TextStyle(color: _textMedium, fontSize: 12, fontWeight: FontWeight.w600),
-                            ),
-                            if (q.auteurEstEnseignant)
-                              Text('Enseignant', style: TextStyle(color: _accentColor, fontSize: 10, fontWeight: FontWeight.w700)),
-                          ],
-                        ),
-                      ),
-                      const Spacer(),
-                      Icon(Icons.chat_bubble_outline_rounded, size: 13, color: _textLight),
-                      const SizedBox(width: 4),
-                      Text('${q.nbReponses}', style: const TextStyle(fontSize: 12, color: _textLight)),
-                      const SizedBox(width: 12),
-                      Icon(Icons.remove_red_eye_outlined, size: 13, color: _textLight),
-                      const SizedBox(width: 4),
-                      Text('${q.nbVues}', style: const TextStyle(fontSize: 12, color: _textLight)),
-                      const SizedBox(width: 12),
-                      IconButton(
-                        icon: const Icon(Icons.open_in_new_rounded, size: 13, color: _textLight),
-                        onPressed: () => _navigateToSource(q),
-                        tooltip: 'Retour à la source',
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(_formatTimeAgo(q.creeLe), style: const TextStyle(fontSize: 11, color: _textLight)),
-                    ],
+                  _statIcon(Icons.chat_bubble_outline_rounded, '${q.nbReponses}'),
+                  const SizedBox(width: 10),
+                  _statIcon(Icons.remove_red_eye_outlined, '${q.nbVues}'),
+                  const SizedBox(width: 10),
+                  GestureDetector(
+                    onTap: () => _navigateToSource(q),
+                    child: Icon(Icons.open_in_new_rounded, size: 14, color: YekiColors.textLight),
                   ),
+                  const SizedBox(width: 8),
+                  Text(_formatTimeAgo(q.creeLe), style: const TextStyle(fontSize: 11)),
                 ],
               ),
             ),
@@ -1130,33 +940,30 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin {
     );
   }
 
+  Widget _statIcon(IconData icon, String text) => Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Icon(icon, size: 13, color: YekiColors.textLight),
+      const SizedBox(width: 3),
+      Text(text, style: const TextStyle(fontSize: 11)),
+    ],
+  );
+
   Widget _buildAvatar(String nom, String username, bool estEnseignant, Color color, double radius) {
     return Stack(
       children: [
         CircleAvatar(
           radius: radius,
-          backgroundColor: estEnseignant ? _accentColor.withOpacity(0.15) : color.withOpacity(0.1),
-          child: Text(
-            _getInitials(nom, username),
-            style: TextStyle(
-              fontSize: radius * 0.75,
-              color: estEnseignant ? _accentColor : color,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
+          backgroundColor: estEnseignant ? _accentColor.withValues(alpha: 0.12) : color.withValues(alpha: 0.08),
+          child: Text(_getInitials(nom, username),
+              style: TextStyle(fontSize: radius * 0.7, color: estEnseignant ? _accentColor : color, fontWeight: FontWeight.w800)),
         ),
         if (estEnseignant)
           Positioned(
-            right: 0,
-            bottom: 0,
+            right: 0, bottom: 0,
             child: Container(
-              width: 8,
-              height: 8,
-              decoration: BoxDecoration(
-                color: _accentColor,
-                shape: BoxShape.circle,
-                border: Border.all(color: _white, width: 1),
-              ),
+              width: radius * 0.35, height: radius * 0.35,
+              decoration: BoxDecoration(color: _accentColor, shape: BoxShape.circle, border: Border.all(color: YekiColors.white, width: 1)),
             ),
           ),
       ],
@@ -1165,46 +972,27 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin {
 
   Widget _buildEmptyState() {
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(color: _bgLight, shape: BoxShape.circle, border: Border.all(color: _borderLight)),
-            child: const Icon(Icons.forum_outlined, size: 48, color: _textLight),
-          ),
-          const SizedBox(height: 16),
-          const Text(
-            'Aucune préoccupation',
-            style: TextStyle(color: _textMedium, fontSize: 16, fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'Les questions posées depuis les leçons,\nexercices et devoirs apparaîtront ici.',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: _textLight, fontSize: 13, height: 1.5),
-          ),
-          const SizedBox(height: 24),
-          GestureDetector(
-            onTap: () => setState(() => _composerVisible = true),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
-                color: _accentColor.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: _accentColor.withOpacity(0.3)),
+                color: YekiColors.primaryDark.withValues(alpha: 0.06),
+                shape: BoxShape.circle,
+                border: Border.all(color: YekiColors.primaryDark.withValues(alpha: 0.12), width: 1),
               ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.add_rounded, color: _accentColor, size: 16),
-                  const SizedBox(width: 6),
-                  Text('Poser une question', style: TextStyle(color: _accentColor, fontSize: 13, fontWeight: FontWeight.w700)),
-                ],
-              ),
+              child: const Icon(Icons.forum_outlined, size: 48, color: YekiColors.textLight),
             ),
-          ),
-        ],
+            const SizedBox(height: 16),
+            const Text('Aucune préoccupation', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+            const SizedBox(height: 8),
+            const Text('Les questions posées depuis les leçons,\nexercices et devoirs apparaîtront ici.',
+                textAlign: TextAlign.center, style: TextStyle(fontSize: 13, height: 1.5)),
+          ],
+        ),
       ),
     );
   }

@@ -1,27 +1,20 @@
+// lib/views/auth/forgot_password_flow.dart
+// ═══════════════════════════════════════════════════════════════════════════
+// MOT DE PASSE OUBLIÉ — 3 ÉCRANS (CORRIGÉ)
+// ═══════════════════════════════════════════════════════════════════════════
+
 import 'dart:async';
 import 'dart:convert';
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
+import 'package:yeki/core/theme/app_theme.dart';
+import 'package:yeki/core/constants/api_constants.dart';
+//import 'package:yeki/utils/error_handler.dart';
 
-// ─────────────────────────────────────────────────────────────────
-// MOT DE PASSE OUBLIÉ — 3 ÉCRANS (design RegisterPage)
-//  1. ForgotPasswordPage   → saisie email
-//  2. VerifyOTPPage        → saisie code OTP (6 chiffres)
-//  3. ResetPasswordPage    → nouveau mot de passe
-// ─────────────────────────────────────────────────────────────────
-
-const String _fpBaseUrl = 'https://yeki.pythonanywhere.com/api';
-
-// ── PALETTE HARMONISÉE AVEC REGISTER PAGE ──────────────────────────
-const Color brandBackground = Color(0xFF135F74); 
-const Color actionOrange = Color(0xFFFF6B00);
-const Color glassFill = Color(0x1AFFFFFF);
-
-// ═══════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════
 //  ÉCRAN 1 — Saisie de l'email
-// ═══════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════
 class ForgotPasswordPage extends StatefulWidget {
   const ForgotPasswordPage({super.key});
 
@@ -42,7 +35,9 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage>
   void initState() {
     super.initState();
     _animCtrl = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 800));
+      vsync: this,
+      duration: const Duration(milliseconds: 800),
+    );
     _fadeAnim = CurvedAnimation(parent: _animCtrl, curve: Curves.easeIn);
     _animCtrl.forward();
   }
@@ -72,8 +67,8 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage>
 
     try {
       final res = await http.post(
-        Uri.parse('$_fpBaseUrl/auth/forgot-password/'),
-        headers: {'Content-Type': 'application/json'},
+        Uri.parse(ApiConstants.forgotPassword),
+        headers: ApiHeaders.auth(null),
         body: jsonEncode({'email': email}),
       );
 
@@ -99,7 +94,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: brandBackground,
+      backgroundColor: YekiColors.primaryDark,
       body: Stack(
         children: [
           _buildDecorations(),
@@ -136,8 +131,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage>
                     _buildStepIndicator(step: 0),
                     const SizedBox(height: 30),
                     _loading
-                        ? const CircularProgressIndicator(
-                            color: Colors.white, strokeWidth: 3)
+                        ? const YekiLoader(color: YekiColors.white)
                         : _buildSubmitButton(
                             label: 'ENVOYER LE CODE',
                             icon: Icons.send_outlined,
@@ -160,7 +154,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage>
     return Align(
       alignment: Alignment.centerLeft,
       child: IconButton(
-        icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white54, size: 18),
+        icon: const Icon(Icons.arrow_back_ios_new, color: YekiColors.white, size: 18),
         onPressed: () => Navigator.of(context).maybePop(),
         padding: EdgeInsets.zero,
       ),
@@ -170,20 +164,32 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage>
   Widget _buildDecorations() {
     return Stack(
       children: [
-        Positioned(top: -40, left: -40, child: _buildCircle(180, Colors.white.withOpacity(0.03))),
-        Positioned(bottom: 20, right: -30, child: _buildCircle(120, Colors.white.withOpacity(0.02))),
+        Positioned(
+          top: -40,
+          left: -40,
+          child: _buildCircle(180, YekiColors.white.withValues(alpha: 0.03)),
+        ),
+        Positioned(
+          bottom: 20,
+          right: -30,
+          child: _buildCircle(120, YekiColors.white.withValues(alpha: 0.02)),
+        ),
       ],
     );
   }
 
   Widget _buildCircle(double size, Color color) {
-    return Container(width: size, height: size, decoration: BoxDecoration(shape: BoxShape.circle, color: color));
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(shape: BoxShape.circle, color: color),
+    );
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════
-//  ÉCRAN 2 — Saisie du code OTP
-// ═══════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════
+//  ÉCRAN 2 — Saisie du code OTP (CORRIGÉ)
+// ═══════════════════════════════════════════════════════════════════════════
 class VerifyOTPPage extends StatefulWidget {
   final String email;
   final String? debugCode;
@@ -267,8 +273,8 @@ class _VerifyOTPPageState extends State<VerifyOTPPage>
 
     try {
       final res = await http.post(
-        Uri.parse('$_fpBaseUrl/auth/verify-otp/'),
-        headers: {'Content-Type': 'application/json'},
+        Uri.parse(ApiConstants.verifyOtp),
+        headers: ApiHeaders.auth(null),
         body: jsonEncode({'email': widget.email, 'code': code}),
       );
       final data = jsonDecode(res.body);
@@ -299,8 +305,8 @@ class _VerifyOTPPageState extends State<VerifyOTPPage>
     });
     try {
       final res = await http.post(
-        Uri.parse('$_fpBaseUrl/auth/forgot-password/'),
-        headers: {'Content-Type': 'application/json'},
+        Uri.parse(ApiConstants.forgotPassword),
+        headers: ApiHeaders.auth(null),
         body: jsonEncode({'email': widget.email}),
       );
       final data = jsonDecode(res.body);
@@ -340,7 +346,7 @@ class _VerifyOTPPageState extends State<VerifyOTPPage>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: brandBackground,
+      backgroundColor: YekiColors.primaryDark,
       body: Stack(
         children: [
           _buildDecorations(),
@@ -366,7 +372,7 @@ class _VerifyOTPPageState extends State<VerifyOTPPage>
                       child: Text(
                         widget.email,
                         style: TextStyle(
-                          color: actionOrange,
+                          color: YekiColors.accent,
                           fontSize: 12,
                           fontWeight: FontWeight.w700,
                           letterSpacing: 0.5,
@@ -387,7 +393,7 @@ class _VerifyOTPPageState extends State<VerifyOTPPage>
                     _buildStepIndicator(step: 1),
                     const SizedBox(height: 30),
                     _loading
-                        ? const CircularProgressIndicator(color: Colors.white, strokeWidth: 3)
+                        ? const YekiLoader(color: YekiColors.white)
                         : _buildSubmitButton(
                             label: 'VÉRIFIER LE CODE',
                             icon: Icons.verified_outlined,
@@ -412,7 +418,7 @@ class _VerifyOTPPageState extends State<VerifyOTPPage>
     return Align(
       alignment: Alignment.centerLeft,
       child: IconButton(
-        icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white54, size: 18),
+        icon: const Icon(Icons.arrow_back_ios_new, color: YekiColors.white, size: 18),
         onPressed: () => Navigator.of(context).maybePop(),
         padding: EdgeInsets.zero,
       ),
@@ -422,14 +428,26 @@ class _VerifyOTPPageState extends State<VerifyOTPPage>
   Widget _buildDecorations() {
     return Stack(
       children: [
-        Positioned(top: -40, left: -40, child: _buildCircle(180, Colors.white.withOpacity(0.03))),
-        Positioned(bottom: 20, right: -30, child: _buildCircle(120, Colors.white.withOpacity(0.02))),
+        Positioned(
+          top: -40,
+          left: -40,
+          child: _buildCircle(180, YekiColors.white.withValues(alpha: 0.03)),
+        ),
+        Positioned(
+          bottom: 20,
+          right: -30,
+          child: _buildCircle(120, YekiColors.white.withValues(alpha: 0.02)),
+        ),
       ],
     );
   }
 
   Widget _buildCircle(double size, Color color) {
-    return Container(width: size, height: size, decoration: BoxDecoration(shape: BoxShape.circle, color: color));
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(shape: BoxShape.circle, color: color),
+    );
   }
 
   Widget _buildOTPFields() {
@@ -450,27 +468,31 @@ class _VerifyOTPPageState extends State<VerifyOTPPage>
               style: const TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
-                color: Colors.white,
+                color: YekiColors.white,
               ),
               inputFormatters: [FilteringTextInputFormatter.digitsOnly],
               decoration: InputDecoration(
                 counterText: '',
                 filled: true,
-                fillColor: glassFill,
+                fillColor: YekiColors.white.withValues(alpha: 0.1),
                 border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(15),
+                  borderRadius: YekiRadius.borderRadiusMd,
                   borderSide: BorderSide(
-                    color: _error.isNotEmpty ? Colors.redAccent.withOpacity(0.5) : Colors.white.withOpacity(0.05),
+                    color: _error.isNotEmpty
+                        ? YekiColors.error.withValues(alpha: 0.5)
+                        : YekiColors.white.withValues(alpha: 0.05),
                   ),
                 ),
                 focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(15),
-                  borderSide: const BorderSide(color: Colors.white, width: 1.5),
+                  borderRadius: YekiRadius.borderRadiusMd,
+                  borderSide: const BorderSide(color: YekiColors.white, width: 1.5),
                 ),
                 enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(15),
+                  borderRadius: YekiRadius.borderRadiusMd,
                   borderSide: BorderSide(
-                    color: _otpCtrl[i].text.isNotEmpty ? actionOrange.withOpacity(0.6) : Colors.white.withOpacity(0.05),
+                    color: _otpCtrl[i].text.isNotEmpty
+                        ? YekiColors.accent.withValues(alpha: 0.6)
+                        : YekiColors.white.withValues(alpha: 0.05),
                   ),
                 ),
                 contentPadding: EdgeInsets.zero,
@@ -502,10 +524,14 @@ class _VerifyOTPPageState extends State<VerifyOTPPage>
         children: [
           Text(
             'Pas reçu ? ',
-            style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(0.5)),
+            style: TextStyle(fontSize: 12, color: YekiColors.white.withValues(alpha: 0.5)),
           ),
           _resending
-              ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: actionOrange))
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: YekiLoader(color: YekiColors.accent, size: 14),
+                )
               : GestureDetector(
                   onTap: canResend ? _renvoyerCode : null,
                   child: Text(
@@ -514,7 +540,7 @@ class _VerifyOTPPageState extends State<VerifyOTPPage>
                       fontSize: 12,
                       fontWeight: FontWeight.w900,
                       letterSpacing: 1,
-                      color: canResend ? actionOrange : Colors.white.withOpacity(0.3),
+                      color: canResend ? YekiColors.accent : YekiColors.white.withValues(alpha: 0.3),
                     ),
                   ),
                 ),
@@ -524,9 +550,9 @@ class _VerifyOTPPageState extends State<VerifyOTPPage>
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════
 //  ÉCRAN 3 — Nouveau mot de passe
-// ═══════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════
 class ResetPasswordPage extends StatefulWidget {
   final String email;
   final String resetToken;
@@ -587,8 +613,8 @@ class _ResetPasswordPageState extends State<ResetPasswordPage>
     });
     try {
       final res = await http.post(
-        Uri.parse('$_fpBaseUrl/auth/reset-password/'),
-        headers: {'Content-Type': 'application/json'},
+        Uri.parse(ApiConstants.resetPassword),
+        headers: ApiHeaders.auth(null),
         body: jsonEncode({
           'email': widget.email,
           'reset_token': widget.resetToken,
@@ -612,7 +638,7 @@ class _ResetPasswordPageState extends State<ResetPasswordPage>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: brandBackground,
+      backgroundColor: YekiColors.primaryDark,
       body: _success ? _buildSuccessView() : _buildFormView(),
     );
   }
@@ -668,14 +694,16 @@ class _ResetPasswordPageState extends State<ResetPasswordPage>
                           Icon(
                             _matches ? Icons.check_circle : Icons.cancel,
                             size: 14,
-                            color: _matches ? Colors.greenAccent : Colors.redAccent,
+                            color: _matches ? YekiColors.success : YekiColors.error,
                           ),
                           const SizedBox(width: 8),
                           Text(
-                            _matches ? 'Les mots de passe correspondent' : 'Les mots de passe ne correspondent pas',
+                            _matches
+                                ? 'Les mots de passe correspondent'
+                                : 'Les mots de passe ne correspondent pas',
                             style: TextStyle(
                               fontSize: 11,
-                              color: _matches ? Colors.greenAccent : Colors.redAccent,
+                              color: _matches ? YekiColors.success : YekiColors.error,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
@@ -691,7 +719,7 @@ class _ResetPasswordPageState extends State<ResetPasswordPage>
                   _buildStepIndicator(step: 2),
                   const SizedBox(height: 30),
                   _loading
-                      ? const CircularProgressIndicator(color: Colors.white, strokeWidth: 3)
+                      ? const YekiLoader(color: YekiColors.white)
                       : _buildSubmitButton(
                           label: 'RÉINITIALISER',
                           icon: Icons.check_circle_outline,
@@ -724,18 +752,25 @@ class _ResetPasswordPageState extends State<ResetPasswordPage>
                       width: 100,
                       height: 100,
                       decoration: BoxDecoration(
-                        color: Colors.greenAccent.withOpacity(0.1),
+                        color: YekiColors.success.withValues(alpha: 0.1),
                         shape: BoxShape.circle,
-                        border: Border.all(color: Colors.greenAccent.withOpacity(0.3), width: 1),
+                        border: Border.all(
+                          color: YekiColors.success.withValues(alpha: 0.3),
+                          width: 1,
+                        ),
                       ),
-                      child: const Icon(Icons.check_circle_outline_rounded, color: Colors.greenAccent, size: 52),
+                      child: const Icon(
+                        Icons.check_circle_outline_rounded,
+                        color: YekiColors.success,
+                        size: 52,
+                      ),
                     ),
                     const SizedBox(height: 30),
                     const Text(
                       'MOT DE PASSE\nRÉINITIALISÉ',
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                        color: Colors.white,
+                        color: YekiColors.white,
                         fontWeight: FontWeight.w900,
                         letterSpacing: 4,
                         fontSize: 18,
@@ -743,37 +778,29 @@ class _ResetPasswordPageState extends State<ResetPasswordPage>
                       ),
                     ),
                     const SizedBox(height: 10),
-                    Container(width: 40, height: 3, decoration: BoxDecoration(color: actionOrange, borderRadius: BorderRadius.circular(2))),
+                    Container(
+                      width: 40,
+                      height: 3,
+                      decoration: BoxDecoration(
+                        color: YekiColors.accent,
+                        borderRadius: YekiRadius.borderRadiusSm,
+                      ),
+                    ),
                     const SizedBox(height: 20),
                     Text(
                       'Votre mot de passe a été mis à jour avec succès.\nConnectez-vous avec votre nouveau mot de passe.',
                       textAlign: TextAlign.center,
-                      style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 12, height: 1.7),
+                      style: TextStyle(
+                        color: YekiColors.white.withValues(alpha: 0.5),
+                        fontSize: 12,
+                        height: 1.7,
+                      ),
                     ),
                     const SizedBox(height: 45),
-                    GestureDetector(
-                      onTap: () => Navigator.of(context).popUntil((route) => route.isFirst),
-                      child: Container(
-                        width: 320,
-                        height: 60,
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: actionOrange,
-                          borderRadius: BorderRadius.circular(15),
-                          boxShadow: [BoxShadow(color: actionOrange.withOpacity(0.3), blurRadius: 15, offset: const Offset(0, 8))],
-                        ),
-                        child: const Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.login_rounded, color: Colors.white, size: 16),
-                            SizedBox(width: 10),
-                            Text(
-                              'SE CONNECTER',
-                              style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 1.5),
-                            ),
-                          ],
-                        ),
-                      ),
+                    YekiButton(
+                      label: 'SE CONNECTER',
+                      icon: Icons.login_rounded,
+                      onPressed: () => Navigator.of(context).popUntil((route) => route.isFirst),
                     ),
                   ],
                 ),
@@ -789,7 +816,7 @@ class _ResetPasswordPageState extends State<ResetPasswordPage>
     return Align(
       alignment: Alignment.centerLeft,
       child: IconButton(
-        icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white54, size: 18),
+        icon: const Icon(Icons.arrow_back_ios_new, color: YekiColors.white, size: 18),
         onPressed: () => Navigator.of(context).maybePop(),
         padding: EdgeInsets.zero,
       ),
@@ -799,14 +826,26 @@ class _ResetPasswordPageState extends State<ResetPasswordPage>
   Widget _buildDecorations() {
     return Stack(
       children: [
-        Positioned(top: -40, left: -40, child: _buildCircle(180, Colors.white.withOpacity(0.03))),
-        Positioned(bottom: 20, right: -30, child: _buildCircle(120, Colors.white.withOpacity(0.02))),
+        Positioned(
+          top: -40,
+          left: -40,
+          child: _buildCircle(180, YekiColors.white.withValues(alpha: 0.03)),
+        ),
+        Positioned(
+          bottom: 20,
+          right: -30,
+          child: _buildCircle(120, YekiColors.white.withValues(alpha: 0.02)),
+        ),
       ],
     );
   }
 
   Widget _buildCircle(double size, Color color) {
-    return Container(width: size, height: size, decoration: BoxDecoration(shape: BoxShape.circle, color: color));
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(shape: BoxShape.circle, color: color),
+    );
   }
 
   Widget _buildPasswordRules() {
@@ -815,16 +854,21 @@ class _ResetPasswordPageState extends State<ResetPasswordPage>
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
-          color: glassFill,
-          borderRadius: BorderRadius.circular(15),
-          border: Border.all(color: Colors.white.withOpacity(0.05)),
+          color: YekiColors.white.withValues(alpha: 0.1),
+          borderRadius: YekiRadius.borderRadiusMd,
+          border: Border.all(color: YekiColors.white.withValues(alpha: 0.05)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
               'CRITÈRES REQUIS',
-              style: TextStyle(color: Colors.white.withOpacity(0.3), fontSize: 9, fontWeight: FontWeight.w900, letterSpacing: 2),
+              style: TextStyle(
+                color: YekiColors.white.withValues(alpha: 0.3),
+                fontSize: 9,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 2,
+              ),
             ),
             const SizedBox(height: 10),
             _buildRule('Au moins 8 caractères', _hasLength),
@@ -841,18 +885,29 @@ class _ResetPasswordPageState extends State<ResetPasswordPage>
       padding: const EdgeInsets.only(bottom: 5),
       child: Row(
         children: [
-          Icon(valid ? Icons.check_circle : Icons.radio_button_unchecked, size: 13, color: valid ? Colors.greenAccent : Colors.white.withOpacity(0.25)),
+          Icon(
+            valid ? Icons.check_circle : Icons.radio_button_unchecked,
+            size: 13,
+            color: valid ? YekiColors.success : YekiColors.white.withValues(alpha: 0.25),
+          ),
           const SizedBox(width: 7),
-          Text(label, style: TextStyle(fontSize: 11, color: valid ? Colors.greenAccent : Colors.white.withOpacity(0.4), fontWeight: valid ? FontWeight.w700 : FontWeight.normal)),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              color: valid ? YekiColors.success : YekiColors.white.withValues(alpha: 0.4),
+              fontWeight: valid ? FontWeight.w700 : FontWeight.normal,
+            ),
+          ),
         ],
       ),
     );
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════
-//  WIDGETS PARTAGÉS (STYLE REGISTER PAGE)
-// ═══════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════
+//  WIDGETS PARTAGÉS (CORRIGÉS)
+// ═══════════════════════════════════════════════════════════════════════════
 
 Widget _buildHeader({required IconData icon, required String title}) {
   return Column(
@@ -861,20 +916,32 @@ Widget _buildHeader({required IconData icon, required String title}) {
         width: 76,
         height: 76,
         decoration: BoxDecoration(
-          color: glassFill,
+          color: YekiColors.white.withValues(alpha: 0.1),
           shape: BoxShape.circle,
-          border: Border.all(color: Colors.white.withOpacity(0.12), width: 1),
+          border: Border.all(color: YekiColors.white.withValues(alpha: 0.12), width: 1),
         ),
-        child: Icon(icon, color: Colors.white70, size: 34),
+        child: Icon(icon, color: YekiColors.white, size: 34),
       ),
       const SizedBox(height: 20),
       Text(
         title,
         textAlign: TextAlign.center,
-        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, letterSpacing: 8, fontSize: 15),
+        style: const TextStyle(
+          color: YekiColors.white,
+          fontWeight: FontWeight.w900,
+          letterSpacing: 8,
+          fontSize: 15,
+        ),
       ),
       const SizedBox(height: 10),
-      Container(width: 40, height: 3, decoration: BoxDecoration(color: actionOrange, borderRadius: BorderRadius.circular(2))),
+      Container(
+        width: 40,
+        height: 3,
+        decoration: BoxDecoration(
+          color: YekiColors.accent,
+          borderRadius: YekiRadius.borderRadiusSm,
+        ),
+      ),
     ],
   );
 }
@@ -884,7 +951,15 @@ Widget _buildSectionLabel(String label) {
     alignment: Alignment.centerLeft,
     child: Padding(
       padding: const EdgeInsets.only(left: 5, bottom: 12),
-      child: Text(label, style: TextStyle(color: Colors.white.withOpacity(0.3), fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 2)),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: YekiColors.white.withValues(alpha: 0.3),
+          fontSize: 10,
+          fontWeight: FontWeight.w900,
+          letterSpacing: 2,
+        ),
+      ),
     ),
   );
 }
@@ -908,30 +983,44 @@ Widget _buildModernField({
       keyboardType: keyboardType,
       onChanged: onChanged,
       onFieldSubmitted: onSubmitted,
-      style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w500),
-      cursorColor: Colors.white,
+      style: const TextStyle(color: YekiColors.white, fontSize: 14, fontWeight: FontWeight.w500),
+      cursorColor: YekiColors.white,
       decoration: InputDecoration(
         labelText: label,
-        labelStyle: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 13),
-        floatingLabelStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
-        prefixIcon: Icon(icon, color: Colors.white.withOpacity(0.7), size: 18),
+        labelStyle: TextStyle(color: YekiColors.white.withValues(alpha: 0.4), fontSize: 13),
+        floatingLabelStyle: const TextStyle(color: YekiColors.white, fontWeight: FontWeight.bold, fontSize: 12),
+        prefixIcon: Icon(icon, color: YekiColors.white.withValues(alpha: 0.7), size: 18),
         suffixIcon: isPassword
             ? IconButton(
-                icon: Icon(obscure! ? Icons.visibility_off_rounded : Icons.visibility_rounded, color: Colors.white24, size: 18),
+                icon: Icon(
+                  obscure! ? Icons.visibility_off_rounded : Icons.visibility_rounded,
+                  color: YekiColors.white,
+                  size: 18,
+                ),
                 onPressed: onToggle,
               )
             : null,
         filled: true,
-        fillColor: glassFill,
+        fillColor: YekiColors.white.withValues(alpha: 0.1),
         contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide(color: Colors.white.withOpacity(0.05))),
-        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: const BorderSide(color: Colors.white, width: 1.5)),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: YekiRadius.borderRadiusMd,
+          borderSide: BorderSide(color: YekiColors.white.withValues(alpha: 0.05)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: YekiRadius.borderRadiusMd,
+          borderSide: const BorderSide(color: YekiColors.white, width: 1.5),
+        ),
       ),
     ),
   );
 }
 
-Widget _buildSubmitButton({required String label, required IconData icon, required VoidCallback onTap}) {
+Widget _buildSubmitButton({
+  required String label,
+  required IconData icon,
+  required VoidCallback onTap,
+}) {
   return GestureDetector(
     onTap: onTap,
     child: Container(
@@ -939,16 +1028,24 @@ Widget _buildSubmitButton({required String label, required IconData icon, requir
       height: 60,
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: actionOrange,
-        borderRadius: BorderRadius.circular(15),
-        boxShadow: [BoxShadow(color: actionOrange.withOpacity(0.3), blurRadius: 15, offset: const Offset(0, 8))],
+        color: YekiColors.accent,
+        borderRadius: YekiRadius.borderRadiusMd,
+        boxShadow: YekiShadows.accent,
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, color: Colors.white, size: 16),
+          Icon(icon, color: YekiColors.white, size: 16),
           const SizedBox(width: 10),
-          Text(label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 1.5)),
+          Text(
+            label,
+            style: const TextStyle(
+              color: YekiColors.white,
+              fontWeight: FontWeight.w900,
+              fontSize: 13,
+              letterSpacing: 1.5,
+            ),
+          ),
         ],
       ),
     ),
@@ -967,10 +1064,12 @@ Widget _buildStepIndicator({required int step}) {
         width: isActive ? 28 : 10,
         height: 10,
         decoration: BoxDecoration(
-          color: isComplete ? Colors.greenAccent.withOpacity(0.8) : (isActive ? actionOrange : Colors.white.withOpacity(0.15)),
-          borderRadius: BorderRadius.circular(5),
+          color: isComplete
+              ? YekiColors.success.withValues(alpha: 0.8)
+              : (isActive ? YekiColors.accent : YekiColors.white.withValues(alpha: 0.15)),
+          borderRadius: YekiRadius.borderRadiusSm,
         ),
-        child: isComplete ? const Icon(Icons.check, size: 8, color: Colors.white) : null,
+        child: isComplete ? const Icon(Icons.check, size: 8, color: YekiColors.white) : null,
       );
     }),
   );
@@ -982,15 +1081,20 @@ Widget _buildErrorWidget(String message) {
     child: Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: Colors.redAccent.withOpacity(0.12),
-        borderRadius: BorderRadius.circular(15),
-        border: Border.all(color: Colors.redAccent.withOpacity(0.3), width: 0.8),
+        color: YekiColors.error.withValues(alpha: 0.12),
+        borderRadius: YekiRadius.borderRadiusMd,
+        border: Border.all(color: YekiColors.error.withValues(alpha: 0.3), width: 0.8),
       ),
       child: Row(
         children: [
-          const Icon(Icons.error_outline, color: Colors.redAccent, size: 14),
+          const Icon(Icons.error_outline, color: YekiColors.error, size: 14),
           const SizedBox(width: 8),
-          Expanded(child: Text(message, style: const TextStyle(fontSize: 11, color: Colors.redAccent, fontWeight: FontWeight.w600))),
+          Expanded(
+            child: Text(
+              message,
+              style: const TextStyle(fontSize: 11, color: YekiColors.error, fontWeight: FontWeight.w600),
+            ),
+          ),
         ],
       ),
     ),
@@ -1003,15 +1107,20 @@ Widget _buildSuccessWidget(String message) {
     child: Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: Colors.greenAccent.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(15),
-        border: Border.all(color: Colors.greenAccent.withOpacity(0.3), width: 0.8),
+        color: YekiColors.success.withValues(alpha: 0.08),
+        borderRadius: YekiRadius.borderRadiusMd,
+        border: Border.all(color: YekiColors.success.withValues(alpha: 0.3), width: 0.8),
       ),
       child: Row(
         children: [
-          const Icon(Icons.check_circle_outline, color: Colors.greenAccent, size: 14),
+          const Icon(Icons.check_circle_outline, color: YekiColors.success, size: 14),
           const SizedBox(width: 8),
-          Expanded(child: Text(message, style: const TextStyle(fontSize: 11, color: Colors.greenAccent, fontWeight: FontWeight.w600))),
+          Expanded(
+            child: Text(
+              message,
+              style: const TextStyle(fontSize: 11, color: YekiColors.success, fontWeight: FontWeight.w600),
+            ),
+          ),
         ],
       ),
     ),
@@ -1023,23 +1132,30 @@ Widget _buildFooterLink(BuildContext context) {
     onPressed: () => Navigator.of(context).pop(),
     child: RichText(
       text: TextSpan(
-        style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 13),
+        style: TextStyle(color: YekiColors.white.withValues(alpha: 0.6), fontSize: 13),
         children: const [
           TextSpan(text: "Retour à "),
-          TextSpan(text: "LA CONNEXION", style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, decoration: TextDecoration.underline)),
+          TextSpan(
+            text: "LA CONNEXION",
+            style: TextStyle(
+              color: YekiColors.white,
+              fontWeight: FontWeight.w900,
+              decoration: TextDecoration.underline,
+            ),
+          ),
         ],
       ),
     ),
   );
 }
 
-// ═══════════════════════════════════════════════════════════════════
-//  UTILITAIRE
-// ═══════════════════════════════════════════════════════════════════
 PageRouteBuilder _slideRoute(Widget page) => PageRouteBuilder(
       pageBuilder: (_, __, ___) => page,
       transitionsBuilder: (_, anim, __, child) => SlideTransition(
-        position: Tween<Offset>(begin: const Offset(1, 0), end: Offset.zero).animate(CurvedAnimation(parent: anim, curve: Curves.easeOutCubic)),
+        position: Tween<Offset>(
+          begin: const Offset(1, 0),
+          end: Offset.zero,
+        ).animate(CurvedAnimation(parent: anim, curve: Curves.easeOutCubic)),
         child: child,
       ),
       transitionDuration: const Duration(milliseconds: 350),

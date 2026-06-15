@@ -1,15 +1,16 @@
+// lib/views/pages/apprenants/dashboard.dart
+// ═══════════════════════════════════════════════════════════════════════════
+//  DASHBOARD PRINCIPAL — CORRIGÉ
+// ═══════════════════════════════════════════════════════════════════════════
+
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:yeki/views/pages/apprenants/concours_pages.dart';
 import 'package:yeki/views/pages/apprenants/devoirs_page.dart';
 import 'package:yeki/views/pages/apprenants/formations_pages.dart';
 import 'package:yeki/views/pages/apprenants/olympiades_page.dart';
-import 'cursus_page.dart';
-
-// Palette de couleurs raffinée
-const Color brandPrimary = Color(0xFF135F74); 
-const Color bgLight = Color(0xFFF8FAFC); 
-const Color inactiveGrey = Color(0xFF94A3B8);
-const Color white = Color(0xFFFFFFFF);
+import 'package:yeki/views/pages/apprenants/cursus_page.dart';
+import 'package:yeki/core/theme/app_theme.dart';
 
 class Dashboard extends StatefulWidget {
   const Dashboard({super.key});
@@ -44,44 +45,47 @@ class _DashboardState extends State<Dashboard> {
 
   @override
   Widget build(BuildContext context) {
+    final double screenWidth = MediaQuery.of(context).size.width;
+
     return Scaffold(
-      extendBody: true, 
-      backgroundColor: bgLight,
+      extendBody: true,
+      backgroundColor: YekiColors.backgroundLight,
       body: IndexedStack(
         index: _currentIndex,
         children: _pages,
       ),
-      bottomNavigationBar: _buildNavBar(),
+      bottomNavigationBar: _buildFloatingNavBar(screenWidth),
     );
   }
 
-  Widget _buildNavBar() {
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16, 0, 16, 30),
-      height: 70, // Hauteur légèrement augmentée pour le confort visuel
-      decoration: BoxDecoration(
-        color: white,
-        borderRadius: BorderRadius.circular(30),
-        boxShadow: [
-          // Ombre principale portée
-          BoxShadow(
-            color: brandPrimary.withOpacity(0.08),
-            blurRadius: 25,
-            offset: const Offset(0, 12),
+  Widget _buildFloatingNavBar(double screenWidth) {
+    final double targetWidth = screenWidth > 600 ? 500 : screenWidth - 32;
+    final double bottomMargin = screenWidth > 600 ? 24 : 16;
+
+    return Align(
+      alignment: Alignment.bottomCenter,
+      child: Container(
+        margin: EdgeInsets.only(bottom: bottomMargin),
+        width: targetWidth,
+        height: 66,
+        child: ClipRRect(
+          borderRadius: YekiRadius.borderRadiusPill,
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+            child: Container(
+              decoration: BoxDecoration(
+                color: YekiColors.white.withValues(alpha: 0.85),
+                borderRadius: YekiRadius.borderRadiusPill,
+                border: Border.all(color: YekiColors.borderLight, width: 1.0),
+                boxShadow: YekiShadows.floating,
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: List.generate(_navItems.length, (i) => _buildNavTile(i)),
+              ),
+            ),
           ),
-          // Lueur interne très subtile
-          BoxShadow(
-            color: Colors.black.withOpacity(0.02),
-            blurRadius: 5,
-            offset: const Offset(0, -2),
-          ),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: List.generate(_navItems.length, (i) => _buildNavTile(i)),
         ),
       ),
     );
@@ -95,36 +99,37 @@ class _DashboardState extends State<Dashboard> {
       child: GestureDetector(
         onTap: () => _onTap(index),
         behavior: HitTestBehavior.opaque,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 350),
-          curve: Curves.easeInOut,
-          margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-          decoration: BoxDecoration(
-            // Background pour l'onglet courant (Pilule)
-            color: isSelected ? brandPrimary.withOpacity(0.08) : Colors.transparent,
-            borderRadius: BorderRadius.circular(25),
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 250),
+              curve: Curves.easeOutCubic,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? YekiColors.primaryDark.withValues(alpha: 0.1)
+                    : Colors.transparent,
+                borderRadius: YekiRadius.borderRadiusLg,
+              ),
+              child: Icon(
                 isSelected ? item.iconFilled : item.iconOutlined,
-                color: isSelected ? brandPrimary : inactiveGrey,
-                size: 24, // Taille d'icône premium
+                color: isSelected ? YekiColors.primaryDark : YekiColors.textLight,
+                size: 22,
               ),
-              const SizedBox(height: 4),
-              AnimatedDefaultTextStyle(
-                duration: const Duration(milliseconds: 200),
-                style: TextStyle(
-                  color: isSelected ? brandPrimary : inactiveGrey,
-                  fontSize: 11, // Police agrandie
-                  fontWeight: isSelected ? FontWeight.w900 : FontWeight.w600,
-                  letterSpacing: isSelected ? 0.2 : 0,
-                ),
-                child: Text(item.label),
+            ),
+            const SizedBox(height: 3),
+            AnimatedDefaultTextStyle(
+              duration: const Duration(milliseconds: 200),
+              style: TextStyle(
+                color: isSelected ? YekiColors.primaryDark : YekiColors.textLight,
+                fontSize: 10,
+                fontWeight: isSelected ? FontWeight.w800 : FontWeight.w500,
+                letterSpacing: isSelected ? 0.1 : 0,
               ),
-            ],
-          ),
+              child: Text(item.label),
+            ),
+          ],
         ),
       ),
     );

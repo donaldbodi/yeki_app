@@ -1,37 +1,16 @@
 // lib/views/pages/apprenants/concours_pages.dart
-// ════════════════════════════════════════════════════════════════
-// PAGE PRÉPA CONCOURS — Design Premium Harmonisé
-// ════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════
 
 import 'dart:convert';
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:yeki/views/pages/apprenants/formations_models.dart';
 import 'package:yeki/views/pages/apprenants/concours_detail_page.dart';
 import 'package:yeki/widgets/yeki_app_bar.dart';
+import 'package:yeki/core/theme/app_theme.dart';
+import 'package:yeki/core/constants/api_constants.dart';
 
-// Palette de Prestige - Harmonisation Royale
-const Color brandPrimary = Color(0xFF135F74);
-const Color brandGold = Color(0xFFC5A059);
-const Color bgPremium = Color(0xFFF4F7F9);
-const Color textMain = Color(0xFF0F172A);
-const Color textSub = Color(0xFF64748B);
-const Color _green = Color(0xFF10B981);
-const Color _borderLight = Color(0xFFE0E4E8);
-
-Future<String?> _getToken() async =>
-    (await SharedPreferences.getInstance()).getString('token');
-
-Map<String, String> _headers(String? t) => {
-  'Content-Type': 'application/json',
-  if (t != null) 'Authorization': 'Token $t',
-};
-
-// ══════════════════════════════════════════════════════════════
-// PAGE LISTE — PRÉPA CONCOURS
-// ══════════════════════════════════════════════════════════════
 class ConcoursPage extends StatefulWidget {
   const ConcoursPage({super.key});
 
@@ -39,8 +18,7 @@ class ConcoursPage extends StatefulWidget {
   State<ConcoursPage> createState() => _ConcoursPageState();
 }
 
-class _ConcoursPageState extends State<ConcoursPage>
-    with SingleTickerProviderStateMixin {
+class _ConcoursPageState extends State<ConcoursPage> with SingleTickerProviderStateMixin {
   bool _loading = true;
   String _error = '';
   List<DepartementItem> _tous = [];
@@ -50,18 +28,19 @@ class _ConcoursPageState extends State<ConcoursPage>
   String _niveauApprenant = '';
   final _searchCtrl = TextEditingController();
   late AnimationController _animCtrl;
+  late Animation<double> _fadeAnim;
 
   static const _filtres = ['Tous', 'Gratuit', 'Payant', 'En cours'];
 
-  // Données pour YekiHeader
-  int _unreadNotifications = 0;
-  bool _isSubscribed = true;
+  final int _unreadNotifications = 2;
+  final bool _isSubscribed = true;
   String _username = 'Apprenant';
 
   @override
   void initState() {
     super.initState();
-    _animCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 800));
+    _animCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 550));
+    _fadeAnim = CurvedAnimation(parent: _animCtrl, curve: Curves.easeOutCubic);
     _loadNiveau();
     _charger();
     _loadUserData();
@@ -80,8 +59,8 @@ class _ConcoursPageState extends State<ConcoursPage>
     if (token == null) return;
     try {
       final response = await http.get(
-        Uri.parse('$kBaseUrl/profil/me/'), 
-        headers: _headers(token)
+        Uri.parse(ApiConstants.profilMe),
+        headers: ApiHeaders.auth(token),
       );
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -98,12 +77,15 @@ class _ConcoursPageState extends State<ConcoursPage>
   }
 
   Future<void> _charger() async {
-    setState(() { _loading = true; _error = ''; });
+    setState(() {
+      _loading = true;
+      _error = '';
+    });
     final token = await _getToken();
     try {
       final res = await http.get(
-        Uri.parse('$kBaseUrl/apprenant/prepa-concours/'),
-        headers: _headers(token),
+        Uri.parse('${ApiConstants.baseUrl}/apprenant/prepa-concours/'),
+        headers: ApiHeaders.auth(token),
       );
       if (res.statusCode == 200 && mounted) {
         final List data = jsonDecode(res.body);
@@ -113,13 +95,18 @@ class _ConcoursPageState extends State<ConcoursPage>
         });
         _animCtrl.forward(from: 0);
       } else if (mounted) {
-        setState(() => _error = 'Erreur ${res.statusCode}');
+        setState(() => _error = 'Impossible de charger les programmes (${res.statusCode})');
       }
     } catch (_) {
-      if (mounted) setState(() => _error = 'Erreur réseau');
+      if (mounted) setState(() => _error = 'Vérifiez votre connexion internet');
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  Future<String?> _getToken() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('token');
   }
 
   void _appliquerFiltre() {
@@ -134,13 +121,13 @@ class _ConcoursPageState extends State<ConcoursPage>
         final matchFiltre = switch (_filtre) {
           'Gratuit' => d.prix == 0,
           'Payant' => d.prix > 0,
-          'En cours' => d.progression > 0 && d.progression < 100,
+          'En cours' => d.progressionMoyenne > 0 && d.progressionMoyenne < 100,
           _ => true,
         };
 
         bool matchNiveau = true;
-        if (_niveauApprenant.isNotEmpty && d.niveauxCibles.isNotEmpty) {
-          matchNiveau = NiveauService.estAccessible(_niveauApprenant, d.niveauxCibles);
+        if (_niveauApprenant.isNotEmpty && d.niveauxAccessibles.isNotEmpty) {
+          matchNiveau = NiveauService.estAccessibleParListe(_niveauApprenant, d.niveauxAccessibles);
         }
 
         return matchSearch && matchFiltre && matchNiveau;
@@ -153,25 +140,16 @@ class _ConcoursPageState extends State<ConcoursPage>
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        backgroundColor: Colors.white,
-        title: const Text('Déconnexion',
-            style: TextStyle(fontWeight: FontWeight.bold, color: textMain)),
-        content: const Text(
-          'Souhaitez-vous vraiment quitter l\'application ?',
-          style: TextStyle(color: textSub),
-        ),
+        backgroundColor: YekiColors.white,
+        title: const Text('Déconnexion', style: TextStyle(fontWeight: FontWeight.w800)),
+        content: const Text('Souhaitez-vous vraiment quitter votre espace Yéki Prépa ?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text('Annuler', style: TextStyle(color: textSub)),
+            child: const Text('Annuler', style: TextStyle(color: YekiColors.textMedium)),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.redAccent,
-              foregroundColor: Colors.white,
-              elevation: 0,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
+            style: ElevatedButton.styleFrom(backgroundColor: YekiColors.error),
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('Se déconnecter'),
           ),
@@ -188,10 +166,33 @@ class _ConcoursPageState extends State<ConcoursPage>
     }
   }
 
+  IconData _getIconForConcours(String text) {
+    final t = text.toLowerCase();
+    if (t.contains('polytech') || t.contains('ingé') || t.contains('mines') || t.contains('travaux')) {
+      return Icons.engineering_rounded;
+    }
+    if (t.contains('ens') || t.contains('normale') || t.contains('pédagogie')) {
+      return Icons.school_rounded;
+    }
+    if (t.contains('enam') || t.contains('admin') || t.contains('gavel') || t.contains('magistrature')) {
+      return Icons.gavel_rounded;
+    }
+    if (t.contains('santé') || t.contains('médecine') || t.contains('fmsb')) {
+      return Icons.health_and_safety_rounded;
+    }
+    if (t.contains('numérique') || t.contains('ict') || t.contains('supptic') || t.contains('informatique')) {
+      return Icons.terminal_rounded;
+    }
+    return Icons.workspace_premium_rounded;
+  }
+
   @override
   Widget build(BuildContext context) {
+    final double screenWidth = MediaQuery.of(context).size.width;
+    final double padX = screenWidth > 800 ? (screenWidth - 760) / 2 : 18.0;
+
     return Scaffold(
-      backgroundColor: bgPremium,
+      backgroundColor: YekiColors.backgroundLight,
       appBar: YekiHeader(
         unreadNotifications: _unreadNotifications,
         isSubscribed: _isSubscribed,
@@ -202,56 +203,129 @@ class _ConcoursPageState extends State<ConcoursPage>
         onSettings: () {},
         onNotifications: () {},
       ),
-      body: Column(
-        children: [
-          // Hero Section
-          _buildHeroSection(),
-          
-          // Barre de recherche
-          _buildSearchBar(),
-          
-          // Barre de filtres
-          _buildPremiumFilterBar(),
-          
-          // Contenu principal
-          Expanded(
-            child: _buildContent(),
-          ),
-        ],
-      ),
+      body: _loading
+          ? _buildResponsiveSkeleton(padX)
+          : _error.isNotEmpty
+              ? _buildErrorState()
+              : RefreshIndicator(
+                  onRefresh: _charger,
+                  color: YekiColors.primaryDark,
+                  backgroundColor: YekiColors.white,
+                  child: FadeTransition(
+                    opacity: _fadeAnim,
+                    child: CustomScrollView(
+                      physics: const BouncingScrollPhysics(),
+                      slivers: [
+                        SliverToBoxAdapter(
+                          child: Padding(
+                            padding: EdgeInsets.fromLTRB(padX, 16, padX, 0),
+                            child: _buildHeroImageCover(),
+                          ),
+                        ),
+                        SliverToBoxAdapter(
+                          child: Padding(
+                            padding: EdgeInsets.symmetric(horizontal: padX),
+                            child: _buildSearchBar(),
+                          ),
+                        ),
+                        SliverToBoxAdapter(
+                          child: Padding(
+                            padding: EdgeInsets.symmetric(horizontal: padX),
+                            child: _buildPremiumFilterBar(),
+                          ),
+                        ),
+                        SliverToBoxAdapter(
+                          child: Padding(
+                            padding: EdgeInsets.fromLTRB(padX, 8, padX, 12),
+                            child: _buildSectionTitle(),
+                          ),
+                        ),
+                        _affiches.isEmpty
+                            ? const SliverFillRemaining(hasScrollBody: false, child: _EmptyView())
+                            : SliverPadding(
+                                padding: EdgeInsets.fromLTRB(padX, 0, padX, 110),
+                                sliver: SliverList(
+                                  delegate: SliverChildBuilderDelegate(
+                                    (ctx, idx) => _buildAiryPremiumCard(_affiches[idx]),
+                                    childCount: _affiches.length,
+                                  ),
+                                ),
+                              ),
+                      ],
+                    ),
+                  ),
+                ),
     );
   }
 
-  Widget _buildHeroSection() {
+  Widget _buildHeroImageCover() {
     return Container(
       width: double.infinity,
+      height: 175,
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [brandPrimary, brandPrimary.withOpacity(0.85)],
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: YekiShadows.medium,
+        image: const DecorationImage(
+          image: NetworkImage(
+            'https://images.unsplash.com/photo-1523050854058-8df90110c9f1?q=80&w=600&auto=format&fit=crop',
+          ),
+          fit: BoxFit.cover,
         ),
       ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(24),
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              YekiColors.primaryLight.withValues(alpha: 0.15),
+              YekiColors.primaryLight.withValues(alpha: 0.85),
+            ],
+          ),
+        ),
+        padding: const EdgeInsets.all(22),
         child: Column(
+          mainAxisAlignment: MainAxisAlignment.end,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
               decoration: BoxDecoration(
-                color: brandGold.withOpacity(0.15),
+                color: YekiColors.accent.withValues(alpha: 0.9),
                 borderRadius: BorderRadius.circular(20),
               ),
-              child: const Text("EXCELLENCE ACADÉMIQUE", 
-                style: TextStyle(color: brandGold, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 1)),
+              child: const Text(
+                "YÉKI PRÉPA CONCOURS",
+                style: TextStyle(
+                  color: YekiColors.white,
+                  fontSize: 9.5,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 1.2,
+                ),
+              ),
             ),
             const SizedBox(height: 10),
-            const Text("Prépa Concours", 
-              style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: -0.5)),
-            const SizedBox(height: 4),
-            const Text("Propulsez votre carrière vers les sommets.", 
-              style: TextStyle(fontSize: 13, color: Colors.white70, fontWeight: FontWeight.w500)),
+            const Text(
+              "Atteignez l'Excellence",
+              style: TextStyle(
+                fontSize: 26,
+                fontWeight: FontWeight.w900,
+                color: YekiColors.white,
+                letterSpacing: -0.5,
+              ),
+            ),
+            const SizedBox(height: 3),
+            Text(
+              _niveauApprenant.isNotEmpty
+                  ? "Concours accessibles pour le niveau : $_niveauApprenant"
+                  : "Propulsez votre avenir au sein des grandes écoles d'ingénierie.",
+              style: TextStyle(
+                fontSize: 13,
+                color: YekiColors.white.withValues(alpha: 0.9),
+                fontWeight: FontWeight.w500,
+              ),
+            ),
           ],
         ),
       ),
@@ -260,28 +334,28 @@ class _ConcoursPageState extends State<ConcoursPage>
 
   Widget _buildSearchBar() {
     return Container(
-      color: bgPremium,
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
+      padding: const EdgeInsets.symmetric(vertical: 14),
       child: Container(
         decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: _borderLight, width: 1),
+          color: YekiColors.white,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: YekiColors.borderLight, width: 1.2),
+          boxShadow: YekiShadows.subtle,
         ),
         child: TextField(
           controller: _searchCtrl,
-          onChanged: (v) { _searchQ = v; _appliquerFiltre(); },
-          style: const TextStyle(color: textMain, fontSize: 15),
+          onChanged: (v) {
+            _searchQ = v;
+            _appliquerFiltre();
+          },
+          style: YekiTextStyles.bodyMedium,
           decoration: InputDecoration(
             hintText: "Rechercher une école, un concours...",
-            hintStyle: TextStyle(color: textSub.withOpacity(0.6), fontSize: 14),
-            prefixIcon: Padding(
-              padding: const EdgeInsets.only(left: 8),
-              child: Icon(Icons.search_rounded, color: brandPrimary, size: 22),
-            ),
+            hintStyle: YekiTextStyles.bodySmall,
+            prefixIcon: Icon(Icons.search_rounded, color: YekiColors.primaryLight, size: 22),
             suffixIcon: _searchQ.isNotEmpty
                 ? IconButton(
-                    icon: const Icon(Icons.close_rounded, size: 20),
+                    icon: const Icon(Icons.close_rounded, size: 18),
                     onPressed: () {
                       _searchCtrl.clear();
                       setState(() => _searchQ = '');
@@ -290,7 +364,7 @@ class _ConcoursPageState extends State<ConcoursPage>
                   )
                 : null,
             border: InputBorder.none,
-            contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
+            contentPadding: const EdgeInsets.symmetric(vertical: 15, horizontal: 16),
           ),
         ),
       ),
@@ -299,34 +373,40 @@ class _ConcoursPageState extends State<ConcoursPage>
 
   Widget _buildPremiumFilterBar() {
     return Container(
-      color: bgPremium,
-      height: 52,
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+      height: 40,
+      margin: const EdgeInsets.only(bottom: 16),
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
+        physics: const BouncingScrollPhysics(),
         itemCount: _filtres.length,
         itemBuilder: (context, i) {
           bool isSelected = _filtre == _filtres[i];
           return GestureDetector(
-            onTap: () => setState(() { 
-              _filtre = _filtres[i]; 
-              _appliquerFiltre(); 
+            onTap: () => setState(() {
+              _filtre = _filtres[i];
+              _appliquerFiltre();
             }),
             child: AnimatedContainer(
-              duration: const Duration(milliseconds: 300),
-              margin: const EdgeInsets.only(right: 12),
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+              duration: const Duration(milliseconds: 250),
+              margin: const EdgeInsets.only(right: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 18),
               decoration: BoxDecoration(
-                color: isSelected ? brandPrimary : Colors.white,
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(color: isSelected ? brandPrimary : _borderLight),
+                color: isSelected ? YekiColors.primaryDark.withValues(alpha: 0.12) : YekiColors.backgroundAlt,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: isSelected ? YekiColors.primaryDark.withValues(alpha: 0.35) : Colors.transparent,
+                  width: 1.5,
+                ),
               ),
               alignment: Alignment.center,
-              child: Text(_filtres[i], style: TextStyle(
-                color: isSelected ? Colors.white : textSub,
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                fontSize: 13,
-              )),
+              child: Text(
+                _filtres[i],
+                style: TextStyle(
+                  color: isSelected ? YekiColors.primaryLight : YekiColors.textLight,
+                  fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                  fontSize: 13,
+                ),
+              ),
             ),
           );
         },
@@ -334,218 +414,262 @@ class _ConcoursPageState extends State<ConcoursPage>
     );
   }
 
-  Widget _buildContent() {
-    if (_loading) {
-      return const Center(child: CircularProgressIndicator(color: brandPrimary));
-    }
-    if (_error.isNotEmpty) {
-      return _ErrorView(msg: _error, onRetry: _charger);
-    }
-    if (_affiches.isEmpty) {
-      return const _EmptyView();
-    }
-    
-    return ListView.builder(
-      physics: const BouncingScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(20, 8, 20, 100),
-      itemCount: _affiches.length,
-      itemBuilder: (context, index) {
-        final fade = CurvedAnimation(
-          parent: _animCtrl, 
-          curve: Interval(0.05 + (index * 0.06).clamp(0, 0.5), 1.0, curve: Curves.easeOut)
-        );
-        return FadeTransition(
-          opacity: fade,
-          child: SlideTransition(
-            position: Tween<Offset>(begin: const Offset(0, 0.1), end: Offset.zero).animate(fade),
-            child: _PremiumConcoursCard(
-              dept: _affiches[index], 
-              index: index, 
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => DetailConcoursPage(
-                    concoursId: _affiches[index].id,
-                    deptPrecharge: _affiches[index],
-                  ),
-                ),
-              ).then((_) => _charger()),
+  Widget _buildSectionTitle() {
+    return Row(
+      children: [
+        const Text(
+          "Vos Concours",
+          style: TextStyle(
+            fontSize: 19,
+            fontWeight: FontWeight.w900,
+            letterSpacing: -0.3,
+          ),
+        ),
+        const Spacer(),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          decoration: BoxDecoration(
+            color: YekiColors.primaryDark.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Text(
+            "${_affiches.length} Concours Ouverts",
+            style: const TextStyle(
+              color: YekiColors.primaryDark,
+              fontSize: 11.5,
+              fontWeight: FontWeight.w700,
             ),
           ),
-        );
-      },
+        ),
+      ],
     );
   }
-}
 
-// --- COMPOSANT CARTE PREMIUM ---
-class _PremiumConcoursCard extends StatelessWidget {
-  final DepartementItem dept;
-  final int index;
-  final VoidCallback onTap;
-
-  const _PremiumConcoursCard({
-    required this.dept, 
-    required this.index, 
-    required this.onTap,
-  });
-
-  Color _parseColor() {
+  Widget _buildAiryPremiumCard(DepartementItem dept) {
+    Color itemColor;
     try {
       final hex = dept.couleur.replaceAll('#', '');
-      return Color(int.parse('FF$hex', radix: 16));
+      itemColor = Color(int.parse('FF$hex', radix: 16));
     } catch (_) {
-      return brandPrimary;
+      itemColor = YekiColors.primaryLight;
     }
-  }
 
-  @override
-  Widget build(BuildContext context) {
-    final Color mainCol = _parseColor();
+    final String affichageTitre = dept.nomConcours.isNotEmpty ? dept.nomConcours : dept.nom;
+    final bool aProgression = dept.progressionMoyenne > 0;
+    final double progFraction = dept.progressionMoyenne / 100;
 
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 20),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(24),
-          boxShadow: [
-            BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 20, offset: const Offset(0, 8)),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Image Section avec Badge flottant
-            Stack(
-              children: [
-                Container(
-                  height: 140,
-                  decoration: BoxDecoration(
-                    borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-                    gradient: LinearGradient(
-                      colors: [mainCol, mainCol.withOpacity(0.8)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    image: dept.imageUrl != null
-                        ? DecorationImage(
-                            image: NetworkImage(dept.imageUrl!),
-                            fit: BoxFit.cover,
-                            colorFilter: ColorFilter.mode(mainCol.withOpacity(0.4), BlendMode.darken),
-                          )
-                        : null,
-                  ),
-                  child: dept.imageUrl == null
-                      ? Center(
-                          child: Icon(Icons.emoji_events_rounded, size: 50, color: Colors.white.withOpacity(0.2)),
-                        )
-                      : null,
-                ),
-                Positioned(
-                  top: 12, left: 12,
-                  child: _GlassBadge(
-                    label: dept.prix == 0 ? "GRATUIT" : "${dept.prix} FCFA", 
-                    color: dept.prix == 0 ? _green : brandGold,
-                  ),
-                ),
-                Positioned(
-                  top: 12, right: 12,
-                  child: _GlassBadge(
-                    label: dept.statut == 'TERMINÉ' ? "TERMINÉ" : (dept.statut == 'EN COURS' ? "EN COURS" : "NOUVEAU"),
-                    color: dept.statut == 'TERMINÉ' ? _green : (dept.statut == 'EN COURS' ? brandPrimary : textSub),
-                  ),
-                ),
-                Positioned(
-                  bottom: 12, left: 16, right: 60,
-                  child: Text(
-                    dept.nomConcours.isNotEmpty ? dept.nomConcours : dept.nom,
-                    style: const TextStyle(
-                      color: Colors.white, 
-                      fontSize: 16, 
-                      fontWeight: FontWeight.w900,
-                      shadows: [Shadow(blurRadius: 4, color: Colors.black54)],
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
-            // Contenu Info
-            Padding(
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: YekiColors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: YekiColors.borderLight, width: 1.0),
+        boxShadow: YekiShadows.subtle,
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(24),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => DetailConcoursPage(concoursId: dept.id, deptPrecharge: dept),
+              ),
+            ).then((_) => _charger()),
+            child: Padding(
               padding: const EdgeInsets.all(18),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  if (dept.nom != dept.nomConcours && dept.nom.isNotEmpty)
-                    Text(dept.nom, 
-                      style: const TextStyle(color: textSub, fontWeight: FontWeight.w600, fontSize: 11, letterSpacing: 0.5)),
-                  const SizedBox(height: 4),
-                  if (dept.description.isNotEmpty)
-                    Text(
-                      dept.description, 
-                      maxLines: 2, 
-                      overflow: TextOverflow.ellipsis, 
-                      style: TextStyle(color: textMain.withOpacity(0.7), height: 1.4, fontSize: 13)
-                    ),
-                  const SizedBox(height: 14),
-                  // Stats Row
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _infoIcon(Icons.calendar_today_rounded, 
-                        dept.dateExamen?.toString().substring(0,10) ?? "Date à définir"),
-                      if (dept.placesDisponibles != null)
-                        _infoIcon(Icons.people_outline_rounded, "${dept.placesDisponibles} Places"),
-                      _infoIcon(Icons.menu_book_outlined, "${dept.nbCours} Modules"),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: itemColor.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Icon(
+                          _getIconForConcours(affichageTitre),
+                          color: itemColor,
+                          size: 26,
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              affichageTitre,
+                              style: const TextStyle(
+                                fontSize: 16.5,
+                                fontWeight: FontWeight.w900,
+                                height: 1.25,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 5),
+                            if (dept.nom != dept.nomConcours && dept.nom.isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 4),
+                                child: Text(
+                                  dept.nom,
+                                  style: TextStyle(
+                                    fontSize: 12.5,
+                                    color: itemColor,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            if (dept.niveauxAccessibles.isNotEmpty)
+                              Wrap(
+                                spacing: 6,
+                                runSpacing: 4,
+                                children: dept.niveauxAccessibles.map((niveau) => Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: YekiColors.warning.withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text(
+                                    niveau,
+                                    style: TextStyle(
+                                      color: YekiColors.warning,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                )).toList(),
+                              ),
+                          ],
+                        ),
+                      ),
                     ],
                   ),
-                  if (dept.progressionMoyenne > 0) ...[
-                    const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(6),
-                            child: LinearProgressIndicator(
-                              value: dept.progressionMoyenne / 100, 
-                              backgroundColor: bgPremium, 
-                              valueColor: AlwaysStoppedAnimation(mainCol), 
-                              minHeight: 6
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Text("${dept.progressionMoyenne.toStringAsFixed(0)}%", 
-                          style: TextStyle(color: mainCol, fontWeight: FontWeight.w800, fontSize: 12)),
-                      ],
+                  if (dept.description.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      dept.description,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: YekiColors.textDark.withValues(alpha: 0.6),
+                        height: 1.4,
+                        fontSize: 12.5,
+                      ),
                     ),
                   ],
-                  const SizedBox(height: 18),
-                  // Action Button Premium
-                  SizedBox(
-                    width: double.infinity,
-                    height: 50,
-                    child: ElevatedButton(
-                      onPressed: onTap,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: mainCol,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                        elevation: 0,
-                      ),
-                      child: Text(
-                        dept.progressionMoyenne > 0 ? "CONTINUER LA PRÉPA" : "DÉCOUVRIR LE PROGRAMME", 
-                        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13, letterSpacing: 0.5)
-                      ),
+                  if (dept.niveauxCibles.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
+                      children: dept.niveauxCibles.split(',').map((niv) => Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: YekiColors.backgroundLight,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: YekiColors.borderLight),
+                        ),
+                        child: Text(
+                          niv.trim(),
+                          style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
+                        ),
+                      )).toList(),
                     ),
+                  ],
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                    decoration: BoxDecoration(
+                      color: YekiColors.backgroundLight,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        _infoIcon(Icons.calendar_month_rounded, dept.dateExamen?.toString().substring(0, 10) ?? "À définir"),
+                        if (dept.placesDisponibles != null)
+                          _infoIcon(Icons.event_seat_rounded, "${dept.placesDisponibles} pl."),
+                        _infoIcon(Icons.layers_rounded, "${dept.nbCours} mod."),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  aProgression ? "Préparation en cours" : (dept.prix == 0 ? "Accès Libre" : "${dept.prix} FCFA"),
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                    color: aProgression ? YekiColors.primaryLight : (dept.prix == 0 ? YekiColors.success : YekiColors.textLight),
+                                  ),
+                                ),
+                                if (aProgression)
+                                  Text(
+                                    "${dept.progressionMoyenne.toStringAsFixed(0)}%",
+                                    style: const TextStyle(
+                                      fontSize: 11.5,
+                                      fontWeight: FontWeight.w900,
+                                      color: YekiColors.primaryDark,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: LinearProgressIndicator(
+                                value: aProgression ? progFraction : 0.0,
+                                backgroundColor: YekiColors.borderLight,
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  aProgression ? YekiColors.primaryDark : YekiColors.textLight.withValues(alpha: 0.3),
+                                ),
+                                minHeight: 5,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Container(
+                        height: 38,
+                        padding: const EdgeInsets.symmetric(horizontal: 14),
+                        decoration: BoxDecoration(
+                          color: aProgression ? YekiColors.accent : itemColor,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        alignment: Alignment.center,
+                        child: Text(
+                          aProgression ? "CONTINUER" : "DÉCOUVRIR",
+                          style: const TextStyle(
+                            color: YekiColors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 0.3,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -554,12 +678,14 @@ class _PremiumConcoursCard extends StatelessWidget {
   Widget _infoIcon(IconData icon, String text) {
     return Flexible(
       child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 14, color: textSub),
-          const SizedBox(width: 6),
-          Expanded(
-            child: Text(text, 
-              style: const TextStyle(color: textSub, fontSize: 11, fontWeight: FontWeight.w500),
+          Icon(icon, size: 13, color: YekiColors.textLight),
+          const SizedBox(width: 5),
+          Flexible(
+            child: Text(
+              text,
+              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
@@ -568,28 +694,68 @@ class _PremiumConcoursCard extends StatelessWidget {
       ),
     );
   }
-}
 
-class _GlassBadge extends StatelessWidget {
-  final String label;
-  final Color color;
-  const _GlassBadge({required this.label, required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(10),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-          color: color.withOpacity(0.85),
-          child: Text(label, 
-            style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w800)),
+  Widget _buildErrorState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.wifi_off_rounded, size: 44, color: YekiColors.textLight),
+            const SizedBox(height: 12),
+            Text(_error, style: YekiTextStyles.bodyMedium, textAlign: TextAlign.center),
+            const SizedBox(height: 16),
+            YekiButton(
+              label: 'Réessayer',
+              icon: Icons.refresh_rounded,
+              onPressed: _charger,
+              width: 160,
+            ),
+          ],
         ),
       ),
     );
   }
+
+  Widget _buildResponsiveSkeleton(double padding) {
+    return ListView(
+      physics: const NeverScrollableScrollPhysics(),
+      padding: EdgeInsets.symmetric(horizontal: padding, vertical: 16),
+      children: [
+        Container(
+          height: 175,
+          decoration: BoxDecoration(
+            color: YekiColors.borderLight,
+            borderRadius: BorderRadius.circular(24),
+          ),
+        ),
+        const SizedBox(height: 16),
+        _skeletonWidget(h: 48, r: 24),
+        const SizedBox(height: 14),
+        Row(
+          children: List.generate(3, (_) => Expanded(
+            child: Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: _skeletonWidget(h: 36, r: 18),
+            ),
+          )),
+        ),
+        const SizedBox(height: 24),
+        _skeletonWidget(h: 200, r: 22),
+        const SizedBox(height: 16),
+        _skeletonWidget(h: 200, r: 22),
+      ],
+    );
+  }
+
+  Widget _skeletonWidget({double h = 20, double r = 12}) => Container(
+        height: h,
+        decoration: BoxDecoration(
+          color: YekiColors.borderLight,
+          borderRadius: BorderRadius.circular(r),
+        ),
+      );
 }
 
 class _EmptyView extends StatelessWidget {
@@ -597,49 +763,26 @@ class _EmptyView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.emoji_events_outlined, size: 70, color: Colors.grey.shade300),
-          const SizedBox(height: 16),
-          const Text('Aucun concours disponible pour votre niveau',
-              style: TextStyle(color: textSub, fontSize: 15, fontWeight: FontWeight.w600)),
-          const SizedBox(height: 8),
-          const Text('Des concours seront disponibles quand vous aurez le niveau requis',
-              style: TextStyle(color: textSub, fontSize: 12),
-              textAlign: TextAlign.center),
-        ],
-      ),
-    );
-  }
-}
-
-class _ErrorView extends StatelessWidget {
-  final String msg;
-  final VoidCallback onRetry;
-  const _ErrorView({required this.msg, required this.onRetry});
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.wifi_off_rounded, size: 60, color: textSub),
-          const SizedBox(height: 16),
-          Text(msg, style: TextStyle(color: textSub)),
-          const SizedBox(height: 16),
-          ElevatedButton.icon(
-            onPressed: onRetry,
-            icon: const Icon(Icons.refresh_rounded),
-            label: const Text('Réessayer'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: brandPrimary,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              elevation: 0,
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.assignment_turned_in_rounded, size: 64, color: YekiColors.borderLight),
+            const SizedBox(height: 16),
+            const Text(
+              'Aucun concours trouvé',
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
+              textAlign: TextAlign.center,
             ),
-          ),
-        ],
+            const SizedBox(height: 6),
+            const Text(
+              'Ajustez vos filtres ou votre recherche pour explorer d\'autres opportunités.',
+              style: TextStyle(fontSize: 12.5, height: 1.35),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -1,4 +1,7 @@
-// lib/views/pages/apprenants/devoirs_page.dart (version complètement dynamique et corrigée)
+// lib/views/pages/apprenants/devoirs_page.dart
+// ═══════════════════════════════════════════════════════════════════════════
+//  YEKI DEVOIRS — Design Unifié Premium (CORRIGÉ)
+// ═══════════════════════════════════════════════════════════════════════════
 
 import 'dart:convert';
 import 'package:flutter/material.dart';
@@ -7,23 +10,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:yeki/widgets/yeki_app_bar.dart';
 import 'package:yeki/services/offline_service.dart';
 import 'package:yeki/services/sync_service.dart';
-import 'composer_devoir_page.dart';
-import 'resultat_devoir_page.dart';
-
-// Palette unifiée
-const Color brandPrimary = Color(0xFF135F74);
-const Color brandGold = Color(0xFFC5A059);
-const Color textMain = Color(0xFF0F172A);
-const Color textSub = Color(0xFF64748B);
-const Color borderLight = Color(0xFFE0E4E8);
-const Color bgLight = Color(0xFFF8FAFC);
-const Color white = Color(0xFFFFFFFF);
-const Color green = Color(0xFF10B981);
-const Color red = Color(0xFFEF4444);
-const Color orange = Color(0xFFF97316);
-const Color purple = Color(0xFF8B5CF6);
-
-const String baseUrl = 'https://yeki.pythonanywhere.com/api';
+import 'package:yeki/views/pages/apprenants/composer_devoir_page.dart';
+import 'package:yeki/views/pages/apprenants/resultat_devoir_page.dart';
+import 'package:yeki/core/theme/app_theme.dart';
+import 'package:yeki/core/constants/api_constants.dart';
 
 class DevoirItem {
   final int id;
@@ -44,7 +34,7 @@ class DevoirItem {
   final bool estExpire;
   final bool estPublie;
   final int nbQuestions;
-  
+
   DevoirItem({
     required this.id,
     required this.titre,
@@ -65,7 +55,7 @@ class DevoirItem {
     required this.estPublie,
     required this.nbQuestions,
   });
-  
+
   factory DevoirItem.fromJson(Map<String, dynamic> json) {
     return DevoirItem(
       id: json['id'] ?? 0,
@@ -88,106 +78,131 @@ class DevoirItem {
       nbQuestions: json['nb_questions'] ?? 0,
     );
   }
-  
+
   bool get aSoumis => statutApprenant != null && statutApprenant != 'non_commence';
   bool get estCorrige => statutApprenant == 'corrige';
   bool get estEnCours => statutApprenant == 'en_cours';
-  
+
   String get statutLabel {
     switch (statutApprenant) {
-      case 'non_commence': return 'À faire';
-      case 'en_cours': return 'En cours';
-      case 'soumis': return 'Soumis';
-      case 'corrige': return 'Corrigé';
-      case 'en_retard': return 'En retard';
-      default: return 'À faire';
+      case 'non_commence':
+        return 'À faire';
+      case 'en_cours':
+        return 'En cours';
+      case 'soumis':
+        return 'Soumis';
+      case 'corrige':
+        return 'Corrigé';
+      case 'en_retard':
+        return 'En retard';
+      default:
+        return 'À faire';
     }
   }
-  
+
   Color get statutColor {
     switch (statutApprenant) {
-      case 'non_commence': return brandPrimary;
-      case 'en_cours': return purple;
-      case 'soumis': return orange;
-      case 'corrige': return green;
-      case 'en_retard': return red;
-      default: return brandPrimary;
+      case 'non_commence':
+        return YekiColors.primaryDark;
+      case 'en_cours':
+        return YekiColors.purple;
+      case 'soumis':
+        return YekiColors.warning;
+      case 'corrige':
+        return YekiColors.success;
+      case 'en_retard':
+        return YekiColors.error;
+      default:
+        return YekiColors.primaryDark;
     }
   }
-  
+
   Color get typeColor {
     switch (typeDevoir) {
-      case 'cursus': return const Color(0xFF3B82F6);
-      case 'concours': return brandGold;
-      case 'formation_classique': return const Color(0xFF14B8A6);
-      case 'formation_metier': return orange;
-      case 'olympiade': return purple;
-      default: return brandPrimary;
+      case 'cursus':
+        return Colors.blue;
+      case 'concours':
+        return YekiColors.accent;
+      case 'formation_classique':
+        return Colors.teal;
+      case 'formation_metier':
+        return YekiColors.warning;
+      case 'olympiade':
+        return YekiColors.purple;
+      default:
+        return YekiColors.primaryDark;
     }
   }
-  
+
   String get typeLabel {
     switch (typeDevoir) {
-      case 'cursus': return 'Cursus';
-      case 'concours': return 'Concours';
-      case 'formation_classique': return 'Formation';
-      case 'formation_metier': return 'Métier';
-      case 'olympiade': return 'Olympiade';
-      default: return typeDevoir;
+      case 'cursus':
+        return 'Cursus';
+      case 'concours':
+        return 'Concours';
+      case 'formation_classique':
+        return 'Formation';
+      case 'formation_metier':
+        return 'Métier';
+      case 'olympiade':
+        return 'Olympiade';
+      default:
+        return typeDevoir;
     }
   }
 }
 
 class DevoirsPage extends StatefulWidget {
   final bool estEnseignantPrincipal;
-  
+
   const DevoirsPage({super.key, required this.estEnseignantPrincipal});
 
   @override
   State<DevoirsPage> createState() => _DevoirsPageState();
 }
 
-class _DevoirsPageState extends State<DevoirsPage> with SingleTickerProviderStateMixin {
+class _DevoirsPageState extends State<DevoirsPage>
+    with SingleTickerProviderStateMixin {
   late TabController _tabCtrl;
   bool _loading = true;
-  bool _refreshing = false;
-  String _error = '';
-  
+  final String _error = '';
+
   List<DevoirItem> _tous = [];
   List<DevoirItem> _affiches = [];
-  
+
   String _typeSelectionne = 'Tous';
   String? _matiereSelectionnee;
   String? _niveauSelectionne;
   String _statutSelectionne = 'Tous';
   String _recherche = '';
-  
+
   final TextEditingController _searchCtrl = TextEditingController();
-  
-  // Données pour YekiHeader
-  int _unreadNotifications = 0;
-  bool _isSubscribed = true;
+
+  final int _unreadNotifications = 0;
+  final bool _isSubscribed = true;
   String _username = 'Apprenant';
-  
+
   final List<_TypeDevoirTab> _types = [
-    const _TypeDevoirTab('Tous', Icons.grid_view_rounded, brandPrimary),
-    const _TypeDevoirTab('cursus', Icons.school_rounded, Color(0xFF3B82F6)),
-    const _TypeDevoirTab('concours', Icons.emoji_events_rounded, brandGold),
-    const _TypeDevoirTab('formation_classique', Icons.account_balance_rounded, Color(0xFF14B8A6)),
-    const _TypeDevoirTab('formation_metier', Icons.work_rounded, orange),
-    const _TypeDevoirTab('olympiade', Icons.military_tech_rounded, purple),
+    const _TypeDevoirTab('Tous', Icons.grid_view_rounded, YekiColors.primaryDark),
+    const _TypeDevoirTab('cursus', Icons.school_rounded, Colors.blue),
+    const _TypeDevoirTab('concours', Icons.emoji_events_rounded, YekiColors.accent),
+    const _TypeDevoirTab('formation_classique', Icons.account_balance_rounded, Colors.teal),
+    const _TypeDevoirTab('formation_metier', Icons.work_rounded, YekiColors.warning),
+    const _TypeDevoirTab('olympiade', Icons.military_tech_rounded, YekiColors.purple),
   ];
-  
+
   final List<String> _matieres = [
     'Mathématiques', 'Physique', 'Chimie', 'SVT', 'Informatique',
-    'Français', 'Anglais', 'Histoire-Géo', 'Philosophie', 'Économie', 'Autre',
+    'Français', 'Anglais', 'Histoire-Géo', 'Philosophie', 'Économie',
+    'Autre',
   ];
-  
+
   final List<String> _niveaux = [
     'Terminale', '1ère', '2nde', '3ème',
-    'Licence 1', 'Licence 2', 'Licence 3', 'Master 1', 'Master 2', 'Autre',
+    'Licence 1', 'Licence 2', 'Licence 3', 'Master 1', 'Master 2',
+    'Autre',
   ];
-  
+
   final List<String> _statuts = [
     'Tous', 'non_commence', 'en_cours', 'soumis', 'corrige', 'en_retard',
   ];
@@ -197,17 +212,17 @@ class _DevoirsPageState extends State<DevoirsPage> with SingleTickerProviderStat
     super.initState();
     _tabCtrl = TabController(length: _types.length, vsync: this)
       ..addListener(_onTabChanged);
-    
+
     _initOffline();
     _charger();
     _loadUserData();
-    
+
     _searchCtrl.addListener(() {
       setState(() => _recherche = _searchCtrl.text);
       _appliquerFiltres();
     });
   }
-  
+
   Future<void> _initOffline() async {
     await OfflineService.init();
     SyncService().startAutoSync();
@@ -234,11 +249,11 @@ class _DevoirsPageState extends State<DevoirsPage> with SingleTickerProviderStat
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('token');
     if (token == null) return;
-    
+
     try {
       final response = await http.get(
-        Uri.parse('$baseUrl/profil/me/'),
-        headers: {'Content-Type': 'application/json', 'Authorization': 'Token $token'},
+        Uri.parse(ApiConstants.profilMe),
+        headers: ApiHeaders.auth(token),
       );
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -253,30 +268,31 @@ class _DevoirsPageState extends State<DevoirsPage> with SingleTickerProviderStat
 
   Future<void> _charger({bool silent = false}) async {
     if (!silent && mounted) setState(() => _loading = true);
-    
+
     final token = await _getToken();
     if (token == null) {
       _loadFromCache();
       if (mounted) setState(() => _loading = false);
       return;
     }
-    
+
     try {
       final response = await http.get(
-        Uri.parse('$baseUrl/devoirs/'),
-        headers: {'Content-Type': 'application/json', 'Authorization': 'Token $token'},
+        Uri.parse(ApiConstants.devoirs),
+        headers: ApiHeaders.auth(token),
       );
-      
+
       if (response.statusCode == 200) {
         final List data = jsonDecode(response.body);
-        final devoirs = data.map((d) => DevoirItem.fromJson(d as Map<String, dynamic>)).toList();
-        
+        final devoirs = data
+            .map((d) => DevoirItem.fromJson(d as Map<String, dynamic>))
+            .toList();
+
         setState(() {
           _tous = devoirs;
           _appliquerFiltres();
         });
-        
-        // Mettre en cache
+
         await OfflineService.cacheDevoirs('all_devoirs', data);
         OfflineService.isOnline = true;
       } else {
@@ -289,12 +305,14 @@ class _DevoirsPageState extends State<DevoirsPage> with SingleTickerProviderStat
       if (mounted) setState(() => _loading = false);
     }
   }
-  
+
   void _loadFromCache() {
     final cached = OfflineService.getCachedDevoirs('all_devoirs');
     if (cached != null) {
       setState(() {
-        _tous = cached.map((d) => DevoirItem.fromJson(d as Map<String, dynamic>)).toList();
+        _tous = cached
+            .map((d) => DevoirItem.fromJson(d as Map<String, dynamic>))
+            .toList();
         _appliquerFiltres();
       });
     }
@@ -302,27 +320,27 @@ class _DevoirsPageState extends State<DevoirsPage> with SingleTickerProviderStat
 
   void _appliquerFiltres() {
     List<DevoirItem> temp = List.from(_tous);
-    
+
     if (_typeSelectionne != 'Tous') {
       temp = temp.where((d) => d.typeDevoir == _typeSelectionne).toList();
     }
-    
+
     if (_matiereSelectionnee != null) {
       temp = temp.where((d) => d.matiere == _matiereSelectionnee).toList();
     }
-    
+
     if (_niveauSelectionne != null) {
       temp = temp.where((d) => d.niveau == _niveauSelectionne).toList();
     }
-    
+
     if (_statutSelectionne != 'Tous') {
       temp = temp.where((d) => d.statutApprenant == _statutSelectionne).toList();
     }
-    
+
     if (_recherche.isNotEmpty) {
       temp = temp.where((d) => d.titre.toLowerCase().contains(_recherche.toLowerCase())).toList();
     }
-    
+
     setState(() => _affiches = temp);
   }
 
@@ -330,9 +348,7 @@ class _DevoirsPageState extends State<DevoirsPage> with SingleTickerProviderStat
   int get _enRetard => _tous.where((d) => d.statutApprenant == 'en_retard').length;
 
   Future<void> _refresh() async {
-    setState(() => _refreshing = true);
     await _charger(silent: true);
-    setState(() => _refreshing = false);
   }
 
   Future<void> _deconnecter() async {
@@ -340,24 +356,34 @@ class _DevoirsPageState extends State<DevoirsPage> with SingleTickerProviderStat
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        backgroundColor: white,
-        title: const Text('Déconnexion', style: TextStyle(fontWeight: FontWeight.bold, color: textMain)),
-        content: const Text('Souhaitez-vous vraiment quitter l\'application ?', style: TextStyle(color: textSub)),
+        backgroundColor: YekiColors.white,
+        title: const Text('Déconnexion',
+            style: TextStyle(fontWeight: FontWeight.w800)),
+        content: const Text('Souhaitez-vous vraiment quitter l\'application ?',
+            style: TextStyle(color: YekiColors.textMedium)),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('Annuler', style: TextStyle(color: textSub))),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Annuler', style: TextStyle(color: YekiColors.textMedium))),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent, foregroundColor: white, elevation: 0),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: YekiColors.error,
+                foregroundColor: YekiColors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('Se déconnecter'),
           ),
         ],
       ),
     );
-    
+
     if (confirm == true) {
       final prefs = await SharedPreferences.getInstance();
       await prefs.clear();
-      if (mounted) Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
+      if (mounted) {
+        Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
+      }
     }
   }
 
@@ -389,8 +415,11 @@ class _DevoirsPageState extends State<DevoirsPage> with SingleTickerProviderStat
 
   @override
   Widget build(BuildContext context) {
+    final double screenWidth = MediaQuery.of(context).size.width;
+    final double padX = screenWidth > 800 ? (screenWidth - 760) / 2 : 18.0;
+
     return Scaffold(
-      backgroundColor: bgLight,
+      backgroundColor: YekiColors.backgroundLight,
       appBar: YekiHeader(
         unreadNotifications: _unreadNotifications,
         isSubscribed: _isSubscribed,
@@ -401,64 +430,115 @@ class _DevoirsPageState extends State<DevoirsPage> with SingleTickerProviderStat
         onSettings: () {},
         onNotifications: () {},
       ),
-      body: Column(
-        children: [
-          _buildHeroSection(),
-          _buildStatsSection(),
-          _buildTabsSection(),
-          _buildFiltersSection(),
-          _buildSearchBar(),
-          Expanded(
-            child: _buildContent(),
-          ),
-        ],
-      ),
+      body: _loading
+          ? _buildResponsiveSkeleton(padX)
+          : _error.isNotEmpty
+              ? _buildErrorState()
+              : RefreshIndicator(
+                  onRefresh: _refresh,
+                  color: YekiColors.primaryDark,
+                  backgroundColor: YekiColors.white,
+                  child: CustomScrollView(
+                    physics: const BouncingScrollPhysics(),
+                    slivers: [
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: EdgeInsets.fromLTRB(padX, 20, padX, 8),
+                          child: _buildPageTitle(),
+                        ),
+                      ),
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(horizontal: padX),
+                          child: _buildStatsSection(),
+                        ),
+                      ),
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: EdgeInsets.fromLTRB(padX, 12, padX, 4),
+                          child: _buildSearchBar(),
+                        ),
+                      ),
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(horizontal: padX),
+                          child: _buildTabsSection(),
+                        ),
+                      ),
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: EdgeInsets.fromLTRB(padX, 4, padX, 8),
+                          child: _buildFiltersSection(),
+                        ),
+                      ),
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: EdgeInsets.fromLTRB(padX, 8, padX, 12),
+                          child: _buildSectionTitle(),
+                        ),
+                      ),
+                      _affiches.isEmpty
+                          ? const SliverFillRemaining(hasScrollBody: false, child: _EmptyView())
+                          : SliverPadding(
+                              padding: EdgeInsets.fromLTRB(padX, 0, padX, 110),
+                              sliver: SliverList(
+                                delegate: SliverChildBuilderDelegate(
+                                  (ctx, idx) => _buildUnifiedCard(_affiches[idx]),
+                                  childCount: _affiches.length,
+                                ),
+                              ),
+                            ),
+                    ],
+                  ),
+                ),
     );
   }
 
-  Widget _buildHeroSection() {
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [brandPrimary, brandPrimary.withOpacity(0.85)],
+  Widget _buildPageTitle() {
+    return Row(
+      children: [
+        const Text(
+          "Mes Devoirs",
+          style: TextStyle(
+            fontSize: 26,
+            fontWeight: FontWeight.w900,
+            letterSpacing: -0.5,
+          ),
         ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-              decoration: BoxDecoration(
-                color: brandGold.withOpacity(0.15),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: const Text("ÉVALUATIONS", style: TextStyle(color: brandGold, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 1)),
+        const SizedBox(width: 8),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          decoration: BoxDecoration(
+            color: YekiColors.accent.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: const Text(
+            "ÉVALUATIONS",
+            style: TextStyle(
+              color: YekiColors.accent,
+              fontSize: 9,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.5,
             ),
-            const SizedBox(height: 10),
-            const Text("Mes Devoirs", style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: -0.5)),
-            const SizedBox(height: 4),
-            const Text("Suivez vos progrès et réussissez vos examens", style: TextStyle(fontSize: 13, color: Colors.white70, fontWeight: FontWeight.w500)),
-          ],
+          ),
         ),
-      ),
+      ],
     );
   }
 
   Widget _buildStatsSection() {
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      margin: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         children: [
-          _buildStatCard('Total', _tous.length.toString(), Icons.assignment_rounded, brandPrimary),
-          const SizedBox(width: 12),
-          _buildStatCard('À faire', _aFaire.toString(), Icons.pending_rounded, const Color(0xFF3B82F6)),
-          const SizedBox(width: 12),
-          _buildStatCard('En retard', _enRetard.toString(), Icons.warning_rounded, red),
+          _buildStatCard('Total', _tous.length.toString(),
+              Icons.assignment_rounded, YekiColors.primaryDark),
+          const SizedBox(width: 10),
+          _buildStatCard('À faire', _aFaire.toString(),
+              Icons.pending_rounded, Colors.blue),
+          const SizedBox(width: 10),
+          _buildStatCard('En retard', _enRetard.toString(),
+              Icons.warning_rounded, YekiColors.error),
         ],
       ),
     );
@@ -467,19 +547,52 @@ class _DevoirsPageState extends State<DevoirsPage> with SingleTickerProviderStat
   Widget _buildStatCard(String label, String value, IconData icon, Color color) {
     return Expanded(
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12),
+        padding: const EdgeInsets.symmetric(vertical: 14),
         decoration: BoxDecoration(
-          color: white,
+          color: YekiColors.white,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: borderLight, width: 1),
+          border: Border.all(color: YekiColors.borderLight, width: 1),
         ),
         child: Column(
           children: [
             Icon(icon, size: 20, color: color),
-            const SizedBox(height: 4),
-            Text(value, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: color)),
-            Text(label, style: const TextStyle(fontSize: 11, color: textSub)),
+            const SizedBox(height: 6),
+            Text(value,
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: color)),
+            Text(label, style: const TextStyle(fontSize: 11)),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSearchBar() {
+    return Container(
+      decoration: BoxDecoration(
+        color: YekiColors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: YekiColors.borderLight, width: 1.2),
+        boxShadow: YekiShadows.subtle,
+      ),
+      child: TextField(
+        controller: _searchCtrl,
+        style: YekiTextStyles.bodyMedium,
+        decoration: InputDecoration(
+          hintText: 'Rechercher un devoir...',
+          hintStyle: YekiTextStyles.bodySmall,
+          prefixIcon: Icon(Icons.search_rounded, color: YekiColors.primaryLight, size: 22),
+          suffixIcon: _recherche.isNotEmpty
+              ? IconButton(
+                  icon: const Icon(Icons.close_rounded, size: 18),
+                  onPressed: () {
+                    _searchCtrl.clear();
+                    setState(() => _recherche = '');
+                    _appliquerFiltres();
+                  },
+                )
+              : null,
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(vertical: 15, horizontal: 16),
         ),
       ),
     );
@@ -487,53 +600,52 @@ class _DevoirsPageState extends State<DevoirsPage> with SingleTickerProviderStat
 
   Widget _buildTabsSection() {
     return Container(
-      color: white,
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: SizedBox(
-        height: 48,
-        child: ListView.builder(
-          scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          itemCount: _types.length,
-          itemBuilder: (context, index) {
-            final type = _types[index];
-            final isSelected = _typeSelectionne == type.code;
-            return GestureDetector(
-              onTap: () {
-                setState(() {
-                  _typeSelectionne = type.code;
-                  _tabCtrl.animateTo(index);
-                  _appliquerFiltres();
-                });
-              },
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                margin: const EdgeInsets.only(right: 12),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                decoration: BoxDecoration(
-                  color: isSelected ? type.color : bgLight,
-                  borderRadius: BorderRadius.circular(24),
-                  border: Border.all(color: isSelected ? type.color : borderLight, width: 1),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(type.icon, size: 16, color: isSelected ? white : type.color),
-                    const SizedBox(width: 6),
-                    Text(
-                      _typeLabel(type.code),
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: isSelected ? white : type.color,
-                      ),
-                    ),
-                  ],
+      height: 44,
+      margin: const EdgeInsets.symmetric(vertical: 14),
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        physics: const BouncingScrollPhysics(),
+        itemCount: _types.length,
+        itemBuilder: (context, index) {
+          final type = _types[index];
+          final isSelected = _typeSelectionne == type.code;
+          return GestureDetector(
+            onTap: () {
+              setState(() {
+                _typeSelectionne = type.code;
+                _tabCtrl.animateTo(index);
+                _appliquerFiltres();
+              });
+            },
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 250),
+              margin: const EdgeInsets.only(right: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                color: isSelected ? type.color.withValues(alpha: 0.12) : YekiColors.backgroundAlt,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: isSelected ? type.color.withValues(alpha: 0.35) : Colors.transparent,
+                  width: 1.5,
                 ),
               ),
-            );
-          },
-        ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(type.icon, size: 15, color: isSelected ? type.color : YekiColors.textLight),
+                  const SizedBox(width: 6),
+                  Text(_typeLabel(type.code),
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                      color: isSelected ? type.color : YekiColors.textLight,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -541,7 +653,6 @@ class _DevoirsPageState extends State<DevoirsPage> with SingleTickerProviderStat
   Widget _buildFiltersSection() {
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
       child: Row(
         children: [
           _buildFilterDropdown(
@@ -587,16 +698,16 @@ class _DevoirsPageState extends State<DevoirsPage> with SingleTickerProviderStat
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   decoration: BoxDecoration(
-                    color: red.withOpacity(0.08),
+                    color: YekiColors.error.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: red.withOpacity(0.2), width: 1),
+                    border: Border.all(color: YekiColors.error.withValues(alpha: 0.2), width: 1),
                   ),
                   child: const Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.clear_rounded, size: 14, color: red),
+                      Icon(Icons.clear_rounded, size: 14, color: YekiColors.error),
                       SizedBox(width: 4),
-                      Text('Effacer', style: TextStyle(fontSize: 12, color: red, fontWeight: FontWeight.w600)),
+                      Text('Effacer', style: TextStyle(fontSize: 12, color: YekiColors.error, fontWeight: FontWeight.w600)),
                     ],
                   ),
                 ),
@@ -617,206 +728,335 @@ class _DevoirsPageState extends State<DevoirsPage> with SingleTickerProviderStat
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
       decoration: BoxDecoration(
-        color: white,
+        color: YekiColors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: borderLight, width: 1),
+        border: Border.all(color: YekiColors.borderLight, width: 1),
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
           value: value,
-          hint: Text(hint, style: const TextStyle(fontSize: 12, color: textSub)),
+          hint: Text(hint, style: const TextStyle(fontSize: 12)),
           isDense: true,
           items: items.map((s) => DropdownMenuItem(
             value: s,
             child: Text(
               labelBuilder != null ? labelBuilder(s) : s,
-              style: const TextStyle(fontSize: 12, color: textMain),
+              style: const TextStyle(fontSize: 12),
             ),
           )).toList(),
           onChanged: onChanged,
-          icon: Icon(Icons.keyboard_arrow_down, size: 18, color: textSub),
+          icon: Icon(Icons.keyboard_arrow_down, size: 18),
         ),
       ),
     );
   }
 
-  Widget _buildSearchBar() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-      child: Container(
-        decoration: BoxDecoration(
-          color: white,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: borderLight, width: 1),
-        ),
-        child: TextField(
-          controller: _searchCtrl,
-          style: const TextStyle(color: textMain, fontSize: 14),
-          decoration: InputDecoration(
-            hintText: 'Rechercher un devoir...',
-            prefixIcon: Icon(Icons.search_rounded, color: brandPrimary, size: 20),
-            border: InputBorder.none,
-            contentPadding: const EdgeInsets.symmetric(vertical: 12),
-            hintStyle: const TextStyle(fontSize: 13, color: textSub),
+  Widget _buildSectionTitle() {
+    return Row(
+      children: [
+        const Text(
+          "Vos Devoirs",
+          style: TextStyle(
+            fontSize: 19,
+            fontWeight: FontWeight.w900,
+            letterSpacing: -0.3,
           ),
         ),
-      ),
+        const Spacer(),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          decoration: BoxDecoration(
+            color: YekiColors.primaryDark.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Text(
+            "${_affiches.length} Devoirs",
+            style: const TextStyle(
+              color: YekiColors.primaryDark,
+              fontSize: 11.5,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+      ],
     );
   }
 
-  Widget _buildContent() {
-    if (_loading) {
-      return const Center(child: CircularProgressIndicator(color: brandPrimary));
-    }
-    
-    if (_error.isNotEmpty) {
-      return _buildError();
-    }
-    
-    if (_affiches.isEmpty) {
-      return _buildEmpty();
-    }
-    
-    return RefreshIndicator(
-      onRefresh: _refresh,
-      color: brandPrimary,
-      child: ListView.builder(
-        physics: const BouncingScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
-        itemCount: _affiches.length,
-        itemBuilder: (context, index) => _buildCard(_affiches[index]),
-      ),
-    );
-  }
-
-  Widget _buildCard(DevoirItem d) {
+  Widget _buildUnifiedCard(DevoirItem d) {
     final joursRestants = d.dateLimite.difference(DateTime.now()).inDays;
     final estExpire = joursRestants < 0;
-    
+
     return Container(
-      margin: const EdgeInsets.only(bottom: 14),
+      margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
-        color: white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: borderLight, width: 1),
+        color: YekiColors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: YekiColors.borderLight, width: 1.0),
+        boxShadow: YekiShadows.subtle,
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(20),
-        child: IntrinsicHeight(
-          child: Row(
-            children: [
-              Container(width: 5, color: d.typeColor),
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
+        borderRadius: BorderRadius.circular(24),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: () {
+              if (d.estCorrige && d.noteApprenant != null) {
+                _voirResultat(d);
+              } else if (!estExpire || d.aSoumis) {
+                _ouvrirDevoir(d);
+              }
+            },
+            child: Padding(
+              padding: const EdgeInsets.all(18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          _buildTypeBadge(d.typeLabel, d.typeColor),
-                          _buildStatutBadge(d.statutLabel, d.statutColor),
-                        ],
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: d.typeColor.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Icon(_getIconForType(d.typeDevoir), color: d.typeColor, size: 26),
                       ),
-                      const SizedBox(height: 10),
-                      Text(
-                        d.titre,
-                        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: textMain),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 6),
-                      Row(
-                        children: [
-                          Icon(Icons.layers_outlined, size: 13, color: textSub),
-                          const SizedBox(width: 4),
-                          Text('${d.matiere} • ${d.niveau}', style: const TextStyle(color: textSub, fontSize: 12)),
-                        ],
-                      ),
-                      const Divider(height: 20),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          _buildTimerInfo(joursRestants, estExpire),
-                          _buildActionButton(d, estExpire),
-                        ],
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              d.titre,
+                              style: const TextStyle(
+                                fontSize: 16.5,
+                                fontWeight: FontWeight.w900,
+                                height: 1.25,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 5),
+                            Row(
+                              children: [
+                                _infoChip(d.typeLabel, d.typeColor),
+                                const SizedBox(width: 6),
+                                _infoChip(d.statutLabel, d.statutColor),
+                              ],
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                   ),
-                ),
+                  if (d.description.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      d.description,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: YekiColors.textDark.withValues(alpha: 0.6), height: 1.4, fontSize: 12.5),
+                    ),
+                  ],
+                  const SizedBox(height: 14),
+                  Container(
+                    padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                    decoration: BoxDecoration(
+                      color: YekiColors.backgroundLight,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        _infoIcon(Icons.layers_outlined, '${d.matiere} • ${d.niveau}'),
+                        _infoIcon(Icons.quiz_rounded, '${d.nbQuestions} questions'),
+                        _infoIcon(Icons.timer_rounded, '${d.dureeMinutes} min'),
+                      ],
+                    ),
+                  ),
+                  if (d.estCorrige && d.noteApprenant != null) ...[
+                    const SizedBox(height: 14),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: YekiColors.success.withValues(alpha: 0.05),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: YekiColors.success.withValues(alpha: 0.15)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.grade_rounded, color: YekiColors.success, size: 18),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Note : ${d.noteApprenant!.toStringAsFixed(1)} / ${d.noteSur.toStringAsFixed(0)}',
+                            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+                          ),
+                          const Spacer(),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(color: YekiColors.success, borderRadius: BorderRadius.circular(8)),
+                            child: Text(
+                              '${((d.noteApprenant! / d.noteSur) * 100).toStringAsFixed(0)}%',
+                              style: const TextStyle(color: YekiColors.white, fontSize: 11, fontWeight: FontWeight.w800),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(child: _buildTimerInfo(joursRestants, estExpire)),
+                      const SizedBox(width: 12),
+                      _buildActionButton(d, estExpire),
+                    ],
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildTypeBadge(String label, Color color) {
+  IconData _getIconForType(String typeDevoir) {
+    switch (typeDevoir) {
+      case 'cursus':
+        return Icons.school_rounded;
+      case 'concours':
+        return Icons.emoji_events_rounded;
+      case 'formation_classique':
+        return Icons.account_balance_rounded;
+      case 'formation_metier':
+        return Icons.work_rounded;
+      case 'olympiade':
+        return Icons.military_tech_rounded;
+      default:
+        return Icons.assignment_rounded;
+    }
+  }
+
+  Widget _infoChip(String label, Color color) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(6),
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.15), width: 0.5),
       ),
-      child: Text(label, style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.bold)),
+      child: Text(
+        label,
+        style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: color),
+      ),
     );
   }
 
-  Widget _buildStatutBadge(String label, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(6),
+  Widget _infoIcon(IconData icon, String text) {
+    return Flexible(
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 13, color: YekiColors.textLight),
+          const SizedBox(width: 5),
+          Flexible(
+            child: Text(
+              text,
+              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
       ),
-      child: Text(label, style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.w800)),
     );
   }
 
   Widget _buildTimerInfo(int joursRestants, bool estExpire) {
     if (estExpire) {
-      return const Text('Clôturé', style: TextStyle(color: textSub, fontSize: 12));
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: YekiColors.error.withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.lock_clock_rounded, size: 14, color: YekiColors.error),
+            const SizedBox(width: 6),
+            Text('Clôturé', style: TextStyle(color: YekiColors.error, fontSize: 12, fontWeight: FontWeight.w700)),
+          ],
+        ),
+      );
     }
-    
-    final color = joursRestants < 3 ? red : (joursRestants < 7 ? orange : green);
-    return Row(
-      children: [
-        Icon(Icons.access_time_rounded, size: 13, color: color),
-        const SizedBox(width: 4),
-        Text('$joursRestants j', style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w600)),
-      ],
+
+    final color = joursRestants < 3 ? YekiColors.error : (joursRestants < 7 ? YekiColors.warning : YekiColors.success);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.access_time_rounded, size: 14, color: color),
+          const SizedBox(width: 6),
+          Text('$joursRestants jour${joursRestants > 1 ? 's' : ''}',
+              style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w700)),
+        ],
+      ),
     );
   }
 
   Widget _buildActionButton(DevoirItem d, bool estExpire) {
     if (d.estCorrige && d.noteApprenant != null) {
-      return TextButton.icon(
-        onPressed: () => _voirResultat(d),
-        icon: const Icon(Icons.analytics_outlined, size: 14),
-        label: Text('Note: ${d.noteApprenant!.toStringAsFixed(1)}/${d.noteSur.toStringAsFixed(0)}'),
-        style: TextButton.styleFrom(foregroundColor: green, padding: const EdgeInsets.symmetric(horizontal: 8)),
+      return Container(
+        height: 38,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        decoration: BoxDecoration(
+          color: YekiColors.success,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(12),
+            onTap: () => _voirResultat(d),
+            child: const Center(
+              child: Text('Voir résultat', style: TextStyle(color: YekiColors.white, fontSize: 12, fontWeight: FontWeight.w800)),
+            ),
+          ),
+        ),
       );
     }
-    
+
     if (estExpire && !d.aSoumis) {
       return const SizedBox.shrink();
     }
-    
-    return ElevatedButton(
-      onPressed: () => _ouvrirDevoir(d),
-      style: ElevatedButton.styleFrom(
-        backgroundColor: d.typeColor,
-        foregroundColor: white,
-        elevation: 0,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        minimumSize: const Size(0, 34),
+
+    return Container(
+      height: 38,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        color: d.typeColor,
+        borderRadius: BorderRadius.circular(12),
       ),
-      child: Text(
-        d.estEnCours ? 'Continuer' : 'Commencer',
-        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: () => _ouvrirDevoir(d),
+          child: Center(
+            child: Text(
+              d.estEnCours ? 'Continuer' : 'Commencer',
+              style: const TextStyle(color: YekiColors.white, fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 0.3),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -844,42 +1084,59 @@ class _DevoirsPageState extends State<DevoirsPage> with SingleTickerProviderStat
     }
   }
 
-  Widget _buildEmpty() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.assignment_turned_in_outlined, size: 70, color: borderLight),
-          const SizedBox(height: 16),
-          const Text('Aucun devoir', style: TextStyle(color: textSub, fontSize: 16, fontWeight: FontWeight.w600)),
-          const SizedBox(height: 8),
-          const Text('Ajustez vos filtres pour voir plus de résultats', style: TextStyle(color: textSub, fontSize: 13)),
-        ],
-      ),
+  Widget _buildResponsiveSkeleton(double padding) {
+    return ListView(
+      physics: const NeverScrollableScrollPhysics(),
+      padding: EdgeInsets.symmetric(horizontal: padding, vertical: 16),
+      children: [
+        const SizedBox(height: 20),
+        _skeletonWidget(h: 28, w: 200),
+        const SizedBox(height: 16),
+        Row(
+          children: List.generate(3, (_) => Expanded(
+            child: Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: _skeletonWidget(h: 70, r: 16),
+            ),
+          )),
+        ),
+        const SizedBox(height: 16),
+        _skeletonWidget(h: 48, r: 24),
+        const SizedBox(height: 14),
+        _skeletonWidget(h: 44, r: 22),
+        const SizedBox(height: 24),
+        _skeletonWidget(h: 220, r: 22),
+        const SizedBox(height: 16),
+        _skeletonWidget(h: 220, r: 22),
+      ],
     );
   }
 
-  Widget _buildError() {
+  Widget _skeletonWidget({double h = 20, double? w, double r = 12}) => Container(
+        height: h,
+        width: w,
+        decoration: BoxDecoration(color: YekiColors.borderLight, borderRadius: BorderRadius.circular(r)),
+      );
+
+  Widget _buildErrorState() {
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.error_outline, size: 60, color: red),
-          const SizedBox(height: 16),
-          Text(_error, style: const TextStyle(color: textSub)),
-          const SizedBox(height: 16),
-          ElevatedButton.icon(
-            onPressed: _charger,
-            icon: const Icon(Icons.refresh_rounded),
-            label: const Text('Réessayer'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: brandPrimary,
-              foregroundColor: white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              elevation: 0,
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.error_outline_rounded, size: 44, color: YekiColors.error),
+            const SizedBox(height: 12),
+            Text(_error, style: YekiTextStyles.bodyMedium, textAlign: TextAlign.center),
+            const SizedBox(height: 20),
+            YekiButton(
+              label: 'Réessayer',
+              icon: Icons.refresh_rounded,
+              onPressed: _charger,
+              width: 160,
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -889,6 +1146,29 @@ class _TypeDevoirTab {
   final String code;
   final IconData icon;
   final Color color;
-  
   const _TypeDevoirTab(this.code, this.icon, this.color);
+}
+
+class _EmptyView extends StatelessWidget {
+  const _EmptyView();
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.assignment_turned_in_outlined, size: 64, color: YekiColors.borderLight),
+            const SizedBox(height: 16),
+            const Text('Aucun devoir trouvé',
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800), textAlign: TextAlign.center),
+            const SizedBox(height: 6),
+            const Text('Ajustez vos filtres pour voir plus de résultats.',
+                style: TextStyle(fontSize: 12.5, height: 1.35), textAlign: TextAlign.center),
+          ],
+        ),
+      ),
+    );
+  }
 }

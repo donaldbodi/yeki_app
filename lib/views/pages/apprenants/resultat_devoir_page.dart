@@ -1,12 +1,14 @@
-// lib/views/pages/apprenants/resultat_devoir_page.dart - Page des résultats
+// lib/views/pages/apprenants/resultat_devoir_page.dart
+// ═══════════════════════════════════════════════════════════════════════════
+// PAGE RÉSULTAT DEVOIR — CORRIGÉE
+// ═══════════════════════════════════════════════════════════════════════════
 
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:yeki/widgets/yeki_fabs.dart';
-
-const String baseUrl = 'https://yeki.pythonanywhere.com/api';
+import 'package:yeki/core/theme/app_theme.dart';
+import 'package:yeki/core/constants/api_constants.dart';
 
 class ResultatDevoirPage extends StatefulWidget {
   final int devoirId;
@@ -57,8 +59,8 @@ class _ResultatDevoirPageState extends State<ResultatDevoirPage> with SingleTick
 
     try {
       final response = await http.get(
-        Uri.parse('$baseUrl/devoirs/${widget.devoirId}/resultat/'),
-        headers: {'Authorization': 'Token $token'},
+        Uri.parse(ApiConstants.devoirResultat(widget.devoirId)),
+        headers: ApiHeaders.auth(token),
       );
 
       if (response.statusCode == 200) {
@@ -83,15 +85,15 @@ class _ResultatDevoirPageState extends State<ResultatDevoirPage> with SingleTick
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: YekiColors.backgroundLight,
       appBar: AppBar(
         title: Text(widget.titre),
-        backgroundColor: const Color(0xFF135F74),
-        foregroundColor: Colors.white,
+        backgroundColor: YekiColors.primaryDark,
+        foregroundColor: YekiColors.white,
         elevation: 0,
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: YekiLoader())
           : _buildContent(),
     );
   }
@@ -109,32 +111,28 @@ class _ResultatDevoirPageState extends State<ResultatDevoirPage> with SingleTick
             Container(
               padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
-                color: const Color(0xFFF97316).withOpacity(0.1),
+                color: YekiColors.warning.withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.hourglass_top_rounded, size: 60, color: Color(0xFFF97316)),
+              child: const Icon(Icons.hourglass_top_rounded, size: 60, color: YekiColors.warning),
             ),
             const SizedBox(height: 20),
             const Text(
               'Correction en attente',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
             Text(
               _resultat!['message'] ?? 'Votre devoir sera corrigé prochainement par l\'enseignant.',
               textAlign: TextAlign.center,
-              style: const TextStyle(color: Color(0xFF64748B), fontSize: 13),
+              style: const TextStyle(fontSize: 13),
             ),
             const SizedBox(height: 24),
-            ElevatedButton.icon(
+            YekiButton(
+              label: 'Retour',
+              icon: Icons.arrow_back,
               onPressed: () => Navigator.pop(context),
-              icon: const Icon(Icons.arrow_back),
-              label: const Text('Retour'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF135F74),
-                foregroundColor: Colors.white,
-                elevation: 0,
-              ),
+              width: 160,
             ),
           ],
         ),
@@ -149,11 +147,11 @@ class _ResultatDevoirPageState extends State<ResultatDevoirPage> with SingleTick
     
     Color noteColor;
     if (pourcentage >= 75) {
-      noteColor = const Color(0xFF10B981);
+      noteColor = YekiColors.success;
     } else if (pourcentage >= 50) {
-      noteColor = const Color(0xFFF97316);
+      noteColor = YekiColors.warning;
     } else {
-      noteColor = const Color(0xFFEF4444);
+      noteColor = YekiColors.error;
     }
 
     return SingleChildScrollView(
@@ -167,39 +165,34 @@ class _ResultatDevoirPageState extends State<ResultatDevoirPage> with SingleTick
               padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [noteColor, noteColor.withOpacity(0.8)],
+                  colors: [noteColor, noteColor.withValues(alpha: 0.8)],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
-                borderRadius: BorderRadius.circular(24),
+                borderRadius: YekiRadius.borderRadiusXxl,
               ),
               child: Column(
                 children: [
                   Icon(
                     pourcentage >= 50 ? Icons.emoji_events_rounded : Icons.psychology_rounded,
                     size: 48,
-                    color: Colors.white,
+                    color: YekiColors.white,
                   ),
                   const SizedBox(height: 16),
                   Text(
                     note.toStringAsFixed(1),
-                    style: const TextStyle(fontSize: 48, fontWeight: FontWeight.w900, color: Colors.white),
+                    style: TextStyle(fontSize: 48, fontWeight: FontWeight.w900, color: YekiColors.white.withValues(alpha: 0.7)),
                   ),
-                  Text(
-                    '/ $noteSur',
-                    style: const TextStyle(fontSize: 18, color: Colors.white70),
-                  ),
+                  Text('/ $noteSur', style: TextStyle(fontSize: 18, color: YekiColors.white.withValues(alpha: 0.7))),
                   const SizedBox(height: 8),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(20),
+                      color: YekiColors.white.withValues(alpha: 0.2),
+                      borderRadius: YekiRadius.borderRadiusXl,
                     ),
-                    child: Text(
-                      '${pourcentage.toStringAsFixed(0)}%',
-                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.white),
-                    ),
+                    child: Text('${pourcentage.toStringAsFixed(0)}%',
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: YekiColors.white.withValues(alpha: 0.7))),
                   ),
                 ],
               ),
@@ -210,22 +203,22 @@ class _ResultatDevoirPageState extends State<ResultatDevoirPage> with SingleTick
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFFE0E4E8), width: 1),
+                color: YekiColors.white,
+                borderRadius: YekiRadius.borderRadiusLg,
+                border: Border.all(color: YekiColors.borderLight, width: 1),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Row(
                     children: [
-                      Icon(Icons.comment_rounded, size: 16, color: Color(0xFF135F74)),
+                      Icon(Icons.comment_rounded, size: 16, color: YekiColors.primaryDark),
                       SizedBox(width: 8),
                       Text('Commentaire de l\'enseignant', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                     ],
                   ),
                   const SizedBox(height: 8),
-                  Text(commentaire, style: const TextStyle(fontSize: 14, color: Color(0xFF475569))),
+                  Text(commentaire, style: const TextStyle(fontSize: 14)),
                 ],
               ),
             ),
@@ -234,17 +227,14 @@ class _ResultatDevoirPageState extends State<ResultatDevoirPage> with SingleTick
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFFE0E4E8), width: 1),
+                color: YekiColors.white,
+                borderRadius: YekiRadius.borderRadiusLg,
+                border: Border.all(color: YekiColors.borderLight, width: 1),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'Détail par question',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                  ),
+                  const Text('Détail par question', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
                   const SizedBox(height: 12),
                   ...detail.asMap().entries.map((entry) {
                     final idx = entry.key;
@@ -257,52 +247,41 @@ class _ResultatDevoirPageState extends State<ResultatDevoirPage> with SingleTick
                       margin: const EdgeInsets.only(bottom: 12),
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: estCorrect ? const Color(0xFF10B981).withOpacity(0.05) : const Color(0xFFEF4444).withOpacity(0.05),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: estCorrect ? const Color(0xFF10B981).withOpacity(0.3) : const Color(0xFFEF4444).withOpacity(0.3)),
+                        color: estCorrect ? YekiColors.success.withValues(alpha: 0.05) : YekiColors.error.withValues(alpha: 0.05),
+                        borderRadius: YekiRadius.borderRadiusMd,
+                        border: Border.all(color: estCorrect ? YekiColors.success.withValues(alpha: 0.3) : YekiColors.error.withValues(alpha: 0.3)),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Row(
                             children: [
-                              Icon(
-                                estCorrect ? Icons.check_circle_rounded : Icons.cancel_rounded,
-                                size: 16,
-                                color: estCorrect ? const Color(0xFF10B981) : const Color(0xFFEF4444),
-                              ),
+                              Icon(estCorrect ? Icons.check_circle_rounded : Icons.cancel_rounded,
+                                  size: 16, color: estCorrect ? YekiColors.success : YekiColors.error),
                               const SizedBox(width: 8),
                               Expanded(
-                                child: Text(
-                                  d['question'] ?? 'Question ${idx + 1}',
-                                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-                                ),
+                                child: Text(d['question'] ?? 'Question ${idx + 1}',
+                                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
                               ),
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                                 decoration: BoxDecoration(
-                                  color: estCorrect ? const Color(0xFF10B981).withOpacity(0.1) : const Color(0xFFEF4444).withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(6),
+                                  color: estCorrect ? YekiColors.success.withValues(alpha: 0.1) : YekiColors.error.withValues(alpha: 0.1),
+                                  borderRadius: YekiRadius.borderRadiusSm,
                                 ),
-                                child: Text(
-                                  '${pointsObtenus.toStringAsFixed(0)}/${pointsMax.toStringAsFixed(0)} pts',
-                                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: estCorrect ? const Color(0xFF10B981) : const Color(0xFFEF4444)),
-                                ),
+                                child: Text('${pointsObtenus.toStringAsFixed(0)}/${pointsMax.toStringAsFixed(0)} pts',
+                                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700,
+                                        color: estCorrect ? YekiColors.success : YekiColors.error)),
                               ),
                             ],
                           ),
                           const SizedBox(height: 8),
-                          Text(
-                            'Votre réponse: ${d['reponse'] ?? '-'}',
-                            style: const TextStyle(fontSize: 12, color: Color(0xFF475569)),
-                          ),
+                          Text('Votre réponse: ${d['reponse'] ?? '-'}', style: const TextStyle(fontSize: 12)),
                           if (!estCorrect && d['bonne_reponse'] != null && d['bonne_reponse'].toString().isNotEmpty)
                             Padding(
                               padding: const EdgeInsets.only(top: 4),
-                              child: Text(
-                                'Bonne réponse: ${d['bonne_reponse']}',
-                                style: const TextStyle(fontSize: 12, color: Color(0xFF10B981), fontWeight: FontWeight.w500),
-                              ),
+                              child: Text('Bonne réponse: ${d['bonne_reponse']}',
+                                  style: TextStyle(fontSize: 12, color: YekiColors.success, fontWeight: FontWeight.w500)),
                             ),
                         ],
                       ),

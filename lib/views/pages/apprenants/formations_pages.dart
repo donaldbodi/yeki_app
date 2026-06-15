@@ -1,39 +1,16 @@
 // lib/views/pages/apprenants/formations_pages.dart
-// ════════════════════════════════════════════════════════════════
-// PAGE FORMATIONS — Design Premium Harmonisé
-// ════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════
 
 import 'dart:convert';
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:yeki/views/pages/apprenants/formations_models.dart';
 import 'package:yeki/views/pages/apprenants/formation_detail_page.dart';
 import 'package:yeki/widgets/yeki_app_bar.dart';
+import 'package:yeki/core/theme/app_theme.dart';
+import 'package:yeki/core/constants/api_constants.dart';
 
-// Palette Premium Harmonisée
-const Color brandPrimary = Color(0xFF135F74);
-const Color brandGold = Color(0xFFC5A059);
-const Color bgPremium = Color(0xFFF4F7F9);
-const Color textMain = Color(0xFF0F172A);
-const Color textSub = Color(0xFF64748B);
-const Color _green = Color(0xFF10B981);
-const Color _orange = Color(0xFFF97316);
-const Color _purple = Color(0xFF8B5CF6);
-const Color _borderLight = Color(0xFFE0E4E8);
-
-Future<String?> _getToken() async =>
-    (await SharedPreferences.getInstance()).getString('token');
-
-Map<String, String> _headers(String? t) => {
-  'Content-Type': 'application/json',
-  if (t != null) 'Authorization': 'Token $t',
-};
-
-// ══════════════════════════════════════════════════════════════
-// PAGE FORMATIONS
-// ══════════════════════════════════════════════════════════════
 class FormationsPage extends StatefulWidget {
   const FormationsPage({super.key});
 
@@ -56,7 +33,6 @@ class _FormationsPageState extends State<FormationsPage>
 
   static const _types = ['Tout', 'Métier', 'Classique'];
 
-  // Données pour YekiHeader
   int _unreadNotifications = 0;
   bool _isSubscribed = true;
   String _username = 'Apprenant';
@@ -72,7 +48,10 @@ class _FormationsPageState extends State<FormationsPage>
   }
 
   void _onTabChanged() {
-    if (!_tabCtrl.indexIsChanging) _appliquerFiltres();
+    if (!_tabCtrl.indexIsChanging) {
+      setState(() {});
+      _appliquerFiltres();
+    }
   }
 
   @override
@@ -89,9 +68,7 @@ class _FormationsPageState extends State<FormationsPage>
     if (token == null) return;
     try {
       final response = await http.get(
-        Uri.parse('$kBaseUrl/profil/me/'), 
-        headers: _headers(token)
-      );
+          Uri.parse(ApiConstants.profilMe), headers: ApiHeaders.auth(token));
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         setState(() => _username = data['username'] ?? 'Apprenant');
@@ -106,25 +83,38 @@ class _FormationsPageState extends State<FormationsPage>
     }
   }
 
+  Future<String?> _getToken() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('token');
+  }
+
   Future<void> _charger() async {
-    setState(() { _loading = true; _error = ''; });
+    setState(() {
+      _loading = true;
+      _error = '';
+    });
     final token = await _getToken();
     try {
       final res = await http.get(
-        Uri.parse('$kBaseUrl/apprenant/formations/?type=all'),
-        headers: _headers(token),
-      );
+          Uri.parse('${ApiConstants.baseUrl}/apprenant/formations/'),
+          headers: ApiHeaders.auth(token));
       if (res.statusCode == 200 && mounted) {
         final List data = jsonDecode(res.body);
         setState(() {
-          _tous = data.map((d) => DepartementItem.fromJson(d as Map<String, dynamic>)).toList();
+          _tous = data
+              .map((d) =>
+                  DepartementItem.fromJson(d as Map<String, dynamic>))
+              .toList();
           _appliquerFiltres();
         });
       } else if (mounted) {
-        setState(() => _error = 'Erreur ${res.statusCode}');
+        setState(() =>
+            _error = 'Impossible de charger les formations (${res.statusCode})');
       }
     } catch (_) {
-      if (mounted) setState(() => _error = 'Erreur réseau');
+      if (mounted) {
+        setState(() => _error = 'Vérifiez votre connexion internet');
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -143,8 +133,9 @@ class _FormationsPageState extends State<FormationsPage>
         };
 
         bool matchNiveau = true;
-        if (_niveauApprenant.isNotEmpty && d.niveauxCibles.isNotEmpty) {
-          matchNiveau = NiveauService.estAccessible(_niveauApprenant, d.niveauxCibles);
+        if (_niveauApprenant.isNotEmpty && d.niveauxAccessibles.isNotEmpty) {
+          matchNiveau = NiveauService.estAccessibleParListe(
+              _niveauApprenant, d.niveauxAccessibles);
         }
 
         final matchProg = switch (_filtreProg) {
@@ -170,24 +161,23 @@ class _FormationsPageState extends State<FormationsPage>
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        backgroundColor: Colors.white,
+        backgroundColor: YekiColors.white,
         title: const Text('Déconnexion',
-            style: TextStyle(fontWeight: FontWeight.bold, color: textMain)),
+            style: TextStyle(fontWeight: FontWeight.w800)),
         content: const Text(
-          'Souhaitez-vous vraiment quitter l\'application ?',
-          style: TextStyle(color: textSub),
-        ),
+            'Souhaitez-vous vraiment quitter votre espace Yéki ?',
+            style: TextStyle(color: YekiColors.textMedium)),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text('Annuler', style: TextStyle(color: textSub)),
-          ),
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Annuler',
+                  style: TextStyle(color: YekiColors.textMedium))),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.redAccent,
-              foregroundColor: Colors.white,
+              backgroundColor: YekiColors.error,
+              foregroundColor: YekiColors.white,
               elevation: 0,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             ),
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('Se déconnecter'),
@@ -200,15 +190,58 @@ class _FormationsPageState extends State<FormationsPage>
       final prefs = await SharedPreferences.getInstance();
       await prefs.clear();
       if (mounted) {
-        Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
+        Navigator.pushNamedAndRemoveUntil(
+            context, '/login', (route) => false);
       }
     }
   }
 
+  IconData _getIconForFormation(DepartementItem dept) {
+    final domaine = dept.domaine.toLowerCase();
+    final nom = dept.nom.toLowerCase();
+
+    if (domaine.contains('tech') ||
+        domaine.contains('informatique') ||
+        nom.contains('développement') ||
+        nom.contains('programmation')) {
+      return Icons.terminal_rounded;
+    }
+    if (domaine.contains('business') ||
+        domaine.contains('gestion') ||
+        domaine.contains('finance')) {
+      return Icons.trending_up_rounded;
+    }
+    if (domaine.contains('design') ||
+        domaine.contains('graphique') ||
+        domaine.contains('créativ')) {
+      return Icons.palette_rounded;
+    }
+    if (domaine.contains('santé') ||
+        domaine.contains('médecine') ||
+        domaine.contains('médical')) {
+      return Icons.health_and_safety_rounded;
+    }
+    if (domaine.contains('artisanat') ||
+        domaine.contains('métier') ||
+        dept.estFormationMetier) {
+      return Icons.handyman_rounded;
+    }
+    if (dept.modeFormation == 'distance') {
+      return Icons.laptop_rounded;
+    }
+
+    return dept.estFormationMetier
+        ? Icons.work_rounded
+        : Icons.account_balance_rounded;
+  }
+
   @override
   Widget build(BuildContext context) {
+    final double screenWidth = MediaQuery.of(context).size.width;
+    final double padX = screenWidth > 800 ? (screenWidth - 760) / 2 : 18.0;
+
     return Scaffold(
-      backgroundColor: bgPremium,
+      backgroundColor: YekiColors.backgroundLight,
       appBar: YekiHeader(
         unreadNotifications: _unreadNotifications,
         isSubscribed: _isSubscribed,
@@ -219,81 +252,162 @@ class _FormationsPageState extends State<FormationsPage>
         onSettings: () {},
         onNotifications: () {},
       ),
-      body: Column(
-        children: [
-          _buildHeroSection(),
-          _buildSearchAndFilter(),
-          _buildTabs(),
-          Expanded(
-            child: _buildContent(),
-          ),
-        ],
-      ),
+      body: _loading
+          ? _buildResponsiveSkeleton(padX)
+          : _error.isNotEmpty
+              ? _buildErrorState()
+              : RefreshIndicator(
+                  onRefresh: _charger,
+                  color: YekiColors.primaryDark,
+                  backgroundColor: YekiColors.white,
+                  child: CustomScrollView(
+                    physics: const BouncingScrollPhysics(),
+                    slivers: [
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: EdgeInsets.fromLTRB(padX, 16, padX, 0),
+                          child: _buildHeroImageCover(),
+                        ),
+                      ),
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(horizontal: padX),
+                          child: _buildSearchBarAndPopup(),
+                        ),
+                      ),
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(horizontal: padX),
+                          child: _buildPremiumTabBar(),
+                        ),
+                      ),
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: EdgeInsets.fromLTRB(padX, 8, padX, 12),
+                          child: _buildSectionTitle(),
+                        ),
+                      ),
+                      _affiches.isEmpty
+                          ? const SliverFillRemaining(
+                              hasScrollBody: false, child: _EmptyView())
+                          : SliverPadding(
+                              padding: EdgeInsets.fromLTRB(padX, 0, padX, 110),
+                              sliver: SliverList(
+                                delegate: SliverChildBuilderDelegate(
+                                  (ctx, idx) =>
+                                      _buildUnifiedCard(_affiches[idx]),
+                                  childCount: _affiches.length,
+                                ),
+                              ),
+                            ),
+                    ],
+                  ),
+                ),
     );
   }
 
-  Widget _buildHeroSection() {
+  Widget _buildHeroImageCover() {
     return Container(
       width: double.infinity,
+      height: 175,
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [brandPrimary, brandPrimary.withOpacity(0.85)],
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: YekiShadows.medium,
+        image: const DecorationImage(
+          image: NetworkImage(
+            'https://images.unsplash.com/photo-1524178232363-1fb2b075b655?q=80&w=600&auto=format&fit=crop',
+          ),
+          fit: BoxFit.cover,
         ),
       ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(24),
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              YekiColors.primaryLight.withValues(alpha: 0.15),
+              YekiColors.primaryLight.withValues(alpha: 0.85),
+            ],
+          ),
+        ),
+        padding: const EdgeInsets.all(22),
         child: Column(
+          mainAxisAlignment: MainAxisAlignment.end,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
               decoration: BoxDecoration(
-                color: brandGold.withOpacity(0.15),
+                color: YekiColors.accent.withValues(alpha: 0.9),
                 borderRadius: BorderRadius.circular(20),
               ),
-              child: const Text("DÉVELOPPEMENT PROFESSIONNEL", 
-                style: TextStyle(color: brandGold, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 1)),
+              child: const Text(
+                "DÉVELOPPEMENT PROFESSIONNEL",
+                style: TextStyle(
+                  color: YekiColors.white,
+                  fontSize: 9.5,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 1.2,
+                ),
+              ),
             ),
             const SizedBox(height: 10),
-            const Text("Formations", 
-              style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: -0.5)),
-            const SizedBox(height: 4),
-            const Text("Développez vos compétences avec nos experts", 
-              style: TextStyle(fontSize: 13, color: Colors.white70, fontWeight: FontWeight.w500)),
+            const Text(
+              "Formations",
+              style: TextStyle(
+                fontSize: 26,
+                fontWeight: FontWeight.w900,
+                color: YekiColors.white,
+                letterSpacing: -0.5,
+              ),
+            ),
+            const SizedBox(height: 3),
+            Text(
+              "Développez vos compétences avec nos experts.",
+              style: TextStyle(
+                fontSize: 13,
+                color: YekiColors.white.withValues(alpha: 0.9),
+                fontWeight: FontWeight.w500,
+              ),
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildSearchAndFilter() {
+  Widget _buildSearchBarAndPopup() {
     return Container(
-      color: bgPremium,
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
+      padding: const EdgeInsets.symmetric(vertical: 14),
       child: Row(
         children: [
           Expanded(
             child: Container(
               decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: _borderLight, width: 1),
+                color: YekiColors.white,
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(color: YekiColors.borderLight, width: 1.2),
+                boxShadow: YekiShadows.subtle,
               ),
               child: TextField(
                 controller: _searchCtrl,
-                style: const TextStyle(color: textMain, fontSize: 14),
+                onChanged: (v) {
+                  _searchQ = v;
+                  _appliquerFiltres();
+                },
+                style: YekiTextStyles.bodyMedium,
                 decoration: InputDecoration(
-                  hintText: 'Rechercher une formation...',
-                  hintStyle: TextStyle(color: textSub.withOpacity(0.6), fontSize: 14),
-                  prefixIcon: Padding(
-                    padding: const EdgeInsets.only(left: 8),
-                    child: Icon(Icons.search_rounded, color: brandPrimary, size: 20),
-                  ),
+                  hintText: "Rechercher une formation...",
+                  hintStyle: YekiTextStyles.bodySmall,
+                  prefixIcon: const Icon(Icons.search_rounded,
+                      color: YekiColors.primaryLight, size: 22),
                   suffixIcon: _searchQ.isNotEmpty
                       ? IconButton(
-                          icon: const Icon(Icons.close_rounded, size: 18),
+                          icon: const Icon(Icons.close_rounded,
+                              size: 18),
                           onPressed: () {
                             _searchCtrl.clear();
                             setState(() => _searchQ = '');
@@ -302,12 +416,9 @@ class _FormationsPageState extends State<FormationsPage>
                         )
                       : null,
                   border: InputBorder.none,
-                  contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                  contentPadding: const EdgeInsets.symmetric(
+                      vertical: 15, horizontal: 16),
                 ),
-                onChanged: (v) {
-                  setState(() => _searchQ = v);
-                  _appliquerFiltres();
-                },
               ),
             ),
           ),
@@ -324,44 +435,63 @@ class _FormationsPageState extends State<FormationsPage>
     );
   }
 
-  Widget _buildTabs() {
+  Widget _buildPremiumTabBar() {
     final counts = [
       _tous.length,
       _tous.where((d) => d.estFormationMetier).length,
       _tous.where((d) => d.estFormationClassique).length,
     ];
+
     return Container(
-      color: Colors.white,
-      padding: const EdgeInsets.symmetric(horizontal: 20),
+      height: 44,
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: YekiColors.backgroundAlt,
+        borderRadius: BorderRadius.circular(24),
+      ),
       child: TabBar(
         controller: _tabCtrl,
-        labelColor: brandPrimary,
-        unselectedLabelColor: textSub,
-        indicatorColor: brandPrimary,
-        indicatorWeight: 3,
-        labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-        unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
+        labelColor: YekiColors.primaryLight,
+        unselectedLabelColor: YekiColors.textLight,
+        indicatorSize: TabBarIndicatorSize.tab,
+        dividerColor: Colors.transparent,
+        indicator: BoxDecoration(
+          color: YekiColors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: YekiColors.primaryLight.withValues(alpha: 0.15), width: 1),
+          boxShadow: YekiShadows.subtle,
+        ),
+        labelStyle: const TextStyle(
+            fontWeight: FontWeight.w900, fontSize: 12.5),
+        unselectedLabelStyle: const TextStyle(
+            fontWeight: FontWeight.w600, fontSize: 12.5),
         tabs: List.generate(_types.length, (i) {
+          bool isSelected = _tabCtrl.index == i;
           return Tab(
             child: Row(
-              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Text(_types[i]),
                 const SizedBox(width: 6),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 7, vertical: 2),
                   decoration: BoxDecoration(
-                    color: _tabCtrl.index == i
-                        ? brandPrimary.withOpacity(0.1)
-                        : _borderLight,
-                    borderRadius: BorderRadius.circular(12),
+                    color: isSelected
+                        ? YekiColors.primaryLight.withValues(alpha: 0.12)
+                        : YekiColors.backgroundAlt,
+                    borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
                     '${counts[i]}',
                     style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w600,
-                        color: _tabCtrl.index == i ? brandPrimary : textSub),
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                      color: isSelected
+                          ? YekiColors.primaryLight
+                          : YekiColors.textLight,
+                    ),
                   ),
                 ),
               ],
@@ -372,220 +502,326 @@ class _FormationsPageState extends State<FormationsPage>
     );
   }
 
-  Widget _buildContent() {
-    if (_loading) {
-      return const Center(child: CircularProgressIndicator(color: brandPrimary));
-    }
-    if (_error.isNotEmpty) {
-      return _ErrorView(msg: _error, onRetry: _charger);
-    }
-    if (_affiches.isEmpty) {
-      return const _EmptyView();
-    }
-    
-    return ListView.builder(
-      physics: const BouncingScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 100),
-      itemCount: _affiches.length,
-      itemBuilder: (ctx, i) => _FormationCard(
-        dept: _affiches[i],
-        onTap: () => Navigator.push(
-          ctx,
-          MaterialPageRoute(
-            builder: (_) => FormationDetailPage(
-              formationId: _affiches[i].id,
-              deptPrecharge: _affiches[i],
+  Widget _buildSectionTitle() {
+    return Row(
+      children: [
+        const Text(
+          "Vos Formations",
+          style: TextStyle(
+            fontSize: 19,
+            fontWeight: FontWeight.w900,
+            letterSpacing: -0.3,
+          ),
+        ),
+        const Spacer(),
+        Container(
+          padding:
+              const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          decoration: BoxDecoration(
+            color: YekiColors.primaryLight.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Text(
+            "${_affiches.length} Disponibles",
+            style: const TextStyle(
+              color: YekiColors.primaryLight,
+              fontSize: 11.5,
+              fontWeight: FontWeight.w700,
             ),
           ),
-        ).then((_) => _charger()),
-      ),
+        ),
+      ],
     );
   }
-}
 
-// ══════════════════════════════════════════════════════════════
-// CARTE FORMATION PREMIUM
-// ══════════════════════════════════════════════════════════════
-class _FormationCard extends StatelessWidget {
-  final DepartementItem dept;
-  final VoidCallback onTap;
-
-  const _FormationCard({required this.dept, required this.onTap});
-
-  Color get _color {
+  Widget _buildUnifiedCard(DepartementItem dept) {
+    Color itemColor;
     try {
       final hex = dept.couleur.replaceAll('#', '');
-      return Color(int.parse('FF$hex', radix: 16));
+      itemColor = Color(int.parse('FF$hex', radix: 16));
     } catch (_) {
-      return dept.estFormationMetier ? _orange : brandPrimary;
+      itemColor = dept.estFormationMetier ? YekiColors.accent : YekiColors.primaryLight;
     }
-  }
 
-  @override
-  Widget build(BuildContext context) {
-    final c = _color;
-    final typeLabel = dept.estFormationMetier ? 'Formation Métier' : 'Formation Classique';
-    final typeIcon = dept.estFormationMetier ? Icons.work_rounded : Icons.account_balance_rounded;
+    final typeLabel = dept.estFormationMetier
+        ? 'Formation Métier'
+        : 'Formation Classique';
+    final bool aProgression = dept.progression > 0;
+    final double progFraction = dept.progressionMoyenne / 100;
+    
+    final bool niveauMatch = _niveauApprenant.isEmpty || 
+        dept.niveauxAccessibles.isEmpty ||
+        dept.niveauxAccessibles.any((n) => n.toLowerCase() == _niveauApprenant.toLowerCase());
 
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 20),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(24),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.04),
-              blurRadius: 20,
-              offset: const Offset(0, 8),
-            ),
-          ],
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: YekiColors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: niveauMatch ? YekiColors.borderLight : YekiColors.borderLight.withValues(alpha: 0.5),
+          width: niveauMatch ? 1.0 : 0.5,
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Header avec gradient
-            Stack(
-              children: [
-                Container(
-                  height: 120,
-                  decoration: BoxDecoration(
-                    borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-                    gradient: LinearGradient(
-                      colors: [c, c.withOpacity(0.7)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    image: dept.imageUrl != null
-                        ? DecorationImage(
-                            image: NetworkImage(dept.imageUrl!),
-                            fit: BoxFit.cover,
-                            colorFilter: ColorFilter.mode(c.withOpacity(0.4), BlendMode.darken),
-                          )
-                        : null,
-                  ),
-                  child: dept.imageUrl == null
-                      ? Center(
-                          child: Icon(typeIcon, size: 46, color: Colors.white.withOpacity(0.2)),
-                        )
-                      : null,
-                ),
-                Positioned(
-                  top: 12, left: 12,
-                  child: _GlassBadge(
-                    label: typeLabel,
-                    icon: typeIcon,
-                    color: c,
-                  ),
-                ),
-                Positioned(
-                  top: 12, right: 12,
-                  child: _StatusBadge(statut: dept.statut),
-                ),
-                if (dept.estCertifiante)
-                  Positioned(
-                    bottom: 12, right: 12,
-                    child: _GoldBadge(label: "Certifiante", icon: Icons.verified_rounded),
-                  ),
-              ],
-            ),
-            // Contenu
-            Padding(
+        boxShadow: YekiShadows.subtle,
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(24),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => FormationDetailPage(
+                    formationId: dept.id, deptPrecharge: dept),
+              ),
+            ).then((_) => _charger()),
+            child: Padding(
               padding: const EdgeInsets.all(18),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(dept.nom,
-                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: textMain),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis),
-                  if (dept.description.isNotEmpty) ...[
-                    const SizedBox(height: 6),
-                    Text(dept.description,
-                        style: TextStyle(fontSize: 12, color: textSub, height: 1.4),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis),
-                  ],
-                  const SizedBox(height: 14),
-                  // Chips d'informations
-                  Wrap(
-                    spacing: 8, runSpacing: 6,
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      if (dept.dureeFormation.isNotEmpty)
-                        _PremiumChip(icon: Icons.schedule_rounded, label: dept.dureeFormation, color: brandPrimary),
-                      if (dept.ville.isNotEmpty)
-                        _PremiumChip(icon: Icons.location_on_rounded, label: dept.ville, color: c),
-                      if (dept.modeFormation.isNotEmpty)
-                        _PremiumChip(
-                            icon: dept.modeFormation == 'presentiel'
-                                ? Icons.location_city_rounded
-                                : dept.modeFormation == 'distance'
-                                    ? Icons.wifi_rounded
-                                    : Icons.devices_rounded,
-                            label: dept.modeFormationLabel,
-                            color: _purple),
-                      if (dept.domaine.isNotEmpty)
-                        _PremiumChip(icon: Icons.category_rounded, label: dept.domaine, color: _orange),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: itemColor.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Icon(
+                          _getIconForFormation(dept),
+                          color: itemColor,
+                          size: 26,
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              dept.nom,
+                              style: const TextStyle(
+                                fontSize: 16.5,
+                                fontWeight: FontWeight.w900,
+                                height: 1.25,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 5),
+                            Wrap(
+                              spacing: 6,
+                              runSpacing: 4,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 8, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: itemColor.withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text(
+                                    typeLabel,
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: itemColor,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ),
+                                ...dept.niveauxAccessibles.map((niveau) => Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 8, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: YekiColors.warning.withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text(
+                                    niveau,
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      color: YekiColors.warning,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                )),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (dept.estCertifiante)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: YekiColors.accent,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.verified_rounded,
+                                  size: 11, color: YekiColors.white),
+                              SizedBox(width: 4),
+                              Text(
+                                'Certifiante',
+                                style: TextStyle(
+                                  color: YekiColors.white,
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                     ],
                   ),
-                  if (dept.nbCours > 0) ...[
-                    const SizedBox(height: 14),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text('${dept.nbCours} cours',
-                            style: TextStyle(fontSize: 12, color: textSub, fontWeight: FontWeight.w500)),
-                        Text('${dept.progressionMoyenne.toStringAsFixed(0)}%',
-                            style: TextStyle(fontSize: 12, color: c, fontWeight: FontWeight.bold)),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(6),
-                      child: LinearProgressIndicator(
-                        value: dept.progressionMoyenne / 100,
-                        backgroundColor: bgPremium,
-                        valueColor: AlwaysStoppedAnimation(c),
-                        minHeight: 6,
-                      ),
+
+                  if (dept.description.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      dept.description,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                          color: YekiColors.textDark.withValues(alpha: 0.6),
+                          height: 1.4,
+                          fontSize: 12.5),
                     ),
                   ],
+
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 4,
+                    children: [
+                      if (dept.dureeFormation.isNotEmpty)
+                        _infoChip(Icons.schedule_rounded,
+                            dept.dureeFormation, YekiColors.primaryLight),
+                      if (dept.modeFormation.isNotEmpty)
+                        _infoChip(
+                          dept.modeFormation == 'presentiel'
+                              ? Icons.location_city_rounded
+                              : dept.modeFormation == 'distance'
+                                  ? Icons.wifi_rounded
+                                  : Icons.devices_rounded,
+                          dept.modeFormationLabel,
+                          YekiColors.purple,
+                        ),
+                      if (dept.ville.isNotEmpty)
+                        _infoChip(Icons.location_on_rounded,
+                            dept.ville, itemColor),
+                      if (dept.domaine.isNotEmpty)
+                        _infoChip(Icons.category_rounded, dept.domaine,
+                            YekiColors.accent),
+                    ],
+                  ),
+
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        vertical: 10, horizontal: 12),
+                    decoration: BoxDecoration(
+                      color: YekiColors.backgroundLight,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Row(
+                      mainAxisAlignment:
+                          MainAxisAlignment.spaceBetween,
+                      children: [
+                        _infoIcon(Icons.layers_rounded,
+                            "${dept.nbCours} modules"),
+                        if (dept.dureeFormation.isNotEmpty)
+                          _infoIcon(Icons.timer_rounded,
+                              dept.dureeFormation),
+                        _infoIcon(Icons.menu_book_rounded,
+                            '${dept.nbCours} cours'),
+                      ],
+                    ),
+                  ),
+
                   const SizedBox(height: 16),
                   Row(
                     children: [
                       Expanded(
-                        child: ElevatedButton(
-                          onPressed: onTap,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: c,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                            elevation: 0,
-                          ),
-                          child: Text(
-                            dept.progression > 0 ? 'Continuer' : 'Découvrir',
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                          ),
+                        child: Column(
+                          crossAxisAlignment:
+                              CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment:
+                                  MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  aProgression
+                                      ? "Formation en cours"
+                                      : (dept.prix == 0
+                                          ? "Accès Libre"
+                                          : "${dept.prix} FCFA"),
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                    color: aProgression
+                                        ? YekiColors.primaryLight
+                                        : (dept.prix == 0
+                                            ? YekiColors.success
+                                            : YekiColors.textLight),
+                                  ),
+                                ),
+                                if (aProgression)
+                                  Text(
+                                    "${dept.progressionMoyenne.toStringAsFixed(0)}%",
+                                    style: const TextStyle(
+                                      fontSize: 11.5,
+                                      fontWeight: FontWeight.w900,
+                                      color: YekiColors.primaryDark,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: LinearProgressIndicator(
+                                value:
+                                    aProgression ? progFraction : 0.0,
+                                backgroundColor: YekiColors.borderLight,
+                                valueColor: AlwaysStoppedAnimation<
+                                    Color>(
+                                  aProgression
+                                      ? YekiColors.primaryDark
+                                      : YekiColors.textLight.withValues(alpha: 0.3),
+                                ),
+                                minHeight: 5,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                      const SizedBox(width: 12),
+                      const SizedBox(width: 16),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        height: 38,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14),
                         decoration: BoxDecoration(
-                          color: dept.prix == 0 ? _green.withOpacity(0.1) : brandGold.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(
-                            color: dept.prix == 0 ? _green.withOpacity(0.3) : brandGold.withOpacity(0.3),
-                          ),
+                          color: aProgression
+                              ? YekiColors.accent
+                              : itemColor,
+                          borderRadius: BorderRadius.circular(12),
                         ),
+                        alignment: Alignment.center,
                         child: Text(
-                          dept.prix == 0 ? 'Gratuit' : '${dept.prix} F',
-                          style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                              color: dept.prix == 0 ? _green : brandGold),
+                          aProgression ? "CONTINUER" : "DÉCOUVRIR",
+                          style: const TextStyle(
+                            color: YekiColors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 0.3,
+                          ),
                         ),
                       ),
                     ],
@@ -593,118 +829,112 @@ class _FormationCard extends StatelessWidget {
                 ],
               ),
             ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ── COMPOSANTS PREMIUM ──
-class _GlassBadge extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final Color color;
-  const _GlassBadge({required this.label, required this.icon, required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(10),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-          color: color.withOpacity(0.85),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, size: 10, color: Colors.white),
-              const SizedBox(width: 4),
-              Text(label,
-                  style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w800)),
-            ],
           ),
         ),
       ),
     );
   }
-}
 
-class _GoldBadge extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  const _GoldBadge({required this.label, required this.icon});
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _infoChip(IconData icon, String label, Color color) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: brandGold,
+        color: YekiColors.backgroundLight,
         borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: YekiColors.borderLight),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 10, color: Colors.white),
-          const SizedBox(width: 3),
-          Text(label,
-              style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold)),
-        ],
-      ),
-    );
-  }
-}
-
-class _PremiumChip extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final Color color;
-  const _PremiumChip({required this.icon, required this.label, required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withOpacity(0.15), width: 0.5),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 11, color: color),
+          Icon(icon, size: 12, color: color),
           const SizedBox(width: 4),
-          Text(label, style: TextStyle(fontSize: 11, color: color, fontWeight: FontWeight.w500)),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 10.5,
+              color: color,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
         ],
       ),
     );
   }
-}
 
-class _StatusBadge extends StatelessWidget {
-  final String statut;
-  const _StatusBadge({required this.statut});
-
-  @override
-  Widget build(BuildContext context) {
-    final (color, label) = switch (statut) {
-      'TERMINÉ' => (_green, 'Terminé'),
-      'EN COURS' => (brandPrimary, 'En cours'),
-      _ => (textSub, 'Nouveau'),
-    };
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(10),
+  Widget _infoIcon(IconData icon, String text) {
+    return Flexible(
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 13, color: YekiColors.textLight),
+          const SizedBox(width: 5),
+          Flexible(
+            child: Text(
+              text,
+              style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
       ),
-      child: Text(label,
-          style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold)),
     );
   }
+
+  Widget _buildErrorState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.wifi_off_rounded, size: 44, color: YekiColors.textLight),
+            const SizedBox(height: 12),
+            Text(_error,
+                style: YekiTextStyles.bodyMedium,
+                textAlign: TextAlign.center),
+            const SizedBox(height: 16),
+            YekiButton(
+              label: 'Réessayer',
+              icon: Icons.refresh_rounded,
+              onPressed: _charger,
+              width: 160,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildResponsiveSkeleton(double padding) {
+    return ListView(
+      physics: const NeverScrollableScrollPhysics(),
+      padding: EdgeInsets.symmetric(horizontal: padding, vertical: 16),
+      children: [
+        Container(
+            height: 175,
+            decoration: BoxDecoration(
+                color: YekiColors.borderLight,
+                borderRadius: BorderRadius.circular(24))),
+        const SizedBox(height: 16),
+        _skeletonWidget(h: 48, r: 24),
+        const SizedBox(height: 14),
+        _skeletonWidget(h: 44, r: 24),
+        const SizedBox(height: 24),
+        _skeletonWidget(h: 220, r: 22),
+        const SizedBox(height: 16),
+        _skeletonWidget(h: 220, r: 22),
+      ],
+    );
+  }
+
+  Widget _skeletonWidget({double h = 20, double r = 12}) => Container(
+        height: h,
+        decoration: BoxDecoration(
+            color: YekiColors.borderLight, borderRadius: BorderRadius.circular(r)),
+      );
 }
 
 class _FilterPopup extends StatelessWidget {
@@ -718,59 +948,33 @@ class _FilterPopup extends StatelessWidget {
       initialValue: selected,
       onSelected: onChanged,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      color: Colors.white,
-      elevation: 4,
+      color: YekiColors.white,
+      elevation: 6,
       itemBuilder: (_) => ['Toutes', 'En cours', 'Nouvelles', 'Terminées']
           .map((s) => PopupMenuItem(
                 value: s,
                 child: Row(
                   children: [
-                    if (s == selected) Icon(Icons.check_rounded, size: 14, color: brandPrimary),
+                    if (s == selected)
+                      const Icon(Icons.check_rounded,
+                          size: 15, color: YekiColors.primaryLight),
                     if (s == selected) const SizedBox(width: 8),
-                    Text(s, style: const TextStyle(fontSize: 13, color: textMain)),
+                    Text(s,
+                        style: const TextStyle(
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w600)),
                   ],
                 ),
               ))
           .toList(),
       child: Container(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.all(13),
         decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: _borderLight, width: 1),
+          color: YekiColors.white,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: YekiColors.borderLight, width: 1.2),
         ),
-        child: Icon(Icons.tune_rounded, color: brandPrimary, size: 20),
-      ),
-    );
-  }
-}
-
-class _ErrorView extends StatelessWidget {
-  final String msg;
-  final VoidCallback onRetry;
-  const _ErrorView({required this.msg, required this.onRetry});
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.wifi_off_rounded, size: 60, color: textSub),
-          const SizedBox(height: 16),
-          Text(msg, style: TextStyle(color: textSub)),
-          const SizedBox(height: 16),
-          ElevatedButton.icon(
-            onPressed: onRetry,
-            icon: const Icon(Icons.refresh_rounded),
-            label: const Text('Réessayer'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: brandPrimary,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              elevation: 0,
-            ),
-          ),
-        ],
+        child: const Icon(Icons.tune_rounded, color: YekiColors.primaryLight, size: 22),
       ),
     );
   }
@@ -781,17 +985,30 @@ class _EmptyView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.workspace_premium_outlined, size: 70, color: _borderLight),
-          const SizedBox(height: 16),
-          const Text('Aucune formation disponible pour votre niveau',
-              style: TextStyle(color: textSub, fontSize: 15, fontWeight: FontWeight.w600)),
-          const SizedBox(height: 8),
-          const Text('Explorez d\'autres catégories',
-              style: TextStyle(color: textSub, fontSize: 13)),
-        ],
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.workspace_premium_outlined,
+                size: 64, color: YekiColors.borderLight),
+            const SizedBox(height: 16),
+            const Text(
+              'Aucune formation disponible',
+              style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'Ajustez vos filtres ou explorez d\'autres catégories.',
+              style: TextStyle(
+                  fontSize: 12.5, height: 1.35),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
       ),
     );
   }

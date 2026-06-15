@@ -1,7 +1,7 @@
 // lib/views/pages/paiement/paiement_page.dart
-// ════════════════════════════════════════════════════════════════
-// PAGE DE PAIEMENT UNIFIÉE - CINETPAY UNIQUEMENT
-// ════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════
+// PAGE DE PAIEMENT UNIFIÉE - CINETPAY UNIQUEMENT (CORRIGÉE)
+// ═══════════════════════════════════════════════════════════════════════════
 
 import 'dart:convert';
 import 'package:flutter/material.dart';
@@ -9,21 +9,11 @@ import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+import 'package:yeki/core/theme/app_theme.dart';
+import 'package:yeki/core/constants/api_constants.dart';
+import 'package:yeki/utils/error_handler.dart';
+import 'package:yeki/services/facture_service.dart';
 
-const String _baseUrl = 'https://yeki.pythonanywhere.com/api';
-
-// Palette harmonisée
-const Color _primary = Color(0xFF135F74);
-//const Color _gold = Color(0xFFC5A059);
-const Color _bg = Color(0xFFF8FAFC);
-const Color _white = Color(0xFFFFFFFF);
-const Color _textDark = Color(0xFF1A1C1E);
-const Color _textMedium = Color(0xFF5A5C5E);
-const Color _textLight = Color(0xFF8A8C8E);
-const Color _green = Color(0xFF10B981);
-const Color _red = Color(0xFFEF4444);
-
-/// Types de paiement supportés
 enum PaiementType {
   rechargeWallet,
   accesDepartement,
@@ -32,7 +22,6 @@ enum PaiementType {
   abonnementAnnuel,
 }
 
-/// Moyens de paiement CinetPay
 enum CinetPayMethod {
   mtn,
   orange,
@@ -45,6 +34,7 @@ class PaiementPage extends StatefulWidget {
   final int? olympiadeId;
   final String titre;
   final int montant;
+  final int? montantPresentiel;
 
   const PaiementPage({
     super.key,
@@ -53,6 +43,7 @@ class PaiementPage extends StatefulWidget {
     this.olympiadeId,
     required this.titre,
     required this.montant,
+    this.montantPresentiel,
   });
 
   @override
@@ -67,6 +58,9 @@ class _PaiementPageState extends State<PaiementPage> {
   final _cardCvvController = TextEditingController();
   final _cardNameController = TextEditingController();
   bool _isLoading = false;
+  bool _genererFacture = true;
+
+  int get _montantTotal => widget.montant + (widget.montantPresentiel ?? 0);
 
   @override
   void dispose() {
@@ -110,23 +104,22 @@ class _PaiementPageState extends State<PaiementPage> {
   }
 
   Future<void> _initierPaiement() async {
-    // Validation
     if (_selectedMethod != CinetPayMethod.carte) {
       if (_phoneController.text.trim().length < 9) {
-        _showSnackBar('Veuillez entrer un numéro de téléphone valide (9 chiffres)', isError: true);
+        ErrorHandler.showError(context, 'Veuillez entrer un numéro de téléphone valide (9 chiffres)');
         return;
       }
     } else {
       if (_cardNumberController.text.trim().length < 16) {
-        _showSnackBar('Veuillez entrer un numéro de carte valide', isError: true);
+        ErrorHandler.showError(context, 'Veuillez entrer un numéro de carte valide');
         return;
       }
       if (_cardExpiryController.text.trim().length < 5) {
-        _showSnackBar('Veuillez entrer une date d\'expiration valide (MM/AA)', isError: true);
+        ErrorHandler.showError(context, 'Veuillez entrer une date d\'expiration valide (MM/AA)');
         return;
       }
       if (_cardCvvController.text.trim().length < 3) {
-        _showSnackBar('Veuillez entrer un CVV valide', isError: true);
+        ErrorHandler.showError(context, 'Veuillez entrer un CVV valide');
         return;
       }
     }
@@ -136,14 +129,14 @@ class _PaiementPageState extends State<PaiementPage> {
     final token = await _getToken();
     if (token == null) {
       setState(() => _isLoading = false);
-      _showSnackBar('Session expirée, veuillez vous reconnecter', isError: true);
+      ErrorHandler.showError(context, 'Session expirée, veuillez vous reconnecter');
       return;
     }
 
     try {
       final body = {
         'type_paiement': _getTypePaiementString(),
-        'montant': widget.montant,
+        'montant': _montantTotal,
         'payment_method': _getPaymentMethodString(),
         'phone': _selectedMethod != CinetPayMethod.carte ? _phoneController.text.trim() : null,
       };
@@ -156,11 +149,8 @@ class _PaiementPageState extends State<PaiementPage> {
       }
 
       final response = await http.post(
-        Uri.parse('$_baseUrl/paiements/cinetpay/initier/'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Token $token',
-        },
+        Uri.parse(ApiConstants.paiementCinetpayInitier),
+        headers: ApiHeaders.auth(token),
         body: jsonEncode(body),
       );
 
@@ -170,7 +160,6 @@ class _PaiementPageState extends State<PaiementPage> {
         final reference = data['reference'];
 
         if (paymentUrl != null && mounted) {
-          // Ouvrir la WebView CinetPay
           final success = await Navigator.push<bool>(
             context,
             MaterialPageRoute(
@@ -178,49 +167,77 @@ class _PaiementPageState extends State<PaiementPage> {
                 paymentUrl: paymentUrl,
                 reference: reference,
                 titre: widget.titre,
-                montant: widget.montant,
+                montant: _montantTotal,
+                type: widget.type,
+                departementId: widget.departementId,
               ),
             ),
           );
 
           if (success == true && mounted) {
-            // Paiement réussi
-            Navigator.pop(context, true);
-            _showSnackBar('✅ Paiement réussi !', isError: false);
+            if (_genererFacture && widget.type == PaiementType.accesDepartement) {
+              await _genererFacturePDF(reference);
+            }
+            if (mounted) {
+              Navigator.pop(context, true);
+              ErrorHandler.showSuccess(context, '✅ Paiement réussi !');
+            }
           }
         }
       } else {
         final error = jsonDecode(response.body);
-        _showSnackBar(error['detail'] ?? 'Erreur lors de l\'initialisation du paiement', isError: true);
+        ErrorHandler.showError(context, error['detail'] ?? 'Erreur lors de l\'initialisation du paiement');
       }
     } catch (e) {
-      _showSnackBar('Erreur réseau: $e', isError: true);
+      ErrorHandler.showError(context, 'Erreur réseau: $e');
     } finally {
       setState(() => _isLoading = false);
     }
   }
 
-  void _showSnackBar(String message, {required bool isError}) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: isError ? _red : _green,
-        behavior: SnackBarBehavior.floating,
-        margin: const EdgeInsets.all(16),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
-    );
+  Future<void> _genererFacturePDF(String reference) async {
+    try {
+      final token = await _getToken();
+      final userResponse = await http.get(
+        Uri.parse(ApiConstants.profilMe),
+        headers: ApiHeaders.auth(token),
+      );
+
+      String nom = 'Apprenant Yéki';
+      String email = '';
+      if (userResponse.statusCode == 200) {
+        final data = jsonDecode(userResponse.body);
+        nom = '${data['first_name']} ${data['last_name']}'.trim();
+        if (nom.isEmpty) nom = data['username'] ?? 'Apprenant';
+        email = data['email'] ?? '';
+      }
+
+      final factureFile = await FactureService.genererFacture(
+        reference: reference,
+        clientNom: nom,
+        clientEmail: email,
+        description: widget.titre,
+        montantLigne: widget.montant,
+        montantPresentiel: widget.montantPresentiel ?? 0,
+        montantTotal: _montantTotal,
+        date: DateTime.now(),
+        departementNom: widget.type == PaiementType.accesDepartement ? widget.titre : null,
+      );
+
+      await FactureService.imprimerFacture(factureFile);
+    } catch (e) {
+      debugPrint('Erreur génération facture: $e');
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _bg,
+      backgroundColor: YekiColors.backgroundLight,
       appBar: AppBar(
         title: const Text('Paiement sécurisé'),
-        backgroundColor: _primary,
-        foregroundColor: _white,
+        backgroundColor: YekiColors.primaryDark,
+        foregroundColor: YekiColors.white,
         elevation: 0,
         centerTitle: true,
       ),
@@ -229,28 +246,23 @@ class _PaiementPageState extends State<PaiementPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Récapitulatif
             _buildRecapCard(),
             const SizedBox(height: 24),
-
-            // Choix du moyen de paiement
             const Text(
               'Moyen de paiement',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: _textDark),
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 12),
             _buildMethodSelector(),
             const SizedBox(height: 24),
-
-            // Formulaire selon méthode
             _buildPaymentForm(),
+            if (widget.type == PaiementType.accesDepartement && widget.montantPresentiel != null && widget.montantPresentiel! > 0) ...[
+              const SizedBox(height: 16),
+              _buildFactureOption(),
+            ],
             const SizedBox(height: 32),
-
-            // Bouton de paiement
             _buildPayButton(),
             const SizedBox(height: 16),
-
-            // Sécurité
             _buildSecurityFooter(),
           ],
         ),
@@ -281,16 +293,10 @@ class _PaiementPageState extends State<PaiementPage> {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: _white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE0E4E8)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        color: YekiColors.white,
+        borderRadius: YekiRadius.borderRadiusLg,
+        border: Border.all(color: YekiColors.borderLight),
+        boxShadow: YekiShadows.subtle,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -300,41 +306,47 @@ class _PaiementPageState extends State<PaiementPage> {
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: _primary.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
+                  color: YekiColors.primaryDark.withValues(alpha: 0.1),
+                  borderRadius: YekiRadius.borderRadiusMd,
                 ),
-                child: const Icon(Icons.receipt_long_rounded, color: _primary, size: 24),
+                child: const Icon(Icons.receipt_long_rounded, color: YekiColors.primaryDark, size: 24),
               ),
               const SizedBox(width: 14),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      typeLabel,
-                      style: const TextStyle(fontSize: 12, color: _textLight),
-                    ),
-                    Text(
-                      widget.titre,
-                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: _textDark),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
+                    Text(typeLabel, style: const TextStyle(fontSize: 12)),
+                    Text(widget.titre, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold), maxLines: 2, overflow: TextOverflow.ellipsis),
                   ],
                 ),
               ),
             ],
           ),
           const Divider(height: 24),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text('Montant total', style: TextStyle(fontSize: 14, color: _textMedium)),
-              Text(
-                '${widget.montant} FCFA',
-                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: _primary),
-              ),
-            ],
+          if (widget.montantPresentiel != null && widget.montantPresentiel! > 0) ...[
+            _buildPriceRow('Formation en ligne', widget.montant),
+            _buildPriceRow('Frais présentiel', widget.montantPresentiel!),
+            const Divider(height: 16),
+            _buildPriceRow('Montant total', _montantTotal, isBold: true),
+          ] else ...[
+            _buildPriceRow('Montant total', _montantTotal, isBold: true),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPriceRow(String label, int montant, {bool isBold = false}) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: TextStyle(fontSize: 14, fontWeight: isBold ? FontWeight.bold : FontWeight.normal)),
+          Text(
+            '${montant} FCFA',
+            style: TextStyle(fontSize: 16, fontWeight: isBold ? FontWeight.bold : FontWeight.w600, color: isBold ? YekiColors.primaryDark : null),
           ),
         ],
       ),
@@ -368,7 +380,7 @@ class _PaiementPageState extends State<PaiementPage> {
           child: _methodTile(
             icon: Icons.credit_card_rounded,
             label: 'Carte\nBancaire',
-            color: _primary,
+            color: YekiColors.primaryDark,
             selected: _selectedMethod == CinetPayMethod.carte,
             onTap: () => setState(() => _selectedMethod = CinetPayMethod.carte),
           ),
@@ -390,17 +402,14 @@ class _PaiementPageState extends State<PaiementPage> {
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
         decoration: BoxDecoration(
-          color: selected ? color.withOpacity(0.1) : _white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: selected ? color : const Color(0xFFE0E4E8),
-            width: selected ? 2 : 1,
-          ),
+          color: selected ? color.withValues(alpha: 0.1) : YekiColors.white,
+          borderRadius: YekiRadius.borderRadiusMd,
+          border: Border.all(color: selected ? color : YekiColors.borderLight, width: selected ? 2 : 1),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, color: selected ? color : _textLight, size: 22),
+            Icon(icon, color: selected ? color : YekiColors.textLight, size: 22),
             const SizedBox(height: 4),
             Text(
               label,
@@ -408,13 +417,27 @@ class _PaiementPageState extends State<PaiementPage> {
               style: TextStyle(
                 fontSize: 10,
                 fontWeight: FontWeight.w600,
-                color: selected ? color : _textMedium,
+                color: selected ? color : YekiColors.textMedium,
                 height: 1.3,
               ),
             ),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildFactureOption() {
+    return Row(
+      children: [
+        Checkbox(
+          value: _genererFacture,
+          onChanged: (v) => setState(() => _genererFacture = v ?? false),
+          activeColor: YekiColors.primaryDark,
+        ),
+        const SizedBox(width: 8),
+        const Text('Générer une facture après paiement', style: TextStyle(fontSize: 13)),
+      ],
     );
   }
 
@@ -433,9 +456,9 @@ class _PaiementPageState extends State<PaiementPage> {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: _white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE0E4E8)),
+        color: YekiColors.white,
+        borderRadius: YekiRadius.borderRadiusLg,
+        border: Border.all(color: YekiColors.borderLight),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -444,10 +467,7 @@ class _PaiementPageState extends State<PaiementPage> {
             children: [
               Icon(Icons.phone_android_rounded, color: color),
               const SizedBox(width: 8),
-              Text(
-                isMtn ? 'MTN Mobile Money' : 'Orange Money',
-                style: TextStyle(fontWeight: FontWeight.bold, color: color, fontSize: 15),
-              ),
+              Text(isMtn ? 'MTN Mobile Money' : 'Orange Money', style: TextStyle(fontWeight: FontWeight.bold, color: color, fontSize: 15)),
             ],
           ),
           const SizedBox(height: 16),
@@ -461,10 +481,10 @@ class _PaiementPageState extends State<PaiementPage> {
             decoration: InputDecoration(
               labelText: '$label (ex: 6XXXXXXXX)',
               prefixText: '+237 ',
-              prefixStyle: const TextStyle(fontWeight: FontWeight.w600, color: _textMedium),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              prefixStyle: const TextStyle(fontWeight: FontWeight.w600),
+              border: OutlineInputBorder(borderRadius: YekiRadius.borderRadiusMd),
               focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: YekiRadius.borderRadiusMd,
                 borderSide: BorderSide(color: color, width: 2),
               ),
             ),
@@ -473,18 +493,15 @@ class _PaiementPageState extends State<PaiementPage> {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: color.withOpacity(0.08),
-              borderRadius: BorderRadius.circular(10),
+              color: color.withValues(alpha: 0.08),
+              borderRadius: YekiRadius.borderRadiusSm,
             ),
             child: Row(
               children: [
                 Icon(Icons.info_outline_rounded, size: 16, color: color),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: Text(
-                    'Vous recevrez une notification de confirmation sur votre téléphone.',
-                    style: TextStyle(fontSize: 12, color: _textMedium),
-                  ),
+                  child: Text('Vous recevrez une notification de confirmation sur votre téléphone.', style: TextStyle(fontSize: 12)),
                 ),
               ],
             ),
@@ -498,21 +515,18 @@ class _PaiementPageState extends State<PaiementPage> {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: _white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE0E4E8)),
+        color: YekiColors.white,
+        borderRadius: YekiRadius.borderRadiusLg,
+        border: Border.all(color: YekiColors.borderLight),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Row(
             children: [
-              Icon(Icons.credit_card_rounded, color: _primary),
+              Icon(Icons.credit_card_rounded, color: YekiColors.primaryDark),
               SizedBox(width: 8),
-              Text(
-                'Carte bancaire',
-                style: TextStyle(fontWeight: FontWeight.bold, color: _primary, fontSize: 15),
-              ),
+              Text('Carte bancaire', style: TextStyle(fontWeight: FontWeight.bold, color: YekiColors.primaryDark, fontSize: 15)),
             ],
           ),
           const SizedBox(height: 16),
@@ -521,7 +535,7 @@ class _PaiementPageState extends State<PaiementPage> {
             textCapitalization: TextCapitalization.words,
             decoration: InputDecoration(
               labelText: 'Nom sur la carte',
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              border: OutlineInputBorder(borderRadius: YekiRadius.borderRadiusMd),
             ),
           ),
           const SizedBox(height: 12),
@@ -536,7 +550,7 @@ class _PaiementPageState extends State<PaiementPage> {
             decoration: InputDecoration(
               labelText: 'Numéro de carte',
               hintText: 'XXXX XXXX XXXX XXXX',
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              border: OutlineInputBorder(borderRadius: YekiRadius.borderRadiusMd),
             ),
           ),
           const SizedBox(height: 12),
@@ -553,7 +567,7 @@ class _PaiementPageState extends State<PaiementPage> {
                   ],
                   decoration: InputDecoration(
                     labelText: 'MM/AA',
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    border: OutlineInputBorder(borderRadius: YekiRadius.borderRadiusMd),
                   ),
                 ),
               ),
@@ -569,7 +583,7 @@ class _PaiementPageState extends State<PaiementPage> {
                   ],
                   decoration: InputDecoration(
                     labelText: 'CVV',
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    border: OutlineInputBorder(borderRadius: YekiRadius.borderRadiusMd),
                   ),
                 ),
               ),
@@ -581,35 +595,11 @@ class _PaiementPageState extends State<PaiementPage> {
   }
 
   Widget _buildPayButton() {
-    return SizedBox(
-      width: double.infinity,
-      child: ElevatedButton(
-        onPressed: _isLoading ? null : _initierPaiement,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: _primary,
-          foregroundColor: _white,
-          padding: const EdgeInsets.symmetric(vertical: 18),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          elevation: 0,
-        ),
-        child: _isLoading
-            ? const SizedBox(
-                width: 24,
-                height: 24,
-                child: CircularProgressIndicator(color: _white, strokeWidth: 2),
-              )
-            : Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.lock_rounded, size: 18),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Payer ${widget.montant} FCFA',
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
-                ],
-              ),
-      ),
+    return YekiButton(
+      label: 'Payer ${_montantTotal} FCFA',
+      icon: Icons.lock_rounded,
+      onPressed: _isLoading ? null : _initierPaiement,
+      isLoading: _isLoading,
     );
   }
 
@@ -617,121 +607,10 @@ class _PaiementPageState extends State<PaiementPage> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        Icon(Icons.security_rounded, size: 14, color: _textLight),
+        Icon(Icons.security_rounded, size: 14, color: YekiColors.textLight),
         const SizedBox(width: 6),
-        Text(
-          'Paiement 100% sécurisé via CinetPay',
-          style: TextStyle(fontSize: 12, color: _textLight),
-        ),
+        Text('Paiement 100% sécurisé via CinetPay', style: TextStyle(fontSize: 12, color: YekiColors.textLight)),
       ],
-    );
-  }
-}
-
-// WebView CinetPay intégrée
-class CinetPayWebView extends StatefulWidget {
-  final String paymentUrl;
-  final String reference;
-  final String titre;
-  final int montant;
-
-  const CinetPayWebView({
-    super.key,
-    required this.paymentUrl,
-    required this.reference,
-    required this.titre,
-    required this.montant,
-  });
-
-  @override
-  State<CinetPayWebView> createState() => _CinetPayWebViewState();
-}
-
-class _CinetPayWebViewState extends State<CinetPayWebView> {
-  late final WebViewController _controller;
-  bool _isLoading = true;
-  bool _paymentCompleted = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _initWebView();
-  }
-
-  void _initWebView() {
-    _controller = WebViewController()
-      ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setNavigationDelegate(
-        NavigationDelegate(
-          onPageStarted: (String url) {
-            setState(() => _isLoading = true);
-            _checkPaymentCompletion(url);
-          },
-          onPageFinished: (String url) {
-            setState(() => _isLoading = false);
-            _checkPaymentCompletion(url);
-          },
-          onWebResourceError: (error) {
-            setState(() => _isLoading = false);
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Erreur de chargement: ${error.description}'),
-                backgroundColor: _red,
-              ),
-            );
-          },
-        ),
-      )
-      ..loadRequest(Uri.parse(widget.paymentUrl));
-  }
-
-  void _checkPaymentCompletion(String url) {
-    // CinetPay redirige vers notify_url ou return_url
-    if (url.contains('payment-result') || 
-        url.contains('success') || 
-        url.contains('cinetpay.com/success')) {
-      if (!_paymentCompleted) {
-        _paymentCompleted = true;
-        _verifierPaiement();
-      }
-    }
-  }
-
-  Future<void> _verifierPaiement() async {
-    // Attendre que le webhook soit traité
-    await Future.delayed(const Duration(seconds: 3));
-    
-    if (mounted) {
-      Navigator.pop(context, true);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('✅ Paiement effectué avec succès !'),
-          backgroundColor: _green,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('Paiement - ${widget.titre}'),
-        backgroundColor: _primary,
-        foregroundColor: _white,
-      ),
-      body: Stack(
-        children: [
-          WebViewWidget(controller: _controller),
-          if (_isLoading)
-            const Center(
-              child: CircularProgressIndicator(
-                valueColor: AlwaysStoppedAnimation<Color>(_primary),
-              ),
-            ),
-        ],
-      ),
     );
   }
 }
@@ -764,6 +643,97 @@ class _ExpiryFormatter extends TextInputFormatter {
     return newValue.copyWith(
       text: str,
       selection: TextSelection.collapsed(offset: str.length),
+    );
+  }
+}
+
+// WebView CinetPay intégrée
+class CinetPayWebView extends StatefulWidget {
+  final String paymentUrl;
+  final String reference;
+  final String titre;
+  final int montant;
+  final PaiementType type;
+  final int? departementId;
+
+  const CinetPayWebView({
+    super.key,
+    required this.paymentUrl,
+    required this.reference,
+    required this.titre,
+    required this.montant,
+    required this.type,
+    this.departementId,
+  });
+
+  @override
+  State<CinetPayWebView> createState() => _CinetPayWebViewState();
+}
+
+class _CinetPayWebViewState extends State<CinetPayWebView> {
+  late final WebViewController _controller;
+  bool _isLoading = true;
+  bool _paymentCompleted = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _initWebView();
+  }
+
+  void _initWebView() {
+    _controller = WebViewController()
+      ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..setNavigationDelegate(
+        NavigationDelegate(
+          onPageStarted: (String url) {
+            setState(() => _isLoading = true);
+            _checkPaymentCompletion(url);
+          },
+          onPageFinished: (String url) {
+            setState(() => _isLoading = false);
+            _checkPaymentCompletion(url);
+          },
+          onWebResourceError: (error) {
+            setState(() => _isLoading = false);
+            ErrorHandler.showError(context, 'Erreur de chargement: ${error.description}');
+          },
+        ),
+      )
+      ..loadRequest(Uri.parse(widget.paymentUrl));
+  }
+
+  void _checkPaymentCompletion(String url) {
+    if (url.contains('payment-result') || url.contains('success') || url.contains('cinetpay.com/success')) {
+      if (!_paymentCompleted) {
+        _paymentCompleted = true;
+        _verifierPaiement();
+      }
+    }
+  }
+
+  Future<void> _verifierPaiement() async {
+    await Future.delayed(const Duration(seconds: 3));
+    if (mounted) {
+      Navigator.pop(context, true);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Paiement - ${widget.titre}'),
+        backgroundColor: YekiColors.primaryDark,
+        foregroundColor: YekiColors.white,
+      ),
+      body: Stack(
+        children: [
+          WebViewWidget(controller: _controller),
+          if (_isLoading)
+            const Center(child: YekiLoader()),
+        ],
+      ),
     );
   }
 }

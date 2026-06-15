@@ -1,6 +1,12 @@
+// lib/views/pages/onboarding.dart
+// ═══════════════════════════════════════════════════════════════════════════
+// PAGE D'ONBOARDING — CORRIGÉE AVEC DESIGN SYSTEM GLOBAL
+// ═══════════════════════════════════════════════════════════════════════════
+
 import 'package:flutter/material.dart';
 import 'dart:ui';
 import 'package:yeki/main.dart';
+import 'package:yeki/core/theme/app_theme.dart';
 
 class OnboardingPage extends StatefulWidget {
   const OnboardingPage({super.key});
@@ -10,13 +16,8 @@ class OnboardingPage extends StatefulWidget {
 }
 
 class _OnboardingPageState extends State<OnboardingPage> {
-  final PageController _ctrl = PageController();
-  int _current = 0;
-
-  // --- NOUVELLE PALETTE HARMONISÉE ---
-  static const Color brandBackground = Color(0xFF135F74); 
-  static const Color actionOrange = Color(0xFFFF6B00); 
-  static const Color glassFill = Color(0x1AFFFFFF);
+  final PageController _pageController = PageController();
+  int _currentPage = 0;
 
   final List<Map<String, String>> _pages = [
     {
@@ -39,12 +40,20 @@ class _OnboardingPageState extends State<OnboardingPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: brandBackground,
+      backgroundColor: YekiColors.primaryDark,
       body: Stack(
         children: [
           // ÉLÉMENTS DÉCORATIFS (Cercles subtils)
-          Positioned(top: -100, right: -100, child: _buildCircle(300, Colors.white.withOpacity(0.03))),
-          Positioned(bottom: -50, left: -50, child: _buildCircle(200, actionOrange.withOpacity(0.05))),
+          Positioned(
+            top: -100,
+            right: -100,
+            child: _buildCircle(300, YekiColors.white.withValues(alpha: 0.03)),
+          ),
+          Positioned(
+            bottom: -50,
+            left: -50,
+            child: _buildCircle(200, YekiColors.accent.withValues(alpha: 0.05)),
+          ),
           
           SafeArea(
             child: Column(
@@ -52,10 +61,10 @@ class _OnboardingPageState extends State<OnboardingPage> {
                 _buildHeader(),
                 Expanded(
                   child: PageView.builder(
-                    controller: _ctrl,
-                    onPageChanged: (i) => setState(() => _current = i),
+                    controller: _pageController,
+                    onPageChanged: (index) => setState(() => _currentPage = index),
                     itemCount: _pages.length,
-                    itemBuilder: (context, i) => _buildPage(_pages[i]),
+                    itemBuilder: (context, index) => _buildPage(_pages[index]),
                   ),
                 ),
                 _buildFooter(),
@@ -68,7 +77,14 @@ class _OnboardingPageState extends State<OnboardingPage> {
   }
 
   Widget _buildCircle(double size, Color color) {
-    return Container(width: size, height: size, decoration: BoxDecoration(shape: BoxShape.circle, color: color));
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: color,
+      ),
+    );
   }
 
   Widget _buildHeader() {
@@ -77,12 +93,27 @@ class _OnboardingPageState extends State<OnboardingPage> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          const Text('YEKI', 
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, letterSpacing: 4, fontSize: 20)),
+          const Text(
+            'YEKI',
+            style: TextStyle(
+              color: YekiColors.white,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 4,
+              fontSize: 20,
+            ),
+          ),
           TextButton(
             onPressed: () => YekiAuth.finishOnboarding(context),
-            style: TextButton.styleFrom(foregroundColor: Colors.white.withOpacity(0.5)),
-            child: const Text('Passer', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+            style: TextButton.styleFrom(
+              foregroundColor: YekiColors.white.withValues(alpha: 0.5),
+            ),
+            child: const Text(
+              'Passer',
+              style: TextStyle(
+                fontWeight: FontWeight.w700,
+                fontSize: 14,
+              ),
+            ),
           ),
         ],
       ),
@@ -104,9 +135,9 @@ class _OnboardingPageState extends State<OnboardingPage> {
                 height: 280,
                 width: double.infinity,
                 decoration: BoxDecoration(
-                  color: glassFill,
+                  color: YekiColors.white.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(30),
-                  border: Border.all(color: Colors.white.withOpacity(0.1)),
+                  border: Border.all(color: YekiColors.white.withValues(alpha: 0.1)),
                 ),
                 child: Padding(
                   padding: const EdgeInsets.all(15.0),
@@ -115,7 +146,11 @@ class _OnboardingPageState extends State<OnboardingPage> {
                     child: Image.asset(
                       data['image']!,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Icon(Icons.auto_awesome_motion, size: 80, color: Colors.white.withOpacity(0.2)),
+                      errorBuilder: (_, _, _) => Icon(
+                        Icons.auto_awesome_motion,
+                        size: 80,
+                        color: YekiColors.white.withValues(alpha: 0.2),
+                      ),
                     ),
                   ),
                 ),
@@ -127,7 +162,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
             data['title']!,
             textAlign: TextAlign.center,
             style: const TextStyle(
-              color: Colors.white,
+              color: YekiColors.white,
               fontSize: 26,
               fontWeight: FontWeight.w900,
               height: 1.2,
@@ -141,7 +176,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
               data['desc']!,
               textAlign: TextAlign.center,
               style: TextStyle(
-                color: Colors.white.withOpacity(0.7),
+                color: YekiColors.white.withValues(alpha: 0.7),
                 fontSize: 15,
                 fontWeight: FontWeight.w400,
                 height: 1.6,
@@ -154,7 +189,8 @@ class _OnboardingPageState extends State<OnboardingPage> {
   }
 
   Widget _buildFooter() {
-    bool isLast = _current == _pages.length - 1;
+    final bool isLastPage = _currentPage == _pages.length - 1;
+    
     return Padding(
       padding: const EdgeInsets.fromLTRB(40, 0, 40, 50),
       child: Row(
@@ -162,50 +198,71 @@ class _OnboardingPageState extends State<OnboardingPage> {
         children: [
           // Indicateurs de progression épurés
           Row(
-            children: List.generate(_pages.length, (i) => AnimatedContainer(
-              duration: const Duration(milliseconds: 300),
-              margin: const EdgeInsets.only(right: 8),
-              width: i == _current ? 28 : 8,
-              height: 6,
-              decoration: BoxDecoration(
-                color: i == _current ? actionOrange : Colors.white.withOpacity(0.15),
-                borderRadius: BorderRadius.circular(3),
-              ),
-            )),
+            children: List.generate(_pages.length, (index) {
+              return AnimatedContainer(
+                duration: const Duration(milliseconds: 300),
+                margin: const EdgeInsets.only(right: 8),
+                width: index == _currentPage ? 28 : 8,
+                height: 6,
+                decoration: BoxDecoration(
+                  color: index == _currentPage
+                      ? YekiColors.accent
+                      : YekiColors.white.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(3),
+                ),
+              );
+            }),
           ),
 
-          // Bouton d'action "Premium"
+          // Bouton d'action
           GestureDetector(
             onTap: () {
-              if (!isLast) {
-                _ctrl.nextPage(duration: const Duration(milliseconds: 500), curve: Curves.easeInOutQuart);
+              if (!isLastPage) {
+                _pageController.nextPage(
+                  duration: const Duration(milliseconds: 500),
+                  curve: Curves.easeInOutQuart,
+                );
               } else {
                 YekiAuth.finishOnboarding(context);
               }
             },
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 300),
-              padding: EdgeInsets.symmetric(horizontal: isLast ? 28 : 20, vertical: 18),
+              padding: EdgeInsets.symmetric(
+                horizontal: isLastPage ? 28 : 20,
+                vertical: 18,
+              ),
               decoration: BoxDecoration(
-                color: actionOrange,
+                color: YekiColors.accent,
                 borderRadius: BorderRadius.circular(20),
                 boxShadow: [
                   BoxShadow(
-                    color: actionOrange.withOpacity(0.3), 
-                    blurRadius: 20, 
-                    offset: const Offset(0, 10)
+                    color: YekiColors.accent.withValues(alpha: 0.3),
+                    blurRadius: 20,
+                    offset: const Offset(0, 10),
                   ),
                 ],
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  if (isLast) ...[
-                    const Text('Démarrer', 
-                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 15, letterSpacing: 1)),
+                  if (isLastPage) ...[
+                    const Text(
+                      'Démarrer',
+                      style: TextStyle(
+                        color: YekiColors.white,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 15,
+                        letterSpacing: 1,
+                      ),
+                    ),
                     const SizedBox(width: 12),
                   ],
-                  const Icon(Icons.arrow_forward_ios_rounded, color: Colors.white, size: 18),
+                  const Icon(
+                    Icons.arrow_forward_ios_rounded,
+                    color: YekiColors.white,
+                    size: 18,
+                  ),
                 ],
               ),
             ),

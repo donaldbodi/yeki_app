@@ -1,3 +1,10 @@
+// lib/widgets/creer_cours_sheet.dart
+// ═══════════════════════════════════════════════════════════════════
+// FORMULAIRE CRÉATION DE COURS — complet selon le modèle Cours
+// Champs : titre, niveau, matière, concours, description_brief,
+//          color_code, icon_name, enseignant_principal, image
+// ═══════════════════════════════════════════════════════════════════
+
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
@@ -5,16 +12,9 @@ import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:file_picker/file_picker.dart';
-
-// ═══════════════════════════════════════════════════════════════════
-// FORMULAIRE CRÉATION DE COURS — complet selon le modèle Cours
-// Champs : titre, niveau, matière, concours, description_brief,
-//          color_code, icon_name, enseignant_principal, image
-// ═══════════════════════════════════════════════════════════════════
-
-const String _baseUrl = 'https://yeki.pythonanywhere.com/api';
-const Color _primary  = Color(0xFF6A1B9A);
-const Color _dark     = Color(0xFF0D1B2A);
+import 'package:yeki/core/theme/app_theme.dart';
+import 'package:yeki/core/constants/api_constants.dart';
+import 'package:yeki/utils/error_handler.dart';
 
 // ── Listes de référence ──────────────────────────────────────────
 
@@ -85,20 +85,20 @@ class CreerCoursSheet extends StatefulWidget {
 
 class _CreerCoursSheetState extends State<CreerCoursSheet> {
   // Controllers
-  final _titreCtrl  = TextEditingController();
-  final _descCtrl   = TextEditingController();
+  final _titreCtrl = TextEditingController();
+  final _descCtrl = TextEditingController();
   final _concoursCtrl = TextEditingController();
 
   // Valeurs sélectionnées
   String? _niveau;
   String? _matiere;
-  String  _colorCode = '#008080';
-  String  _iconName  = 'school';
-  int?    _enseignantPrincipalId;
+  String _colorCode = '#008080';
+  String _iconName = 'school';
+  int? _enseignantPrincipalId;
 
   // Image
   Uint8List? _imageBytes;
-  String?    _imageName;
+  String? _imageName;
 
   // État
   bool _isLoading = false;
@@ -120,8 +120,8 @@ class _CreerCoursSheetState extends State<CreerCoursSheet> {
   }
 
   Future<String?> _getToken() async {
-    final p = await SharedPreferences.getInstance();
-    return p.getString('token');
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('token');
   }
 
   Future<void> _chargerEnseignants() async {
@@ -129,8 +129,8 @@ class _CreerCoursSheetState extends State<CreerCoursSheet> {
     final token = await _getToken();
     try {
       final res = await http.get(
-        Uri.parse('$_baseUrl/enseignants/liste/?role=principal'),
-        headers: {'Authorization': 'Token $token'},
+        Uri.parse('${ApiConstants.baseUrl}/enseignants/liste/?role=principal'),
+        headers: ApiHeaders.auth(token),
       );
       if (res.statusCode == 200) {
         final list = jsonDecode(res.body) as List;
@@ -146,26 +146,28 @@ class _CreerCoursSheetState extends State<CreerCoursSheet> {
   Future<void> _soumettre() async {
     // Validations frontend
     if (_titreCtrl.text.trim().isEmpty) {
-      _showError('Le titre est obligatoire'); return;
+      _showError('Le titre est obligatoire');
+      return;
     }
     if (_niveau == null) {
-      _showError('Le niveau est obligatoire'); return;
+      _showError('Le niveau est obligatoire');
+      return;
     }
 
     setState(() => _isLoading = true);
     final token = await _getToken();
 
     try {
-      final uri     = Uri.parse('$_baseUrl/cours/create/');
+      final uri = Uri.parse('${ApiConstants.baseUrl}/cours/create/');
       final request = http.MultipartRequest('POST', uri);
       request.headers['Authorization'] = 'Token $token';
 
       // ── Champs obligatoires ──────────────────────────────────
-      request.fields['titre']       = _titreCtrl.text.trim();
-      request.fields['niveau']      = _niveau!;
+      request.fields['titre'] = _titreCtrl.text.trim();
+      request.fields['niveau'] = _niveau!;
       request.fields['departement'] = widget.departementId.toString();
-      request.fields['color_code']  = _colorCode;
-      request.fields['icon_name']   = _iconName;
+      request.fields['color_code'] = _colorCode;
+      request.fields['icon_name'] = _iconName;
 
       // ── Champs optionnels ────────────────────────────────────
       if (_matiere != null && _matiere!.isNotEmpty) {
@@ -178,8 +180,7 @@ class _CreerCoursSheetState extends State<CreerCoursSheet> {
         request.fields['description_brief'] = _descCtrl.text.trim();
       }
       if (_enseignantPrincipalId != null) {
-        request.fields['enseignant_principal'] =
-            _enseignantPrincipalId.toString();
+        request.fields['enseignant_principal'] = _enseignantPrincipalId.toString();
       }
 
       // ── Image ────────────────────────────────────────────────
@@ -192,7 +193,7 @@ class _CreerCoursSheetState extends State<CreerCoursSheet> {
       }
 
       final streamed = await request.send();
-      final res      = await http.Response.fromStream(streamed);
+      final res = await http.Response.fromStream(streamed);
       setState(() => _isLoading = false);
 
       if (res.statusCode == 201) {
@@ -200,7 +201,6 @@ class _CreerCoursSheetState extends State<CreerCoursSheet> {
         widget.onSuccess();
       } else {
         final body = jsonDecode(res.body);
-        // Afficher le premier message d'erreur du serializer
         String msg = 'Erreur ${res.statusCode}';
         if (body is Map) {
           final firstKey = body.keys.first;
@@ -220,7 +220,7 @@ class _CreerCoursSheetState extends State<CreerCoursSheet> {
   Widget build(BuildContext context) {
     return Container(
       decoration: const BoxDecoration(
-        color: Colors.white,
+        color: YekiColors.white,
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
       padding: EdgeInsets.only(
@@ -237,35 +237,43 @@ class _CreerCoursSheetState extends State<CreerCoursSheet> {
               child: Container(
                 width: 40, height: 4,
                 decoration: BoxDecoration(
-                    color: Colors.grey.shade300,
-                    borderRadius: BorderRadius.circular(10)),
+                  color: YekiColors.borderLight,
+                  borderRadius: BorderRadius.circular(10),
+                ),
               ),
             ),
             const SizedBox(height: 16),
 
             // ── Titre formulaire ─────────────────────────────────
-            const Text('Créer un cours',
-                style: TextStyle(
-                    fontSize: 20, fontWeight: FontWeight.bold, color: _dark)),
+            const Text(
+              'Créer un cours',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: YekiColors.textDark,
+              ),
+            ),
             const SizedBox(height: 6),
 
             // ── Badge département ────────────────────────────────
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
               decoration: BoxDecoration(
-                color: _primary.withOpacity(0.07),
+                color: YekiColors.purple.withValues(alpha: 0.07),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.domain, color: _primary, size: 15),
+                  const Icon(Icons.domain, color: YekiColors.purple, size: 15),
                   const SizedBox(width: 7),
                   Text(
                     'Département : ${widget.departementNom}',
                     style: const TextStyle(
-                        color: _primary, fontSize: 13,
-                        fontWeight: FontWeight.w500),
+                      color: YekiColors.purple,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                 ],
               ),
@@ -341,21 +349,26 @@ class _CreerCoursSheetState extends State<CreerCoursSheet> {
               width: double.infinity,
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: _primary,
+                  backgroundColor: YekiColors.purple,
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14)),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
                   padding: const EdgeInsets.symmetric(vertical: 16),
                 ),
                 onPressed: _isLoading ? null : _soumettre,
                 child: _isLoading
                     ? const SizedBox(
                         width: 22, height: 22,
-                        child: CircularProgressIndicator(
-                            color: Colors.white, strokeWidth: 2))
-                    : const Text('Créer le cours',
+                        child: YekiLoader(color: YekiColors.white, size: 22),
+                      )
+                    : const Text(
+                        'Créer le cours',
                         style: TextStyle(
-                            color: Colors.white, fontSize: 16,
-                            fontWeight: FontWeight.bold)),
+                          color: YekiColors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
               ),
             ),
             const SizedBox(height: 8),
@@ -377,13 +390,13 @@ class _CreerCoursSheetState extends State<CreerCoursSheet> {
               decoration: BoxDecoration(
                 color: _hexToColor(_colorCode),
                 shape: BoxShape.circle,
-                border: Border.all(color: Colors.grey.shade300),
+                border: Border.all(color: YekiColors.borderLight),
               ),
             ),
             const SizedBox(width: 10),
             Text(
               'Couleur : $_colorCode',
-              style: TextStyle(fontSize: 13, color: Colors.grey.shade700),
+              style: TextStyle(fontSize: 13, color: YekiColors.textLight),
             ),
           ],
         ),
@@ -402,15 +415,15 @@ class _CreerCoursSheetState extends State<CreerCoursSheet> {
                   color: c,
                   shape: BoxShape.circle,
                   border: Border.all(
-                    color: selected ? _dark : Colors.transparent,
+                    color: selected ? YekiColors.textDark : Colors.transparent,
                     width: selected ? 2.5 : 0,
                   ),
                   boxShadow: selected
-                      ? [BoxShadow(color: c.withOpacity(0.5), blurRadius: 6)]
+                      ? [BoxShadow(color: c.withValues(alpha: 0.5), blurRadius: 6)]
                       : null,
                 ),
                 child: selected
-                    ? const Icon(Icons.check, color: Colors.white, size: 18)
+                    ? const Icon(Icons.check, color: YekiColors.white, size: 18)
                     : null,
               ),
             );
@@ -427,14 +440,14 @@ class _CreerCoursSheetState extends State<CreerCoursSheet> {
       runSpacing: 8,
       children: _icones.map((item) {
         final selected = _iconName == item['name'];
-        final couleur  = _hexToColor(_colorCode);
+        final couleur = _hexToColor(_colorCode);
         return GestureDetector(
           onTap: () => setState(() => _iconName = item['name'] as String),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 180),
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
-              color: selected ? couleur : Colors.grey.shade100,
+              color: selected ? couleur : YekiColors.backgroundLight,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
                 color: selected ? couleur : Colors.transparent,
@@ -446,14 +459,14 @@ class _CreerCoursSheetState extends State<CreerCoursSheet> {
                 Icon(
                   item['icon'] as IconData,
                   size: 18,
-                  color: selected ? Colors.white : Colors.grey.shade600,
+                  color: selected ? YekiColors.white : YekiColors.textLight,
                 ),
                 const SizedBox(width: 5),
                 Text(
                   item['label'] as String,
                   style: TextStyle(
                     fontSize: 12,
-                    color: selected ? Colors.white : Colors.grey.shade700,
+                    color: selected ? YekiColors.white : YekiColors.textMedium,
                     fontWeight: selected ? FontWeight.bold : FontWeight.normal,
                   ),
                 ),
@@ -471,7 +484,7 @@ class _CreerCoursSheetState extends State<CreerCoursSheet> {
       return const Center(
         child: SizedBox(
           height: 30,
-          child: CircularProgressIndicator(color: _primary, strokeWidth: 2),
+          child: YekiLoader(color: YekiColors.purple, size: 24),
         ),
       );
     }
@@ -479,15 +492,17 @@ class _CreerCoursSheetState extends State<CreerCoursSheet> {
       return Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: Colors.grey.shade50,
+          color: YekiColors.backgroundLight,
           borderRadius: BorderRadius.circular(14),
         ),
-        child: const Row(
+        child: Row(
           children: [
-            Icon(Icons.info_outline, color: Colors.grey, size: 18),
-            SizedBox(width: 8),
-            Text('Aucun enseignant principal disponible',
-                style: TextStyle(color: Colors.grey, fontSize: 13)),
+            const Icon(Icons.info_outline, color: YekiColors.textLight, size: 18),
+            const SizedBox(width: 8),
+            const Text(
+              'Aucun enseignant principal disponible',
+              style: TextStyle(color: YekiColors.textLight, fontSize: 13),
+            ),
           ],
         ),
       );
@@ -511,37 +526,39 @@ class _CreerCoursSheetState extends State<CreerCoursSheet> {
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: _enseignantPrincipalId != null
-              ? _primary.withOpacity(0.05)
-              : Colors.grey.shade50,
+              ? YekiColors.purple.withValues(alpha: 0.05)
+              : YekiColors.backgroundLight,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
             color: _enseignantPrincipalId != null
-                ? _primary.withOpacity(0.3)
-                : Colors.grey.shade200,
+                ? YekiColors.purple.withValues(alpha: 0.3)
+                : YekiColors.borderLight,
           ),
         ),
         child: Row(
           children: [
             CircleAvatar(
               radius: 18,
-              backgroundColor: _primary.withOpacity(0.12),
-              child: const Icon(Icons.person, color: _primary, size: 18),
+              backgroundColor: YekiColors.purple.withValues(alpha: 0.12),
+              child: const Icon(Icons.person, color: YekiColors.purple, size: 18),
             ),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Enseignant principal',
-                      style: TextStyle(fontSize: 11, color: Colors.grey)),
+                  const Text(
+                    'Enseignant principal',
+                    style: TextStyle(fontSize: 11, color: YekiColors.textLight),
+                  ),
                   const SizedBox(height: 2),
                   Text(
                     epNom,
                     style: TextStyle(
                       fontSize: 14,
                       color: _enseignantPrincipalId != null
-                          ? _dark
-                          : Colors.grey.shade500,
+                          ? YekiColors.textDark
+                          : YekiColors.textLight,
                       fontWeight: _enseignantPrincipalId != null
                           ? FontWeight.w600
                           : FontWeight.normal,
@@ -553,7 +570,7 @@ class _CreerCoursSheetState extends State<CreerCoursSheet> {
             Icon(
               Icons.arrow_forward_ios,
               size: 14,
-              color: Colors.grey.shade400,
+              color: YekiColors.textLight,
             ),
           ],
         ),
@@ -570,7 +587,7 @@ class _CreerCoursSheetState extends State<CreerCoursSheet> {
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setS) => Container(
           decoration: const BoxDecoration(
-            color: Colors.white,
+            color: YekiColors.white,
             borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
           ),
           padding: EdgeInsets.only(
@@ -584,41 +601,58 @@ class _CreerCoursSheetState extends State<CreerCoursSheet> {
                 child: Container(
                   width: 40, height: 4,
                   decoration: BoxDecoration(
-                      color: Colors.grey.shade300,
-                      borderRadius: BorderRadius.circular(10)),
+                    color: YekiColors.borderLight,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
                 ),
               ),
               const SizedBox(height: 14),
-              const Text('Choisir l\'enseignant principal',
-                  style: TextStyle(
-                      fontSize: 16, fontWeight: FontWeight.bold, color: _dark)),
+              const Text(
+                'Choisir l\'enseignant principal',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: YekiColors.textDark,
+                ),
+              ),
               const SizedBox(height: 4),
-              const Text('Optionnel — peut être assigné plus tard',
-                  style: TextStyle(fontSize: 12, color: Colors.grey)),
+              const Text(
+                'Optionnel — peut être assigné plus tard',
+                style: TextStyle(fontSize: 12, color: YekiColors.textLight),
+              ),
               const SizedBox(height: 10),
               // Option "aucun"
               RadioListTile<int?>(
                 value: null,
                 groupValue: tempSelected,
-                activeColor: _primary,
-                title: const Text('Aucun pour l\'instant',
-                    style: TextStyle(fontSize: 14, color: Colors.grey)),
+                activeColor: YekiColors.purple,
+                title: const Text(
+                  'Aucun pour l\'instant',
+                  style: TextStyle(fontSize: 14, color: YekiColors.textLight),
+                ),
                 onChanged: (v) => setS(() => tempSelected = v),
               ),
               ConstrainedBox(
                 constraints: BoxConstraints(
-                    maxHeight: MediaQuery.of(ctx).size.height * 0.35),
+                  maxHeight: MediaQuery.of(ctx).size.height * 0.35,
+                ),
                 child: ListView(
                   shrinkWrap: true,
                   children: _enseignants.map((e) => RadioListTile<int>(
                     value: e['id'] as int,
                     groupValue: tempSelected,
-                    activeColor: _primary,
-                    title: Text(e['nom'] ?? e['username'] ?? '',
-                        style: const TextStyle(
-                            fontSize: 14, fontWeight: FontWeight.w500)),
-                    subtitle: Text(e['email'] ?? '',
-                        style: const TextStyle(fontSize: 12)),
+                    activeColor: YekiColors.purple,
+                    title: Text(
+                      e['nom'] ?? e['username'] ?? '',
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    subtitle: Text(
+                      e['email'] ?? '',
+                      style: const TextStyle(fontSize: 12),
+                    ),
                     onChanged: (v) => setS(() => tempSelected = v),
                   )).toList(),
                 ),
@@ -628,17 +662,20 @@ class _CreerCoursSheetState extends State<CreerCoursSheet> {
                 width: double.infinity,
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: _primary,
+                    backgroundColor: YekiColors.purple,
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                     padding: const EdgeInsets.symmetric(vertical: 13),
                   ),
                   onPressed: () {
                     setState(() => _enseignantPrincipalId = tempSelected);
                     Navigator.pop(ctx);
                   },
-                  child: const Text('Confirmer',
-                      style: TextStyle(color: Colors.white)),
+                  child: const Text(
+                    'Confirmer',
+                    style: TextStyle(color: YekiColors.white),
+                  ),
                 ),
               ),
             ],
@@ -653,11 +690,13 @@ class _CreerCoursSheetState extends State<CreerCoursSheet> {
     return GestureDetector(
       onTap: () async {
         final res = await FilePicker.platform.pickFiles(
-            type: FileType.image, withData: true);
+          type: FileType.image,
+          withData: true,
+        );
         if (res != null && res.files.single.bytes != null) {
           setState(() {
             _imageBytes = res.files.single.bytes;
-            _imageName  = res.files.single.name;
+            _imageName = res.files.single.name;
           });
         }
       },
@@ -665,13 +704,13 @@ class _CreerCoursSheetState extends State<CreerCoursSheet> {
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: _imageName != null
-              ? _primary.withOpacity(0.05)
-              : Colors.grey.shade50,
+              ? YekiColors.purple.withValues(alpha: 0.05)
+              : YekiColors.backgroundLight,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
             color: _imageName != null
-                ? _primary.withOpacity(0.3)
-                : Colors.grey.shade200,
+                ? YekiColors.purple.withValues(alpha: 0.3)
+                : YekiColors.borderLight,
           ),
         ),
         child: Row(
@@ -680,15 +719,13 @@ class _CreerCoursSheetState extends State<CreerCoursSheet> {
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
                 color: _imageName != null
-                    ? _primary.withOpacity(0.1)
-                    : Colors.grey.shade200,
+                    ? YekiColors.purple.withValues(alpha: 0.1)
+                    : YekiColors.borderLight,
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Icon(
-                _imageName != null
-                    ? Icons.image
-                    : Icons.add_photo_alternate_outlined,
-                color: _imageName != null ? _primary : Colors.grey,
+                _imageName != null ? Icons.image : Icons.add_photo_alternate_outlined,
+                color: _imageName != null ? YekiColors.purple : YekiColors.textLight,
                 size: 22,
               ),
             ),
@@ -703,23 +740,23 @@ class _CreerCoursSheetState extends State<CreerCoursSheet> {
                         : 'Ajouter une image de couverture',
                     style: TextStyle(
                       fontSize: 14,
-                      fontWeight: _imageName != null
-                          ? FontWeight.w600 : FontWeight.normal,
-                      color: _imageName != null ? _dark : Colors.grey.shade500,
+                      fontWeight: _imageName != null ? FontWeight.w600 : FontWeight.normal,
+                      color: _imageName != null ? YekiColors.textDark : YekiColors.textLight,
                     ),
                   ),
                   if (_imageName != null) ...[
                     const SizedBox(height: 2),
                     Text(
                       _imageName!,
-                      style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+                      style: TextStyle(fontSize: 11, color: YekiColors.textLight),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ] else ...[
                     const SizedBox(height: 2),
-                    Text('Optionnel — JPEG, PNG',
-                        style: TextStyle(
-                            fontSize: 11, color: Colors.grey.shade400)),
+                    Text(
+                      'Optionnel — JPEG, PNG',
+                      style: TextStyle(fontSize: 11, color: YekiColors.textLight),
+                    ),
                   ],
                 ],
               ),
@@ -728,13 +765,12 @@ class _CreerCoursSheetState extends State<CreerCoursSheet> {
               GestureDetector(
                 onTap: () => setState(() {
                   _imageBytes = null;
-                  _imageName  = null;
+                  _imageName = null;
                 }),
-                child: Icon(Icons.close, color: Colors.grey.shade400, size: 18),
+                child: Icon(Icons.close, color: YekiColors.textLight, size: 18),
               )
             else
-              Icon(Icons.arrow_forward_ios,
-                  size: 13, color: Colors.grey.shade400),
+              Icon(Icons.arrow_forward_ios, size: 13, color: YekiColors.textLight),
           ],
         ),
       ),
@@ -747,35 +783,50 @@ class _CreerCoursSheetState extends State<CreerCoursSheet> {
           Container(
             width: 4, height: 16,
             decoration: BoxDecoration(
-                color: _primary, borderRadius: BorderRadius.circular(2)),
+              color: YekiColors.purple,
+              borderRadius: BorderRadius.circular(2),
+            ),
           ),
           const SizedBox(width: 8),
-          Text(label,
-              style: const TextStyle(
-                  fontSize: 14, fontWeight: FontWeight.bold, color: _dark)),
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              color: YekiColors.textDark,
+            ),
+          ),
         ],
       );
 
-  Widget _field(TextEditingController ctrl, String label, IconData icon,
-      String hint, {int maxLines = 1}) {
+  Widget _field(
+    TextEditingController ctrl,
+    String label,
+    IconData icon,
+    String hint, {
+    int maxLines = 1,
+  }) {
     return TextField(
       controller: ctrl,
       maxLines: maxLines,
       decoration: InputDecoration(
         labelText: label,
         hintText: hint,
-        prefixIcon: Icon(icon, color: _primary, size: 20),
+        prefixIcon: Icon(icon, color: YekiColors.purple, size: 20),
         filled: true,
-        fillColor: Colors.grey.shade50,
+        fillColor: YekiColors.backgroundLight,
         border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
-            borderSide: BorderSide.none),
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide.none,
+        ),
         focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
-            borderSide: const BorderSide(color: _primary)),
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: YekiColors.purple),
+        ),
         enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
-            borderSide: BorderSide(color: Colors.grey.shade200)),
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide(color: YekiColors.borderLight),
+        ),
       ),
     );
   }
@@ -791,21 +842,24 @@ class _CreerCoursSheetState extends State<CreerCoursSheet> {
       value: value,
       decoration: InputDecoration(
         labelText: hint,
-        prefixIcon: Icon(icon, color: _primary, size: 20),
+        prefixIcon: Icon(icon, color: YekiColors.purple, size: 20),
         filled: true,
-        fillColor: Colors.grey.shade50,
+        fillColor: YekiColors.backgroundLight,
         border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
-            borderSide: BorderSide.none),
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide.none,
+        ),
         focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
-            borderSide: const BorderSide(color: _primary)),
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: YekiColors.purple),
+        ),
         enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
-            borderSide: BorderSide(color: Colors.grey.shade200)),
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide(color: YekiColors.borderLight),
+        ),
       ),
-      icon: const Icon(Icons.keyboard_arrow_down, color: _primary),
-      dropdownColor: Colors.white,
+      icon: const Icon(Icons.keyboard_arrow_down, color: YekiColors.purple),
+      dropdownColor: YekiColors.white,
       items: items.map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
       onChanged: onChanged,
     );
@@ -821,8 +875,6 @@ class _CreerCoursSheetState extends State<CreerCoursSheet> {
 
   void _showError(String msg) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(msg), backgroundColor: Colors.red));
+    ErrorHandler.showError(context, msg);
   }
 }
-

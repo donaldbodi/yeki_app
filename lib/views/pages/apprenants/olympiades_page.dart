@@ -1,7 +1,7 @@
 // lib/views/pages/apprenants/olympiades_page.dart
-// ════════════════════════════════════════════════════════════════
-// PAGE OLYMPIADES — Design Premium Dynamique
-// ════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════
+// PAGE OLYMPIADES — Design Unifié Premium avec Filtrage par Niveau (CORRIGÉ)
+// ═══════════════════════════════════════════════════════════════════════════
 
 import 'dart:convert';
 import 'package:flutter/material.dart';
@@ -12,92 +12,10 @@ import 'package:yeki/widgets/yeki_app_bar.dart';
 import 'package:yeki/views/pages/apprenants/classement_olympiade.dart';
 import 'package:yeki/views/pages/apprenants/composer_devoir_page.dart';
 import 'package:yeki/views/pages/apprenants/sheet_inscription.dart';
+import 'package:yeki/views/pages/apprenants/formations_models.dart';
+import 'package:yeki/core/theme/app_theme.dart';
+import 'package:yeki/core/constants/api_constants.dart';
 
-// Palette Premium Harmonisée
-const Color brandPrimary = Color(0xFF135F74);
-const Color brandGold = Color(0xFFC5A059);
-const Color textMain = Color(0xFF0F172A);
-const Color textSub = Color(0xFF64748B);
-const Color _borderLight = Color(0xFFE0E4E8);
-const Color _bgLight = Color(0xFFF8FAFC);
-const Color _white = Color(0xFFFFFFFF);
-const Color _green = Color(0xFF10B981);
-const Color _red = Color(0xFFEF4444);
-const Color _orange = Color(0xFFF97316);
-const Color _purple = Color(0xFF8B5CF6);
-
-const String _baseO = 'https://yeki.pythonanywhere.com/api';
-
-class _OlympiadeItem {
-  final int id, devoirId, dureeMinutes;
-  final String titre, matiere, niveau, phase;
-  final String reglement, prixDescription, statutApprenant;
-  final DateTime datFinInscription, datDebutCompetition, datFinCompetition;
-  final bool estInscrit, afficherClassement;
-  final double? note, noteMax;
-  final int? rang;
-
-  const _OlympiadeItem({
-    required this.id,
-    required this.devoirId,
-    required this.titre,
-    required this.matiere,
-    required this.niveau,
-    required this.phase,
-    required this.datFinInscription,
-    required this.datDebutCompetition,
-    required this.datFinCompetition,
-    required this.reglement,
-    required this.prixDescription,
-    required this.estInscrit,
-    required this.statutApprenant,
-    this.note,
-    this.noteMax,
-    this.rang,
-    required this.dureeMinutes,
-    required this.afficherClassement,
-  });
-
-  factory _OlympiadeItem.fromJson(Map<String, dynamic> j) {
-    DateTime _d(String? s) {
-      if (s == null || s.isEmpty) return DateTime.now().add(const Duration(days: 30));
-      try {
-        return DateTime.parse(s).toLocal();
-      } catch (_) {
-        return DateTime.now();
-      }
-    }
-    final statut = j['statut'] as String? ?? 'inscription';
-    final phase = switch (statut) {
-      'inscription' => 'inscription',
-      'en_cours' => 'competition',
-      'terminee' => 'terminee',
-      _ => 'attente',
-    };
-    return _OlympiadeItem(
-      id: j['id'] ?? 0,
-      devoirId: j['devoir_id'] ?? 0,
-      titre: j['titre'] ?? '',
-      matiere: j['matiere'] ?? '',
-      niveau: j['niveau'] ?? '',
-      phase: phase,
-      datFinInscription: _d(j['date_cloture_inscription']),
-      datDebutCompetition: _d(j['date_debut_olympiade']),
-      datFinCompetition: _d(j['date_fin_olympiade']),
-      reglement: j['description'] ?? '',
-      prixDescription: '${j['prix_1er'] ?? ''} / ${j['prix_2eme'] ?? ''} / ${j['prix_3eme'] ?? ''}',
-      estInscrit: j['est_inscrit'] ?? false,
-      statutApprenant: (j['inscription']?['statut'] as String?) ?? 'non_commence',
-      note: j['inscription']?['note'] != null ? (j['inscription']['note'] as num).toDouble() : null,
-      noteMax: (j['note_sur'] as num? ?? 20).toDouble(),
-      rang: j['inscription']?['classement'] as int?,
-      dureeMinutes: j['duree_minutes'] ?? 120,
-      afficherClassement: j['statut'] == 'terminee',
-    );
-  }
-}
-
-// ════════════════════════════════════════════════════════════════
 class OlympiadesPage extends StatefulWidget {
   const OlympiadesPage({super.key});
   @override
@@ -108,30 +26,33 @@ class _OlympiadesPageState extends State<OlympiadesPage>
     with SingleTickerProviderStateMixin {
   bool _loading = true;
   String _error = '';
-  List<_OlympiadeItem> _tous = [];
-  List<_OlympiadeItem> _affich = [];
+  List<OlympiadeItem> _tous = [];
+  List<OlympiadeItem> _affich = [];
   String _niveau = '';
   String _phaseFiltre = 'tous';
   late AnimationController _animCtrl;
 
-  // Données pour YekiHeader
-  int _unreadNotifications = 0;
-  bool _isSubscribed = true;
+  final int _unreadNotifications = 0;
+  final bool _isSubscribed = true;
   String _username = 'Apprenant';
 
-  final List<(String, String, Color)> _phases = [
-    ('tous', 'Toutes', brandPrimary),
-    ('inscription', 'Inscriptions', _green),
-    ('competition', 'En cours', _purple),
-    ('terminee', 'Terminées', brandGold),
+  final List<(String, String, Color, IconData)> _phases = [
+    ('tous', 'Toutes', YekiColors.primaryDark, Icons.apps_rounded),
+    ('inscription', 'Inscriptions', YekiColors.success, Icons.how_to_reg_rounded),
+    ('competition', 'En cours', YekiColors.purple, Icons.play_circle_rounded),
+    ('terminee', 'Terminées', YekiColors.accent, Icons.emoji_events_rounded),
   ];
 
   @override
   void initState() {
     super.initState();
-    _animCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 600));
+    _animCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 500),
+    );
     _charger();
     _loadUserData();
+    _loadNiveau();
   }
 
   @override
@@ -146,11 +67,8 @@ class _OlympiadesPageState extends State<OlympiadesPage>
     if (token == null) return;
     try {
       final response = await http.get(
-        Uri.parse('$_baseO/profil/me/'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Token $token',
-        },
+        Uri.parse(ApiConstants.profilMe),
+        headers: ApiHeaders.auth(token),
       );
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -159,29 +77,40 @@ class _OlympiadesPageState extends State<OlympiadesPage>
     } catch (_) {}
   }
 
+  Future<void> _loadNiveau() async {
+    final niveau = await NiveauService.getNiveau();
+    if (niveau != null) {
+      setState(() => _niveau = niveau);
+    }
+  }
+
+  Future<String?> _getToken() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('token');
+  }
+
   Future<void> _deconnecter() async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        backgroundColor: _white,
+        backgroundColor: YekiColors.white,
         title: const Text('Déconnexion',
-            style: TextStyle(fontWeight: FontWeight.bold, color: textMain)),
+            style: TextStyle(fontWeight: FontWeight.w800)),
         content: const Text(
-          'Souhaitez-vous vraiment quitter l\'application ?',
-          style: TextStyle(color: textSub),
-        ),
+            'Souhaitez-vous vraiment quitter l\'application ?',
+            style: TextStyle(color: YekiColors.textMedium)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text('Annuler', style: TextStyle(color: textSub)),
+            child: const Text('Annuler', style: TextStyle(color: YekiColors.textMedium)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.redAccent,
-              foregroundColor: _white,
+              backgroundColor: YekiColors.error,
+              foregroundColor: YekiColors.white,
               elevation: 0,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             ),
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('Se déconnecter'),
@@ -194,7 +123,8 @@ class _OlympiadesPageState extends State<OlympiadesPage>
       final prefs = await SharedPreferences.getInstance();
       await prefs.clear();
       if (mounted) {
-        Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
+        Navigator.pushNamedAndRemoveUntil(
+            context, '/login', (route) => false);
       }
     }
   }
@@ -204,33 +134,25 @@ class _OlympiadesPageState extends State<OlympiadesPage>
       _loading = true;
       _error = '';
     });
-    final prefs = await SharedPreferences.getInstance();
-    final tok = prefs.getString('token');
-    final headers = {
-      'Content-Type': 'application/json',
-      if (tok != null) 'Authorization': 'Token $tok',
-    };
+    final token = await _getToken();
 
     try {
-      final rP = await http.get(Uri.parse('$_baseO/profil/me/'), headers: headers);
+      final rP = await http.get(Uri.parse(ApiConstants.profilMe),
+          headers: ApiHeaders.auth(token));
       if (rP.statusCode == 200) {
         _niveau = (jsonDecode(rP.body) as Map)['niveau']?.toString() ?? '';
       }
     } catch (_) {}
 
     try {
-      final params = <String, String>{};
-      if (_niveau.isNotEmpty) params['niveau'] = _niveau;
-
       final res = await http.get(
-        Uri.parse('$_baseO/olympiades/pour-moi/')
-            .replace(queryParameters: params.isNotEmpty ? params : null),
-        headers: headers,
+        Uri.parse(ApiConstants.olympiadesPourMoi),
+        headers: ApiHeaders.auth(token),
       );
 
       if (res.statusCode == 200 && mounted) {
         final data = (jsonDecode(res.body) as List)
-            .map((j) => _OlympiadeItem.fromJson(j as Map<String, dynamic>))
+            .map((j) => OlympiadeItem.fromJson(j as Map<String, dynamic>))
             .toList();
         setState(() {
           _tous = data;
@@ -255,10 +177,32 @@ class _OlympiadesPageState extends State<OlympiadesPage>
     });
   }
 
+  IconData _getIconForMatiere(String matiere) {
+    final m = matiere.toLowerCase();
+    if (m.contains('math')) return Icons.calculate_rounded;
+    if (m.contains('physique')) return Icons.science_rounded;
+    if (m.contains('chimie')) return Icons.biotech_rounded;
+    if (m.contains('svt') || m.contains('bio')) return Icons.eco_rounded;
+    if (m.contains('info')) return Icons.terminal_rounded;
+    if (m.contains('français') || m.contains('lettre')) {
+      return Icons.menu_book_rounded;
+    }
+    if (m.contains('anglais') || m.contains('langue')) {
+      return Icons.language_rounded;
+    }
+    if (m.contains('histoire') || m.contains('géo')) return Icons.public_rounded;
+    if (m.contains('philo')) return Icons.psychology_rounded;
+    if (m.contains('éco')) return Icons.trending_up_rounded;
+    return Icons.military_tech_rounded;
+  }
+
   @override
   Widget build(BuildContext context) {
+    final double screenWidth = MediaQuery.of(context).size.width;
+    final double padX = screenWidth > 800 ? (screenWidth - 760) / 2 : 18.0;
+
     return Scaffold(
-      backgroundColor: _bgLight,
+      backgroundColor: YekiColors.backgroundLight,
       appBar: YekiHeader(
         unreadNotifications: _unreadNotifications,
         isSubscribed: _isSubscribed,
@@ -269,49 +213,121 @@ class _OlympiadesPageState extends State<OlympiadesPage>
         onSettings: () {},
         onNotifications: () {},
       ),
-      body: Column(
-        children: [
-          _buildHeroSection(),
-          _buildFilters(),
-          Expanded(
-            child: _buildContent(),
-          ),
-        ],
-      ),
+      body: _loading
+          ? _buildResponsiveSkeleton(padX)
+          : _error.isNotEmpty
+              ? _buildErrorState()
+              : RefreshIndicator(
+                  onRefresh: _charger,
+                  color: YekiColors.primaryDark,
+                  backgroundColor: YekiColors.white,
+                  child: CustomScrollView(
+                    physics: const BouncingScrollPhysics(),
+                    slivers: [
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: EdgeInsets.fromLTRB(padX, 16, padX, 0),
+                          child: _buildHeroSection(),
+                        ),
+                      ),
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(horizontal: padX),
+                          child: _buildFilters(),
+                        ),
+                      ),
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: EdgeInsets.fromLTRB(padX, 8, padX, 12),
+                          child: _buildSectionTitle(),
+                        ),
+                      ),
+                      _affich.isEmpty
+                          ? const SliverFillRemaining(
+                              hasScrollBody: false, child: _EmptyView())
+                          : SliverPadding(
+                              padding: EdgeInsets.fromLTRB(padX, 0, padX, 110),
+                              sliver: SliverList(
+                                delegate: SliverChildBuilderDelegate(
+                                  (ctx, idx) => _buildUnifiedCard(_affich[idx]),
+                                  childCount: _affich.length,
+                                ),
+                              ),
+                            ),
+                    ],
+                  ),
+                ),
     );
   }
 
   Widget _buildHeroSection() {
     return Container(
       width: double.infinity,
+      height: 175,
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [brandPrimary, brandPrimary.withOpacity(0.85)],
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: YekiShadows.medium,
+        image: const DecorationImage(
+          image: NetworkImage(
+            'https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?q=80&w=600&auto=format&fit=crop',
+          ),
+          fit: BoxFit.cover,
         ),
       ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(24),
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              YekiColors.primaryLight.withValues(alpha: 0.15),
+              YekiColors.primaryLight.withValues(alpha: 0.85),
+            ],
+          ),
+        ),
+        padding: const EdgeInsets.all(22),
         child: Column(
+          mainAxisAlignment: MainAxisAlignment.end,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
               decoration: BoxDecoration(
-                color: brandGold.withOpacity(0.15),
+                color: YekiColors.accent.withValues(alpha: 0.9),
                 borderRadius: BorderRadius.circular(20),
               ),
-              child: const Text("EXCELLENCE ACADÉMIQUE",
-                  style: TextStyle(color: brandGold, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 1)),
+              child: const Text(
+                "EXCELLENCE ACADÉMIQUE",
+                style: TextStyle(
+                  color: YekiColors.white,
+                  fontSize: 9.5,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 1.2,
+                ),
+              ),
             ),
             const SizedBox(height: 10),
-            const Text("Olympiades",
-                style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: _white, letterSpacing: -0.5)),
-            const SizedBox(height: 4),
+            const Text(
+              "Olympiades",
+              style: TextStyle(
+                fontSize: 26,
+                fontWeight: FontWeight.w900,
+                color: YekiColors.white,
+                letterSpacing: -0.5,
+              ),
+            ),
+            const SizedBox(height: 3),
             Text(
-              _niveau.isNotEmpty ? "Niveau : $_niveau" : "Défiez les meilleurs",
-              style: const TextStyle(fontSize: 13, color: Colors.white70, fontWeight: FontWeight.w500),
+              _niveau.isNotEmpty
+                  ? "Compétitions disponibles pour le niveau : $_niveau"
+                  : "Défiez les meilleurs apprenants",
+              style: TextStyle(
+                fontSize: 13,
+                color: YekiColors.white.withValues(alpha: 0.9),
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ],
         ),
@@ -321,237 +337,363 @@ class _OlympiadesPageState extends State<OlympiadesPage>
 
   Widget _buildFilters() {
     return Container(
-      color: _white,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Row(
-        children: [
-          Expanded(
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
+      height: 44,
+      margin: const EdgeInsets.symmetric(vertical: 14),
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        physics: const BouncingScrollPhysics(),
+        itemCount: _phases.length,
+        itemBuilder: (context, i) {
+          final phase = _phases[i];
+          final sel = _phaseFiltre == phase.$1;
+          return GestureDetector(
+            onTap: () {
+              setState(() => _phaseFiltre = phase.$1);
+              _appliquerFiltre();
+            },
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 250),
+              margin: const EdgeInsets.only(right: 8),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+              decoration: BoxDecoration(
+                color: sel
+                    ? phase.$3.withValues(alpha: 0.12)
+                    : YekiColors.backgroundAlt,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: sel ? phase.$3.withValues(alpha: 0.35) : Colors.transparent,
+                  width: 1.5,
+                ),
+              ),
               child: Row(
-                children: _phases.map((p) {
-                  final sel = _phaseFiltre == p.$1;
-                  return GestureDetector(
-                    onTap: () {
-                      setState(() => _phaseFiltre = p.$1);
-                      _appliquerFiltre();
-                    },
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
-                      margin: const EdgeInsets.only(right: 8),
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: sel ? p.$3 : _bgLight,
-                        borderRadius: BorderRadius.circular(24),
-                        border: Border.all(color: sel ? p.$3 : _borderLight, width: 1),
-                      ),
-                      child: Text(
-                        p.$2,
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: sel ? _white : p.$3,
-                        ),
-                      ),
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    phase.$4,
+                    size: 15,
+                    color: sel ? phase.$3 : YekiColors.textLight,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    phase.$2,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: sel ? FontWeight.w800 : FontWeight.w600,
+                      color: sel ? phase.$3 : YekiColors.textLight,
                     ),
-                  );
-                }).toList(),
+                  ),
+                ],
               ),
             ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-              color: _bgLight,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: _borderLight),
-            ),
-            child: Text(
-              '${_affich.length}',
-              style: const TextStyle(fontSize: 12, color: textSub, fontWeight: FontWeight.w600),
-            ),
-          ),
-        ],
+          );
+        },
       ),
     );
   }
 
-  Widget _buildContent() {
-    if (_loading) {
-      return const Center(child: CircularProgressIndicator(color: brandPrimary));
-    }
-    if (_error.isNotEmpty) {
-      return _buildError();
-    }
-    if (_affich.isEmpty) {
-      return _buildEmpty();
-    }
-
-    return RefreshIndicator(
-      color: brandPrimary,
-      onRefresh: _charger,
-      child: ListView.builder(
-        physics: const BouncingScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 100),
-        itemCount: _affich.length,
-        itemBuilder: (_, i) => _buildCard(_affich[i], i),
-      ),
+  Widget _buildSectionTitle() {
+    return Row(
+      children: [
+        const Text(
+          "Vos Olympiades",
+          style: TextStyle(
+            fontSize: 19,
+            fontWeight: FontWeight.w900,
+            letterSpacing: -0.3,
+          ),
+        ),
+        const Spacer(),
+        Container(
+          padding:
+              const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          decoration: BoxDecoration(
+            color: YekiColors.primaryDark.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Text(
+            "${_affich.length} Épreuves",
+            style: const TextStyle(
+              color: YekiColors.primaryDark,
+              fontSize: 11.5,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+      ],
     );
   }
 
-  Widget _buildCard(_OlympiadeItem o, int index) {
+  Widget _buildUnifiedCard(OlympiadeItem o) {
     final (phaseLabel, phaseColor) = _phaseInfo(o.phase);
     final dateFmt = DateFormat('dd/MM/yyyy HH:mm');
+    final Color cardColor = phaseColor;
 
-    final delay = (index * 0.06).clamp(0.0, 1.0);
-    final anim = CurvedAnimation(
-      parent: _animCtrl,
-      curve: Interval(delay, 1.0, curve: Curves.easeOutCubic),
-    );
-
-    return FadeTransition(
-      opacity: anim,
-      child: SlideTransition(
-        position: Tween<Offset>(begin: const Offset(0, 0.1), end: Offset.zero).animate(anim),
-        child: Container(
-          margin: const EdgeInsets.only(bottom: 16),
-          decoration: BoxDecoration(
-            color: _white,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: _borderLight, width: 1),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // En-tête avec gradient
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [phaseColor, phaseColor.withOpacity(0.8)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: _white.withOpacity(0.15),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: const Icon(Icons.military_tech_rounded, color: _white, size: 22),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            o.titre,
-                            style: const TextStyle(color: _white, fontSize: 16, fontWeight: FontWeight.w800),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 4),
-                          Row(
-                            children: [
-                              Text(
-                                o.matiere,
-                                style: const TextStyle(color: Colors.white70, fontSize: 12),
-                              ),
-                              if (o.niveau.isNotEmpty) ...[
-                                const SizedBox(width: 8),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: _white.withOpacity(0.15),
-                                    borderRadius: BorderRadius.circular(6),
-                                  ),
-                                  child: Text(
-                                    o.niveau,
-                                    style: const TextStyle(color: _white, fontSize: 10, fontWeight: FontWeight.w700),
-                                  ),
-                                ),
-                              ],
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                    _buildPhaseBadge(phaseLabel, phaseColor),
-                  ],
-                ),
-              ),
-              // Contenu
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildDateRow(Icons.how_to_reg_rounded, 'Inscriptions jusqu\'au',
-                        dateFmt.format(o.datFinInscription), _green),
-                    const SizedBox(height: 8),
-                    _buildDateRow(Icons.play_circle_rounded, 'Début',
-                        dateFmt.format(o.datDebutCompetition), brandPrimary),
-                    const SizedBox(height: 8),
-                    _buildDateRow(Icons.stop_circle_rounded, 'Fin',
-                        dateFmt.format(o.datFinCompetition), _red),
-                    // Résultat
-                    if (o.note != null) ...[
-                      const SizedBox(height: 12),
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: YekiColors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: YekiColors.borderLight,
+          width: 1.0,
+        ),
+        boxShadow: YekiShadows.subtle,
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(24),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: () => _handleCardTap(o),
+            child: Padding(
+              padding: const EdgeInsets.all(18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: brandGold.withOpacity(0.08),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: brandGold.withOpacity(0.2), width: 1),
+                          color: cardColor.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(16),
                         ),
-                        child: Row(
+                        child: Icon(
+                          _getIconForMatiere(o.matiere),
+                          color: cardColor,
+                          size: 26,
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Icon(Icons.emoji_events_rounded, color: brandGold, size: 20),
-                            const SizedBox(width: 10),
                             Text(
-                              'Note : ${o.note!.toStringAsFixed(1)}/${o.noteMax?.toStringAsFixed(0)}',
-                              style: const TextStyle(fontWeight: FontWeight.w800, color: textMain, fontSize: 15),
-                            ),
-                            if (o.rang != null) ...[
-                              const Spacer(),
-                              Text(
-                                'Rang #${o.rang}',
-                                style: const TextStyle(fontWeight: FontWeight.w700, color: brandGold),
+                              o.titre,
+                              style: const TextStyle(
+                                fontSize: 16.5,
+                                fontWeight: FontWeight.w900,
+                                height: 1.25,
                               ),
-                            ],
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 5),
+                            Wrap(
+                              spacing: 6,
+                              runSpacing: 4,
+                              children: [
+                                Text(
+                                  o.matiere,
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                if (o.niveau.isNotEmpty)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: YekiColors.backgroundLight,
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(
+                                          color: YekiColors.borderLight),
+                                    ),
+                                    child: Text(
+                                      o.niveau,
+                                      style: const TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                ...o.niveauxAccessibles.map((niveau) => Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: YekiColors.warning.withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text(
+                                    niveau,
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      color: YekiColors.warning,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                )),
+                              ],
+                            ),
                           ],
                         ),
                       ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: cardColor.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          phaseLabel,
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            color: cardColor,
+                          ),
+                        ),
+                      ),
                     ],
-                    const SizedBox(height: 16),
-                    _buildActions(o),
+                  ),
+
+                  if (o.reglement.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      o.reglement,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: YekiColors.textDark.withValues(alpha: 0.6),
+                        height: 1.4,
+                        fontSize: 12.5,
+                      ),
+                    ),
                   ],
-                ),
+
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        vertical: 10, horizontal: 12),
+                    decoration: BoxDecoration(
+                      color: YekiColors.backgroundLight,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Column(
+                      children: [
+                        _buildDateRow(
+                          Icons.how_to_reg_rounded,
+                          'Fin des inscriptions',
+                          dateFmt.format(o.datFinInscription),
+                          YekiColors.success,
+                        ),
+                        const SizedBox(height: 8),
+                        _buildDateRow(
+                          Icons.play_circle_rounded,
+                          'Début de l\'épreuve',
+                          dateFmt.format(o.datDebutCompetition),
+                          YekiColors.primaryDark,
+                        ),
+                        const SizedBox(height: 8),
+                        _buildDateRow(
+                          Icons.stop_circle_rounded,
+                          'Clôture générale',
+                          dateFmt.format(o.datFinCompetition),
+                          YekiColors.error,
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  if (o.note != null) ...[
+                    const SizedBox(height: 14),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: YekiColors.accent.withValues(alpha: 0.05),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                            color: YekiColors.accent.withValues(alpha: 0.15)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.emoji_events_rounded,
+                              color: YekiColors.accent, size: 18),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Résultat : ${o.note!.toStringAsFixed(1)} / ${o.noteMax?.toStringAsFixed(0)}',
+                            style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 13),
+                          ),
+                          if (o.rang != null) ...[
+                            const Spacer(),
+                            Text(
+                              'Rang : #${o.rang}',
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: YekiColors.accent,
+                                  fontSize: 13),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
+
+                  const SizedBox(height: 16),
+                  _buildActions(o),
+                ],
               ),
-            ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildActions(_OlympiadeItem o) {
+  void _handleCardTap(OlympiadeItem o) {
+    if (o.phase == 'terminee' && o.afficherClassement) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ClassementOlympiadePage(
+              olympiadeId: o.id, titre: o.titre),
+        ),
+      );
+    } else if (o.phase == 'competition' && o.estInscrit) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ComposerDevoirPage(
+            devoirId: o.devoirId,
+            titre: o.titre,
+            dureeMin: o.dureeMinutes,
+            noteSur: (o.noteMax ?? 20).toInt(),
+          ),
+        ),
+      );
+    } else if (o.phase == 'inscription' && !o.estInscrit) {
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (_) => InscriptionSheet(
+          olympiadeId: o.id,
+          titre: o.titre,
+          onSuccess: _charger,
+        ),
+      );
+    }
+  }
+
+  Widget _buildActions(OlympiadeItem o) {
     if (o.phase == 'terminee' && o.afficherClassement) {
       return SizedBox(
         width: double.infinity,
-        child: _buildButton(
-          label: 'Voir le classement',
+        child: YekiButton(
+          label: 'Visualiser le classement',
           icon: Icons.leaderboard_rounded,
-          color: brandGold,
-          onTap: () => Navigator.push(
+          backgroundColor: YekiColors.accent,
+          onPressed: () => Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) => ClassementOlympiadePage(olympiadeId: o.id, titre: o.titre),
+              builder: (_) => ClassementOlympiadePage(
+                  olympiadeId: o.id, titre: o.titre),
             ),
           ),
         ),
@@ -560,11 +702,11 @@ class _OlympiadesPageState extends State<OlympiadesPage>
     if (o.phase == 'competition' && o.estInscrit) {
       return SizedBox(
         width: double.infinity,
-        child: _buildButton(
-          label: 'Commencer la compétition',
+        child: YekiButton(
+          label: 'Lancer la compétition',
           icon: Icons.play_arrow_rounded,
-          color: _purple,
-          onTap: () => Navigator.push(
+          backgroundColor: YekiColors.purple,
+          onPressed: () => Navigator.push(
             context,
             MaterialPageRoute(
               builder: (_) => ComposerDevoirPage(
@@ -581,35 +723,43 @@ class _OlympiadesPageState extends State<OlympiadesPage>
     if (o.phase == 'inscription' && !o.estInscrit) {
       return SizedBox(
         width: double.infinity,
-        child: _buildButton(
-          label: "S'inscrire",
-          icon: Icons.how_to_reg_rounded,
-          color: _green,
-          onTap: () => showModalBottomSheet(
+        child: YekiButton(
+          label: "S'inscrire maintenant",
+          icon: Icons.assignment_turned_in_rounded,
+          backgroundColor: YekiColors.primaryDark,
+          onPressed: () => showModalBottomSheet(
             context: context,
             isScrollControlled: true,
             backgroundColor: Colors.transparent,
-            builder: (_) => InscriptionSheet(olympiadeId: o.id, titre: o.titre, onSuccess: _charger),
+            builder: (_) => InscriptionSheet(
+              olympiadeId: o.id,
+              titre: o.titre,
+              onSuccess: _charger,
+            ),
           ),
         ),
       );
     }
     if (o.phase == 'inscription' && o.estInscrit) {
       return Container(
-        padding: const EdgeInsets.all(12),
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 12),
         decoration: BoxDecoration(
-          color: _green.withOpacity(0.08),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: _green.withOpacity(0.2), width: 1),
+          color: YekiColors.success.withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: YekiColors.success.withValues(alpha: 0.15)),
         ),
         child: const Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.check_circle_rounded, color: _green, size: 16),
+            Icon(Icons.check_circle_rounded, color: YekiColors.success, size: 16),
             SizedBox(width: 8),
             Text(
-              'Inscrit — En attente du début',
-              style: TextStyle(color: _green, fontWeight: FontWeight.w700, fontSize: 13),
+              'Enregistré — En attente du lancement',
+              style: TextStyle(
+                  color: YekiColors.success,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13),
             ),
           ],
         ),
@@ -618,52 +768,21 @@ class _OlympiadesPageState extends State<OlympiadesPage>
     return const SizedBox.shrink();
   }
 
-  Widget _buildButton({
-    required String label,
-    required IconData icon,
-    required Color color,
-    required VoidCallback onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 13),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(colors: [color, color.withOpacity(0.8)]),
-          borderRadius: BorderRadius.circular(14),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, color: _white, size: 18),
-            const SizedBox(width: 8),
-            Text(
-              label,
-              style: const TextStyle(color: _white, fontWeight: FontWeight.bold, fontSize: 14),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _buildDateRow(IconData icon, String label, String value, Color color) {
     return Row(
       children: [
-        Container(
-          padding: const EdgeInsets.all(5),
-          decoration: BoxDecoration(
-            color: color.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(6),
-          ),
-          child: Icon(icon, size: 12, color: color),
-        ),
+        Icon(icon, size: 14, color: YekiColors.textLight.withValues(alpha: 0.7)),
         const SizedBox(width: 8),
-        Text('$label : ', style: const TextStyle(fontSize: 12, color: textSub)),
+        Text('$label : ',
+            style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w400)),
         Expanded(
           child: Text(
             value,
-            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: textMain),
+            style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
@@ -672,78 +791,95 @@ class _OlympiadesPageState extends State<OlympiadesPage>
     );
   }
 
-  Widget _buildPhaseBadge(String label, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: _white.withOpacity(0.15),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: _white.withOpacity(0.3)),
-      ),
-      child: Text(
-        label,
-        style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: _white),
-      ),
-    );
-  }
-
   (String, Color) _phaseInfo(String phase) => switch (phase) {
-    'inscription' => ('Inscriptions', _green),
-    'competition' => ('En cours', _purple),
-    'terminee' => ('Terminée', brandGold),
-    _ => ('En attente', Colors.grey),
-  };
+        'inscription' => ('Inscriptions', YekiColors.success),
+        'competition' => ('En cours', YekiColors.purple),
+        'terminee' => ('Terminée', YekiColors.accent),
+        _ => ('En attente', YekiColors.textLight),
+      };
 
-  Widget _buildEmpty() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(24),
+  Widget _buildResponsiveSkeleton(double padding) {
+    return ListView(
+      physics: const NeverScrollableScrollPhysics(),
+      padding: EdgeInsets.symmetric(horizontal: padding, vertical: 16),
+      children: [
+        Container(
+            height: 175,
             decoration: BoxDecoration(
-              color: brandGold.withOpacity(0.08),
-              shape: BoxShape.circle,
-              border: Border.all(color: brandGold.withOpacity(0.2), width: 1),
-            ),
-            child: const Icon(Icons.military_tech_outlined, size: 48, color: brandGold),
-          ),
-          const SizedBox(height: 16),
-          const Text(
-            'Aucune olympiade',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: textMain),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            _niveau.isNotEmpty ? 'Pas d\'olympiade pour le niveau $_niveau' : 'Revenez bientôt !',
-            style: const TextStyle(fontSize: 13, color: textSub),
-          ),
-        ],
-      ),
+                color: YekiColors.borderLight,
+                borderRadius: BorderRadius.circular(24))),
+        const SizedBox(height: 16),
+        _skeletonWidget(h: 44, r: 22),
+        const SizedBox(height: 24),
+        _skeletonWidget(h: 250, r: 22),
+        const SizedBox(height: 16),
+        _skeletonWidget(h: 250, r: 22),
+      ],
     );
   }
 
-  Widget _buildError() {
+  Widget _skeletonWidget({double h = 20, double r = 12}) => Container(
+        height: h,
+        decoration: BoxDecoration(
+            color: YekiColors.borderLight, borderRadius: BorderRadius.circular(r)),
+      );
+
+  Widget _buildErrorState() {
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.error_outline, size: 56, color: _red),
-          const SizedBox(height: 12),
-          Text(_error, style: const TextStyle(color: textSub), textAlign: TextAlign.center),
-          const SizedBox(height: 16),
-          ElevatedButton.icon(
-            onPressed: _charger,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: brandPrimary,
-              foregroundColor: _white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              elevation: 0,
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.error_outline_rounded,
+                size: 44, color: YekiColors.error),
+            const SizedBox(height: 12),
+            Text(_error,
+                style: YekiTextStyles.bodyMedium,
+                textAlign: TextAlign.center),
+            const SizedBox(height: 20),
+            YekiButton(
+              label: 'Actualiser',
+              icon: Icons.refresh_rounded,
+              onPressed: _charger,
+              width: 160,
             ),
-            icon: const Icon(Icons.refresh_rounded),
-            label: const Text('Réessayer'),
-          ),
-        ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _EmptyView extends StatelessWidget {
+  const _EmptyView();
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.military_tech_outlined,
+                size: 64, color: YekiColors.borderLight),
+            const SizedBox(height: 16),
+            const Text(
+              'Aucune olympiade trouvée',
+              style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'Ajustez vos filtres ou revenez plus tard.',
+              style: TextStyle(
+                  fontSize: 12.5, height: 1.35),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
       ),
     );
   }

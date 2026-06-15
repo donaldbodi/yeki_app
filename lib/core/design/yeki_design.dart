@@ -56,13 +56,13 @@ const double kRadiusXl  = 28;
 
 // ── Ombres ────────────────────────────────────────────────────────
 List<BoxShadow> kShadowSm = [
-  BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, 2)),
+  BoxShadow(color: Colors.black.withAlpha(13), blurRadius: 8, offset: const Offset(0, 2)), // 0.05 opacity ≈ 13 alpha
 ];
 List<BoxShadow> kShadowMd = [
-  BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 16, offset: const Offset(0, 4)),
+  BoxShadow(color: Colors.black.withAlpha(20), blurRadius: 16, offset: const Offset(0, 4)), // 0.08 opacity ≈ 20 alpha
 ];
 List<BoxShadow> kShadowPrimary = [
-  BoxShadow(color: kPrimary.withOpacity(0.25), blurRadius: 20, offset: const Offset(0, 6)),
+  BoxShadow(color: kPrimary.withAlpha(64), blurRadius: 20, offset: const Offset(0, 6)), // 0.25 opacity ≈ 64 alpha
 ];
 
 // ── Helpers ───────────────────────────────────────────────────────
@@ -74,15 +74,22 @@ String yekiInitials(String nom, String username) {
   return n[0].toUpperCase();
 }
 
-// Extension couleur
+// Extension couleur avec .withAlpha() au lieu de .withOpacity()
 extension ColorX on Color {
-  Color darken([double amount = .1]) {
+  /// Assombrit la couleur (amount entre 0 et 1)
+  Color darken([double amount = 0.1]) {
     final hsl = HSLColor.fromColor(this);
     return hsl.withLightness((hsl.lightness - amount).clamp(0.0, 1.0)).toColor();
   }
 
-  Color lighten([double amount = .1]) {
+  /// Éclaircit la couleur (amount entre 0 et 1)
+  Color lighten([double amount = 0.1]) {
     final hsl = HSLColor.fromColor(this);
     return hsl.withLightness((hsl.lightness + amount).clamp(0.0, 1.0)).toColor();
+  }
+  
+  /// Convertit une opacité (0-1) en alpha (0-255)
+  Color withOpacityValue(double opacity) {
+    return withAlpha((opacity * 255).round().clamp(0, 255));
   }
 }

@@ -9,16 +9,11 @@ import 'package:yeki/services/offline_service.dart';
 import 'package:yeki/services/sync_service.dart';
 import 'package:yeki/services/recharge_wallet_page.dart';
 import 'package:yeki/views/pages/apprenants/dasboard.dart';
-import 'package:yeki/views/pages/apprenants/profil_page.dart';
-import 'package:yeki/views/pages/enseignants/admin_general_page.dart';
-import 'package:yeki/views/pages/enseignants/enseignant_admin_dashboard_page.dart';
-import 'package:yeki/views/pages/enseignants/cadre_dashboard_page.dart';
 import 'package:yeki/views/pages/enseignants/interface_enseignant_page.dart';
-import 'package:yeki/views/pages/enseignants/principal_dashboard_page.dart';
-import 'package:yeki/views/pages/enseignants/secondaire_dashboard_page.dart';
 import 'package:yeki/views/pages/onboarding.dart';
 import 'package:yeki/views/auth/login_page.dart';
 import 'package:yeki/services/update_service.dart';
+import 'package:yeki/views/pages/shared/profil_page.dart';
 import 'package:yeki/widgets/wallet_page.dart';
 
 // ─────────────────────────────────────────────────────────────────
@@ -249,28 +244,9 @@ class YekiAuth {
       return const Dashboard();
     }
     if (_isEnseignant(role)) {
-      return EnseignantHomePage();
+      return const EnseignantHomePage();
     }
     return const LoginPage();
-  }
-
-  static Widget _getEnseignantDashboard(String role) {
-    if (role == 'admin') {
-      return const AdminGeneralPage();
-    } else if (role == 'enseignant_admin') {
-      return const EnseignantAdminDashboardPage();
-    } else if (role == 'enseignant_cadre') {
-      return const CadreDashboardPage();
-    } else if (role == 'enseignant_principal') {
-      return DashboardPrincipalPage(
-        nomEnseignant: '',
-        roleEnseignant: 'Enseignant Principal',
-        extraInfo: null,
-      );
-    } else if (role == 'enseignant') {
-      return const SecondaireDashboardPage();
-    }
-    return const EnseignantHomePage();
   }
 
   static bool _isEnseignant(String role) => {
@@ -279,8 +255,8 @@ class YekiAuth {
   }.contains(role);
 
   static PageRouteBuilder _fade(Widget page) => PageRouteBuilder(
-    pageBuilder: (_, __, ___) => page,
-    transitionsBuilder: (_, anim, __, child) =>
+    pageBuilder: (_, _, _) => page,
+    transitionsBuilder: (_, anim, _, child) =>
         FadeTransition(opacity: anim, child: child),
     transitionDuration: const Duration(milliseconds: 350),
   );

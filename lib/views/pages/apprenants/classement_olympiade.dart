@@ -1,20 +1,15 @@
+// lib/views/pages/apprenants/classement_olympiade.dart
+// ═══════════════════════════════════════════════════════════════════════════
+
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:yeki/core/theme/app_theme.dart';
+import 'package:yeki/core/constants/api_constants.dart';
 
-const String _baseO = 'https://yeki.pythonanywhere.com/api';
-
-// ─── Palette ────────────────────────────────────────────────────
-const Color _olymp  = Color(0xFF7B2FBE);
-const Color _dark   = Color(0xFF1A1C1E);
-const Color _bg     = Color(0xFFF5F7FA);
-
-// ═══════════════════════════════════════════════════════════════
-// Page classement olympiade
-// ═══════════════════════════════════════════════════════════════
 class ClassementOlympiadePage extends StatefulWidget {
-  final int    olympiadeId;
+  final int olympiadeId;
   final String titre;
   const ClassementOlympiadePage({super.key, required this.olympiadeId, required this.titre});
 
@@ -23,11 +18,14 @@ class ClassementOlympiadePage extends StatefulWidget {
 }
 
 class _ClassementOlympiadePageState extends State<ClassementOlympiadePage> {
-  bool  _loading = true;
-  List  _entrees = [];
+  bool _loading = true;
+  List _entrees = [];
 
   @override
-  void initState() { super.initState(); _charger(); }
+  void initState() { 
+    super.initState(); 
+    _charger(); 
+  }
 
   Future<String?> _token() async {
     final p = await SharedPreferences.getInstance();
@@ -36,12 +34,11 @@ class _ClassementOlympiadePageState extends State<ClassementOlympiadePage> {
 
   Future<void> _charger() async {
     final token = await _token();
+    // ✅ CORRIGÉ : Utiliser la bonne méthode avec paramètre
+    final url = ApiConstants.olympiadeClassement(widget.olympiadeId);
     final res = await http.get(
-      Uri.parse('$_baseO/olympiades/${widget.olympiadeId}/classement/'),
-      headers: {
-        'Content-Type': 'application/json',
-        if (token != null) 'Authorization': 'Token $token',
-      },
+      Uri.parse(url),
+      headers: ApiHeaders.auth(token),
     );
     if (res.statusCode == 200) {
       setState(() {
@@ -56,63 +53,50 @@ class _ClassementOlympiadePageState extends State<ClassementOlympiadePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _bg,
+      backgroundColor: YekiColors.backgroundLight,
       appBar: AppBar(
-        backgroundColor: _olymp,
+        backgroundColor: YekiColors.purple,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_rounded,
-              color: Colors.white, size: 18),
+          icon: const Icon(Icons.arrow_back_ios_rounded, size: 18),
           onPressed: () => Navigator.pop(context),
         ),
         title: Text('Classement — ${widget.titre}',
-            style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w800,
-                fontSize: 14)),
+            style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14)),
       ),
       body: _loading
-          ? const Center(
-              child: CircularProgressIndicator(color: _olymp))
+          ? const Center(child: YekiLoader())
           : _entrees.isEmpty
-              ? Center(
-                  child: Text('Aucun participant classé.',
-                      style: TextStyle(color: Colors.grey.shade400)),
-                )
+              ? Center(child: Text('Aucun participant classé.', style: TextStyle(color: YekiColors.textLight)))
               : ListView.builder(
-                  padding:
-                      const EdgeInsets.fromLTRB(16, 16, 16, 40),
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 40),
                   itemCount: _entrees.length,
-                  itemBuilder: (_, i) =>
-                      _buildEntree(_entrees[i], i),
+                  itemBuilder: (_, i) => _buildEntree(_entrees[i], i),
                 ),
     );
   }
 
   Widget _buildEntree(Map e, int i) {
-    final rang    = e['rang'] as int;
-    final name    = e['username'] as String;
-    final note20  = (e['note_sur_20'] as num).toDouble();
+    final rang = e['rang'] as int;
+    final name = e['username'] as String;
+    final note20 = (e['note_sur_20'] as num).toDouble();
 
-    Color  bgColor  = Colors.white;
-    Color  rnColor  = Colors.grey.shade400;
+    Color bgColor = YekiColors.white;
+    Color rnColor = YekiColors.textLight;
     Widget? medal;
 
     if (rang == 1) {
       bgColor = const Color(0xFFFFF8E1);
       rnColor = const Color(0xFFE2A84B);
-      medal   = const Icon(Icons.emoji_events_rounded,
-          color: Color(0xFFE2A84B), size: 22);
+      medal = const Icon(Icons.emoji_events_rounded, color: Color(0xFFE2A84B), size: 22);
     } else if (rang == 2) {
       bgColor = const Color(0xFFF5F5F5);
-      rnColor = Colors.blueGrey;
-      medal   = const Icon(Icons.emoji_events_rounded,
-          color: Colors.blueGrey, size: 20);
+      rnColor = YekiColors.textMedium;
+      medal = const Icon(Icons.emoji_events_rounded, color: YekiColors.textMedium, size: 20);
     } else if (rang == 3) {
       bgColor = const Color(0xFFFFF3E0);
-      rnColor = Colors.orange;
-      medal   = const Icon(Icons.emoji_events_rounded,
-          color: Colors.orange, size: 18);
+      rnColor = YekiColors.warning;
+      medal = const Icon(Icons.emoji_events_rounded, color: YekiColors.warning, size: 18);
     }
 
     return Container(
@@ -120,51 +104,33 @@ class _ClassementOlympiadePageState extends State<ClassementOlympiadePage> {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: bgColor,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(
-          color: Colors.black.withOpacity(0.04), blurRadius: 8)],
+        borderRadius: YekiRadius.borderRadiusLg,
+        boxShadow: YekiShadows.subtle,
       ),
       child: Row(children: [
-        // Rang
         SizedBox(
           width: 36,
-          child: medal ??
-              Text('#$rang', style: TextStyle(
-                color: rnColor, fontWeight: FontWeight.w900,
-                fontSize: 14,
-              )),
+          child: medal ?? Text('#$rang', style: TextStyle(color: rnColor, fontWeight: FontWeight.w900, fontSize: 14)),
         ),
         const SizedBox(width: 12),
-        // Avatar
         CircleAvatar(
           radius: 18,
-          backgroundColor: _olymp.withOpacity(0.15),
+          backgroundColor: YekiColors.purple.withValues(alpha: 0.15),
           child: Text(
             name.isNotEmpty ? name[0].toUpperCase() : '?',
-            style: const TextStyle(
-                color: _olymp, fontWeight: FontWeight.w900,
-                fontSize: 14),
+            style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14),
           ),
         ),
         const SizedBox(width: 12),
-        // Nom
-        Expanded(child: Text(name, style: const TextStyle(
-          fontWeight: FontWeight.w700, fontSize: 14, color: _dark,
-        ))),
-        // Note
+        Expanded(child: Text(name, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14))),
         Container(
-          padding: const EdgeInsets.symmetric(
-              horizontal: 10, vertical: 5),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
           decoration: BoxDecoration(
-            color: _olymp.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(10),
+            color: YekiColors.purple.withValues(alpha: 0.1),
+            borderRadius: YekiRadius.borderRadiusSm,
           ),
-          child: Text(
-            '${note20.toStringAsFixed(1)}/20',
-            style: const TextStyle(
-                color: _olymp, fontWeight: FontWeight.w800,
-                fontSize: 13),
-          ),
+          child: Text('${note20.toStringAsFixed(1)}/20',
+              style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13)),
         ),
       ]),
     );

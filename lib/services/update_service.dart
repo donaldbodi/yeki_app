@@ -15,29 +15,25 @@ import 'package:crypto/crypto.dart';
 import 'package:awesome_notifications/awesome_notifications.dart';
 
 class UpdateService {
-  static const String API_URL = "https://yeki.pythonanywhere.com/api/latest-version/";
-  static const String PREF_LAST_CHECK = 'last_update_check';
-  static const String PREF_PENDING_DOWNLOAD = 'pending_download';
-  static const String PREF_SKIP_VERSION = 'skip_version';
+  // ✅ CORRIGÉ : lowerCamelCase pour les constantes
+  static const String apiUrl = "https://yeki.pythonanywhere.com/api/latest-version/";
+  static const String prefLastCheck = 'last_update_check';
+  static const String prefPendingDownload = 'pending_download';
+  static const String prefSkipVersion = 'skip_version';
   
   // ─────────────────────────────────────────────────────────────
   //  INITIALISATION
   // ─────────────────────────────────────────────────────────────
   static Future<void> initialize() async {
-    // Initialiser le téléchargeur
     await FlutterDownloader.initialize(
       debug: true,
       ignoreSsl: false,
     );
     
-    // Initialiser les notifications
     await _initializeAwesomeNotifications();
-    
-    // Vérifier les permissions au démarrage
     await _requestPermissions();
   }
   
-  // Initialisation awesome_notifications
   static Future<void> _initializeAwesomeNotifications() async {
     await AwesomeNotifications().initialize(
       null,
@@ -65,7 +61,6 @@ class UpdateService {
       ],
     );
     
-    // Demander la permission
     await AwesomeNotifications().requestPermissionToSendNotifications();
   }
   
@@ -79,19 +74,18 @@ class UpdateService {
       final platform = _getPlatform();
       
       final prefs = await SharedPreferences.getInstance();
-      final lastCheck = prefs.getInt(PREF_LAST_CHECK) ?? 0;
+      final lastCheck = prefs.getInt(prefLastCheck) ?? 0;
       final now = DateTime.now().millisecondsSinceEpoch;
-      final skippedVersion = prefs.getString(PREF_SKIP_VERSION);
+      final skippedVersion = prefs.getString(prefSkipVersion);
       
-      // Vérifier au maximum toutes les heures
       if (!showNoUpdate && (now - lastCheck) < 3600000) {
         return null;
       }
       
-      await prefs.setInt(PREF_LAST_CHECK, now);
+      await prefs.setInt(prefLastCheck, now);
       
       final response = await http.get(
-        Uri.parse("$API_URL?platform=$platform"),
+        Uri.parse("$apiUrl?platform=$platform"),
       ).timeout(const Duration(seconds: 15));
       
       if (response.statusCode == 200) {
@@ -103,7 +97,6 @@ class UpdateService {
         final versionName = data['version_name'] as String? ?? 'v1.0.0';
         final minVersion = data['min_version'] as int? ?? 1;
         
-        // Vérifier si l'utilisateur a ignoré cette version
         if (!forceUpdate && skippedVersion == versionName) {
           return null;
         }
@@ -143,13 +136,11 @@ class UpdateService {
       final fileName = _getFileName(info.downloadUrl);
       final savePath = '${directory.path}/$fileName';
       
-      // Supprimer l'ancien fichier s'il existe
       final existingFile = File(savePath);
       if (await existingFile.exists()) {
         await existingFile.delete();
       }
       
-      // Démarrer le téléchargement
       final taskId = await FlutterDownloader.enqueue(
         url: info.downloadUrl,
         savedDir: directory.path,
@@ -158,20 +149,17 @@ class UpdateService {
         openFileFromNotification: true,
       );
       
-      // Sauvegarder les infos de téléchargement
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(PREF_PENDING_DOWNLOAD, taskId!);
+      await prefs.setString(prefPendingDownload, taskId!);
       await prefs.setString('pending_version', info.versionName);
       await prefs.setString('pending_path', savePath);
       
-      // Écouter la progression
       FlutterDownloader.registerCallback((id, status, progress) {
         if (id == taskId) {
           _onDownloadProgress(id, status as DownloadTaskStatus, progress, savePath, info);
         }
       });
       
-      // Afficher une notification de début (sans progress bar)
       await _showDownloadStartedNotification(info);
       
       return true;
@@ -190,11 +178,9 @@ class UpdateService {
   }
   
   static Future<void> _onDownloadComplete(String savePath, UpdateInfo info) async {
-    // Vérifier l'intégrité du fichier
     final file = File(savePath);
     if (!await file.exists()) return;
     
-    // Vérifier le hash
     final hash = await _calculateFileHash(file);
     final expectedHash = await _getExpectedHash(info.downloadUrl);
     if (expectedHash.isNotEmpty && hash != expectedHash) {
@@ -204,10 +190,8 @@ class UpdateService {
       return;
     }
     
-    // Notifier l'utilisateur
     await _showDownloadCompleteNotification(savePath, info);
     
-    // Sauvegarder pour installation différée
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('downloaded_apk_path', savePath);
     await prefs.setString('downloaded_version', info.versionName);
@@ -223,7 +207,6 @@ class UpdateService {
   // ─────────────────────────────────────────────────────────────
   static Future<bool> installUpdate(String apkPath) async {
     if (Platform.isAndroid) {
-      // Vérifier la permission d'installation
       if (!await Permission.requestInstallPackages.isGranted) {
         final result = await Permission.requestInstallPackages.request();
         if (!result.isGranted) {
@@ -246,7 +229,7 @@ class UpdateService {
   // ─────────────────────────────────────────────────────────────
   static Future<void> skipVersion(String versionName) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(PREF_SKIP_VERSION, versionName);
+    await prefs.setString(prefSkipVersion, versionName);
   }
   
   // ─────────────────────────────────────────────────────────────
@@ -329,7 +312,6 @@ class UpdateService {
         Permission.notification,
       ];
       
-      // Pour Android 8+ (API 26+)
       if (await Permission.requestInstallPackages.status.isDenied) {
         permissions.add(Permission.requestInstallPackages);
       }
@@ -339,7 +321,6 @@ class UpdateService {
       final allGranted = statuses.values.every((status) => status.isGranted);
       
       if (!allGranted) {
-        // Deuxième tentative
         final again = await permissions.request();
         return again.values.every((status) => status.isGranted);
       }
@@ -440,7 +421,8 @@ class UpdateService {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: const Color(0xFF135F74).withOpacity(0.08),
+                // ✅ CORRIGÉ : withValues(alpha: 0.08)
+                color: const Color(0xFF135F74).withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Column(
@@ -498,7 +480,8 @@ class UpdateService {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: const Color(0xFF135F74).withOpacity(0.08),
+                // ✅ CORRIGÉ : withValues(alpha: 0.08)
+                color: const Color(0xFF135F74).withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Column(

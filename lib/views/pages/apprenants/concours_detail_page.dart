@@ -9,9 +9,11 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:intl/intl.dart'; // ← AJOUTÉ pour le formatage de date
+import 'package:intl/intl.dart';
 import 'package:yeki/views/pages/apprenants/cours_detail_page.dart';
 import 'formations_models.dart';
+import 'package:yeki/core/theme/app_theme.dart';
+import 'package:yeki/core/constants/api_constants.dart';
 
 // Palette harmonisée
 const Color brandBackground = Color(0xFF135F74);
@@ -30,6 +32,7 @@ const Color _purple = Color(0xFF8B5CF6);
 
 Future<String?> _getToken() async =>
     (await SharedPreferences.getInstance()).getString('token');
+
 Map<String, String> _headers(String? t) => {
   'Content-Type': 'application/json',
   if (t != null) 'Authorization': 'Token $t',
@@ -37,7 +40,7 @@ Map<String, String> _headers(String? t) => {
 
 // ══════════════════════════════════════════════════════════════
 class DetailConcoursPage extends StatefulWidget {
-  final int              concoursId;
+  final int concoursId;
   final DepartementItem? deptPrecharge;
 
   const DetailConcoursPage({
@@ -79,13 +82,13 @@ class _DetailConcoursPageState extends State<DetailConcoursPage>
     final token = await _getToken();
     try {
       final res = await http.get(
-        Uri.parse('$kBaseUrl/departement/${widget.concoursId}/'),
+        Uri.parse('${ApiConstants.baseUrl}/departement/${widget.concoursId}/'),
         headers: _headers(token),
       );
       if (res.statusCode == 200 && mounted) {
         final data = jsonDecode(res.body) as Map<String, dynamic>;
         setState(() {
-          _dept    = DepartementItem.fromJson(data);
+          _dept = DepartementItem.fromJson(data);
           _loading = false;
         });
       }
@@ -108,7 +111,7 @@ class _DetailConcoursPageState extends State<DetailConcoursPage>
     if (_loading) {
       return Scaffold(
         backgroundColor: _bgLight,
-        body: const Center(child: CircularProgressIndicator()),
+        body: const Center(child: YekiLoader()),
       );
     }
     if (_dept == null) {
@@ -142,7 +145,7 @@ class _DetailConcoursPageState extends State<DetailConcoursPage>
     return Scaffold(
       backgroundColor: _bgLight,
       body: NestedScrollView(
-        headerSliverBuilder: (_, __) => [
+        headerSliverBuilder: (_, _) => [
           _buildSliverAppBar(dept),
           SliverToBoxAdapter(child: _buildTabs()),
         ],
@@ -182,15 +185,15 @@ class _DetailConcoursPageState extends State<DetailConcoursPage>
         background: Stack(fit: StackFit.expand, children: [
           if (dept.imageUrl != null)
             Image.network(dept.imageUrl!, fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => _buildGradientBg(dept))
+                errorBuilder: (_, _, _) => _buildGradientBg(dept))
           else
             _buildGradientBg(dept),
           Container(
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 colors: [
-                  Colors.black.withOpacity(0.1),
-                  Colors.black.withOpacity(0.6),
+                  Colors.black.withValues(alpha: 0.1),
+                  Colors.black.withValues(alpha: 0.6),
                 ],
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
@@ -227,11 +230,10 @@ class _DetailConcoursPageState extends State<DetailConcoursPage>
                 ),
                 if (dept.nom != dept.nomConcours && dept.nom.isNotEmpty)
                   Text(dept.nom,
-                      style: TextStyle(color: _white.withOpacity(0.8), fontSize: 13)),
-                // ✅ CORRECTION ICI : cadre est un Map
+                      style: TextStyle(color: _white.withValues(alpha: 0.8), fontSize: 13)),
                 if (dept.cadre != null)
                   Text('Cadre : ${dept.cadre!['nom']}',
-                      style: TextStyle(color: _white.withOpacity(0.7), fontSize: 12)),
+                      style: TextStyle(color: _white.withValues(alpha: 0.7), fontSize: 12)),
               ],
             ),
           ),
@@ -264,8 +266,8 @@ class _DetailConcoursPageState extends State<DetailConcoursPage>
         gradient: LinearGradient(
           colors: [
             _accentColor,
-            _accentColor.withOpacity(0.7),
-            _accentColor.withOpacity(0.4),
+            _accentColor.withValues(alpha: 0.7),
+            _accentColor.withValues(alpha: 0.4),
           ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
@@ -273,7 +275,7 @@ class _DetailConcoursPageState extends State<DetailConcoursPage>
       ),
       child: Center(
         child: Icon(Icons.emoji_events_rounded,
-            size: 80, color: _white.withOpacity(0.1)),
+            size: 80, color: _white.withValues(alpha: 0.1)),
       ),
     );
   }
@@ -326,7 +328,7 @@ class _DetailConcoursPageState extends State<DetailConcoursPage>
                   child: LinearProgressIndicator(
                     value: progression / 100,
                     backgroundColor: _borderLight,
-                    valueColor: AlwaysStoppedAnimation(_accentColor),
+                    valueColor: AlwaysStoppedAnimation<Color>(_accentColor),
                     minHeight: 6,
                   ),
                 ),
@@ -334,7 +336,8 @@ class _DetailConcoursPageState extends State<DetailConcoursPage>
             ),
           ),
           const SizedBox(width: 16),
-          ElevatedButton(
+          YekiButton(
+            label: progression > 0 ? 'Continuer' : 'Commencer',
             onPressed: dept.cours.isNotEmpty
                 ? () => Navigator.push(
                       context,
@@ -347,17 +350,8 @@ class _DetailConcoursPageState extends State<DetailConcoursPage>
                       ),
                     )
                 : null,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: _accentColor,
-              foregroundColor: _white,
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 13),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              elevation: 0,
-            ),
-            child: Text(
-              progression > 0 ? 'Continuer' : 'Commencer',
-              style: const TextStyle(fontWeight: FontWeight.bold),
-            ),
+            backgroundColor: _accentColor,
+            width: 120,
           ),
         ],
       ),
@@ -428,26 +422,22 @@ class _TabInfos extends StatelessWidget {
 }
 
 // ── Carte des dates ───────────────────────────────────────────
-// ✅ ENTIÈREMENT CORRIGÉE : DateTime? au lieu de String?
 class _DatesCard extends StatelessWidget {
   final DepartementItem dept;
   final Color accentColor;
   const _DatesCard({required this.dept, required this.accentColor});
 
-  // ✅ Formatage avec DateTime?
   String _fmt(DateTime? date) {
     if (date == null) return 'Non définie';
     final format = DateFormat('dd MMMM yyyy', 'fr_FR');
     return format.format(date);
   }
 
-  // ✅ Vérification avec DateTime?
   bool _isPast(DateTime? date) {
     if (date == null) return false;
     return date.isBefore(DateTime.now());
   }
 
-  // ✅ Vérification avec DateTime?
   bool _isSoon(DateTime? date) {
     if (date == null) return false;
     final diff = date.difference(DateTime.now()).inDays;
@@ -512,9 +502,9 @@ class _DatesCard extends StatelessWidget {
                     Container(
                       width: 44, height: 44,
                       decoration: BoxDecoration(
-                        color: r.color.withOpacity(0.1),
+                        color: r.color.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: r.color.withOpacity(0.2), width: 0.8),
+                        border: Border.all(color: r.color.withValues(alpha: 0.2), width: 0.8),
                       ),
                       child: Icon(r.icon, color: r.color, size: 20),
                     ),
@@ -607,9 +597,9 @@ class _DetailsCard extends StatelessWidget {
                 leading: Container(
                   width: 42, height: 42,
                   decoration: BoxDecoration(
-                    color: item.color.withOpacity(0.1),
+                    color: item.color.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: item.color.withOpacity(0.2), width: 0.8),
+                    border: Border.all(color: item.color.withValues(alpha: 0.2), width: 0.8),
                   ),
                   child: Icon(item.icon, color: item.color, size: 18),
                 ),
@@ -657,9 +647,9 @@ class _OrgCard extends StatelessWidget {
           Container(
             width: 50, height: 50,
             decoration: BoxDecoration(
-              color: accentColor.withOpacity(0.1),
+              color: accentColor.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: accentColor.withOpacity(0.2), width: 0.8),
+              border: Border.all(color: accentColor.withValues(alpha: 0.2), width: 0.8),
             ),
             child: Icon(Icons.apartment_rounded, color: accentColor, size: 24),
           ),
@@ -695,10 +685,10 @@ class _PrixCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: isGratuit ? _green.withOpacity(0.05) : _gold.withOpacity(0.05),
+        color: isGratuit ? _green.withValues(alpha: 0.05) : _gold.withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-            color: isGratuit ? _green.withOpacity(0.3) : _gold.withOpacity(0.3), width: 1),
+            color: isGratuit ? _green.withValues(alpha: 0.3) : _gold.withValues(alpha: 0.3), width: 1),
       ),
       child: Row(
         children: [
@@ -793,9 +783,9 @@ class _TabCours extends StatelessWidget {
                 Container(
                   width: 52, height: 52,
                   decoration: BoxDecoration(
-                    color: cardColor.withOpacity(0.1),
+                    color: cardColor.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: cardColor.withOpacity(0.2), width: 0.8),
+                    border: Border.all(color: cardColor.withValues(alpha: 0.2), width: 0.8),
                   ),
                   child: Icon(Icons.book_rounded, color: cardColor, size: 24),
                 ),
@@ -840,7 +830,7 @@ class _TabCours extends StatelessWidget {
                         child: LinearProgressIndicator(
                           value: c.progression / 100,
                           backgroundColor: _borderLight,
-                          valueColor: AlwaysStoppedAnimation(cardColor),
+                          valueColor: AlwaysStoppedAnimation<Color>(cardColor),
                           minHeight: 4,
                         ),
                       ),
@@ -940,9 +930,9 @@ class _TabDebouches extends StatelessWidget {
 // HELPERS
 // ══════════════════════════════════════════════════════════════
 class _SectionTitle extends StatelessWidget {
-  final String   title;
+  final String title;
   final IconData icon;
-  final Color    color;
+  final Color color;
   const _SectionTitle({required this.title, required this.icon, required this.color});
 
   @override
@@ -959,10 +949,10 @@ class _SectionTitle extends StatelessWidget {
 }
 
 class _StatBubble extends StatelessWidget {
-  final String   value;
-  final String   label;
+  final String value;
+  final String label;
   final IconData icon;
-  final Color    color;
+  final Color color;
   const _StatBubble({
     required this.value, required this.label,
     required this.icon, required this.color,

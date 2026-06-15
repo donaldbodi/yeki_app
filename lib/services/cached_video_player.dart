@@ -1,10 +1,13 @@
-// lib/widgets/cached_video_player.dart
+// lib/services/cached_video_player.dart
+// ═══════════════════════════════════════════════════════════════
+//  CACHED VIDEO PLAYER — CORRIGÉ
+// ═══════════════════════════════════════════════════════════════
 
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 import 'package:yeki/services/cache_manager.dart';
-
+import 'package:yeki/core/theme/app_theme.dart';
 
 class CachedVideoPlayer extends StatefulWidget {
   final String videoUrl;
@@ -26,7 +29,8 @@ class _CachedVideoPlayerState extends State<CachedVideoPlayer> {
   final CacheManager _cacheManager = CacheManager();
   VideoPlayerController? _controller;
   
-  bool _isPlaying = false;
+  // ✅ _isPlaying n'est pas utilisé, on peut le supprimer
+  // bool _isPlaying = false;
   bool _isLoading = true;
   bool _isFullscreen = false;
   DownloadStatus _downloadStatus = DownloadStatus.notDownloaded;
@@ -37,6 +41,12 @@ class _CachedVideoPlayerState extends State<CachedVideoPlayer> {
   void initState() {
     super.initState();
     _init();
+  }
+
+  @override
+  void dispose() {
+    _controller?.dispose();
+    super.dispose();
   }
 
   Future<void> _init() async {
@@ -79,13 +89,14 @@ class _CachedVideoPlayerState extends State<CachedVideoPlayer> {
     setState(() {
       if (_controller!.value.isPlaying) {
         _controller!.pause();
-        _isPlaying = false;
       } else {
         _controller!.play();
-        _isPlaying = true;
       }
     });
   }
+
+  // ✅ _formatDuration supprimé car non utilisé
+  // String _formatDuration(Duration duration) { ... }
 
   Future<void> _downloadVideo() async {
     setState(() => _downloadStatus = DownloadStatus.downloading);
@@ -108,7 +119,7 @@ class _CachedVideoPlayerState extends State<CachedVideoPlayer> {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Vidéo téléchargée avec succès'),
-              backgroundColor: Color(0xFF10B981),
+              backgroundColor: YekiColors.success,
               behavior: SnackBarBehavior.floating,
               duration: Duration(seconds: 2),
             ),
@@ -121,7 +132,7 @@ class _CachedVideoPlayerState extends State<CachedVideoPlayer> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text('Erreur: $error'),
-              backgroundColor: Colors.red,
+              backgroundColor: YekiColors.error,
               behavior: SnackBarBehavior.floating,
             ),
           );
@@ -134,13 +145,17 @@ class _CachedVideoPlayerState extends State<CachedVideoPlayer> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        shape: RoundedRectangleBorder(borderRadius: YekiRadius.borderRadiusLg),
+        backgroundColor: YekiColors.white,
         title: const Text('Supprimer la vidéo'),
-        content: const Text('Voulez-vous supprimer cette vidéo du cache ? Elle sera re-téléchargée à la prochaine lecture.'),
+        content: const Text('Voulez-vous supprimer cette vidéo du cache ?'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Annuler')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Annuler', style: TextStyle(color: YekiColors.textMedium)),
+          ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            style: ElevatedButton.styleFrom(backgroundColor: YekiColors.error),
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('Supprimer'),
           ),
@@ -156,7 +171,7 @@ class _CachedVideoPlayerState extends State<CachedVideoPlayer> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Vidéo supprimée du cache'),
-            backgroundColor: Color(0xFFF97316),
+            backgroundColor: YekiColors.warning,
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -166,18 +181,6 @@ class _CachedVideoPlayerState extends State<CachedVideoPlayer> {
 
   void _toggleFullscreen() {
     setState(() => _isFullscreen = !_isFullscreen);
-  }
-
-  String _formatDuration(Duration duration) {
-    final minutes = duration.inMinutes;
-    final seconds = duration.inSeconds % 60;
-    return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
-  }
-
-  @override
-  void dispose() {
-    _controller?.dispose();
-    super.dispose();
   }
 
   @override
@@ -199,28 +202,29 @@ class _CachedVideoPlayerState extends State<CachedVideoPlayer> {
               
               if (_isLoading)
                 Container(
-                  color: Colors.black,
+                  color: YekiColors.black,
                   child: const Center(
-                    child: CircularProgressIndicator(color: Color(0xFF135F74)),
+                    child: YekiLoader(color: YekiColors.white),
                   ),
                 ),
               
-              if (!_isLoading && !_controller!.value.isPlaying)
+              if (!_isLoading && _controller != null && !_controller!.value.isPlaying)
                 GestureDetector(
                   onTap: _togglePlay,
                   child: Container(
                     width: 56,
                     height: 56,
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
+                      // ✅ withValues(alpha: 0.2) est correct
+                      color: YekiColors.white.withValues(alpha: 0.2),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.play_arrow_rounded, size: 32, color: Colors.white),
+                    child: const Icon(Icons.play_arrow_rounded, size: 32, color: YekiColors.white),
                   ),
                 ),
               
               // Barre de progression
-              if (!_isLoading)
+              if (!_isLoading && _controller != null)
                 Positioned(
                   bottom: 0,
                   left: 0,
@@ -228,10 +232,11 @@ class _CachedVideoPlayerState extends State<CachedVideoPlayer> {
                   child: VideoProgressIndicator(
                     _controller!,
                     allowScrubbing: true,
-                    colors: const VideoProgressColors(
-                      playedColor: Color(0xFF135F74),
-                      bufferedColor: Colors.white30,
-                      backgroundColor: Colors.white10,
+                    // ✅ CORRIGÉ : Utiliser withValues(alpha:) au lieu de YekiColors.white30/white10
+                    colors: VideoProgressColors(
+                      playedColor: YekiColors.primaryDark,
+                      bufferedColor: YekiColors.white.withValues(alpha: 0.3),
+                      backgroundColor: YekiColors.white.withValues(alpha: 0.1),
                     ),
                   ),
                 ),
@@ -242,7 +247,7 @@ class _CachedVideoPlayerState extends State<CachedVideoPlayer> {
                   bottom: 8,
                   right: 8,
                   child: IconButton(
-                    icon: const Icon(Icons.fullscreen_rounded, color: Colors.white, size: 20),
+                    icon: const Icon(Icons.fullscreen_rounded, color: YekiColors.white, size: 20),
                     onPressed: _toggleFullscreen,
                   ),
                 ),
@@ -252,7 +257,7 @@ class _CachedVideoPlayerState extends State<CachedVideoPlayer> {
         
         // Boutons de contrôle du cache
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          padding: YekiSpacing.paddingSm,
           child: Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
@@ -260,7 +265,7 @@ class _CachedVideoPlayerState extends State<CachedVideoPlayer> {
                 _buildActionButton(
                   icon: Icons.delete_outline,
                   label: 'Supprimer',
-                  color: Colors.red,
+                  color: YekiColors.error,
                   onTap: _deleteDownload,
                 )
               else if (_downloadStatus == DownloadStatus.downloading)
@@ -269,14 +274,14 @@ class _CachedVideoPlayerState extends State<CachedVideoPlayer> {
                 _buildActionButton(
                   icon: Icons.error_outline,
                   label: 'Réessayer',
-                  color: Colors.orange,
+                  color: YekiColors.warning,
                   onTap: _downloadVideo,
                 )
               else
                 _buildActionButton(
                   icon: Icons.download_outlined,
                   label: 'Télécharger',
-                  color: const Color(0xFF135F74),
+                  color: YekiColors.primaryDark,
                   onTap: _downloadVideo,
                 ),
             ],
@@ -295,11 +300,11 @@ class _CachedVideoPlayerState extends State<CachedVideoPlayer> {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        padding: YekiSpacing.paddingSm,
         decoration: BoxDecoration(
-          color: color.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: color.withOpacity(0.3)),
+          color: color.withValues(alpha: 0.1),
+          borderRadius: YekiRadius.borderRadiusSm,
+          border: Border.all(color: color.withValues(alpha: 0.3)),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -315,11 +320,11 @@ class _CachedVideoPlayerState extends State<CachedVideoPlayer> {
 
   Widget _buildProgressButton() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      padding: YekiSpacing.paddingSm,
       decoration: BoxDecoration(
-        color: const Color(0xFF135F74).withOpacity(0.1),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFF135F74).withOpacity(0.3)),
+        color: YekiColors.primaryDark.withValues(alpha: 0.1),
+        borderRadius: YekiRadius.borderRadiusSm,
+        border: Border.all(color: YekiColors.primaryDark.withValues(alpha: 0.3)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -330,13 +335,13 @@ class _CachedVideoPlayerState extends State<CachedVideoPlayer> {
             child: CircularProgressIndicator(
               value: _downloadProgress,
               strokeWidth: 2,
-              color: const Color(0xFF135F74),
+              color: YekiColors.primaryDark,
             ),
           ),
           const SizedBox(width: 8),
           Text(
             '${(_downloadProgress * 100).toInt()}%',
-            style: const TextStyle(fontSize: 11, color: Color(0xFF135F74), fontWeight: FontWeight.w600),
+            style: const TextStyle(fontSize: 11, color: YekiColors.primaryDark, fontWeight: FontWeight.w600),
           ),
         ],
       ),

@@ -1,15 +1,18 @@
 // lib/views/pages/enseignants/detail_departement_page.dart
+// ═══════════════════════════════════════════════════════════════════════════
+// DÉTAIL DÉPARTEMENT — CORRIGÉ
+// ═══════════════════════════════════════════════════════════════════════════
 
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:yeki/widgets/creer_cours_sheet.dart';
-import 'package:yeki/widgets/modifier_cours_sheet.dart';
 import 'package:yeki/views/pages/enseignants/interface_enseignant_page.dart';
-import 'detail_cours_enseignant.dart';
-
-const String baseUrl = 'https://yeki.pythonanywhere.com/api';
+import 'package:yeki/views/pages/enseignants/detail_cours_enseignant.dart';
+import 'package:yeki/core/theme/app_theme.dart';
+import 'package:yeki/core/constants/api_constants.dart';
+import 'package:yeki/utils/error_handler.dart';
 
 class DetailDepartementPage extends StatefulWidget {
   final int departementId;
@@ -71,8 +74,8 @@ class _DetailDepartementPageState extends State<DetailDepartementPage>
 
     try {
       final response = await http.get(
-        Uri.parse('$baseUrl/enseignant/cadre/departement/${widget.departementId}/'),
-        headers: {'Authorization': 'Token $token'},
+        Uri.parse(ApiConstants.enseignantCadreDepartement(widget.departementId)),
+        headers: ApiHeaders.auth(token),
       );
 
       if (response.statusCode == 200) {
@@ -84,23 +87,12 @@ class _DetailDepartementPageState extends State<DetailDepartementPage>
         });
       } else {
         setState(() => _loading = false);
-        _showError('Erreur ${response.statusCode}');
+        ErrorHandler.showError(context, 'Erreur ${response.statusCode}');
       }
     } catch (e) {
       setState(() => _loading = false);
-      _showError('Erreur réseau');
+      ErrorHandler.showError(context, 'Erreur réseau');
     }
-  }
-
-  void _showError(String msg) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(msg),
-        backgroundColor: Colors.red,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
   }
 
   void _creerCours() {
@@ -128,17 +120,17 @@ class _DetailDepartementPageState extends State<DetailDepartementPage>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: YekiColors.backgroundLight,
       floatingActionButton: FloatingActionButton(
         backgroundColor: _accentColor,
         elevation: 4,
         onPressed: _creerCours,
-        child: const Icon(Icons.add_rounded, color: Colors.white, size: 28),
+        child: const Icon(Icons.add_rounded, color: YekiColors.white, size: 28),
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: YekiLoader())
           : NestedScrollView(
-              headerSliverBuilder: (_, __) => [
+              headerSliverBuilder: (_, _) => [
                 _buildSliverAppBar(),
                 SliverToBoxAdapter(child: _buildInfoBar()),
                 SliverToBoxAdapter(child: _buildTabs()),
@@ -167,10 +159,10 @@ class _DetailDepartementPageState extends State<DetailDepartementPage>
         icon: Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: Colors.black26,
-            borderRadius: BorderRadius.circular(10),
+            color: YekiColors.black.withValues(alpha: 0.26),
+            borderRadius: YekiRadius.borderRadiusSm,
           ),
-          child: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 16),
+          child: const Icon(Icons.arrow_back_ios_new, color: YekiColors.white, size: 16),
         ),
         onPressed: () => Navigator.pop(context),
       ),
@@ -178,7 +170,7 @@ class _DetailDepartementPageState extends State<DetailDepartementPage>
         background: Container(
           decoration: BoxDecoration(
             gradient: LinearGradient(
-              colors: [_accentColor, _accentColor.withOpacity(0.7)],
+              colors: [_accentColor, _accentColor.withValues(alpha: 0.7)],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
@@ -193,18 +185,18 @@ class _DetailDepartementPageState extends State<DetailDepartementPage>
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFC5A059).withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(20),
+                      color: YekiColors.accent.withValues(alpha: 0.2),
+                      borderRadius: YekiRadius.borderRadiusXl,
                     ),
                     child: Text(
                       _getTypeLabel(typeDept).toUpperCase(),
-                      style: const TextStyle(color: Color(0xFFC5A059), fontSize: 10, fontWeight: FontWeight.w800),
+                      style: const TextStyle(color: YekiColors.accent, fontSize: 10, fontWeight: FontWeight.w800),
                     ),
                   ),
                   const SizedBox(height: 10),
                   Text(
                     _departement['nom'] ?? widget.departementNom,
-                    style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
+                    style: const TextStyle(color: YekiColors.white, fontSize: 24, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 8),
                   Row(
@@ -222,7 +214,7 @@ class _DetailDepartementPageState extends State<DetailDepartementPage>
       ),
       actions: [
         IconButton(
-          icon: const Icon(Icons.refresh, color: Colors.white),
+          icon: const Icon(Icons.refresh, color: YekiColors.white),
           onPressed: _charger,
         ),
       ],
@@ -233,15 +225,15 @@ class _DetailDepartementPageState extends State<DetailDepartementPage>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.15),
-        borderRadius: BorderRadius.circular(20),
+        color: YekiColors.white.withValues(alpha: 0.15),
+        borderRadius: YekiRadius.borderRadiusXl,
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, color: Colors.white, size: 12),
+          Icon(icon, color: YekiColors.white, size: 12),
           const SizedBox(width: 4),
-          Text(label, style: const TextStyle(color: Colors.white, fontSize: 11)),
+          Text(label, style: const TextStyle(color: YekiColors.white, fontSize: 11)),
         ],
       ),
     );
@@ -253,7 +245,7 @@ class _DetailDepartementPageState extends State<DetailDepartementPage>
     final ville = _departement['ville'] ?? '';
     
     return Container(
-      color: Colors.white,
+      color: YekiColors.white,
       padding: const EdgeInsets.symmetric(vertical: 12),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -277,18 +269,18 @@ class _DetailDepartementPageState extends State<DetailDepartementPage>
         Icon(icon, size: 18, color: _accentColor),
         const SizedBox(height: 4),
         Text(value, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-        Text(label, style: const TextStyle(fontSize: 10, color: Color(0xFF64748B))),
+        Text(label, style: const TextStyle(fontSize: 10)),
       ],
     );
   }
 
   Widget _buildTabs() {
     return Container(
-      color: Colors.white,
+      color: YekiColors.white,
       child: TabBar(
         controller: _tabCtrl,
         labelColor: _accentColor,
-        unselectedLabelColor: const Color(0xFF64748B),
+        unselectedLabelColor: YekiColors.textLight,
         indicatorColor: _accentColor,
         indicatorWeight: 3,
         labelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
@@ -309,7 +301,7 @@ class _DetailDepartementPageState extends State<DetailDepartementPage>
             Container(
               padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
-                color: _accentColor.withOpacity(0.08),
+                color: _accentColor.withValues(alpha: 0.08),
                 shape: BoxShape.circle,
               ),
               child: Icon(Icons.book_outlined, size: 48, color: _accentColor),
@@ -322,7 +314,7 @@ class _DetailDepartementPageState extends State<DetailDepartementPage>
             const SizedBox(height: 8),
             const Text(
               'Créez votre premier cours dans ce département',
-              style: TextStyle(color: Color(0xFF64748B), fontSize: 13),
+              style: TextStyle(fontSize: 13),
             ),
             const SizedBox(height: 20),
             ElevatedButton.icon(
@@ -331,7 +323,7 @@ class _DetailDepartementPageState extends State<DetailDepartementPage>
               label: const Text('Créer un cours'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: _accentColor,
-                foregroundColor: Colors.white,
+                foregroundColor: YekiColors.white,
                 elevation: 0,
               ),
             ),
@@ -365,12 +357,12 @@ class _DetailDepartementPageState extends State<DetailDepartementPage>
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE0E4E8), width: 1),
+        color: YekiColors.white,
+        borderRadius: YekiRadius.borderRadiusLg,
+        border: Border.all(color: YekiColors.borderLight, width: 1),
       ),
       child: InkWell(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: YekiRadius.borderRadiusLg,
         onTap: () {
           Navigator.push(
             context,
@@ -395,8 +387,8 @@ class _DetailDepartementPageState extends State<DetailDepartementPage>
                   Container(
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      color: coursColor.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(12),
+                      color: coursColor.withValues(alpha: 0.1),
+                      borderRadius: YekiRadius.borderRadiusMd,
                     ),
                     child: Icon(Icons.book_rounded, color: coursColor, size: 22),
                   ),
@@ -414,7 +406,7 @@ class _DetailDepartementPageState extends State<DetailDepartementPage>
                         const SizedBox(height: 4),
                         Text(
                           cours['niveau'] ?? '',
-                          style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                          style: const TextStyle(fontSize: 12),
                         ),
                       ],
                     ),
@@ -423,17 +415,17 @@ class _DetailDepartementPageState extends State<DetailDepartementPage>
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
-                        color: Colors.green.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(8),
+                        color: YekiColors.success.withValues(alpha: 0.1),
+                        borderRadius: YekiRadius.borderRadiusSm,
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(Icons.person, size: 10, color: Colors.green),
+                          const Icon(Icons.person, size: 10, color: YekiColors.success),
                           const SizedBox(width: 4),
                           Text(
                             ep['nom'] ?? '',
-                            style: const TextStyle(fontSize: 10, color: Colors.green),
+                            style: const TextStyle(fontSize: 10, color: YekiColors.success),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -457,10 +449,10 @@ class _DetailDepartementPageState extends State<DetailDepartementPage>
                 children: [
                   Expanded(
                     child: ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: YekiRadius.borderRadiusSm,
                       child: LinearProgressIndicator(
                         value: taux / 100,
-                        backgroundColor: const Color(0xFFE0E4E8),
+                        backgroundColor: YekiColors.borderLight,
                         color: coursColor,
                         minHeight: 6,
                       ),
@@ -483,14 +475,14 @@ class _DetailDepartementPageState extends State<DetailDepartementPage>
   Widget _miniStat(IconData icon, String value, String label) {
     return Row(
       children: [
-        Icon(icon, size: 12, color: const Color(0xFF64748B)),
+        Icon(icon, size: 12, color: YekiColors.textLight),
         const SizedBox(width: 4),
         Text(
           value,
           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
         ),
         const SizedBox(width: 2),
-        Text(label, style: const TextStyle(fontSize: 11, color: Color(0xFF64748B))),
+        Text(label, style: const TextStyle(fontSize: 11)),
       ],
     );
   }
@@ -500,7 +492,6 @@ class _DetailDepartementPageState extends State<DetailDepartementPage>
     final nbApprenants = _departement['nb_apprenants'] ?? 0;
     final tauxMoyen = (_departement['taux_moyen'] as num?)?.toDouble() ?? 0.0;
     
-    // Calculer le nombre total de leçons et devoirs
     int totalLecons = 0;
     int totalDevoirs = 0;
     for (final cours in _cours) {
@@ -516,30 +507,30 @@ class _DetailDepartementPageState extends State<DetailDepartementPage>
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: [_accentColor, _accentColor.withOpacity(0.85)],
+                colors: [_accentColor, _accentColor.withValues(alpha: 0.85)],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: YekiRadius.borderRadiusXl,
             ),
             child: Column(
               children: [
-                const Text(
+                Text(
                   'Taux de complétion moyen',
-                  style: TextStyle(color: Colors.white70, fontSize: 12),
+                  style: TextStyle(color: YekiColors.white.withValues(alpha: 0.7), fontSize: 12),
                 ),
                 const SizedBox(height: 8),
                 Text(
                   '${tauxMoyen.toStringAsFixed(0)}%',
-                  style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold),
+                  style: const TextStyle(color: YekiColors.white, fontSize: 32, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 12),
                 ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: YekiRadius.borderRadiusSm,
                   child: LinearProgressIndicator(
                     value: tauxMoyen / 100,
-                    backgroundColor: Colors.white.withOpacity(0.2),
-                    valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFFC5A059)),
+                    backgroundColor: YekiColors.white.withValues(alpha: 0.2),
+                    valueColor: const AlwaysStoppedAnimation<Color>(YekiColors.accent),
                     minHeight: 8,
                   ),
                 ),
@@ -579,9 +570,9 @@ class _DetailDepartementPageState extends State<DetailDepartementPage>
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE0E4E8), width: 1),
+        color: YekiColors.white,
+        borderRadius: YekiRadius.borderRadiusLg,
+        border: Border.all(color: YekiColors.borderLight, width: 1),
       ),
       child: Column(
         children: [
@@ -592,7 +583,7 @@ class _DetailDepartementPageState extends State<DetailDepartementPage>
             style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 4),
-          Text(label, style: const TextStyle(fontSize: 11, color: Color(0xFF64748B))),
+          Text(label, style: const TextStyle(fontSize: 11)),
         ],
       ),
     );

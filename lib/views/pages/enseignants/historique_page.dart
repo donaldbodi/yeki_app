@@ -1,20 +1,16 @@
+// lib/views/pages/enseignants/historique_page.dart
+// ═══════════════════════════════════════════════════════════════════════════
+// PAGE HISTORIQUE ENSEIGNANT — CORRIGÉE
+// ═══════════════════════════════════════════════════════════════════════════
+
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
+import 'package:yeki/core/theme/app_theme.dart';
+import 'package:yeki/core/constants/api_constants.dart';
 
-// ─────────────────────────────────────────────────────────────────
-// PAGE HISTORIQUE  — Enseignants
-// Connectée à GET /api/historique/  et  GET /api/historique/stats/
-// ─────────────────────────────────────────────────────────────────
-
-const String _hBaseUrl = 'https://yeki.pythonanywhere.com/api';
-const Color _hPrimary = Color(0xFF2884A0);
-const Color _hBg = Color(0xFFF1F5F9);
-const Color _hDark = Color(0xFF1E293B);
-
-// ── Mapping action → icône / couleur / label ──────────────────────
 const Map<String, Map<String, dynamic>> _actionMeta = {
   'course_created':    {'icon': Icons.add_circle_outline,    'color': Color(0xFF2E7D32), 'cat': 'cours'},
   'course_modified':   {'icon': Icons.edit_outlined,          'color': Color(0xFF1565C0), 'cat': 'cours'},
@@ -44,9 +40,8 @@ const Map<String, Map<String, dynamic>> _actionMeta = {
 
 Map<String, dynamic> _getMeta(String action) =>
     _actionMeta[action] ??
-    {'icon': Icons.history, 'color': Colors.grey.shade500, 'cat': 'autre'};
+    {'icon': Icons.history, 'color': YekiColors.textLight, 'cat': 'autre'};
 
-// ── Catégories pour le filtre ─────────────────────────────────────
 const List<_HFilter> _filters = [
   _HFilter(key: '',             label: 'Tout',         icon: Icons.apps),
   _HFilter(key: 'cours',        label: 'Cours',        icon: Icons.book_outlined),
@@ -67,9 +62,6 @@ class _HFilter {
   const _HFilter({required this.key, required this.label, required this.icon});
 }
 
-// ═══════════════════════════════════════════════════════════════════
-//  PAGE PRINCIPALE
-// ═══════════════════════════════════════════════════════════════════
 class HistoriquePage extends StatefulWidget {
   const HistoriquePage({super.key});
 
@@ -87,7 +79,7 @@ class _HistoriquePageState extends State<HistoriquePage>
   Map<String, dynamic> _stats = {};
 
   String _selectedCategory = '';
-  String _selectedPeriode = '';   // '', 'semaine', 'mois'
+  String _selectedPeriode = '';
 
   late AnimationController _animCtrl;
   late Animation<double> _fadeAnim;
@@ -121,7 +113,6 @@ class _HistoriquePageState extends State<HistoriquePage>
     };
   }
 
-  // ── Chargement ───────────────────────────────────────────────────
   Future<void> _chargerTout() async {
     await Future.wait([_chargerActivites(), _chargerStats()]);
   }
@@ -147,7 +138,7 @@ class _HistoriquePageState extends State<HistoriquePage>
 
       params['limit'] = '150';
 
-      final uri = Uri.parse('$_hBaseUrl/historique/').replace(queryParameters: params);
+      final uri = Uri.parse(ApiConstants.historique).replace(queryParameters: params);
       final res = await http.get(uri, headers: headers);
 
       if (res.statusCode == 200) {
@@ -172,7 +163,7 @@ class _HistoriquePageState extends State<HistoriquePage>
     try {
       final headers = await _authHeaders();
       final res = await http.get(
-        Uri.parse('$_hBaseUrl/historique/stats/'),
+        Uri.parse(ApiConstants.historiqueStats),
         headers: headers,
       );
       if (res.statusCode == 200) {
@@ -184,7 +175,6 @@ class _HistoriquePageState extends State<HistoriquePage>
     }
   }
 
-  // ── Grouper les activités par date ───────────────────────────────
   Map<String, List<Map<String, dynamic>>> _grouperParDate() {
     final grouped = <String, List<Map<String, dynamic>>>{};
     for (final a in _activites) {
@@ -212,7 +202,6 @@ class _HistoriquePageState extends State<HistoriquePage>
     return DateFormat('MMMM yyyy', 'fr_FR').format(dt);
   }
 
-  // ── Formater le timestamp ────────────────────────────────────────
   String _formatTime(String? ts) {
     if (ts == null) return '';
     try {
@@ -229,16 +218,13 @@ class _HistoriquePageState extends State<HistoriquePage>
     }
   }
 
-  // ═══════════════════════════════════════════════════════════════
-  //  BUILD
-  // ═══════════════════════════════════════════════════════════════
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _hBg,
+      backgroundColor: YekiColors.backgroundLight,
       body: NestedScrollView(
         controller: _scrollCtrl,
-        headerSliverBuilder: (_, __) => [
+        headerSliverBuilder: (_, _) => [
           _buildSliverAppBar(),
         ],
         body: Column(
@@ -252,15 +238,14 @@ class _HistoriquePageState extends State<HistoriquePage>
     );
   }
 
-  // ── AppBar ───────────────────────────────────────────────────────
   SliverAppBar _buildSliverAppBar() {
     return SliverAppBar(
       expandedHeight: 170,
       pinned: true,
-      backgroundColor: _hPrimary,
+      backgroundColor: YekiColors.primaryDark,
       actions: [
         IconButton(
-          icon: const Icon(Icons.refresh, color: Colors.white),
+          icon: const Icon(Icons.refresh, color: YekiColors.white),
           onPressed: _chargerTout,
           tooltip: 'Actualiser',
         ),
@@ -270,7 +255,7 @@ class _HistoriquePageState extends State<HistoriquePage>
         background: Container(
           decoration: const BoxDecoration(
             gradient: LinearGradient(
-              colors: [Color(0xFF1A5276), _hPrimary],
+              colors: [Color(0xFF1A5276), YekiColors.primaryDark],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
@@ -281,14 +266,14 @@ class _HistoriquePageState extends State<HistoriquePage>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Row(
+                  Row(
                     children: [
-                      Icon(Icons.history_outlined, color: Colors.white70, size: 16),
+                      Icon(Icons.history_outlined, color: YekiColors.white.withValues(alpha: 0.7), size: 16),
                       SizedBox(width: 6),
                       Text(
                         'HISTORIQUE',
                         style: TextStyle(
-                          color: Colors.white70,
+                          color: YekiColors.white.withValues(alpha: 0.7),
                           fontSize: 11,
                           letterSpacing: 2,
                           fontWeight: FontWeight.w600,
@@ -300,46 +285,26 @@ class _HistoriquePageState extends State<HistoriquePage>
                   const Text(
                     'Mes activités',
                     style: TextStyle(
-                      color: Colors.white,
+                      color: YekiColors.white,
                       fontSize: 24,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
                   const SizedBox(height: 12),
-                  // ── Bandeaux stats ────────────────────────────
                   _loadingStats
-                      ? const SizedBox(
+                      ? SizedBox(
                           height: 28,
                           child: Center(
-                            child: SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(
-                                color: Colors.white54,
-                                strokeWidth: 2,
-                              ),
-                            ),
+                            child: YekiLoader(size: 18, color: YekiColors.white.withValues(alpha: 0.54)),
                           ),
                         )
                       : Row(
                           children: [
-                            _statBadge(
-                              '${_stats['total'] ?? 0}',
-                              'au total',
-                              Icons.timeline,
-                            ),
+                            _statBadge('${_stats['total'] ?? 0}', 'au total', Icons.timeline),
                             const SizedBox(width: 10),
-                            _statBadge(
-                              '${_stats['cette_semaine'] ?? 0}',
-                              'cette semaine',
-                              Icons.date_range,
-                            ),
+                            _statBadge('${_stats['cette_semaine'] ?? 0}', 'cette semaine', Icons.date_range),
                             const SizedBox(width: 10),
-                            _statBadge(
-                              '${_stats['ce_mois'] ?? 0}',
-                              'ce mois',
-                              Icons.calendar_month,
-                            ),
+                            _statBadge('${_stats['ce_mois'] ?? 0}', 'ce mois', Icons.calendar_month),
                           ],
                         ),
                 ],
@@ -349,7 +314,7 @@ class _HistoriquePageState extends State<HistoriquePage>
         ),
         title: const Text(
           'Historique',
-          style: TextStyle(color: Colors.white, fontSize: 16),
+          style: TextStyle(color: YekiColors.white, fontSize: 16),
         ),
         titlePadding: const EdgeInsets.only(left: 56, bottom: 14),
       ),
@@ -359,18 +324,18 @@ class _HistoriquePageState extends State<HistoriquePage>
   Widget _statBadge(String count, String label, IconData icon) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.15),
-          borderRadius: BorderRadius.circular(20),
+          color: YekiColors.white.withValues(alpha: 0.15),
+          borderRadius: YekiRadius.borderRadiusXl,
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, color: Colors.white, size: 12),
+            Icon(icon, color: YekiColors.white, size: 12),
             const SizedBox(width: 4),
             Text(
               '$count $label',
               style: const TextStyle(
-                color: Colors.white,
+                color: YekiColors.white,
                 fontSize: 11,
                 fontWeight: FontWeight.w600,
               ),
@@ -379,10 +344,9 @@ class _HistoriquePageState extends State<HistoriquePage>
         ),
       );
 
-  // ── Filtre catégories ────────────────────────────────────────────
   Widget _buildFilterRow() {
     return Container(
-      color: Colors.white,
+      color: YekiColors.white,
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -404,14 +368,10 @@ class _HistoriquePageState extends State<HistoriquePage>
                       vertical: 7,
                     ),
                     decoration: BoxDecoration(
-                      color: isSelected
-                          ? _hPrimary
-                          : _hPrimary.withOpacity(0.07),
-                      borderRadius: BorderRadius.circular(20),
+                      color: isSelected ? YekiColors.primaryDark : YekiColors.primaryDark.withValues(alpha: 0.07),
+                      borderRadius: YekiRadius.borderRadiusXl,
                       border: Border.all(
-                        color: isSelected
-                            ? _hPrimary
-                            : _hPrimary.withOpacity(0.2),
+                        color: isSelected ? YekiColors.primaryDark : YekiColors.primaryDark.withValues(alpha: 0.2),
                       ),
                     ),
                     child: Row(
@@ -420,7 +380,7 @@ class _HistoriquePageState extends State<HistoriquePage>
                         Icon(
                           f.icon,
                           size: 14,
-                          color: isSelected ? Colors.white : _hPrimary,
+                          color: isSelected ? YekiColors.white : YekiColors.primaryDark,
                         ),
                         const SizedBox(width: 5),
                         Text(
@@ -428,10 +388,9 @@ class _HistoriquePageState extends State<HistoriquePage>
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
-                            color: isSelected ? Colors.white : _hPrimary,
+                            color: isSelected ? YekiColors.white : YekiColors.primaryDark,
                           ),
                         ),
-                        // Badge comptage
                         if (!_loadingStats &&
                             f.key.isNotEmpty &&
                             (_stats['categories'] as Map<String, dynamic>?)?[f.key] != null &&
@@ -443,17 +402,15 @@ class _HistoriquePageState extends State<HistoriquePage>
                               vertical: 1,
                             ),
                             decoration: BoxDecoration(
-                              color: isSelected
-                                  ? Colors.white.withOpacity(0.3)
-                                  : _hPrimary,
-                              borderRadius: BorderRadius.circular(10),
+                              color: isSelected ? YekiColors.white.withValues(alpha: 0.3) : YekiColors.primaryDark,
+                              borderRadius: YekiRadius.borderRadiusSm,
                             ),
                             child: Text(
                               '${(_stats['categories'] as Map<String, dynamic>)[f.key]}',
                               style: TextStyle(
                                 fontSize: 10,
                                 fontWeight: FontWeight.bold,
-                                color: isSelected ? Colors.white : Colors.white,
+                                color: isSelected ? YekiColors.white : YekiColors.white,
                               ),
                             ),
                           ),
@@ -470,7 +427,6 @@ class _HistoriquePageState extends State<HistoriquePage>
     );
   }
 
-  // ── Filtre période ───────────────────────────────────────────────
   Widget _buildPeriodeRow() {
     final periodes = [
       ('', 'Tout'),
@@ -478,13 +434,13 @@ class _HistoriquePageState extends State<HistoriquePage>
       ('mois', 'Ce mois'),
     ];
     return Container(
-      color: Colors.white,
+      color: YekiColors.white,
       padding: const EdgeInsets.only(left: 12, right: 12, bottom: 10),
       child: Row(
         children: [
           const Text(
             'Période :',
-            style: TextStyle(fontSize: 12, color: Colors.grey),
+            style: TextStyle(fontSize: 12),
           ),
           const SizedBox(width: 8),
           ...periodes.map((p) {
@@ -502,17 +458,15 @@ class _HistoriquePageState extends State<HistoriquePage>
                     vertical: 4,
                   ),
                   decoration: BoxDecoration(
-                    color: isSelected
-                        ? _hDark
-                        : Colors.grey.shade100,
-                    borderRadius: BorderRadius.circular(14),
+                    color: isSelected ? YekiColors.textDark : YekiColors.borderLight,
+                    borderRadius: YekiRadius.borderRadiusLg,
                   ),
                   child: Text(
                     p.$2,
                     style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
-                      color: isSelected ? Colors.white : Colors.grey.shade600,
+                      color: isSelected ? YekiColors.white : YekiColors.textLight,
                     ),
                   ),
                 ),
@@ -520,23 +474,19 @@ class _HistoriquePageState extends State<HistoriquePage>
             );
           }),
           const Spacer(),
-          // Compteur résultats
           if (!_loading)
             Text(
               '${_activites.length} résultat${_activites.length > 1 ? 's' : ''}',
-              style: const TextStyle(fontSize: 11, color: Colors.grey),
+              style: const TextStyle(fontSize: 11),
             ),
         ],
       ),
     );
   }
 
-  // ── Corps principal ──────────────────────────────────────────────
   Widget _buildBody() {
     if (_loading) {
-      return const Center(
-        child: CircularProgressIndicator(color: _hPrimary),
-      );
+      return const Center(child: YekiLoader());
     }
 
     if (_error.isNotEmpty) {
@@ -553,17 +503,14 @@ class _HistoriquePageState extends State<HistoriquePage>
       opacity: _fadeAnim,
       child: RefreshIndicator(
         onRefresh: _chargerTout,
-        color: _hPrimary,
+        color: YekiColors.primaryDark,
         child: ListView(
           padding: const EdgeInsets.fromLTRB(14, 10, 14, 24),
           children: [
-            // ── Graphique résumé par catégorie ─────────────────
             if (_stats.isNotEmpty && _selectedCategory.isEmpty)
               _buildCategoryGrid(),
             if (_stats.isNotEmpty && _selectedCategory.isEmpty)
               const SizedBox(height: 16),
-
-            // ── Activités groupées par date ────────────────────
             for (final entry in grouped.entries) ...[
               _buildDateHeader(entry.key),
               ...entry.value.map((a) => _buildActiviteCard(a)),
@@ -574,7 +521,6 @@ class _HistoriquePageState extends State<HistoriquePage>
     );
   }
 
-  // ── Grille résumé catégories ─────────────────────────────────────
   Widget _buildCategoryGrid() {
     final cats = _stats['categories'] as Map<String, dynamic>? ?? {};
     final nonZero = cats.entries.where((e) => (e.value as int) > 0).toList();
@@ -595,32 +541,23 @@ class _HistoriquePageState extends State<HistoriquePage>
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 8,
-          ),
-        ],
+        color: YekiColors.white,
+        borderRadius: YekiRadius.borderRadiusLg,
+        boxShadow: YekiShadows.subtle,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
             'Répartition de vos activités',
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.bold,
-              color: _hDark,
-            ),
+            style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 12),
           Wrap(
             spacing: 8,
             runSpacing: 8,
             children: nonZero.map((entry) {
-              final meta = catMeta[entry.key] ?? {'icon': Icons.circle, 'color': Colors.grey, 'label': entry.key};
+              final meta = catMeta[entry.key] ?? {'icon': Icons.circle, 'color': YekiColors.textLight, 'label': entry.key};
               final color = meta['color'] as Color;
               final icon = meta['icon'] as IconData;
               final label = meta['label'] as String;
@@ -634,38 +571,24 @@ class _HistoriquePageState extends State<HistoriquePage>
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
                   decoration: BoxDecoration(
-                    color: color.withOpacity(0.08),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: color.withOpacity(0.25)),
+                    color: color.withValues(alpha: 0.08),
+                    borderRadius: YekiRadius.borderRadiusSm,
+                    border: Border.all(color: color.withValues(alpha: 0.25)),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(icon, color: color, size: 14),
                       const SizedBox(width: 5),
-                      Text(
-                        label,
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: color,
-                        ),
-                      ),
+                      Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: color)),
                       const SizedBox(width: 5),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
                         decoration: BoxDecoration(
                           color: color,
-                          borderRadius: BorderRadius.circular(8),
+                          borderRadius: YekiRadius.borderRadiusSm,
                         ),
-                        child: Text(
-                          '$count',
-                          style: const TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                        ),
+                        child: Text('$count', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: YekiColors.white)),
                       ),
                     ],
                   ),
@@ -678,7 +601,6 @@ class _HistoriquePageState extends State<HistoriquePage>
     );
   }
 
-  // ── Séparateur de date ───────────────────────────────────────────
   Widget _buildDateHeader(String label) => Padding(
         padding: const EdgeInsets.only(top: 16, bottom: 8),
         child: Row(
@@ -686,27 +608,22 @@ class _HistoriquePageState extends State<HistoriquePage>
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
-                color: _hPrimary.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(20),
+                color: YekiColors.primaryDark.withValues(alpha: 0.1),
+                borderRadius: YekiRadius.borderRadiusXl,
               ),
               child: Text(
                 label,
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  color: _hPrimary,
-                ),
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: YekiColors.primaryDark),
               ),
             ),
             const SizedBox(width: 8),
             Expanded(
-              child: Divider(color: Colors.grey.shade200, height: 1),
+              child: Divider(color: YekiColors.borderLight, height: 1),
             ),
           ],
         ),
       );
 
-  // ── Carte activité ───────────────────────────────────────────────
   Widget _buildActiviteCard(Map<String, dynamic> activite) {
     final action = activite['action']?.toString() ?? '';
     final label = activite['action_label']?.toString() ?? action;
@@ -720,16 +637,10 @@ class _HistoriquePageState extends State<HistoriquePage>
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.grey.shade100),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.03),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        color: YekiColors.white,
+        borderRadius: YekiRadius.borderRadiusLg,
+        border: Border.all(color: YekiColors.borderLight),
+        boxShadow: YekiShadows.subtle,
       ),
       child: Theme(
         data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
@@ -740,18 +651,14 @@ class _HistoriquePageState extends State<HistoriquePage>
             width: 40,
             height: 40,
             decoration: BoxDecoration(
-              color: color.withOpacity(0.12),
-              borderRadius: BorderRadius.circular(10),
+              color: color.withValues(alpha: 0.12),
+              borderRadius: YekiRadius.borderRadiusSm,
             ),
             child: Icon(icon, color: color, size: 20),
           ),
           title: Text(
             label,
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: _hDark,
-            ),
+            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
           ),
           subtitle: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -759,34 +666,24 @@ class _HistoriquePageState extends State<HistoriquePage>
               if (description.isNotEmpty)
                 Text(
                   description,
-                  style: const TextStyle(fontSize: 11, color: Colors.grey),
+                  style: const TextStyle(fontSize: 11),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
               const SizedBox(height: 2),
               Text(
                 _formatTime(ts),
-                style: TextStyle(
-                  fontSize: 10,
-                  color: color.withOpacity(0.8),
-                  fontWeight: FontWeight.w500,
-                ),
+                style: TextStyle(fontSize: 10, color: color.withValues(alpha: 0.8), fontWeight: FontWeight.w500),
               ),
             ],
           ),
-          // Expansion → données détaillées
           children: data.isEmpty
               ? [
                   Padding(
                     padding: const EdgeInsets.only(top: 4),
                     child: Text(
-                      description.isEmpty
-                          ? 'Aucun détail disponible.'
-                          : description,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey,
-                      ),
+                      description.isEmpty ? 'Aucun détail disponible.' : description,
+                      style: const TextStyle(fontSize: 12),
                     ),
                   ),
                 ]
@@ -802,20 +699,13 @@ class _HistoriquePageState extends State<HistoriquePage>
                             width: 110,
                             child: Text(
                               _formatKey(e.key),
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.grey.shade500,
-                              ),
+                              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
                             ),
                           ),
                           Expanded(
                             child: Text(
                               e.value?.toString() ?? '—',
-                              style: const TextStyle(
-                                fontSize: 11,
-                                color: _hDark,
-                              ),
+                              style: const TextStyle(fontSize: 11),
                             ),
                           ),
                         ],
@@ -828,7 +718,6 @@ class _HistoriquePageState extends State<HistoriquePage>
     );
   }
 
-  // ── Formater les clés de données ─────────────────────────────────
   String _formatKey(String key) {
     final map = {
       'titre': 'Titre',
@@ -859,7 +748,6 @@ class _HistoriquePageState extends State<HistoriquePage>
     return map[key] ?? key.replaceAll('_', ' ');
   }
 
-  // ── État vide ────────────────────────────────────────────────────
   Widget _buildEmptyState() {
     final filter = _filters.firstWhere(
       (f) => f.key == _selectedCategory,
@@ -875,25 +763,17 @@ class _HistoriquePageState extends State<HistoriquePage>
             Container(
               padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
-                color: _hPrimary.withOpacity(0.07),
+                color: YekiColors.primaryDark.withValues(alpha: 0.07),
                 shape: BoxShape.circle,
               ),
-              child: Icon(
-                filter.icon,
-                size: 48,
-                color: _hPrimary.withOpacity(0.4),
-              ),
+              child: Icon(filter.icon, size: 48, color: YekiColors.primaryDark.withValues(alpha: 0.4)),
             ),
             const SizedBox(height: 20),
             Text(
               _selectedCategory.isEmpty
                   ? 'Aucune activité enregistrée'
                   : 'Aucune activité "${filter.label}"',
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: _hDark,
-              ),
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
             Text(
@@ -901,7 +781,7 @@ class _HistoriquePageState extends State<HistoriquePage>
                   ? 'Vos actions apparaîtront ici\nau fur et à mesure.'
                   : 'Essayez un autre filtre.',
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 13, color: Colors.grey),
+              style: const TextStyle(fontSize: 13),
             ),
             if (_selectedCategory.isNotEmpty) ...[
               const SizedBox(height: 16),
@@ -920,70 +800,21 @@ class _HistoriquePageState extends State<HistoriquePage>
     );
   }
 
-  // ── État erreur ──────────────────────────────────────────────────
   Widget _buildErrorState() => Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.cloud_off, size: 48, color: Colors.grey.shade300),
+            Icon(Icons.cloud_off, size: 48, color: YekiColors.borderLight),
             const SizedBox(height: 16),
-            Text(
-              _error,
-              style: const TextStyle(color: Colors.grey),
-            ),
+            Text(_error, style: const TextStyle()),
             const SizedBox(height: 16),
-            ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(backgroundColor: _hPrimary),
+            YekiButton(
+              label: 'Réessayer',
+              icon: Icons.refresh,
               onPressed: _chargerTout,
-              icon: const Icon(Icons.refresh, color: Colors.white),
-              label: const Text(
-                'Réessayer',
-                style: TextStyle(color: Colors.white),
-              ),
+              width: 160,
             ),
           ],
         ),
       );
-}
-
-
-// ═══════════════════════════════════════════════════════════════════
-//  MODÈLE
-// ═══════════════════════════════════════════════════════════════════
-class HistoriqueAction {
-  final int id;
-  final String action;
-  final String actionLabel;
-  final String description;
-  final DateTime timestamp;
-  final Map<String, dynamic> data;
-  final int? objetId;
-  final String objetType;
-  final String userNom;
-
-  HistoriqueAction({
-    required this.id,
-    required this.action,
-    required this.actionLabel,
-    required this.description,
-    required this.timestamp,
-    required this.data,
-    this.objetId,
-    this.objetType = '',
-    this.userNom = '',
-  });
-
-  factory HistoriqueAction.fromJson(Map<String, dynamic> json) {
-    return HistoriqueAction(
-      id:          json['id'] ?? 0,
-      action:      json['action'] ?? '',
-      actionLabel: json['action_label'] ?? json['action'] ?? '',
-      description: json['description'] ?? '',
-      timestamp:   DateTime.parse(json['timestamp'].toString()),
-      data:        Map<String, dynamic>.from(json['data'] ?? {}),
-      objetId:     json['objet_id'] as int?,
-      objetType:   json['objet_type'] ?? '',
-      userNom:     json['user_nom'] ?? '',
-    );
-  }
 }

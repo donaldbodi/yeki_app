@@ -1,47 +1,16 @@
 // lib/views/pages/enseignants/enseignant_admin_dashboard_page.dart
+// ═══════════════════════════════════════════════════════════════════════════
+// ENSEIGNANT ADMIN DASHBOARD — CORRIGÉ
+// ═══════════════════════════════════════════════════════════════════════════
 
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:yeki/core/theme/app_theme.dart';
+import 'package:yeki/core/constants/api_constants.dart';
+import 'package:yeki/utils/error_handler.dart';
 import 'cadre_dashboard_page.dart' show TabBarDelegate;
-
-// Palette harmonisée
-const Color brandPrimary = Color(0xFF135F74);
-const Color brandGold = Color(0xFFC5A059);
-const Color textMain = Color(0xFF0F172A);
-const Color textSub = Color(0xFF64748B);
-const Color _borderLight = Color(0xFFE0E4E8);
-const Color _borderMedium = Color(0xFFD0D4D8);
-const Color _bgLight = Color(0xFFF8FAFC);
-const Color _white = Color(0xFFFFFFFF);
-const Color _green = Color(0xFF10B981);
-const Color _orange = Color(0xFFF97316);
-const Color _purple = Color(0xFF8B5CF6);
-const Color _red = Color(0xFFEF4444);
-const Color _white24 = Color(0x3DFFFFFF);
-const Color _white70 = Color(0xB3FFFFFF);
-
-const String _baseUrl = 'https://yeki.pythonanywhere.com/api';
-
-const Map<String, String> _typeDeptLabels = {
-  'normal':    'Département',
-  'classique': 'Formation Classique',
-  'metier':    'Formation Métier',
-  'concours':  'Prépa Concours',
-};
-const Map<String, IconData> _typeDeptIcons = {
-  'normal':    Icons.domain_rounded,
-  'classique': Icons.account_balance_rounded,
-  'metier':    Icons.work_rounded,
-  'concours':  Icons.emoji_events_rounded,
-};
-const Map<String, Color> _typeDeptColors = {
-  'normal':    brandPrimary,
-  'classique': Colors.teal,
-  'metier':    brandGold,
-  'concours':  _purple,
-};
 
 class EnseignantAdminDashboardPage extends StatefulWidget {
   const EnseignantAdminDashboardPage({super.key});
@@ -101,8 +70,8 @@ class _EnseignantAdminDashboardPageState
     }
     try {
       final res = await http.get(
-        Uri.parse('$_baseUrl/enseignant/admin/dashboard/'),
-        headers: {'Authorization': 'Token $token'},
+        Uri.parse(ApiConstants.enseignantAdminDashboard),
+        headers: ApiHeaders.auth(token),
       );
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body) as Map<String, dynamic>;
@@ -120,11 +89,11 @@ class _EnseignantAdminDashboardPageState
         });
       } else {
         setState(() => _loading = false);
-        _showMsg('Erreur chargement (${res.statusCode})', error: true);
+        ErrorHandler.showError(context, 'Erreur chargement (${res.statusCode})');
       }
     } catch (_) {
       setState(() => _loading = false);
-      _showMsg('Erreur réseau', error: true);
+      ErrorHandler.showError(context, 'Erreur réseau');
     }
   }
 
@@ -133,17 +102,17 @@ class _EnseignantAdminDashboardPageState
     final nbEnAttente = _deptsEnAttente.length + _olympiadesEnAttente.length;
 
     return Scaffold(
-      backgroundColor: _bgLight,
+      backgroundColor: YekiColors.backgroundLight,
       floatingActionButton: _nomParcours.isNotEmpty
           ? FloatingActionButton(
-              backgroundColor: brandPrimary,
+              backgroundColor: YekiColors.primaryDark,
               elevation: 4,
-              child: const Icon(Icons.add_rounded, color: _white, size: 28),
+              child: const Icon(Icons.add_rounded, color: YekiColors.white, size: 28),
               onPressed: _creerDepartement,
             )
           : null,
       body: _loading
-          ? const Center(child: CircularProgressIndicator(color: brandPrimary))
+          ? const Center(child: YekiLoader())
           : NestedScrollView(
               headerSliverBuilder: (_, __) => [_buildAppBar(), _buildTabBar(nbEnAttente)],
               body: TabBarView(
@@ -162,16 +131,16 @@ class _EnseignantAdminDashboardPageState
   SliverAppBar _buildAppBar() => SliverAppBar(
     expandedHeight: 260,
     pinned: true,
-    backgroundColor: brandPrimary,
+    backgroundColor: YekiColors.primaryDark,
     actions: [
-      IconButton(icon: const Icon(Icons.refresh, color: _white), onPressed: _charger),
+      IconButton(icon: const Icon(Icons.refresh, color: YekiColors.white), onPressed: _charger),
     ],
     flexibleSpace: FlexibleSpaceBar(
       collapseMode: CollapseMode.parallax,
       background: Container(
         decoration: BoxDecoration(
           gradient: LinearGradient(
-            colors: [brandPrimary, brandPrimary.withOpacity(0.85)],
+            colors: [YekiColors.primaryDark, YekiColors.primaryDark.withValues(alpha: 0.85)],
             begin: Alignment.topLeft, end: Alignment.bottomRight,
           ),
         ),
@@ -185,13 +154,13 @@ class _EnseignantAdminDashboardPageState
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
-                    color: brandGold.withOpacity(0.2),
+                    color: YekiColors.accent.withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(16),
                   ),
                   child: const Text(
                     "ADMIN",
                     style: TextStyle(
-                      color: brandGold,
+                      color: YekiColors.accent,
                       fontSize: 9,
                       fontWeight: FontWeight.w800,
                       letterSpacing: 1.2,
@@ -201,11 +170,7 @@ class _EnseignantAdminDashboardPageState
                 const SizedBox(height: 12),
                 Text(
                   _nomEnseignant.isEmpty ? 'Enseignant Admin' : _nomEnseignant,
-                  style: const TextStyle(
-                    color: _white,
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -213,12 +178,12 @@ class _EnseignantAdminDashboardPageState
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
-                    color: _white.withOpacity(0.15),
+                    color: YekiColors.white.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: const Text(
                     'Enseignant Administrateur',
-                    style: TextStyle(color: _white, fontSize: 11, fontWeight: FontWeight.w500),
+                    style: TextStyle(color: YekiColors.white, fontSize: 11, fontWeight: FontWeight.w500),
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -236,17 +201,17 @@ class _EnseignantAdminDashboardPageState
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
         decoration: BoxDecoration(
-          color: _orange.withOpacity(0.2),
+          color: YekiColors.warning.withValues(alpha: 0.2),
           borderRadius: BorderRadius.circular(16),
         ),
         child: const Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.warning_amber_rounded, color: _orange, size: 12),
+            Icon(Icons.warning_amber_rounded, color: YekiColors.warning, size: 12),
             SizedBox(width: 6),
             Text(
               'Aucun parcours assigné',
-              style: TextStyle(color: _orange, fontSize: 11, fontWeight: FontWeight.w500),
+              style: TextStyle(color: YekiColors.warning, fontSize: 11, fontWeight: FontWeight.w500),
             ),
           ],
         ),
@@ -263,18 +228,18 @@ class _EnseignantAdminDashboardPageState
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: brandGold.withOpacity(0.15),
+        color: YekiColors.accent.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(16),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.workspace_premium, color: brandGold, size: 12),
+          const Icon(Icons.workspace_premium, color: YekiColors.accent, size: 12),
           const SizedBox(width: 6),
           Flexible(
             child: Text(
               'Coordonnateur · $_nomParcours ($typeLabel)',
-              style: const TextStyle(color: _white, fontSize: 11),
+              style: const TextStyle(color: YekiColors.white, fontSize: 11),
               overflow: TextOverflow.ellipsis,
             ),
           ),
@@ -289,9 +254,9 @@ class _EnseignantAdminDashboardPageState
         delegate: TabBarDelegate(
           TabBar(
             controller: _tabCtrl,
-            labelColor: brandPrimary,
-            unselectedLabelColor: textSub,
-            indicatorColor: brandPrimary,
+            labelColor: YekiColors.primaryDark,
+            unselectedLabelColor: YekiColors.textLight,
+            indicatorColor: YekiColors.primaryDark,
             isScrollable: true,
             tabAlignment: TabAlignment.start,
             labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
@@ -306,11 +271,11 @@ class _EnseignantAdminDashboardPageState
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
-                        color: _red,
-                        borderRadius: BorderRadius.circular(10),
+                        color: YekiColors.error,
+                        borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text('$nbEnAttente',
-                          style: const TextStyle(color: _white, fontSize: 10, fontWeight: FontWeight.w800)),
+                          style: const TextStyle(color: YekiColors.white, fontSize: 10, fontWeight: FontWeight.w800)),
                     ),
                   ],
                 ]),
@@ -318,16 +283,13 @@ class _EnseignantAdminDashboardPageState
               const Tab(text: 'Statistiques'),
             ],
           ),
-          backgroundColor: _white,
+          backgroundColor: YekiColors.white,
         ),
       );
 
-  // ═══════════════════════════════════════════════════════════════
-  //  TAB 1 : Départements
-  // ═══════════════════════════════════════════════════════════════
   Widget _tabDepartements() => RefreshIndicator(
     onRefresh: _charger,
-    color: brandPrimary,
+    color: YekiColors.primaryDark,
     child: ListView(
       padding: const EdgeInsets.all(16),
       children: [
@@ -347,16 +309,16 @@ class _EnseignantAdminDashboardPageState
       return Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: _orange.withOpacity(0.08),
+          color: YekiColors.warning.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: _orange.withOpacity(0.3)),
+          border: Border.all(color: YekiColors.warning.withValues(alpha: 0.3)),
         ),
         child: const Row(children: [
-          Icon(Icons.warning_amber_rounded, color: _orange, size: 22),
+          Icon(Icons.warning_amber_rounded, color: YekiColors.warning, size: 22),
           SizedBox(width: 12),
           Expanded(child: Text(
             'Aucun parcours ne vous est encore assigné.\nContactez l\'administrateur général.',
-            style: TextStyle(color: _orange, fontSize: 13),
+            style: TextStyle(color: YekiColors.warning, fontSize: 13),
           )),
         ]),
       );
@@ -372,39 +334,39 @@ class _EnseignantAdminDashboardPageState
     return Container(
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [brandPrimary, brandPrimary.withOpacity(0.85)],
+          colors: [YekiColors.primaryDark, YekiColors.primaryDark.withValues(alpha: 0.85)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(16),
       ),
       padding: const EdgeInsets.all(20),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
           Container(
             padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(color: _white.withOpacity(0.15), borderRadius: BorderRadius.circular(12)),
-            child: Icon(typeIcon, color: brandGold, size: 22),
+            decoration: BoxDecoration(color: YekiColors.white.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(12)),
+            child: Icon(typeIcon, color: YekiColors.accent, size: 22),
           ),
           const SizedBox(width: 12),
-          const Expanded(
+          Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('Mon parcours', style: TextStyle(color: _white70, fontSize: 12)),
-              Text('Coordonnateur', style: TextStyle(color: _white, fontSize: 13, fontWeight: FontWeight.w600)),
+              Text('Mon parcours', style: TextStyle(color: YekiColors.white.withValues(alpha: 0.7), fontSize: 12)),
+              Text('Coordonnateur', style: TextStyle(color: YekiColors.white, fontSize: 13, fontWeight: FontWeight.w600)),
             ]),
           ),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-            decoration: BoxDecoration(color: _white.withOpacity(0.15), borderRadius: BorderRadius.circular(20)),
+            decoration: BoxDecoration(color: YekiColors.white.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(20)),
             child: Text('${_departements.length} dép.',
-                style: const TextStyle(color: _white, fontSize: 12)),
+                style: const TextStyle(color: YekiColors.white, fontSize: 12)),
           ),
         ]),
         const SizedBox(height: 14),
-        const Divider(color: _white24, height: 1),
+        Divider(color: YekiColors.white.withValues(alpha: 0.24), height: 1),
         const SizedBox(height: 14),
         Text(_nomParcours,
-            style: const TextStyle(color: _white, fontSize: 20, fontWeight: FontWeight.bold)),
+            style: const TextStyle(color: YekiColors.white, fontSize: 20, fontWeight: FontWeight.bold)),
         const SizedBox(height: 8),
         Row(children: [
           _quickStat('${_stats['nb_cours'] ?? 0}', 'cours'),
@@ -420,8 +382,8 @@ class _EnseignantAdminDashboardPageState
   Widget _quickStat(String val, String label) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      Text(val, style: const TextStyle(color: _white, fontWeight: FontWeight.w800, fontSize: 18)),
-      Text(label, style: const TextStyle(color: _white70, fontSize: 10)),
+      Text(val, style: const TextStyle(color: YekiColors.white, fontWeight: FontWeight.w800, fontSize: 18)),
+      Text(label, style: TextStyle(color: YekiColors.white.withValues(alpha: 0.7), fontSize: 10)),
     ],
   );
 
@@ -432,12 +394,14 @@ class _EnseignantAdminDashboardPageState
         Container(
           padding: const EdgeInsets.all(24),
           decoration: BoxDecoration(
-            color: brandPrimary.withOpacity(0.08),
+            color: YekiColors.primaryDark.withValues(alpha: 0.08),
             shape: BoxShape.circle,
-            border: Border.all(color: brandPrimary.withOpacity(0.2), width: 1),
+            border: Border.all(color: YekiColors.primaryDark.withValues(alpha: 0.2), width: 1),
           ),
-          child: Icon(_typeDeptIcons[_typeDeptOptions.first] ?? Icons.domain_rounded,
-              size: 48, color: brandPrimary),
+          child: Icon(_typeDeptOptions.isNotEmpty 
+              ? Icons.domain_rounded 
+              : Icons.school_rounded,
+              size: 48, color: YekiColors.primaryDark),
         ),
         const SizedBox(height: 16),
         Text(_typeParcours == 'prepa'
@@ -445,10 +409,10 @@ class _EnseignantAdminDashboardPageState
             : _typeParcours == 'formation'
                 ? 'Aucune formation créée'
                 : 'Aucun département créé',
-            style: const TextStyle(color: textSub, fontSize: 16, fontWeight: FontWeight.w600)),
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
         const SizedBox(height: 8),
         Text('Commencez par créer votre premier élément',
-            style: TextStyle(color: textSub, fontSize: 13)),
+            style: const TextStyle(fontSize: 13)),
       ]),
     ),
   );
@@ -460,24 +424,22 @@ class _EnseignantAdminDashboardPageState
     final nbCours = dept['nb_cours'] as int? ?? 0;
     final nbIns = dept['nb_inscrits'] as int? ?? 0;
     final cadre = dept['cadre'] as Map?;
-    final color = _typeDeptColors[typeDept] ?? brandPrimary;
+    final color = _typeDeptColors[typeDept] ?? YekiColors.primaryDark;
     final icon = _typeDeptIcons[typeDept] ?? Icons.domain_rounded;
     final label = _typeDeptLabels[typeDept] ?? 'Département';
-    
-    // ⚠️ CORRECTION : Récupérer le statut de validation depuis les données
     final statutValidation = dept['statut_validation'] as String? ?? (estValide ? 'valide' : 'attente');
 
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
       decoration: BoxDecoration(
-        color: _white,
-        borderRadius: BorderRadius.circular(18),
+        color: YekiColors.white,
+        borderRadius: BorderRadius.circular(16),
         border: estValide
-            ? Border.all(color: _borderLight, width: 1)
-            : Border.all(color: _orange.withOpacity(0.5), width: 1.5),
+            ? Border.all(color: YekiColors.borderLight, width: 1)
+            : Border.all(color: YekiColors.warning.withValues(alpha: 0.5), width: 1.5),
       ),
       child: InkWell(
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(16),
         onTap: () => _voirDetailDepartement(dept),
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -486,24 +448,24 @@ class _EnseignantAdminDashboardPageState
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: color.withOpacity(0.1),
+                  color: color.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: color.withOpacity(0.2), width: 0.8),
+                  border: Border.all(color: color.withValues(alpha: 0.2), width: 0.8),
                 ),
                 child: Icon(icon, color: color, size: 22),
               ),
               const SizedBox(width: 12),
               Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text(dept['nom'] ?? '',
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: textMain)),
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
                 const SizedBox(height: 4),
                 Row(children: [
                   _miniChip(label, color),
                   const SizedBox(width: 6),
                   if (prix > 0)
-                    _miniChip('$prix FCFA', brandGold)
+                    _miniChip('$prix FCFA', YekiColors.accent)
                   else
-                    _miniChip('Gratuit', _green),
+                    _miniChip('Gratuit', YekiColors.success),
                 ]),
               ])),
               IconButton(
@@ -518,35 +480,34 @@ class _EnseignantAdminDashboardPageState
               Row(children: [
                 CircleAvatar(
                   radius: 11,
-                  backgroundColor: _purple.withOpacity(0.1),
-                  child: Icon(Icons.person, size: 14, color: _purple),
+                  backgroundColor: YekiColors.purple.withValues(alpha: 0.1),
+                  child: Icon(Icons.person, size: 14, color: YekiColors.purple),
                 ),
                 const SizedBox(width: 8),
                 Text('Cadre : ${cadre['nom'] ?? cadre['username'] ?? ''}',
-                    style: const TextStyle(fontSize: 12, color: textSub)),
+                    style: const TextStyle(fontSize: 12)),
               ])
             else
               _aucunCadreBadge(),
             const SizedBox(height: 10),
             Row(children: [
-              Icon(Icons.book_outlined, size: 13, color: textSub),
+              Icon(Icons.book_outlined, size: 13),
               const SizedBox(width: 4),
-              Text('$nbCours cours', style: TextStyle(color: textSub, fontSize: 12)),
+              Text('$nbCours cours', style: const TextStyle(fontSize: 12)),
               const SizedBox(width: 12),
-              Icon(Icons.people_outlined, size: 13, color: textSub),
+              Icon(Icons.people_outlined, size: 13),
               const SizedBox(width: 4),
-              Text('$nbIns inscrits', style: TextStyle(color: textSub, fontSize: 12)),
+              Text('$nbIns inscrits', style: const TextStyle(fontSize: 12)),
               const Spacer(),
-              // ⚠️ CORRECTION : Affichage conditionnel basé sur statutValidation
               if (statutValidation == 'attente')
                 _buildBoutonsValidation(dept)
               else if (statutValidation == 'refuse')
                 _buildRefuseBadge(dept)
               else
                 Row(children: [
-                  Icon(Icons.check_circle_rounded, size: 13, color: _green),
+                  Icon(Icons.check_circle_rounded, size: 13, color: YekiColors.success),
                   const SizedBox(width: 4),
-                  Text('Validé', style: TextStyle(fontSize: 11, color: _green, fontWeight: FontWeight.w600)),
+                  Text('Validé', style: TextStyle(fontSize: 11, color: YekiColors.success, fontWeight: FontWeight.w600)),
                 ]),
             ]),
           ]),
@@ -555,27 +516,26 @@ class _EnseignantAdminDashboardPageState
     );
   }
 
-  // ⚠️ AJOUT : Widget extrait pour les boutons de validation
   Widget _buildBoutonsValidation(Map<String, dynamic> dept) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: _orange.withOpacity(0.08),
+        color: YekiColors.warning.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: _orange.withOpacity(0.3)),
+        border: Border.all(color: YekiColors.warning.withValues(alpha: 0.3)),
       ),
       child: Row(mainAxisSize: MainAxisSize.min, children: [
-        const Icon(Icons.hourglass_top_rounded, size: 11, color: _orange),
+        const Icon(Icons.hourglass_top_rounded, size: 11, color: YekiColors.warning),
         const SizedBox(width: 4),
-        const Text('À valider', style: TextStyle(fontSize: 10, color: _orange, fontWeight: FontWeight.w700)),
+        const Text('À valider', style: TextStyle(fontSize: 10, color: YekiColors.warning, fontWeight: FontWeight.w700)),
         const SizedBox(width: 6),
         GestureDetector(
           onTap: () => _validerDepartement(dept['id'] as int, dept['nom'] ?? ''),
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-            decoration: BoxDecoration(color: _green, borderRadius: BorderRadius.circular(6)),
+            decoration: BoxDecoration(color: YekiColors.success, borderRadius: BorderRadius.circular(8)),
             child: const Text('Valider',
-                style: TextStyle(color: _white, fontSize: 9, fontWeight: FontWeight.w800)),
+                style: TextStyle(color: YekiColors.white, fontSize: 9, fontWeight: FontWeight.w800)),
           ),
         ),
         const SizedBox(width: 6),
@@ -583,16 +543,15 @@ class _EnseignantAdminDashboardPageState
           onTap: () => _showRefusDialogDepartement(dept['id'] as int, dept['nom'] ?? ''),
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-            decoration: BoxDecoration(color: _red, borderRadius: BorderRadius.circular(6)),
+            decoration: BoxDecoration(color: YekiColors.error, borderRadius: BorderRadius.circular(8)),
             child: const Text('Refuser',
-                style: TextStyle(color: _white, fontSize: 9, fontWeight: FontWeight.w800)),
+                style: TextStyle(color: YekiColors.white, fontSize: 9, fontWeight: FontWeight.w800)),
           ),
         ),
       ]),
     );
   }
 
-  // ⚠️ AJOUT : Widget pour badge "Refusé"
   Widget _buildRefuseBadge(Map<String, dynamic> dept) {
     final motifRefus = dept['motif_refus'] as String? ?? '';
     return Column(
@@ -601,49 +560,46 @@ class _EnseignantAdminDashboardPageState
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
           decoration: BoxDecoration(
-            color: _red.withOpacity(0.08),
+            color: YekiColors.error.withValues(alpha: 0.08),
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: _red.withOpacity(0.3)),
+            border: Border.all(color: YekiColors.error.withValues(alpha: 0.3)),
           ),
           child: Row(mainAxisSize: MainAxisSize.min, children: [
-            const Icon(Icons.cancel_rounded, size: 11, color: _red),
+            const Icon(Icons.cancel_rounded, size: 11, color: YekiColors.error),
             const SizedBox(width: 4),
-            const Text('Refusé', style: TextStyle(fontSize: 10, color: _red, fontWeight: FontWeight.w700)),
+            const Text('Refusé', style: TextStyle(fontSize: 10, color: YekiColors.error, fontWeight: FontWeight.w700)),
           ]),
         ),
         if (motifRefus.isNotEmpty) ...[
           const SizedBox(height: 4),
           Text('Motif : $motifRefus',
-              style: const TextStyle(fontSize: 10, color: _red, fontStyle: FontStyle.italic),
+              style: const TextStyle(fontSize: 10, color: YekiColors.error, fontStyle: FontStyle.italic),
               maxLines: 1, overflow: TextOverflow.ellipsis),
         ],
       ],
     );
   }
 
-  // ═══════════════════════════════════════════════════════════════
-  //  TAB 2 : Cadres
-  // ═══════════════════════════════════════════════════════════════
   Widget _tabCadres() {
     if (_cadres.isEmpty) {
       return Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
         Container(
           padding: const EdgeInsets.all(24),
           decoration: BoxDecoration(
-            color: brandPrimary.withOpacity(0.08),
+            color: YekiColors.primaryDark.withValues(alpha: 0.08),
             shape: BoxShape.circle,
-            border: Border.all(color: brandPrimary.withOpacity(0.2), width: 1),
+            border: Border.all(color: YekiColors.primaryDark.withValues(alpha: 0.2), width: 1),
           ),
-          child: Icon(Icons.person_outline_rounded, size: 48, color: brandPrimary),
+          child: Icon(Icons.person_outline_rounded, size: 48, color: YekiColors.primaryDark),
         ),
         const SizedBox(height: 16),
         Text('Aucun enseignant cadre',
-            style: TextStyle(color: textSub, fontSize: 16, fontWeight: FontWeight.w600)),
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
       ]));
     }
     return RefreshIndicator(
       onRefresh: _charger,
-      color: brandPrimary,
+      color: YekiColors.primaryDark,
       child: ListView.builder(
         padding: const EdgeInsets.all(16),
         itemCount: _cadres.length,
@@ -657,37 +613,34 @@ class _EnseignantAdminDashboardPageState
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
-        color: _white,
+        color: YekiColors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _borderLight, width: 1),
+        border: Border.all(color: YekiColors.borderLight, width: 1),
       ),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Row(children: [
           CircleAvatar(
             radius: 26,
-            backgroundColor: _purple.withOpacity(0.1),
+            backgroundColor: YekiColors.purple.withValues(alpha: 0.1),
             child: Text((cadre['nom'] ?? 'C')[0].toUpperCase(),
-                style: const TextStyle(color: _purple, fontWeight: FontWeight.bold, fontSize: 18)),
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
           ),
           const SizedBox(width: 14),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(cadre['nom'] ?? cadre['username'] ?? '',
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: textMain)),
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
             if (dept != null)
               Text(dept['nom'] ?? '',
-                  style: const TextStyle(fontSize: 12, color: _purple)),
+                  style: const TextStyle(fontSize: 12, color: YekiColors.purple)),
             Text('${cadre['nb_cours'] ?? 0} cours · ${cadre['nb_apprenants'] ?? 0} apprenants',
-                style: const TextStyle(fontSize: 12, color: textSub)),
+                style: const TextStyle(fontSize: 12)),
           ])),
         ]),
       ),
     );
   }
 
-  // ═══════════════════════════════════════════════════════════════
-  //  TAB 3 : En attente de validation
-  // ═══════════════════════════════════════════════════════════════
   Widget _tabEnAttente() {
     final total = _deptsEnAttente.length + _olympiadesEnAttente.length;
     if (total == 0) {
@@ -695,29 +648,29 @@ class _EnseignantAdminDashboardPageState
         Container(
           padding: const EdgeInsets.all(24),
           decoration: BoxDecoration(
-            color: _green.withOpacity(0.08),
+            color: YekiColors.success.withValues(alpha: 0.08),
             shape: BoxShape.circle,
-            border: Border.all(color: _green.withOpacity(0.2), width: 1),
+            border: Border.all(color: YekiColors.success.withValues(alpha: 0.2), width: 1),
           ),
-          child: Icon(Icons.check_circle_outline_rounded, size: 48, color: _green),
+          child: Icon(Icons.check_circle_outline_rounded, size: 48, color: YekiColors.success),
         ),
         const SizedBox(height: 16),
-        Text('Tout est validé !', style: TextStyle(color: textSub, fontSize: 16, fontWeight: FontWeight.w600)),
+        Text('Tout est validé !', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
       ]));
     }
     return RefreshIndicator(
       onRefresh: _charger,
-      color: brandPrimary,
+      color: YekiColors.primaryDark,
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
           if (_deptsEnAttente.isNotEmpty) ...[
-            _sectionTitle('Départements à valider', Icons.domain_rounded, _orange),
+            _sectionTitle('Départements à valider', Icons.domain_rounded, YekiColors.warning),
             ..._deptsEnAttente.map((d) => _buildDeptEnAttenteCard(d as Map<String, dynamic>)),
             const SizedBox(height: 16),
           ],
           if (_olympiadesEnAttente.isNotEmpty) ...[
-            _sectionTitle('Olympiades à valider', Icons.military_tech_rounded, _orange),
+            _sectionTitle('Olympiades à valider', Icons.military_tech_rounded, YekiColors.warning),
             ..._olympiadesEnAttente.map((o) => _buildOlympiadeEnAttenteCard(o as Map<String, dynamic>)),
           ],
           const SizedBox(height: 80),
@@ -728,7 +681,7 @@ class _EnseignantAdminDashboardPageState
 
   Widget _buildDeptEnAttenteCard(Map<String, dynamic> dept) {
     final typeDept = dept['type_dept'] as String? ?? 'normal';
-    final color = _typeDeptColors[typeDept] ?? brandPrimary;
+    final color = _typeDeptColors[typeDept] ?? YekiColors.primaryDark;
     final icon = _typeDeptIcons[typeDept] ?? Icons.domain_rounded;
     final label = _typeDeptLabels[typeDept] ?? 'Département';
     final nom = dept['nom'] ?? '';
@@ -740,24 +693,24 @@ class _EnseignantAdminDashboardPageState
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: _white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: statutValidation == 'refuse' ? _red.withOpacity(0.5) : _orange.withOpacity(0.5), width: 1.5),
+        color: YekiColors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: statutValidation == 'refuse' ? YekiColors.error.withValues(alpha: 0.5) : YekiColors.warning.withValues(alpha: 0.5), width: 1.5),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(10),
+              color: color.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
             ),
             child: Icon(icon, color: color, size: 18),
           ),
           const SizedBox(width: 10),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(nom,
-                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: textMain),
+                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis),
             Text(label, style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w600)),
@@ -765,13 +718,13 @@ class _EnseignantAdminDashboardPageState
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(
-              color: statutValidation == 'refuse' ? _red.withOpacity(0.1) : _orange.withOpacity(0.1),
+              color: statutValidation == 'refuse' ? YekiColors.error.withValues(alpha: 0.1) : YekiColors.warning.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Text(
               statutValidation == 'refuse' ? 'Refusé' : 'En attente',
               style: TextStyle(
-                color: statutValidation == 'refuse' ? _red : _orange,
+                color: statutValidation == 'refuse' ? YekiColors.error : YekiColors.warning,
                 fontSize: 11,
                 fontWeight: FontWeight.w700,
               ),
@@ -783,18 +736,15 @@ class _EnseignantAdminDashboardPageState
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: _red.withOpacity(0.08),
+              color: YekiColors.error.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Row(
               children: [
-                Icon(Icons.warning_amber_rounded, color: _red, size: 14),
+                Icon(Icons.warning_amber_rounded, color: YekiColors.error, size: 14),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: Text(
-                    'Motif : $motifRefus',
-                    style: const TextStyle(color: _red, fontSize: 12),
-                  ),
+                  child: Text('Motif : $motifRefus', style: TextStyle(color: YekiColors.error, fontSize: 12)),
                 ),
               ],
             ),
@@ -802,8 +752,7 @@ class _EnseignantAdminDashboardPageState
         ],
         if (cadre != null) ...[
           const SizedBox(height: 8),
-          Text('Cadre : ${cadre['nom'] ?? ''}',
-              style: const TextStyle(color: textSub, fontSize: 12)),
+          Text('Cadre : ${cadre['nom'] ?? ''}', style: const TextStyle(fontSize: 12)),
         ],
         if (statutValidation == 'attente') ...[
           const SizedBox(height: 12),
@@ -814,11 +763,11 @@ class _EnseignantAdminDashboardPageState
                 icon: const Icon(Icons.check_rounded, size: 16),
                 label: const Text('Valider'),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: _green,
-                  foregroundColor: _white,
+                  backgroundColor: YekiColors.success,
+                  foregroundColor: YekiColors.white,
                   elevation: 0,
                   padding: const EdgeInsets.symmetric(vertical: 10),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 ),
               ),
             ),
@@ -829,10 +778,10 @@ class _EnseignantAdminDashboardPageState
                 icon: const Icon(Icons.close_rounded, size: 16),
                 label: const Text('Refuser'),
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: _red,
-                  side: const BorderSide(color: _red),
+                  foregroundColor: YekiColors.error,
+                  side: const BorderSide(color: YekiColors.error),
                   padding: const EdgeInsets.symmetric(vertical: 10),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 ),
               ),
             ),
@@ -852,38 +801,38 @@ class _EnseignantAdminDashboardPageState
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: _white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: statutValidation == 'refuse' ? _red.withOpacity(0.5) : _orange.withOpacity(0.5), width: 1.5),
+        color: YekiColors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: statutValidation == 'refuse' ? YekiColors.error.withValues(alpha: 0.5) : YekiColors.warning.withValues(alpha: 0.5), width: 1.5),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: brandGold.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(10),
+              color: YekiColors.accent.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
             ),
-            child: const Icon(Icons.military_tech_rounded, color: brandGold, size: 18),
+            child: const Icon(Icons.military_tech_rounded, color: YekiColors.accent, size: 18),
           ),
           const SizedBox(width: 10),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(nom,
-                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: textMain),
+                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis),
-            Text('Olympiade', style: TextStyle(color: brandGold, fontSize: 11, fontWeight: FontWeight.w600)),
+            Text('Olympiade', style: TextStyle(color: YekiColors.accent, fontSize: 11, fontWeight: FontWeight.w600)),
           ])),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(
-              color: statutValidation == 'refuse' ? _red.withOpacity(0.1) : _orange.withOpacity(0.1),
+              color: statutValidation == 'refuse' ? YekiColors.error.withValues(alpha: 0.1) : YekiColors.warning.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Text(
               statutValidation == 'refuse' ? 'Refusée' : 'En attente',
               style: TextStyle(
-                color: statutValidation == 'refuse' ? _red : _orange,
+                color: statutValidation == 'refuse' ? YekiColors.error : YekiColors.warning,
                 fontSize: 11,
                 fontWeight: FontWeight.w700,
               ),
@@ -895,18 +844,15 @@ class _EnseignantAdminDashboardPageState
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: _red.withOpacity(0.08),
+              color: YekiColors.error.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Row(
               children: [
-                Icon(Icons.warning_amber_rounded, color: _red, size: 14),
+                Icon(Icons.warning_amber_rounded, color: YekiColors.error, size: 14),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: Text(
-                    'Motif : $motifRefus',
-                    style: const TextStyle(color: _red, fontSize: 12),
-                  ),
+                  child: Text('Motif : $motifRefus', style: TextStyle(color: YekiColors.error, fontSize: 12)),
                 ),
               ],
             ),
@@ -914,8 +860,7 @@ class _EnseignantAdminDashboardPageState
         ],
         if (cadre != null) ...[
           const SizedBox(height: 8),
-          Text('Cadre : ${cadre['nom'] ?? ''}',
-              style: const TextStyle(color: textSub, fontSize: 12)),
+          Text('Cadre : ${cadre['nom'] ?? ''}', style: const TextStyle(fontSize: 12)),
         ],
         if (statutValidation == 'attente') ...[
           const SizedBox(height: 12),
@@ -926,11 +871,11 @@ class _EnseignantAdminDashboardPageState
                 icon: const Icon(Icons.check_rounded, size: 16),
                 label: const Text('Valider'),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: _green,
-                  foregroundColor: _white,
+                  backgroundColor: YekiColors.success,
+                  foregroundColor: YekiColors.white,
                   elevation: 0,
                   padding: const EdgeInsets.symmetric(vertical: 10),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 ),
               ),
             ),
@@ -941,10 +886,10 @@ class _EnseignantAdminDashboardPageState
                 icon: const Icon(Icons.close_rounded, size: 16),
                 label: const Text('Refuser'),
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: _red,
-                  side: const BorderSide(color: _red),
+                  foregroundColor: YekiColors.error,
+                  side: const BorderSide(color: YekiColors.error),
                   padding: const EdgeInsets.symmetric(vertical: 10),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 ),
               ),
             ),
@@ -954,15 +899,12 @@ class _EnseignantAdminDashboardPageState
     );
   }
 
-  // ═══════════════════════════════════════════════════════════════
-  //  TAB 4 : Statistiques
-  // ═══════════════════════════════════════════════════════════════
   Widget _tabStats() {
     final items = [
-      _SI('Départements', '${_stats['nb_departements'] ?? _departements.length}', Icons.domain, brandPrimary),
-      _SI('Cours', '${_stats['nb_cours'] ?? 0}', Icons.book, _purple),
+      _SI('Départements', '${_stats['nb_departements'] ?? _departements.length}', Icons.domain, YekiColors.primaryDark),
+      _SI('Cours', '${_stats['nb_cours'] ?? 0}', Icons.book, YekiColors.purple),
       _SI('Inscrits', '${_stats['nb_apprenants'] ?? 0}', Icons.people, Colors.teal),
-      _SI('Cadres', '${_stats['nb_enseignants'] ?? 0}', Icons.person_outline, _orange),
+      _SI('Cadres', '${_stats['nb_enseignants'] ?? 0}', Icons.person_outline, YekiColors.warning),
     ];
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
@@ -979,10 +921,10 @@ class _EnseignantAdminDashboardPageState
         if (_departements.isNotEmpty) ...[
           const SizedBox(height: 20),
           Row(children: [
-            Icon(Icons.leaderboard, color: brandPrimary, size: 18),
+            Icon(Icons.leaderboard, color: YekiColors.primaryDark, size: 18),
             const SizedBox(width: 8),
             const Text('Classement des départements',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: textMain)),
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
           ]),
           const SizedBox(height: 12),
           ..._departements.asMap().entries.map((e) {
@@ -993,9 +935,9 @@ class _EnseignantAdminDashboardPageState
               margin: const EdgeInsets.only(bottom: 10),
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
-                color: _white,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: _borderLight, width: 1),
+                color: YekiColors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: YekiColors.borderLight, width: 1),
               ),
               child: Row(children: [
                 Container(
@@ -1003,17 +945,17 @@ class _EnseignantAdminDashboardPageState
                   height: 28,
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
-                    color: i == 0 ? brandGold : i == 1 ? _borderMedium : _orange,
+                    color: i == 0 ? YekiColors.accent : i == 1 ? YekiColors.borderMedium : YekiColors.warning,
                     shape: BoxShape.circle,
                   ),
                   child: Text('${i + 1}',
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: _white)),
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: YekiColors.white)),
                 ),
                 const SizedBox(width: 12),
                 Expanded(child: Text(d['nom'] ?? '',
-                    style: const TextStyle(fontWeight: FontWeight.w600, color: textMain))),
+                    style: const TextStyle(fontWeight: FontWeight.w600))),
                 Text('${taux.toStringAsFixed(0)}%',
-                    style: const TextStyle(fontWeight: FontWeight.bold, color: brandPrimary)),
+                    style: const TextStyle(fontWeight: FontWeight.bold, color: YekiColors.primaryDark)),
               ]),
             );
           }),
@@ -1024,9 +966,9 @@ class _EnseignantAdminDashboardPageState
 
   Widget _buildStatCard(_SI item) => Container(
     decoration: BoxDecoration(
-      color: _white,
-      borderRadius: BorderRadius.circular(18),
-      border: Border.all(color: _borderLight, width: 1),
+      color: YekiColors.white,
+      borderRadius: BorderRadius.circular(16),
+      border: Border.all(color: YekiColors.borderLight, width: 1),
     ),
     padding: const EdgeInsets.all(16),
     child: Column(
@@ -1036,9 +978,9 @@ class _EnseignantAdminDashboardPageState
         Container(
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
-            color: item.color.withOpacity(0.1),
+            color: item.color.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: item.color.withOpacity(0.2), width: 0.8),
+            border: Border.all(color: item.color.withValues(alpha: 0.2), width: 0.8),
           ),
           child: Icon(item.icon, color: item.color, size: 22),
         ),
@@ -1046,120 +988,162 @@ class _EnseignantAdminDashboardPageState
         Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(item.value,
               style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: item.color)),
-          Text(item.label, style: const TextStyle(fontSize: 12, color: textSub)),
+          Text(item.label, style: const TextStyle(fontSize: 12)),
         ]),
       ],
     ),
   );
-
-  // ═══════════════════════════════════════════════════════════════
-  //  ACTIONS
-  // ═══════════════════════════════════════════════════════════════
 
   void _creerDepartement() {
     final nomCtrl = TextEditingController();
     final descCtrl = TextEditingController();
     final prixCtrl = TextEditingController(text: '0');
     String typeDeptSel = _typeDeptOptions.first;
+    String? niveauSelectionne;
+    List<String> niveauxDisponibles = [];
     bool isLoading = false;
+    bool _niveauxCharges = false;
+
+    Future<void> _chargerNiveaux() async {
+      if (_niveauxCharges) return;
+      final token = await _getToken();
+      if (token == null) return;
+      try {
+        final res = await http.get(
+          Uri.parse(ApiConstants.niveaux),
+          headers: ApiHeaders.auth(token),
+        );
+        if (res.statusCode == 200) {
+          final data = jsonDecode(res.body);
+          niveauxDisponibles = List<String>.from(data);
+          _niveauxCharges = true;
+        }
+      } catch (_) {}
+    }
 
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setS) => Container(
-          decoration: BoxDecoration(
-            color: _white,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-          ),
-          padding: EdgeInsets.only(
-            left: 24,
-            right: 24,
-            top: 16,
-            bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
-          ),
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _sheetHandle(),
-                const SizedBox(height: 20),
-                Text(
-                  _typeParcours == 'prepa'
-                      ? 'Créer un concours'
-                      : _typeParcours == 'formation'
-                          ? 'Créer une formation'
-                          : 'Créer un département',
-                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: textMain),
-                ),
-                const SizedBox(height: 6),
-                Text('Parcours : $_nomParcours',
-                    style: const TextStyle(fontSize: 13, color: textSub)),
-                const SizedBox(height: 24),
-                _field(nomCtrl, 'Nom *', Icons.label_rounded,
-                    _typeParcours == 'prepa' ? 'Ex: Concours ENS' : 'Ex: Formation ENSEA'),
-                const SizedBox(height: 16),
-                _field(descCtrl, 'Description', Icons.description_outlined,
-                    'Objectifs, programme…', maxLines: 3),
-                const SizedBox(height: 16),
-                if (_typeDeptOptions.length > 1) ...[
-                  const Text('Type', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: textMain)),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    children: _typeDeptOptions.map((t) {
-                      final selected = typeDeptSel == t;
-                      final c = _typeDeptColors[t] ?? brandPrimary;
-                      return ChoiceChip(
-                        label: Text(_typeDeptLabels[t] ?? t),
-                        selected: selected,
-                        selectedColor: c.withOpacity(0.15),
-                        labelStyle: TextStyle(color: selected ? c : textSub),
-                        onSelected: (_) => setS(() => typeDeptSel = t),
-                      );
-                    }).toList(),
+      builder: (ctx) {
+        _chargerNiveaux();
+        return StatefulBuilder(
+          builder: (ctx, setS) => Container(
+            decoration: BoxDecoration(
+              color: YekiColors.white,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+            ),
+            padding: EdgeInsets.only(
+              left: 24, right: 24, top: 16,
+              bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
+            ),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _sheetHandle(),
+                  const SizedBox(height: 20),
+                  Text(
+                    _typeParcours == 'prepa'
+                        ? 'Créer un concours'
+                        : _typeParcours == 'formation'
+                            ? 'Créer une formation'
+                            : 'Créer un département',
+                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                   ),
+                  const SizedBox(height: 6),
+                  Text('Parcours : $_nomParcours', style: const TextStyle(fontSize: 13)),
+                  const SizedBox(height: 24),
+                  _field(nomCtrl, 'Nom *', Icons.label_rounded,
+                      _typeParcours == 'prepa' ? 'Ex: Concours ENS' : 'Ex: Formation Développement Web'),
                   const SizedBox(height: 16),
-                ],
-                // ⚠️ CORRECTION : Prix visible seulement pour prepa et formation
-                if (_typeParcours == 'prepa' || _typeParcours == 'formation') ...[
-                  _field(prixCtrl, 'Prix (FCFA)', Icons.attach_money_rounded,
-                      '0 = gratuit (validation requise)'),
-                  const SizedBox(height: 12),
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: brandPrimary.withOpacity(0.05),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: brandPrimary.withOpacity(0.15), width: 1),
-                    ),
-                    child: Row(children: [
-                      Icon(Icons.info_outline_rounded, size: 14, color: brandPrimary),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'Prix = 0 : requiert votre validation avant d\'être visible.\nPrix > 0 : validé automatiquement.',
-                          style: TextStyle(fontSize: 11, color: brandPrimary),
+                  _field(descCtrl, 'Description', Icons.description_outlined,
+                      'Objectifs, programme…', maxLines: 3),
+                  const SizedBox(height: 16),
+                  if (_typeParcours == 'formation' || _typeParcours == 'prepa') ...[
+                    const Text('Niveau *', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                      decoration: BoxDecoration(
+                        color: YekiColors.backgroundLight,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: YekiColors.borderLight, width: 1),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: niveauSelectionne,
+                          isExpanded: true,
+                          hint: Text(
+                            _niveauxCharges ? 'Sélectionner un niveau...' : 'Chargement...',
+                            style: const TextStyle(fontSize: 14),
+                          ),
+                          icon: Icon(Icons.keyboard_arrow_down, color: YekiColors.primaryDark),
+                          items: niveauxDisponibles.map((niveau) {
+                            return DropdownMenuItem<String>(
+                              value: niveau,
+                              child: Text(niveau, style: const TextStyle(fontSize: 14)),
+                            );
+                          }).toList(),
+                          onChanged: (value) => setS(() => niveauSelectionne = value),
                         ),
                       ),
-                    ]),
-                  ),
-                ],
-                const SizedBox(height: 24),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: brandPrimary,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      elevation: 0,
                     ),
+                    const SizedBox(height: 16),
+                  ],
+                  if (_typeDeptOptions.length > 1) ...[
+                    const Text('Type', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      children: _typeDeptOptions.map((t) {
+                        final selected = typeDeptSel == t;
+                        final c = _typeDeptColors[t] ?? YekiColors.primaryDark;
+                        return ChoiceChip(
+                          label: Text(_typeDeptLabels[t] ?? t),
+                          selected: selected,
+                          selectedColor: c.withValues(alpha: 0.15),
+                          labelStyle: TextStyle(color: selected ? c : YekiColors.textLight),
+                          onSelected: (_) => setS(() => typeDeptSel = t),
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+                  if (_typeParcours == 'prepa' || _typeParcours == 'formation') ...[
+                    _field(prixCtrl, 'Prix (FCFA)', Icons.attach_money_rounded,
+                        '0 = gratuit (validation requise)'),
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: YekiColors.primaryDark.withValues(alpha: 0.05),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: YekiColors.primaryDark.withValues(alpha: 0.15), width: 1),
+                      ),
+                      child: Row(children: [
+                        Icon(Icons.info_outline_rounded, size: 14, color: YekiColors.primaryDark),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Prix = 0 : requiert votre validation avant d\'être visible.\nPrix > 0 : validé automatiquement.',
+                            style: TextStyle(fontSize: 11, color: YekiColors.primaryDark),
+                          ),
+                        ),
+                      ]),
+                    ),
+                  ],
+                  const SizedBox(height: 24),
+                  YekiButton(
+                    label: 'Créer',
                     onPressed: isLoading ? null : () async {
                       if (nomCtrl.text.trim().isEmpty) {
-                        _showMsg('Le nom est obligatoire', error: true);
+                        ErrorHandler.showError(context, 'Le nom est obligatoire');
+                        return;
+                      }
+                      if ((_typeParcours == 'formation' || _typeParcours == 'prepa') && niveauSelectionne == null) {
+                        ErrorHandler.showError(context, 'Veuillez sélectionner un niveau');
                         return;
                       }
                       setS(() => isLoading = true);
@@ -1171,7 +1155,7 @@ class _EnseignantAdminDashboardPageState
                       try {
                         int prix = 0;
                         if (_typeParcours == 'prepa' || _typeParcours == 'formation') {
-                          try { prix = int.parse(prixCtrl.text.trim()); } catch (_) {}
+                          prix = int.tryParse(prixCtrl.text.trim()) ?? 0;
                         }
                         final body = <String, dynamic>{
                           'nom': nomCtrl.text.trim(),
@@ -1180,47 +1164,40 @@ class _EnseignantAdminDashboardPageState
                           'description': descCtrl.text.trim(),
                           'prix': prix,
                         };
+                        if (niveauSelectionne != null) {
+                          body['niveau'] = niveauSelectionne;
+                        }
                         final res = await http.post(
-                          Uri.parse('$_baseUrl/departements/creer/'),
-                          headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': 'Token $token',
-                          },
+                          Uri.parse(ApiConstants.departementsCreer),
+                          headers: ApiHeaders.auth(token),
                           body: jsonEncode(body),
                         );
                         setS(() => isLoading = false);
                         if (res.statusCode == 201) {
                           if (ctx.mounted) Navigator.pop(ctx);
                           if (prix == 0 && (_typeParcours == 'formation')) {
-                            _showMsg('Département créé ! En attente de validation.', success: true);
+                            ErrorHandler.showSuccess(context, 'Département créé ! En attente de validation.');
                           } else {
-                            _showMsg('Département créé avec succès !', success: true);
+                            ErrorHandler.showSuccess(context, 'Département créé avec succès !');
                           }
                           _charger();
                         } else {
                           final err = jsonDecode(res.body);
-                          _showMsg(err['detail'] ?? 'Erreur ${res.statusCode}', error: true);
+                          ErrorHandler.showError(context, err['detail'] ?? 'Erreur ${res.statusCode}');
                         }
                       } catch (_) {
                         setS(() => isLoading = false);
-                        _showMsg('Erreur réseau', error: true);
+                        ErrorHandler.showError(context, 'Erreur réseau');
                       }
                     },
-                    child: isLoading
-                        ? const SizedBox(
-                            width: 22,
-                            height: 22,
-                            child: CircularProgressIndicator(color: _white, strokeWidth: 2),
-                          )
-                        : const Text('Créer',
-                            style: TextStyle(color: _white, fontSize: 16, fontWeight: FontWeight.bold)),
+                    isLoading: isLoading,
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
@@ -1229,16 +1206,14 @@ class _EnseignantAdminDashboardPageState
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        backgroundColor: _white,
-        title: const Text('Valider le département',
-            style: TextStyle(fontWeight: FontWeight.bold, color: textMain)),
-        content: Text('Confirmer la validation de "$nom" ?\nIl sera visible pour les apprenants.',
-            style: const TextStyle(color: textSub)),
+        backgroundColor: YekiColors.white,
+        title: const Text('Valider le département', style: TextStyle(fontWeight: FontWeight.bold)),
+        content: Text('Confirmer la validation de "$nom" ?\nIl sera visible pour les apprenants.', style: const TextStyle()),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Annuler', style: TextStyle(color: textSub))),
+              child: const Text('Annuler', style: TextStyle(color: YekiColors.textMedium))),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: _green, foregroundColor: _white),
+            style: ElevatedButton.styleFrom(backgroundColor: YekiColors.success, foregroundColor: YekiColors.white),
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('Valider'),
           ),
@@ -1248,14 +1223,14 @@ class _EnseignantAdminDashboardPageState
     if (confirm != true) return;
     final token = await _getToken();
     final res = await http.post(
-      Uri.parse('$_baseUrl/admin/departements/$id/valider/'),
-      headers: {'Authorization': 'Token $token', 'Content-Type': 'application/json'},
+      Uri.parse('${ApiConstants.baseUrl}/admin/departements/$id/valider/'),
+      headers: ApiHeaders.auth(token),
     );
     if (res.statusCode == 200) {
-      _showMsg('✅ Département "$nom" validé !', success: true);
+      ErrorHandler.showSuccess(context, '✅ Département "$nom" validé !');
       _charger();
     } else {
-      _showMsg('Erreur', error: true);
+      ErrorHandler.showError(context, 'Erreur');
     }
   }
 
@@ -1265,13 +1240,12 @@ class _EnseignantAdminDashboardPageState
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        backgroundColor: _white,
-        title: const Text('Refuser le département',
-            style: TextStyle(fontWeight: FontWeight.bold, color: textMain)),
+        backgroundColor: YekiColors.white,
+        title: const Text('Refuser le département', style: TextStyle(fontWeight: FontWeight.bold)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('Refuser "$nom" ?', style: const TextStyle(color: textSub)),
+            Text('Refuser "$nom" ?', style: const TextStyle()),
             const SizedBox(height: 12),
             TextField(
               controller: motifCtrl,
@@ -1285,9 +1259,9 @@ class _EnseignantAdminDashboardPageState
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Annuler', style: TextStyle(color: textSub))),
+              child: const Text('Annuler', style: TextStyle(color: YekiColors.textMedium))),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: _red, foregroundColor: _white),
+            style: ElevatedButton.styleFrom(backgroundColor: YekiColors.error, foregroundColor: YekiColors.white),
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('Refuser'),
           ),
@@ -1302,31 +1276,30 @@ class _EnseignantAdminDashboardPageState
   Future<void> _refuserDepartement(int id, String nom, String motif) async {
     final token = await _getToken();
     final res = await http.post(
-      Uri.parse('$_baseUrl/admin/departements/$id/refuser/'),
-      headers: {'Authorization': 'Token $token', 'Content-Type': 'application/json'},
+      Uri.parse('${ApiConstants.baseUrl}/admin/departements/$id/refuser/'),
+      headers: ApiHeaders.auth(token),
       body: jsonEncode({'motif': motif}),
     );
     if (res.statusCode == 200) {
-      _showMsg('Département "$nom" refusé.', success: false);
+      ErrorHandler.showSuccess(context, 'Département "$nom" refusé.');
       _charger();
     } else {
-      _showMsg('Erreur', error: true);
+      ErrorHandler.showError(context, 'Erreur');
     }
   }
 
   Future<void> _validerOlympiade(int id, String titre, String action) async {
     final token = await _getToken();
     final res = await http.post(
-      Uri.parse('$_baseUrl/admin/olympiades/$id/valider/'),
-      headers: {'Authorization': 'Token $token', 'Content-Type': 'application/json'},
+      Uri.parse('${ApiConstants.baseUrl}/admin/olympiades/$id/valider/'),
+      headers: ApiHeaders.auth(token),
       body: jsonEncode({'action': action}),
     );
     if (res.statusCode == 200) {
-      _showMsg(action == 'valider' ? '✅ Olympiade validée !' : 'Olympiade rejetée.',
-          success: action == 'valider');
+      ErrorHandler.showSuccess(context, action == 'valider' ? '✅ Olympiade validée !' : 'Olympiade rejetée.');
       _charger();
     } else {
-      _showMsg('Erreur', error: true);
+      ErrorHandler.showError(context, 'Erreur');
     }
   }
 
@@ -1336,13 +1309,12 @@ class _EnseignantAdminDashboardPageState
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        backgroundColor: _white,
-        title: const Text('Refuser l\'olympiade',
-            style: TextStyle(fontWeight: FontWeight.bold, color: textMain)),
+        backgroundColor: YekiColors.white,
+        title: const Text('Refuser l\'olympiade', style: TextStyle(fontWeight: FontWeight.bold)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('Refuser "$nom" ?', style: const TextStyle(color: textSub)),
+            Text('Refuser "$nom" ?', style: const TextStyle()),
             const SizedBox(height: 12),
             TextField(
               controller: motifCtrl,
@@ -1356,9 +1328,9 @@ class _EnseignantAdminDashboardPageState
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Annuler', style: TextStyle(color: textSub))),
+              child: const Text('Annuler', style: TextStyle(color: YekiColors.textMedium))),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: _red, foregroundColor: _white),
+            style: ElevatedButton.styleFrom(backgroundColor: YekiColors.error, foregroundColor: YekiColors.white),
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('Refuser'),
           ),
@@ -1373,15 +1345,15 @@ class _EnseignantAdminDashboardPageState
   Future<void> _refuserOlympiade(int id, String nom, String motif) async {
     final token = await _getToken();
     final res = await http.post(
-      Uri.parse('$_baseUrl/admin/olympiades/$id/refuser/'),
-      headers: {'Authorization': 'Token $token', 'Content-Type': 'application/json'},
+      Uri.parse('${ApiConstants.baseUrl}/admin/olympiades/$id/refuser/'),
+      headers: ApiHeaders.auth(token),
       body: jsonEncode({'motif': motif}),
     );
     if (res.statusCode == 200) {
-      _showMsg('Olympiade "$nom" refusée.', success: false);
+      ErrorHandler.showSuccess(context, 'Olympiade "$nom" refusée.');
       _charger();
     } else {
-      _showMsg('Erreur', error: true);
+      ErrorHandler.showError(context, 'Erreur');
     }
   }
 
@@ -1391,17 +1363,17 @@ class _EnseignantAdminDashboardPageState
     List cadresDisp = [];
     try {
       final res = await http.get(
-        Uri.parse('$_baseUrl/enseignants/liste/?role=cadre'),
-        headers: {'Authorization': 'Token $token'},
+        Uri.parse('${ApiConstants.baseUrl}/enseignants/liste/?role=cadre'),
+        headers: ApiHeaders.auth(token),
       );
       if (res.statusCode == 200) {
         cadresDisp = jsonDecode(res.body);
       } else {
-        _showMsg('Impossible de charger les cadres', error: true);
+        ErrorHandler.showError(context, 'Impossible de charger les cadres');
         return;
       }
     } catch (_) {
-      _showMsg('Erreur réseau', error: true);
+      ErrorHandler.showError(context, 'Erreur réseau');
       return;
     }
 
@@ -1415,7 +1387,7 @@ class _EnseignantAdminDashboardPageState
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setS) => Container(
           decoration: BoxDecoration(
-            color: _white,
+            color: YekiColors.white,
             borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
           ),
           padding: EdgeInsets.only(
@@ -1428,10 +1400,9 @@ class _EnseignantAdminDashboardPageState
             _sheetHandle(),
             const SizedBox(height: 20),
             Text(dept['cadre'] == null ? 'Nommer un cadre' : 'Changer le cadre',
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textMain)),
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 6),
-            Text('Département : ${dept['nom'] ?? ''}',
-                style: const TextStyle(fontSize: 13, color: textSub)),
+            Text('Département : ${dept['nom'] ?? ''}', style: const TextStyle(fontSize: 13)),
             const SizedBox(height: 20),
             ConstrainedBox(
               constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.4),
@@ -1440,7 +1411,7 @@ class _EnseignantAdminDashboardPageState
                       child: Padding(
                         padding: EdgeInsets.all(20),
                         child: Text('Aucun enseignant cadre disponible.',
-                            textAlign: TextAlign.center, style: TextStyle(color: textSub)),
+                            textAlign: TextAlign.center),
                       ),
                     )
                   : ListView(
@@ -1448,49 +1419,32 @@ class _EnseignantAdminDashboardPageState
                       children: cadresDisp.map<Widget>((e) => RadioListTile<int>(
                         value: e['id'] as int,
                         groupValue: selected,
-                        activeColor: brandPrimary,
-                        title: Text(e['nom'] ?? e['username'] ?? '',
-                            style: const TextStyle(color: textMain)),
-                        subtitle: Text(e['email'] ?? '',
-                            style: const TextStyle(color: textSub)),
+                        activeColor: YekiColors.primaryDark,
+                        title: Text(e['nom'] ?? e['username'] ?? ''),
+                        subtitle: Text(e['email'] ?? ''),
                         onChanged: (v) => setS(() => selected = v),
                       )).toList(),
                     ),
             ),
             const SizedBox(height: 20),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: brandPrimary,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  elevation: 0,
-                ),
-                onPressed: selected == null
-                    ? null
-                    : () async {
-                        if (ctx.mounted) Navigator.pop(ctx);
-                        final t2 = await _getToken();
-                        if (t2 == null) return;
-                        final res = await http.patch(
-                          Uri.parse('$_baseUrl/departements/${dept['id']}/changer-cadre/'),
-                          headers: {
-                            'Authorization': 'Token $t2',
-                            'Content-Type': 'application/json',
-                          },
-                          body: jsonEncode({'cadre_id': selected}),
-                        );
-                        if (res.statusCode == 200) {
-                          _showMsg('Cadre modifié !', success: true);
-                          _charger();
-                        } else {
-                          _showMsg('Erreur', error: true);
-                        }
-                      },
-                child: const Text('Confirmer',
-                    style: TextStyle(color: _white, fontSize: 16, fontWeight: FontWeight.bold)),
-              ),
+            YekiButton(
+              label: 'Confirmer',
+              onPressed: selected == null ? null : () async {
+                if (ctx.mounted) Navigator.pop(ctx);
+                final t2 = await _getToken();
+                if (t2 == null) return;
+                final res = await http.patch(
+                  Uri.parse('${ApiConstants.baseUrl}/departements/${dept['id']}/changer-cadre/'),
+                  headers: ApiHeaders.auth(t2),
+                  body: jsonEncode({'cadre_id': selected}),
+                );
+                if (res.statusCode == 200) {
+                  ErrorHandler.showSuccess(context, 'Cadre modifié !');
+                  _charger();
+                } else {
+                  ErrorHandler.showError(context, 'Erreur');
+                }
+              },
             ),
           ]),
         ),
@@ -1511,7 +1465,7 @@ class _EnseignantAdminDashboardPageState
     child: Container(
       width: 40,
       height: 4,
-      decoration: BoxDecoration(color: _borderLight, borderRadius: BorderRadius.circular(10)),
+      decoration: BoxDecoration(color: YekiColors.borderLight, borderRadius: BorderRadius.circular(8)),
     ),
   );
 
@@ -1520,26 +1474,26 @@ class _EnseignantAdminDashboardPageState
     return TextField(
       controller: ctrl,
       maxLines: maxLines,
-      style: const TextStyle(color: textMain, fontSize: 14),
+      style: const TextStyle(fontSize: 14),
       decoration: InputDecoration(
         labelText: label,
         hintText: hint,
-        hintStyle: TextStyle(color: textSub, fontSize: 13),
-        labelStyle: const TextStyle(color: textSub, fontSize: 13),
-        prefixIcon: Icon(icon, color: brandPrimary, size: 20),
+        hintStyle: const TextStyle(fontSize: 13),
+        labelStyle: const TextStyle(fontSize: 13),
+        prefixIcon: Icon(icon, color: YekiColors.primaryDark, size: 20),
         filled: true,
-        fillColor: _bgLight,
+        fillColor: YekiColors.backgroundLight,
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(16),
           borderSide: BorderSide.none,
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(color: _borderLight, width: 1),
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(color: YekiColors.borderLight, width: 1),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: brandPrimary, width: 1.5),
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(color: YekiColors.primaryDark, width: 1.5),
         ),
       ),
     );
@@ -1548,25 +1502,22 @@ class _EnseignantAdminDashboardPageState
   Widget _miniChip(String label, Color color) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
     decoration: BoxDecoration(
-      color: color.withOpacity(0.1),
-      borderRadius: BorderRadius.circular(6),
+      color: color.withValues(alpha: 0.1),
+      borderRadius: BorderRadius.circular(8),
     ),
-    child: Text(
-      label,
-      style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.w700),
-    ),
+    child: Text(label, style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.w700)),
   );
 
   Widget _aucunCadreBadge() => Container(
     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
     decoration: BoxDecoration(
-      color: _orange.withOpacity(0.1),
+      color: YekiColors.warning.withValues(alpha: 0.1),
       borderRadius: BorderRadius.circular(8),
     ),
     child: const Row(mainAxisSize: MainAxisSize.min, children: [
-      Icon(Icons.warning_outlined, size: 13, color: _orange),
+      Icon(Icons.warning_outlined, size: 13, color: YekiColors.warning),
       SizedBox(width: 5),
-      Text('Aucun cadre nommé', style: TextStyle(fontSize: 11, color: _orange)),
+      Text('Aucun cadre nommé', style: TextStyle(fontSize: 11, color: YekiColors.warning)),
     ]),
   );
 
@@ -1575,25 +1526,32 @@ class _EnseignantAdminDashboardPageState
     child: Row(children: [
       Icon(icon, color: color, size: 18),
       const SizedBox(width: 8),
-      Text(title, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: textMain)),
+      Text(title, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
     ]),
   );
-
-  void _showMsg(String msg, {bool success = false, bool error = false}) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(msg, style: const TextStyle(color: _white)),
-        backgroundColor: error ? _red : success ? _green : brandPrimary,
-        behavior: SnackBarBehavior.floating,
-        margin: const EdgeInsets.all(16),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
-    );
-  }
 }
 
-// Détail département sheet (INCHANGÉ)
+const Map<String, Color> _typeDeptColors = {
+  'normal': YekiColors.primaryDark,
+  'classique': Colors.teal,
+  'metier': YekiColors.accent,
+  'concours': YekiColors.purple,
+};
+
+const Map<String, IconData> _typeDeptIcons = {
+  'normal': Icons.domain_rounded,
+  'classique': Icons.account_balance_rounded,
+  'metier': Icons.work_rounded,
+  'concours': Icons.emoji_events_rounded,
+};
+
+const Map<String, String> _typeDeptLabels = {
+  'normal': 'Département',
+  'classique': 'Formation Classique',
+  'metier': 'Formation Métier',
+  'concours': 'Prépa Concours',
+};
+
 class _DetailDeptSheet extends StatefulWidget {
   final Map dept;
   const _DetailDeptSheet({required this.dept});
@@ -1620,12 +1578,12 @@ class _DetailDeptSheetState extends State<_DetailDeptSheet> {
     try {
       final results = await Future.wait([
         http.get(
-          Uri.parse('$_baseUrl/departements/$id/cours/'),
-          headers: {'Authorization': 'Token $token'},
+          Uri.parse(ApiConstants.departementCours(id)),
+          headers: ApiHeaders.auth(token),
         ),
         http.get(
-          Uri.parse('$_baseUrl/departements/$id/inscriptions/'),
-          headers: {'Authorization': 'Token $token'},
+          Uri.parse('${ApiConstants.baseUrl}/departements/$id/inscriptions/'),
+          headers: ApiHeaders.auth(token),
         ),
       ]);
       if (mounted) {
@@ -1646,12 +1604,12 @@ class _DetailDeptSheetState extends State<_DetailDeptSheet> {
     final typeDept = dept['type_dept'] as String? ?? 'normal';
     final prix = dept['prix'] as int? ?? 0;
     final estValide = dept['est_valide'] == true;
-    final color = _typeDeptColors[typeDept] ?? brandPrimary;
+    final color = _typeDeptColors[typeDept] ?? YekiColors.primaryDark;
 
     return Container(
       height: MediaQuery.of(context).size.height * 0.8,
       decoration: BoxDecoration(
-        color: _white,
+        color: YekiColors.white.withValues(alpha: 0.7),
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
       ),
       child: Column(children: [
@@ -1660,7 +1618,7 @@ class _DetailDeptSheetState extends State<_DetailDeptSheet> {
           child: Container(
             width: 40,
             height: 4,
-            decoration: BoxDecoration(color: _borderLight, borderRadius: BorderRadius.circular(10)),
+            decoration: BoxDecoration(color: YekiColors.borderLight, borderRadius: BorderRadius.circular(8)),
           ),
         ),
         const SizedBox(height: 20),
@@ -1669,37 +1627,36 @@ class _DetailDeptSheetState extends State<_DetailDeptSheet> {
           child: Row(children: [
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(dept['nom'] ?? '',
-                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: textMain)),
-                Text(dept['parcours'] ?? '', style: const TextStyle(color: textSub, fontSize: 13)),
+                Text(dept['nom'] ?? '', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                Text(dept['parcours'] ?? '', style: const TextStyle(fontSize: 13)),
               ]),
             ),
             Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
               if (prix > 0)
-                Text('$prix FCFA', style: const TextStyle(color: brandGold, fontWeight: FontWeight.w700))
+                Text('$prix FCFA', style: const TextStyle(fontWeight: FontWeight.w700))
               else
                 Text(estValide ? 'Gratuit ✓' : 'À valider',
-                    style: TextStyle(color: estValide ? _green : _orange, fontWeight: FontWeight.w600, fontSize: 12)),
+                    style: TextStyle(color: estValide ? YekiColors.success : YekiColors.warning, fontWeight: FontWeight.w600, fontSize: 12)),
             ]),
           ]),
         ),
-        const Divider(height: 20, color: _borderLight),
+        const Divider(height: 20, color: YekiColors.borderLight),
         Expanded(
           child: _loading
-              ? const Center(child: CircularProgressIndicator(color: brandPrimary))
+              ? const Center(child: YekiLoader())
               : DefaultTabController(
                   length: 2,
                   child: Column(children: [
                     TabBar(
                       tabs: const [Tab(text: 'Cours'), Tab(text: 'Inscrits')],
-                      labelColor: brandPrimary,
-                      unselectedLabelColor: textSub,
-                      indicatorColor: brandPrimary,
+                      labelColor: YekiColors.primaryDark,
+                      unselectedLabelColor: YekiColors.textLight,
+                      indicatorColor: YekiColors.primaryDark,
                     ),
                     Expanded(
                       child: TabBarView(children: [
                         _cours.isEmpty
-                            ? const Center(child: Text('Aucun cours', style: TextStyle(color: textSub)))
+                            ? const Center(child: Text('Aucun cours', style: TextStyle()))
                             : ListView.builder(
                                 padding: const EdgeInsets.all(16),
                                 itemCount: _cours.length,
@@ -1709,16 +1666,16 @@ class _DetailDeptSheetState extends State<_DetailDeptSheet> {
                                     margin: const EdgeInsets.only(bottom: 8),
                                     padding: const EdgeInsets.all(12),
                                     decoration: BoxDecoration(
-                                      color: _bgLight,
+                                      color: YekiColors.backgroundLight,
                                       borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(color: _borderLight, width: 1),
+                                      border: Border.all(color: YekiColors.borderLight, width: 1),
                                     ),
                                     child: Row(children: [
                                       Container(
                                         padding: const EdgeInsets.all(8),
                                         decoration: BoxDecoration(
-                                          color: color.withOpacity(0.1),
-                                          borderRadius: BorderRadius.circular(10),
+                                          color: color.withValues(alpha: 0.1),
+                                          borderRadius: BorderRadius.circular(8),
                                         ),
                                         child: Icon(Icons.book, color: color, size: 18),
                                       ),
@@ -1727,9 +1684,9 @@ class _DetailDeptSheetState extends State<_DetailDeptSheet> {
                                         child: Column(crossAxisAlignment: CrossAxisAlignment.start,
                                             children: [
                                               Text(c['titre'] ?? '',
-                                                  style: const TextStyle(fontWeight: FontWeight.w600, color: textMain)),
+                                                  style: const TextStyle(fontWeight: FontWeight.w600)),
                                               Text('${c['nb_apprenants'] ?? 0} apprenants',
-                                                  style: const TextStyle(fontSize: 12, color: textSub)),
+                                                  style: const TextStyle(fontSize: 12)),
                                             ]),
                                       ),
                                     ]),
@@ -1737,7 +1694,7 @@ class _DetailDeptSheetState extends State<_DetailDeptSheet> {
                                 },
                               ),
                         _inscrits.isEmpty
-                            ? const Center(child: Text('Aucun inscrit', style: TextStyle(color: textSub)))
+                            ? const Center(child: Text('Aucun inscrit', style: TextStyle()))
                             : ListView.builder(
                                 padding: const EdgeInsets.all(16),
                                 itemCount: _inscrits.length,
@@ -1745,21 +1702,21 @@ class _DetailDeptSheetState extends State<_DetailDeptSheet> {
                                   final ins = _inscrits[i];
                                   final statut = ins['statut'] as String? ?? '';
                                   final statusColor = statut == 'accepte'
-                                      ? _green
+                                      ? YekiColors.success
                                       : statut == 'en_attente'
-                                          ? _orange
-                                          : _red;
+                                          ? YekiColors.warning
+                                          : YekiColors.error;
                                   return Container(
                                     margin: const EdgeInsets.only(bottom: 8),
                                     padding: const EdgeInsets.all(12),
                                     decoration: BoxDecoration(
-                                      color: _bgLight,
+                                      color: YekiColors.backgroundLight,
                                       borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(color: _borderLight, width: 1),
+                                      border: Border.all(color: YekiColors.borderLight, width: 1),
                                     ),
                                     child: Row(children: [
                                       CircleAvatar(
-                                        backgroundColor: color.withOpacity(0.1),
+                                        backgroundColor: color.withValues(alpha: 0.1),
                                         child: Text(
                                             (ins['nom'] ?? ins['username'] ?? '?')[0].toUpperCase(),
                                             style: TextStyle(color: color)),
@@ -1769,15 +1726,15 @@ class _DetailDeptSheetState extends State<_DetailDeptSheet> {
                                         child: Column(crossAxisAlignment: CrossAxisAlignment.start,
                                             children: [
                                               Text(ins['nom'] ?? ins['username'] ?? '',
-                                                  style: const TextStyle(fontWeight: FontWeight.w600, color: textMain)),
+                                                  style: const TextStyle(fontWeight: FontWeight.w600)),
                                               Text(ins['inscrit_le']?.toString().substring(0, 10) ?? '',
-                                                  style: const TextStyle(fontSize: 12, color: textSub)),
+                                                  style: const TextStyle(fontSize: 12)),
                                             ]),
                                       ),
                                       Container(
                                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                         decoration: BoxDecoration(
-                                          color: statusColor.withOpacity(0.1),
+                                          color: statusColor.withValues(alpha: 0.1),
                                           borderRadius: BorderRadius.circular(8),
                                         ),
                                         child: Text(statut,

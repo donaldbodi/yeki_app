@@ -1,35 +1,19 @@
+// lib/views/pages/apprenants/cursus_page.dart
+// ═══════════════════════════════════════════════════════════════════════════
+//  YEKI CURSUS PAGE — CORRIGÉE
+// ═══════════════════════════════════════════════════════════════════════════
+
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:yeki/views/auth/login_page.dart';
-import 'package:yeki/views/pages/apprenants/notifications_page.dart';
-import 'package:yeki/views/pages/apprenants/profil_page.dart';
-import '../../../../widgets/yeki_app_bar.dart';
-import 'cours_detail_page.dart';
-
-// ─────────────────────────────────────────────────────────────────
-// CURSUS PAGE — Design harmonisé avec RegisterPage
-// Palette : fond blanc, cartes dégradé brandBackground (#135F74)
-// ─────────────────────────────────────────────────────────────────
-
-const String _base = 'https://yeki.pythonanywhere.com/api';
-
-// Palette harmonisée
-const Color brandBackground = Color(0xFF135F74);
-const Color actionOrange = Color(0xFFFF6B00);
-const Color glassFill = Color(0x1AFFFFFF);
-
-// Couleurs pour le mode light
-const Color _white = Color(0xFFFFFFFF);
-const Color _white80 = Color(0xCCFFFFFF);
-const Color _white60 = Color(0x99FFFFFF);
-const Color _white20 = Color(0x33FFFFFF);
-const Color _textDark = Color(0xFF1A1C1E);
-const Color _textMedium = Color(0xFF5A5C5E);
-const Color _textLight = Color(0xFF8A8C8E);
-const Color _borderLight = Color(0xFFE8ECEF);
-const Color _bgLight = Color(0xFFF8FAFC);
+import 'package:yeki/views/pages/apprenants/cours_detail_page.dart';
+import 'package:yeki/views/pages/shared/notifications_page.dart';
+import 'package:yeki/views/pages/shared/profil_page.dart';
+import 'package:yeki/widgets/yeki_app_bar.dart';
+import 'package:yeki/core/theme/app_theme.dart';
+import 'package:yeki/core/constants/api_constants.dart';
 
 class CursusPage extends StatefulWidget {
   const CursusPage({super.key});
@@ -38,29 +22,21 @@ class CursusPage extends StatefulWidget {
   State<CursusPage> createState() => _CursusPageState();
 }
 
-class _CursusPageState extends State<CursusPage>
-    with SingleTickerProviderStateMixin {
-
-  // ── Données ──────────────────────────────────────────────────────
-  Map<String, dynamic> _profil       = {};
-  List<Map<String, dynamic>> _cours  = [];
+class _CursusPageState extends State<CursusPage> with SingleTickerProviderStateMixin {
+  Map<String, dynamic> _profil = {};
+  List<Map<String, dynamic>> _cours = [];
   List<Map<String, dynamic>> _recent = [];
 
-  // ── État ──────────────────────────────────────────────────────────
-  bool _loadingCours   = true;
-  bool _loadingRecent  = true;
-  bool _loadingProfil  = true;
-  String _errorCours   = '';
+  bool _loadingCours = true;
+  bool _loadingRecent = true;
+  bool _loadingProfil = true;
+  String _errorCours = '';
 
-  // ── Recherche ────────────────────────────────────────────────────
   final TextEditingController _searchCtrl = TextEditingController();
   List<Map<String, dynamic>> _coursFiltres = [];
 
-  // ── Animation ────────────────────────────────────────────────────
   late AnimationController _animCtrl;
   late Animation<double> _fadeAnim;
-
-  // ── Abonnement ───────────────────────────────────────────────────
   final bool _isSubscribed = true;
 
   @override
@@ -68,9 +44,9 @@ class _CursusPageState extends State<CursusPage>
     super.initState();
     _animCtrl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 600),
+      duration: const Duration(milliseconds: 500),
     );
-    _fadeAnim = CurvedAnimation(parent: _animCtrl, curve: Curves.easeOut);
+    _fadeAnim = CurvedAnimation(parent: _animCtrl, curve: Curves.easeOutCubic);
     _chargerTout();
   }
 
@@ -81,7 +57,6 @@ class _CursusPageState extends State<CursusPage>
     super.dispose();
   }
 
-  // ── Token ────────────────────────────────────────────────────────
   Future<Map<String, String>> _headers() async {
     final p = await SharedPreferences.getInstance();
     final t = p.getString('token');
@@ -91,91 +66,75 @@ class _CursusPageState extends State<CursusPage>
     };
   }
 
-  // ── Chargement global ────────────────────────────────────────────
   Future<void> _chargerTout() async {
-    await Future.wait([
-      _chargerProfil(),
-      _chargerCours(),
-      _chargerRecent(),
-    ]);
+    await Future.wait([_chargerProfil(), _chargerCours(), _chargerRecent()]);
   }
 
-  // ── Profil apprenant ─────────────────────────────────────────────
   Future<void> _chargerProfil() async {
     try {
       final headers = await _headers();
-      final res = await http.get(
-        Uri.parse('$_base/profil/me/'),
-        headers: headers,
-      );
-      if (res.statusCode == 200) {
-        if (mounted) {
-          setState(() => _profil = Map<String, dynamic>.from(jsonDecode(res.body)));
-        }
+      final res = await http.get(Uri.parse(ApiConstants.profilMe), headers: headers);
+      if (res.statusCode == 200 && mounted) {
+        setState(() => _profil = Map<String, dynamic>.from(jsonDecode(res.body)));
       }
-    } catch (_) {}
-    finally {
+    } catch (_) {
+      // Ignorer l'erreur
+    } finally {
       if (mounted) setState(() => _loadingProfil = false);
     }
   }
 
-  // ── Cours du cursus ──────────────────────────────────────────────
   Future<void> _chargerCours() async {
-    if (mounted) setState(() { _loadingCours = true; _errorCours = ''; });
+    if (mounted) {
+      setState(() {
+        _loadingCours = true;
+        _errorCours = '';
+      });
+    }
     try {
       final headers = await _headers();
-      final res = await http.get(
-        Uri.parse('$_base/apprenant/cursus/'),
-        headers: headers,
-      );
+      final res = await http.get(Uri.parse(ApiConstants.cursus), headers: headers);
       if (res.statusCode == 200) {
         final List data = jsonDecode(res.body);
-        final mapped = data
-            .map((e) => Map<String, dynamic>.from(e as Map))
-            .toList();
+        final mapped = data.map((e) => Map<String, dynamic>.from(e as Map)).toList();
         if (mounted) {
           setState(() {
-            _cours       = mapped;
+            _cours = mapped;
             _coursFiltres = mapped;
           });
           _animCtrl.forward(from: 0);
         }
       } else {
-        if (mounted) setState(() => _errorCours = 'Erreur ${res.statusCode}');
+        if (mounted) setState(() => _errorCours = 'Incapable de récupérer vos programmes (${res.statusCode})');
       }
     } catch (_) {
-      if (mounted) setState(() => _errorCours = 'Erreur réseau');
+      if (mounted) setState(() => _errorCours = 'Vérifiez votre connexion internet');
     } finally {
       if (mounted) setState(() => _loadingCours = false);
     }
   }
 
-  // ── Leçons récentes ──────────────────────────────────────────────
   Future<void> _chargerRecent() async {
     if (mounted) setState(() => _loadingRecent = true);
     try {
       final headers = await _headers();
       final res = await http.get(
-        Uri.parse('$_base/apprenant/lectures-recentes/?limit=5'),
+        Uri.parse('${ApiConstants.baseUrl}/apprenant/lectures-recentes/?limit=5'),
         headers: headers,
       );
-      if (res.statusCode == 200) {
+      if (res.statusCode == 200 && mounted) {
         final List data = jsonDecode(res.body);
-        if (mounted) {
-          setState(() {
-            _recent = data
-                .map((e) => Map<String, dynamic>.from(e as Map))
-                .toList();
-          });
-        }
+        setState(() {
+          _recent = data.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+        });
       }
-    } catch (_) {}
-    finally {
+    } catch (_) {
+      // Ignorer l'erreur
+    } finally {
       if (mounted) setState(() => _loadingRecent = false);
     }
   }
 
-  // ── Filtre de recherche ──────────────────────────────────────────
   void _filtrer(String q) {
     setState(() {
       if (q.trim().isEmpty) {
@@ -184,50 +143,37 @@ class _CursusPageState extends State<CursusPage>
         final query = q.toLowerCase();
         _coursFiltres = _cours.where((c) {
           return (c['title']?.toString().toLowerCase().contains(query) ?? false) ||
-              (c['enseignant_principal']?.toString().toLowerCase().contains(query) ?? false) ||
-              (c['description']?.toString().toLowerCase().contains(query) ?? false);
+                 (c['enseignant_principal']?.toString().toLowerCase().contains(query) ?? false);
         }).toList();
       }
     });
   }
 
-  // ── Déconnexion ──────────────────────────────────────────────────
   Future<void> _deconnecter() async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        backgroundColor: _white,
-        title: const Text('Déconnexion',
-            style: TextStyle(fontWeight: FontWeight.bold, color: _textDark)),
-        content: const Text(
-          'Souhaitez-vous vraiment quitter l\'application ?',
-          style: TextStyle(color: _textMedium),
-        ),
+        backgroundColor: YekiColors.white,
+        title: const Text('Déconnexion', style: TextStyle(fontWeight: FontWeight.w800)),
+        content: const Text('Quitter votre espace de formation Yéki pour le moment ?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text('Annuler', style: TextStyle(color: _textMedium)),
+            child: const Text('Annuler', style: TextStyle(color: YekiColors.textMedium)),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.redAccent,
-              foregroundColor: Colors.white,
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
-            ),
+            style: ElevatedButton.styleFrom(backgroundColor: YekiColors.error),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Se déconnecter'),
+            child: const Text('Quitter'),
           ),
         ],
       ),
     );
-
     if (confirm == true) {
       try {
         final headers = await _headers();
-        await http.post(Uri.parse('$_base/auth/logout/'), headers: headers);
+        await http.post(Uri.parse(ApiConstants.logout), headers: headers);
       } catch (_) {}
       final prefs = await SharedPreferences.getInstance();
       await prefs.clear();
@@ -241,84 +187,73 @@ class _CursusPageState extends State<CursusPage>
     }
   }
 
-  // ── Helpers ──────────────────────────────────────────────────────
-  String get _nomApprenant {
-    final fn = _profil['first_name']?.toString() ?? '';
-    final ln = _profil['last_name']?.toString() ?? '';
-    return fn.isNotEmpty ? fn : (ln.isNotEmpty ? ln : (_profil['username']?.toString() ?? 'Apprenant'));
-  }
-
+  String get _nomApprenant => _profil['first_name']?.toString() ?? _profil['username']?.toString() ?? 'Étudiant';
   String? get _avatarUrl => _profil['avatar']?.toString();
 
   Color _parseColor(String? hex) {
-    if (hex == null) return brandBackground;
+    if (hex == null) return YekiColors.primaryLight;
     try {
       return Color(int.parse(hex.replaceAll('#', 'FF'), radix: 16));
     } catch (_) {
-      return brandBackground;
+      return YekiColors.primaryLight;
     }
   }
 
-  IconData _parseIcon(String? name) {
-    const map = {
-      'school':           Icons.school,
-      'book':             Icons.book,
-      'science':          Icons.science,
-      'calculate':        Icons.calculate,
-      'history_edu':      Icons.history_edu,
-      'language':         Icons.language,
-      'biotech':          Icons.biotech,
-      'computer':         Icons.computer,
-      'architecture':     Icons.architecture,
-      'psychology':       Icons.psychology,
-      'palette':          Icons.palette,
-      'music_note':       Icons.music_note,
-      'sports_soccer':    Icons.sports_soccer,
-      'medical_services': Icons.medical_services,
-      'engineering':      Icons.engineering,
-      'eco':              Icons.eco,
-      'menu_book':        Icons.menu_book_rounded,
-    };
-    return map[name] ?? Icons.menu_book_rounded;
+  IconData _getIconForSubject(String title) {
+    final t = title.toLowerCase();
+    if (t.contains('physique') || t.contains('onde') || t.contains('biomasse') || t.contains('chimie')) {
+      return Icons.science_rounded;
+    }
+    if (t.contains('crypto') || t.contains('code') || t.contains('flutter') || t.contains('dev')) {
+      return Icons.terminal_rounded;
+    }
+    if (t.contains('mine') || t.contains('geolo') || t.contains('leapfrog') || t.contains('or')) {
+      return Icons.landscape_rounded;
+    }
+    if (t.contains('math') || t.contains('algebre') || t.contains('calcul')) {
+      return Icons.functions_rounded;
+    }
+    if (t.contains('loi') || t.contains('droit') || t.contains('juridique')) {
+      return Icons.gavel_rounded;
+    }
+    return Icons.menu_book_rounded;
   }
 
-  // ════════════════════════════════════════════════════════════════
-  //  BUILD
-  // ════════════════════════════════════════════════════════════════
   @override
   Widget build(BuildContext context) {
+    final double screenWidth = MediaQuery.of(context).size.width;
+    final double paddingHorizontal = screenWidth > 800 ? (screenWidth - 760) / 2 : 18.0;
+
     return Scaffold(
-      backgroundColor: _bgLight,
+      backgroundColor: YekiColors.backgroundLight,
       appBar: YekiHeader(
-        unreadNotifications: 3,
+        unreadNotifications: 2,
         isSubscribed: _isSubscribed,
         userRole: 'Apprenant',
-        username: _loadingProfil ? '...' : _nomApprenant,
+        username: _loadingProfil ? 'Chargement...' : _nomApprenant,
         avatarUrl: _avatarUrl,
-        onNotifications: () => Navigator.push(context,
-            MaterialPageRoute(builder: (_) => const NotificationsPage())),
-        onSettings: () => Navigator.push(context,
-            MaterialPageRoute(builder: (_) => ProfilPage())),
+        onNotifications: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationsPage())),
+        onSettings: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfilPage())),
         onLogout: _deconnecter,
       ),
       body: _loadingCours
-          ? _buildSkeleton()
+          ? _buildResponsiveSkeleton(paddingHorizontal)
           : _errorCours.isNotEmpty
-              ? _buildError()
+              ? _buildErrorState()
               : RefreshIndicator(
                   onRefresh: _chargerTout,
-                  color: brandBackground,
-                  backgroundColor: _white,
+                  color: YekiColors.primaryDark,
+                  backgroundColor: YekiColors.white,
+                  edgeOffset: 10,
                   child: FadeTransition(
                     opacity: _fadeAnim,
                     child: ListView.builder(
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                      itemCount: _coursFiltres.length + 2,
+                      padding: EdgeInsets.fromLTRB(paddingHorizontal, 8, paddingHorizontal, 110),
+                      physics: const BouncingScrollPhysics(),
+                      itemCount: _coursFiltres.length + 1,
                       itemBuilder: (ctx, i) {
-                        if (i == 0) return _buildTopSection();
-                        if (i == _coursFiltres.length + 1)
-                          return const SizedBox(height: 80);
-                        return _buildCoursCard(_coursFiltres[i - 1], i - 1);
+                        if (i == 0) return _buildHeaderComplex();
+                        return _buildModernProgramCard(_coursFiltres[i - 1]);
                       },
                     ),
                   ),
@@ -326,555 +261,332 @@ class _CursusPageState extends State<CursusPage>
     );
   }
 
-  // ── Section supérieure ───────────────────────────────────────────
-  Widget _buildTopSection() {
+  Widget _buildHeaderComplex() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const SizedBox(height: 8),
-        _buildHeader(),
-        const SizedBox(height: 24),
-        _buildSearchBar(),
+        const SizedBox(height: 12),
+        Container(
+          decoration: BoxDecoration(
+            color: YekiColors.white,
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: YekiColors.borderLight, width: 1.0),
+            boxShadow: YekiShadows.subtle,
+          ),
+          child: TextField(
+            controller: _searchCtrl,
+            onChanged: _filtrer,
+            style: YekiTextStyles.bodyMedium,
+            decoration: InputDecoration(
+              hintText: 'Rechercher un cours, un enseignant...',
+              hintStyle: YekiTextStyles.bodySmall,
+              prefixIcon: Icon(Icons.search_rounded, color: YekiColors.primaryLight, size: 22),
+              border: InputBorder.none,
+              contentPadding: const EdgeInsets.symmetric(vertical: 15, horizontal: 18),
+            ),
+          ),
+        ),
+        const SizedBox(height: 28),
+        _buildResumeSection(),
         const SizedBox(height: 32),
-        _buildContinuerLecture(),
-        const SizedBox(height: 32),
-        _buildListeTitle(),
-        const SizedBox(height: 16),
+        Row(
+          textBaseline: TextBaseline.alphabetic,
+          crossAxisAlignment: CrossAxisAlignment.baseline,
+          children: [
+            const Text(
+              'Vos Programmes',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, letterSpacing: -0.3),
+            ),
+            const Spacer(),
+            if (_cours.isNotEmpty)
+              Text(
+                '${_coursFiltres.length} cours disponibles',
+                style: TextStyle(color: YekiColors.primaryLight, fontSize: 12, fontWeight: FontWeight.bold),
+              ),
+          ],
+        ),
+        const SizedBox(height: 14),
       ],
     );
   }
 
-  // ── Header ────────────────────────────────────────────────────────
-  Widget _buildHeader() {
-    return Row(
-      children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                _loadingProfil
-                    ? 'Bonjour 👋'
-                    : 'Bonjour $_nomApprenant',
-                style: const TextStyle(
-                  fontSize: 26,
-                  fontWeight: FontWeight.bold,
-                  color: _textDark,
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                'Prêt à apprendre quelque chose aujourd\'hui ?',
-                style: TextStyle(
-                  color: _textMedium,
-                  fontSize: 14,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  /*Widget _avatarFallback() {
-    final initial = _nomApprenant.isNotEmpty
-        ? _nomApprenant[0].toUpperCase()
-        : 'A';
-    return Center(
-      child: Text(
-        initial,
-        style: const TextStyle(
-          color: brandBackground,
-          fontWeight: FontWeight.bold,
-          fontSize: 20,
-        ),
-      ),
-    );
-  }*/
-
-  // ── Barre de recherche ───────────────────────────────────────────
-  Widget _buildSearchBar() {
-    return Container(
-      decoration: BoxDecoration(
-        color: _white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: TextField(
-        controller: _searchCtrl,
-        onChanged: _filtrer,
-        style: const TextStyle(color: _textDark, fontSize: 15),
-        decoration: InputDecoration(
-          hintText: 'Rechercher un cours, un professeur...',
-          hintStyle: TextStyle(color: _textLight, fontSize: 14),
-          prefixIcon: Icon(Icons.search_rounded, color: _textMedium),
-          suffixIcon: _searchCtrl.text.isNotEmpty
-              ? IconButton(
-                  icon: const Icon(Icons.clear, size: 18),
-                  color: _textLight,
-                  onPressed: () {
-                    _searchCtrl.clear();
-                    _filtrer('');
-                  },
-                )
-              : Container(
-                  margin: const EdgeInsets.all(8),
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: brandBackground.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(Icons.tune_rounded,
-                      color: brandBackground, size: 18),
-                ),
-          border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
-        ),
-      ),
-    );
-  }
-
-  // ── "Continuer la lecture" ───────────────────────────────────────
-  Widget _buildContinuerLecture() {
+  Widget _buildResumeSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
           'Continuer la lecture',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-            color: _textDark,
-          ),
+          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, letterSpacing: -0.1),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 12),
         _loadingRecent
-            ? _buildRecentSkeleton()
+            ? _skeletonWidget(h: 90, r: 24)
             : _recent.isEmpty
-                ? _buildMotivation()
+                ? _buildEmptyMotivationBox()
                 : SizedBox(
-                    height: 170,
+                    height: 105,
                     child: ListView.builder(
                       scrollDirection: Axis.horizontal,
                       physics: const BouncingScrollPhysics(),
                       itemCount: _recent.length,
-                      itemBuilder: (_, i) => _buildRecentCard(_recent[i]),
-                    ),
-                  ),
-      ],
-    );
-  }
+                      itemBuilder: (_, idx) {
+                        final item = _recent[idx];
+                        final accentColor = _parseColor(item['cours_color'] as String?);
+                        final pct = (item['pourcentage'] as num? ?? 0).toInt();
 
-  Widget _buildRecentCard(Map<String, dynamic> item) {
-    final color  = _parseColor(item['cours_color'] as String?);
-    final icon   = _parseIcon(item['cours_icon'] as String?);
-    final pct    = (item['pourcentage'] as num? ?? 0).toInt();
-    final mins   = item['mins_restants'] as int? ?? 5;
-    final module = item['module_titre']?.toString() ?? '';
-    final coursId = item['cours_id'];
-
-    return GestureDetector(
-      onTap: () {
-        if (coursId != null) {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => CoursDetailTabs(
-                coursId: coursId.toString(),
-                titre: item['cours_titre']?.toString() ?? '',
-                coursColor: color.value,
-                isPremium: true,
-              ),
-            ),
-          );
-        }
-      },
-      child: Container(
-        width: 280,
-        margin: const EdgeInsets.only(right: 16),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [brandBackground, brandBackground.withOpacity(0.8)],
-          ),
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: brandBackground.withOpacity(0.3),
-              blurRadius: 16,
-              offset: const Offset(0, 6),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Bande supérieure avec icône
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: _white20,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Icon(icon, color: _white, size: 18),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      item['cours_titre']?.toString() ?? '',
-                      style: const TextStyle(
-                        color: _white80,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            // Titre leçon
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Text(
-                item['lecon_titre']?.toString() ?? '',
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: _white,
-                  fontSize: 15,
-                  fontWeight: FontWeight.bold,
-                  height: 1.3,
-                ),
-              ),
-            ),
-            const Spacer(),
-            // Barre de progression
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(6),
-                          child: LinearProgressIndicator(
-                            value: pct / 100,
-                            backgroundColor: _white20,
-                            valueColor: const AlwaysStoppedAnimation<Color>(_white),
-                            minHeight: 6,
+                        return Container(
+                          width: 280,
+                          margin: const EdgeInsets.only(right: 12, bottom: 4),
+                          decoration: BoxDecoration(
+                            color: accentColor.withValues(alpha: 0.015),
+                            borderRadius: BorderRadius.circular(24),
+                            border: Border.all(color: YekiColors.borderLight, width: 1.0),
+                            boxShadow: YekiShadows.subtle,
                           ),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Text(
-                        '$pct%',
-                        style: const TextStyle(
-                          color: _white,
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      Icon(Icons.access_time_rounded, size: 12, color: _white60),
-                      const SizedBox(width: 4),
-                      Text(
-                        module.isNotEmpty ? '$module · $mins min' : '$mins min restantes',
-                        style: TextStyle(
-                          color: _white60,
-                          fontSize: 11,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ── État motivationnel ───────────────────────────────────────────
-  Widget _buildMotivation() {
-    return GestureDetector(
-      onTap: () {
-        // Scroll vers la liste des cours
-      },
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [brandBackground, brandBackground.withOpacity(0.8)],
-          ),
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: brandBackground.withOpacity(0.3),
-              blurRadius: 16,
-              offset: const Offset(0, 6),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: _white20,
-                shape: BoxShape.circle,
-              ),
-              child: const Text('🚀', style: TextStyle(fontSize: 28)),
-            ),
-            const SizedBox(width: 18),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Le savoir n\'attend pas !',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                      color: _white,
+                          child: Material(
+                            color: Colors.transparent,
+                            borderRadius: BorderRadius.circular(24),
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(24),
+                              onTap: () {
+                                if (item['cours_id'] != null) {
+                                  Navigator.push(context, MaterialPageRoute(builder: (_) => CoursDetailTabs(
+                                    coursId: item['cours_id'].toString(),
+                                    titre: item['cours_titre']?.toString() ?? '',
+                                    coursColor: accentColor.value,
+                                    isPremium: true,
+                                  )));
+                                }
+                              },
+                              child: Padding(
+                                padding: const EdgeInsets.all(14),
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      width: 4,
+                                      height: 50,
+                                      decoration: BoxDecoration(
+                                        color: accentColor,
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          Text(
+                                            item['cours_titre']?.toString().toUpperCase() ?? '',
+                                            style: TextStyle(color: accentColor, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 0.5),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                          const SizedBox(height: 3),
+                                          Text(
+                                            item['lecon_titre']?.toString() ?? '',
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+                                          ),
+                                          const SizedBox(height: 8),
+                                          Row(
+                                            children: [
+                                              Expanded(
+                                                child: ClipRRect(
+                                                  borderRadius: BorderRadius.circular(8),
+                                                  child: LinearProgressIndicator(
+                                                    value: pct / 100,
+                                                    backgroundColor: YekiColors.white,
+                                                    valueColor: AlwaysStoppedAnimation<Color>(accentColor),
+                                                    minHeight: 3.5,
+                                                  ),
+                                                ),
+                                              ),
+                                              const SizedBox(width: 8),
+                                              Text('$pct%', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+                                            ],
+                                          )
+                                        ],
+                                      ),
+                                    )
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                      },
                     ),
                   ),
-                  const SizedBox(height: 6),
-                  Text(
-                    'Tu n\'as rien lu récemment. Lance-toi !',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: _white80,
-                      height: 1.4,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Text(
-                        'Choisir un cours',
-                        style: TextStyle(
-                          color: actionOrange,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 13,
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      Icon(
-                        Icons.arrow_forward_rounded,
-                        size: 14,
-                        color: actionOrange,
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ── Titre de la liste ────────────────────────────────────────────
-  Widget _buildListeTitle() {
-    return Row(
-      children: [
-        const Text(
-          'Tes programmes',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-            color: _textDark,
-          ),
-        ),
-        const Spacer(),
-        if (_cours.isNotEmpty)
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-            decoration: BoxDecoration(
-              color: brandBackground.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Text(
-              '${_cours.length} cours',
-              style: TextStyle(
-                color: brandBackground,
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
       ],
     );
   }
 
-  // ── Carte cours ──────────────────────────────────────────────────
-  Widget _buildCoursCard(Map<String, dynamic> cours, int index) {
-    final color      = _parseColor(cours['color'] as String?);
-    final icon       = _parseIcon(cours['icon'] as String?);
-    final titre      = cours['title']?.toString() ?? '';
-    final desc       = cours['description']?.toString() ?? '';
-    final ep         = cours['enseignant_principal']?.toString() ?? '—';
-    final nbLecons   = (cours['lessons'] as num? ?? 0).toInt();
-    final nbDevoirs  = (cours['assignments'] as num? ?? 0).toInt();
-    final progression= (cours['progression'] as num? ?? 0).toDouble();
-
-    return AnimatedContainer(
-      duration: Duration(milliseconds: 300 + index * 60),
-      curve: Curves.easeOutCubic,
-      margin: const EdgeInsets.only(bottom: 16),
+  Widget _buildEmptyMotivationBox() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
-        color: _white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
+        color: YekiColors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: YekiColors.borderLight, width: 1.0),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(color: YekiColors.backgroundAlt, shape: BoxShape.circle),
+            child: const Text('🎓', style: TextStyle(fontSize: 20)),
           ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Prêt à entamer un chapitre ?', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+                Text('Choisissez une filière d\'enseignement ci-dessous.', style: const TextStyle(fontSize: 12)),
+              ],
+            ),
+          )
         ],
+      ),
+    );
+  }
+
+  Widget _buildModernProgramCard(Map<String, dynamic> cours) {
+    final themeColor = _parseColor(cours['color'] as String?);
+    final titre = cours['title']?.toString() ?? '';
+    final desc = cours['description']?.toString() ?? '';
+    final mentor = cours['enseignant_principal']?.toString() ?? 'Yéki Expert';
+    final totalLessons = (cours['lessons'] as num? ?? 0).toInt();
+    final progress = (cours['progression'] as num? ?? 0).toDouble();
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      decoration: BoxDecoration(
+        color: _lerpColor(YekiColors.white, themeColor, 0.1),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: _lerpColor(YekiColors.borderLight, themeColor, 0.08), width: 1.1),
+        boxShadow: YekiShadows.subtle,
       ),
       child: Material(
         color: Colors.transparent,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(24),
         child: InkWell(
-          borderRadius: BorderRadius.circular(20),
-          onTap: () => Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => CoursDetailTabs(
-                coursId: cours['id'].toString(),
-                titre: titre,
-                coursColor: color.value, // Transmettre la couleur
-                isPremium: true,
-              ),
-            ),
-          ),
+          borderRadius: BorderRadius.circular(24),
+          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => CoursDetailTabs(
+            coursId: cours['id'].toString(),
+            titre: titre,
+            coursColor: themeColor.value,
+            isPremium: true,
+          ))),
           child: Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(18),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: color.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Icon(icon, color: color, size: 24),
-                    ),
-                    const SizedBox(width: 14),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            titre,
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: _textDark,
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                            decoration: BoxDecoration(
+                              color: themeColor.withValues(alpha: 0.06),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              '$totalLessons modules académiques',
+                              style: TextStyle(color: themeColor, fontSize: 11, fontWeight: FontWeight.w700),
                             ),
                           ),
-                          const SizedBox(height: 4),
-                          Row(
-                            children: [
-                              Icon(Icons.person_outline,
-                                  size: 12, color: _textLight),
-                              const SizedBox(width: 4),
-                              Expanded(
-                                child: Text(
-                                  ep,
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: _textMedium,
-                                  ),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ],
+                          const SizedBox(height: 12),
+                          Text(
+                            titre,
+                            style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800, height: 1.25, letterSpacing: -0.2),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ],
                       ),
                     ),
-                    _buildBadge(progression, color),
+                    const SizedBox(width: 14),
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: themeColor.withValues(alpha: 0.08),
+                        shape: BoxShape.circle,
+                        border: Border.all(color: themeColor.withValues(alpha: 0.12), width: 1),
+                      ),
+                      child: Icon(
+                        _getIconForSubject(titre),
+                        color: themeColor,
+                        size: 20,
+                      ),
+                    ),
                   ],
                 ),
                 if (desc.isNotEmpty) ...[
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 8),
                   Text(
                     desc,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: _textMedium,
-                      fontSize: 13,
-                      height: 1.4,
-                    ),
+                    style: const TextStyle(fontSize: 12.5, height: 1.35),
                   ),
                 ],
                 const SizedBox(height: 16),
+                Container(height: 1, color: _lerpColor(YekiColors.white, themeColor, 0.1)),
+                const SizedBox(height: 14),
                 Row(
                   children: [
-                    _metaChip(
-                      icon: Icons.play_lesson_outlined,
-                      label: '$nbLecons leçon${nbLecons > 1 ? 's' : ''}',
-                      color: color,
+                    Expanded(
+                      child: Row(
+                        children: [
+                          CircleAvatar(
+                            radius: 11,
+                            backgroundColor: themeColor.withValues(alpha: 0.12),
+                            child: Icon(Icons.person_rounded, size: 12, color: themeColor),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              mentor,
+                              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                     const SizedBox(width: 12),
-                    if (nbDevoirs > 0)
-                      _metaChip(
-                        icon: Icons.assignment_outlined,
-                        label: '$nbDevoirs devoir${nbDevoirs > 1 ? 's' : ''}',
-                        color: actionOrange,
-                      ),
-                    const Spacer(),
-                    Text(
-                      '${progression.toStringAsFixed(0)}%',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.bold,
-                        color: color,
-                      ),
-                    ),
+                    _buildDynamicBadge(progress),
+                    const SizedBox(width: 12),
+                    Row(
+                      children: [
+                        Text(
+                          '${progress.toStringAsFixed(0)}%',
+                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
+                        ),
+                        const SizedBox(width: 6),
+                        SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(
+                            value: progress / 100,
+                            strokeWidth: 2.2,
+                            backgroundColor: YekiColors.white,
+                            valueColor: AlwaysStoppedAnimation<Color>(progress > 0 ? YekiColors.primaryDark : YekiColors.textLight),
+                          ),
+                        )
+                      ],
+                    )
                   ],
-                ),
-                const SizedBox(height: 12),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: LinearProgressIndicator(
-                    value: progression / 100,
-                    backgroundColor: color.withOpacity(0.1),
-                    valueColor: AlwaysStoppedAnimation<Color>(color),
-                    minHeight: 6,
-                  ),
-                ),
+                )
               ],
             ),
           ),
@@ -883,94 +595,47 @@ class _CursusPageState extends State<CursusPage>
     );
   }
 
-  Widget _buildBadge(double progression, Color color) {
-    String label;
-    Color bg;
-    Color fg;
+  Color _lerpColor(Color a, Color b, double t) {
+    return Color.lerp(a, b, t)!;
+  }
 
-    if (progression == 0) {
-      label = 'NOUVEAU';
-      bg = color.withOpacity(0.1);
-      fg = color;
-    } else if (progression >= 100) {
-      label = 'TERMINÉ';
-      bg = Colors.green.withOpacity(0.1);
-      fg = Colors.green;
-    } else {
-      label = 'EN COURS';
-      bg = actionOrange.withOpacity(0.1);
-      fg = actionOrange;
+  Widget _buildDynamicBadge(double progress) {
+    String txt = 'NOUVEAU';
+    Color c = YekiColors.primaryDark;
+    if (progress >= 100) {
+      txt = 'TERMINÉ';
+      c = YekiColors.success;
+    } else if (progress > 0) {
+      txt = 'EN COURS';
+      c = YekiColors.accent;
     }
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(12),
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(color: c.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(8)),
       child: Text(
-        label,
-        style: TextStyle(
-          color: fg,
-          fontSize: 10,
-          fontWeight: FontWeight.w700,
-          letterSpacing: 0.3,
-        ),
+        txt,
+        style: TextStyle(color: c, fontSize: 9, fontWeight: FontWeight.w900, letterSpacing: 0.3),
       ),
     );
   }
 
-  Widget _metaChip({
-    required IconData icon,
-    required String label,
-    required Color color,
-  }) =>
-      Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14, color: color),
-          const SizedBox(width: 5),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-              color: _textMedium,
-            ),
-          ),
-        ],
-      );
-
-  // ── État erreur ──────────────────────────────────────────────────
-  Widget _buildError() {
+  Widget _buildErrorState() {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(32),
+        padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.cloud_off_outlined,
-                size: 64, color: _textLight),
-            const SizedBox(height: 20),
-            Text(
-              _errorCours,
-              style: TextStyle(color: _textMedium, fontSize: 15),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 24),
-            ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: brandBackground,
-                foregroundColor: Colors.white,
-                elevation: 0,
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
+            Icon(Icons.wifi_off_rounded, size: 44, color: YekiColors.textLight),
+            const SizedBox(height: 12),
+            Text(_errorCours, style: YekiTextStyles.bodyMedium, textAlign: TextAlign.center),
+            const SizedBox(height: 16),
+            YekiButton(
+              label: 'Actualiser la page',
+              icon: Icons.refresh_rounded,
               onPressed: _chargerTout,
-              icon: const Icon(Icons.refresh, size: 18),
-              label: const Text('Réessayer', style: TextStyle(fontSize: 14)),
+              width: 200,
             ),
           ],
         ),
@@ -978,68 +643,41 @@ class _CursusPageState extends State<CursusPage>
     );
   }
 
-  // ── Skeletons ────────────────────────────────────────────────────
-  Widget _buildSkeleton() {
+  Widget _buildResponsiveSkeleton(double padding) {
     return ListView(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      padding: EdgeInsets.symmetric(horizontal: padding, vertical: 16),
       children: [
-        const SizedBox(height: 60),
-        _skeletonBox(h: 48, radius: 16),
-        const SizedBox(height: 24),
-        _skeletonBox(h: 18, w: 160),
+        _skeletonWidget(h: 50, r: 28),
         const SizedBox(height: 16),
-        SizedBox(
-          height: 170,
-          child: Row(
-            children: [
-              _skeletonBox(h: 170, w: 280, radius: 20),
-              const SizedBox(width: 16),
-              _skeletonBox(h: 170, w: 280, radius: 20),
-            ],
-          ),
+        Row(
+          children: [
+            Expanded(child: _skeletonWidget(h: 36, r: 18)),
+            const SizedBox(width: 10),
+            Expanded(child: _skeletonWidget(h: 36, r: 18)),
+            const SizedBox(width: 10),
+            Expanded(child: _skeletonWidget(h: 36, r: 18)),
+          ],
         ),
         const SizedBox(height: 32),
-        _skeletonBox(h: 20, w: 150),
-        const SizedBox(height: 16),
-        ...List.generate(3, (_) => Padding(
-          padding: const EdgeInsets.only(bottom: 16),
-          child: _skeletonBox(h: 140, radius: 20),
-        )),
+        _skeletonWidget(h: 18, w: 140),
+        const SizedBox(height: 12),
+        _skeletonWidget(h: 90, r: 24),
+        const SizedBox(height: 32),
+        _skeletonWidget(h: 22, w: 180),
+        const SizedBox(height: 14),
+        _skeletonWidget(h: 160, r: 24),
+        const SizedBox(height: 14),
+        _skeletonWidget(h: 160, r: 24),
       ],
     );
   }
 
-  Widget _buildRecentSkeleton() => SizedBox(
-        height: 170,
-        child: ListView.builder(
-          scrollDirection: Axis.horizontal,
-          itemCount: 3,
-          itemBuilder: (_, __) => Padding(
-            padding: const EdgeInsets.only(right: 16),
-            child: _skeletonBox(h: 170, w: 280, radius: 20),
-          ),
-        ),
-      );
-
-  Widget _skeletonBox({
-    double h = 20,
-    double? w,
-    double radius = 12,
-  }) =>
-      Container(
+  Widget _skeletonWidget({double h = 20, double? w, double r = 12}) => Container(
         height: h,
         width: w,
         decoration: BoxDecoration(
-          color: _borderLight,
-          borderRadius: BorderRadius.circular(radius),
+          color: YekiColors.borderLight,
+          borderRadius: BorderRadius.circular(r),
         ),
       );
-
-  // ── Utilitaire couleur ───────────────────────────────────────────
-  /*Color _darken(Color color, double amount) {
-    final hsl = HSLColor.fromColor(color);
-    return hsl
-        .withLightness((hsl.lightness - amount).clamp(0.0, 1.0))
-        .toColor();
-  }*/
 }

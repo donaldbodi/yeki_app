@@ -143,7 +143,7 @@ class _FormationDetailPageState extends State<FormationDetailPage>
     return Scaffold(
       backgroundColor: _bgLight,
       body: NestedScrollView(
-        headerSliverBuilder: (_, __) => [
+        headerSliverBuilder: (_, _) => [
           _buildSliverAppBar(dept),
           SliverToBoxAdapter(child: _buildQuickStats(dept)),
           SliverToBoxAdapter(child: _buildTabs()),
@@ -184,7 +184,7 @@ class _FormationDetailPageState extends State<FormationDetailPage>
         background: Stack(fit: StackFit.expand, children: [
           if (dept.imageUrl != null)
             Image.network(dept.imageUrl!, fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => _gradientBg(c))
+                errorBuilder: (_, _, _) => _gradientBg(c))
           else
             _gradientBg(c),
           Container(

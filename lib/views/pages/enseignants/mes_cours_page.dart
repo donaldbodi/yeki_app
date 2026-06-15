@@ -1,21 +1,17 @@
+// lib/views/pages/enseignants/mes_cours_page.dart
+// ═══════════════════════════════════════════════════════════════════════════
+// MES COURS ENSEIGNANT — CORRIGÉ
+// ═══════════════════════════════════════════════════════════════════════════
+
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:yeki/views/pages/enseignants/interface_enseignant_page.dart';
-import 'detail_cours_enseignant.dart';
-
-// Palette harmonisée
-const Color brandBackground = Color(0xFF135F74);
-const Color actionOrange = Color(0xFFFF6B00);
-const Color _textDark = Color(0xFF1A1C1E);
-const Color _textMedium = Color(0xFF5A5C5E);
-const Color _textLight = Color(0xFF8A8C8E);
-const Color _borderLight = Color(0xFFE0E4E8);
-const Color _borderMedium = Color(0xFFD0D4D8);
-const Color _bgLight = Color(0xFFF8FAFC);
-const Color _white = Color(0xFFFFFFFF);
-const Color _green = Color(0xFF10B981);
+import 'package:yeki/views/pages/enseignants/detail_cours_enseignant.dart';
+import 'package:yeki/core/theme/app_theme.dart';
+import 'package:yeki/core/constants/api_constants.dart';
+import 'package:yeki/utils/error_handler.dart';
 
 class MesCoursPage extends StatefulWidget {
   final RoleEnseignant role;
@@ -31,8 +27,6 @@ class _MesCoursPageState extends State<MesCoursPage> {
   List<Map<String, dynamic>> parcours = [];
   String? niveauFiltre;
   String? parcoursFiltre;
-
-  final String baseUrl = "https://yeki.pythonanywhere.com/api";
 
   @override
   void initState() {
@@ -53,7 +47,7 @@ class _MesCoursPageState extends State<MesCoursPage> {
     try {
       final headers = await _authHeaders();
       final response = await http.get(
-        Uri.parse("$baseUrl/enseignant/dashboard/"),
+        Uri.parse(ApiConstants.enseignantDashboard),
         headers: headers,
       );
       if (response.statusCode == 200) {
@@ -87,18 +81,18 @@ class _MesCoursPageState extends State<MesCoursPage> {
     }).toList();
 
     return Scaffold(
-      backgroundColor: _bgLight,
+      backgroundColor: YekiColors.backgroundLight,
       appBar: AppBar(
-        title: const Text('Mes Cours', style: TextStyle(color: _textDark, fontWeight: FontWeight.bold)),
-        backgroundColor: _white,
+        title: const Text('Mes Cours', style: TextStyle(fontWeight: FontWeight.bold)),
+        backgroundColor: YekiColors.white,
         elevation: 0,
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
-          child: Divider(height: 1, color: _borderLight),
+          child: Divider(height: 1, color: YekiColors.borderLight),
         ),
         actions: [
           IconButton(
-            icon: Icon(Icons.refresh, color: brandBackground),
+            icon: Icon(Icons.refresh, color: YekiColors.primaryDark),
             onPressed: _fetchCours,
           ),
         ],
@@ -126,7 +120,7 @@ class _MesCoursPageState extends State<MesCoursPage> {
     final listParcours = coursFiltres.map((c) => c['parcours']?.toString() ?? '').where((s) => s.isNotEmpty).toSet().toList();
 
     return Container(
-      color: _white,
+      color: YekiColors.white,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Row(
         children: [
@@ -149,7 +143,7 @@ class _MesCoursPageState extends State<MesCoursPage> {
           ),
           if (parcoursFiltre != null || niveauFiltre != null)
             IconButton(
-              icon: const Icon(Icons.close, color: _textMedium),
+              icon: const Icon(Icons.close, color: YekiColors.textLight),
               onPressed: () => setState(() {
                 parcoursFiltre = null;
                 niveauFiltre = null;
@@ -164,20 +158,20 @@ class _MesCoursPageState extends State<MesCoursPage> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14),
       decoration: BoxDecoration(
-        color: _bgLight,
+        color: YekiColors.backgroundLight,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: _borderLight, width: 1),
+        border: Border.all(color: YekiColors.borderLight, width: 1),
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
           value: value,
-          hint: Text(hint, style: const TextStyle(color: _textMedium, fontSize: 13)),
-          dropdownColor: _white,
-          icon: Icon(Icons.keyboard_arrow_down, color: _textMedium),
+          hint: Text(hint, style: const TextStyle(fontSize: 13)),
+          dropdownColor: YekiColors.white,
+          icon: Icon(Icons.keyboard_arrow_down, color: YekiColors.textLight),
           isExpanded: true,
           items: items.map((e) => DropdownMenuItem(
             value: e, 
-            child: Text(e, style: const TextStyle(color: _textDark))
+            child: Text(e, style: const TextStyle())
           )).toList(),
           onChanged: onChanged,
         ),
@@ -191,16 +185,16 @@ class _MesCoursPageState extends State<MesCoursPage> {
     final String titre = cours['titre'] ?? "Cours sans titre";
     final String parcoursNom = cours['parcours'] ?? "Général";
 
-    Color accentColor = brandBackground;
-    if (parcoursNom.contains("Prépas")) accentColor = actionOrange;
-    if (parcoursNom.contains("Supérieur")) accentColor = Colors.purple.shade700;
+    Color accentColor = YekiColors.primaryDark;
+    if (parcoursNom.contains("Prépas")) accentColor = YekiColors.accent;
+    if (parcoursNom.contains("Supérieur")) accentColor = YekiColors.purple;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
-        color: _white,
+        color: YekiColors.white,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: _borderLight, width: 1),
+        border: Border.all(color: YekiColors.borderLight, width: 1),
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(20),
@@ -230,9 +224,9 @@ class _MesCoursPageState extends State<MesCoursPage> {
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: accentColor.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: accentColor.withOpacity(0.2), width: 0.8),
+                        color: accentColor.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: accentColor.withValues(alpha: 0.2), width: 0.8),
                       ),
                       child: Icon(Icons.menu_book_rounded, color: accentColor, size: 26),
                     ),
@@ -243,10 +237,9 @@ class _MesCoursPageState extends State<MesCoursPage> {
                         children: [
                           Text(
                             titre,
-                            style: TextStyle(
+                            style: const TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.bold,
-                              color: _textDark,
                               letterSpacing: -0.3,
                             ),
                             maxLines: 2,
@@ -271,14 +264,13 @@ class _MesCoursPageState extends State<MesCoursPage> {
                   cours['description'] ?? "Accédez au contenu complet de ce module...",
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: _textMedium,
+                  style: const TextStyle(
                     fontSize: 13,
                     height: 1.4,
                   ),
                 ),
                 const SizedBox(height: 16),
-                Divider(color: _borderLight, height: 1),
+                Divider(color: YekiColors.borderLight, height: 1),
                 const SizedBox(height: 14),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -293,9 +285,9 @@ class _MesCoursPageState extends State<MesCoursPage> {
                       ),
                       child: const Row(
                         children: [
-                          Text("Détails", style: TextStyle(color: _white, fontSize: 12, fontWeight: FontWeight.w600)),
+                          Text("Détails", style: TextStyle(color: YekiColors.white, fontSize: 12, fontWeight: FontWeight.w600)),
                           SizedBox(width: 6),
-                          Icon(Icons.arrow_forward_rounded, color: _white, size: 14),
+                          Icon(Icons.arrow_forward_rounded, color: YekiColors.white, size: 14),
                         ],
                       ),
                     ),
@@ -312,12 +304,11 @@ class _MesCoursPageState extends State<MesCoursPage> {
   Widget _badgeIcon(IconData icon, String label) {
     return Row(
       children: [
-        Icon(icon, size: 14, color: _textLight),
+        Icon(icon, size: 14, color: YekiColors.textLight),
         const SizedBox(width: 6),
         Text(
           label,
-          style: TextStyle(
-            color: _textMedium,
+          style: const TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w500,
           ),
@@ -331,24 +322,19 @@ class _MesCoursPageState extends State<MesCoursPage> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.auto_stories, size: 64, color: _borderMedium),
+          Icon(Icons.auto_stories, size: 64, color: YekiColors.borderLight),
           const SizedBox(height: 16),
           Text(
             "Aucun cours trouvé",
-            style: TextStyle(color: _textLight, fontSize: 16, fontWeight: FontWeight.w500),
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
           ),
           const SizedBox(height: 8),
           if (widget.role == RoleEnseignant.enseignantCadre)
-            ElevatedButton.icon(
+            YekiButton(
+              label: "Créer un cours",
+              icon: Icons.add,
               onPressed: _creerCours,
-              icon: const Icon(Icons.add, size: 18),
-              label: const Text("Créer un cours"),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: brandBackground,
-                foregroundColor: _white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                elevation: 0,
-              ),
+              width: 180,
             ),
         ],
       ),
@@ -358,9 +344,9 @@ class _MesCoursPageState extends State<MesCoursPage> {
   Widget? _buildFabSelonRole(RoleEnseignant role) {
     if (role == RoleEnseignant.enseignantCadre) {
       return FloatingActionButton.extended(
-        backgroundColor: brandBackground,
-        icon: const Icon(Icons.add, color: _white),
-        label: const Text("Nouveau Cours", style: TextStyle(color: _white)),
+        backgroundColor: YekiColors.primaryDark,
+        icon: const Icon(Icons.add, color: YekiColors.white),
+        label: const Text("Nouveau Cours", style: TextStyle(color: YekiColors.white)),
         onPressed: _creerCours,
       );
     }
@@ -388,8 +374,8 @@ class _MesCoursPageState extends State<MesCoursPage> {
       context: context,
       builder: (_) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        backgroundColor: _white,
-        title: const Text("Créer un cours", style: TextStyle(fontWeight: FontWeight.bold, color: _textDark)),
+        backgroundColor: YekiColors.white,
+        title: const Text("Créer un cours", style: TextStyle(fontWeight: FontWeight.bold)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -397,18 +383,18 @@ class _MesCoursPageState extends State<MesCoursPage> {
               controller: titreCtrl,
               decoration: InputDecoration(
                 labelText: "Titre du cours",
-                labelStyle: TextStyle(color: _textMedium),
+                labelStyle: const TextStyle(),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: _borderLight),
+                  borderSide: const BorderSide(color: YekiColors.borderLight),
                 ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: _borderLight),
+                  borderSide: const BorderSide(color: YekiColors.borderLight),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: brandBackground),
+                  borderSide: const BorderSide(color: YekiColors.primaryDark),
                 ),
               ),
             ),
@@ -417,18 +403,18 @@ class _MesCoursPageState extends State<MesCoursPage> {
               controller: niveauCtrl,
               decoration: InputDecoration(
                 labelText: "Niveau (optionnel)",
-                labelStyle: TextStyle(color: _textMedium),
+                labelStyle: const TextStyle(),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: _borderLight),
+                  borderSide: const BorderSide(color: YekiColors.borderLight),
                 ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: _borderLight),
+                  borderSide: const BorderSide(color: YekiColors.borderLight),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: brandBackground),
+                  borderSide: const BorderSide(color: YekiColors.primaryDark),
                 ),
               ),
             ),
@@ -437,18 +423,18 @@ class _MesCoursPageState extends State<MesCoursPage> {
               controller: parcoursCtrl,
               decoration: InputDecoration(
                 labelText: "Parcours (optionnel)",
-                labelStyle: TextStyle(color: _textMedium),
+                labelStyle: const TextStyle(),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: _borderLight),
+                  borderSide: const BorderSide(color: YekiColors.borderLight),
                 ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: _borderLight),
+                  borderSide: const BorderSide(color: YekiColors.borderLight),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: brandBackground),
+                  borderSide: const BorderSide(color: YekiColors.primaryDark),
                 ),
               ),
             ),
@@ -457,7 +443,7 @@ class _MesCoursPageState extends State<MesCoursPage> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text("Annuler", style: TextStyle(color: _textMedium)),
+            child: const Text("Annuler", style: TextStyle(color: YekiColors.textMedium)),
           ),
           ElevatedButton(
             onPressed: () async {
@@ -472,37 +458,21 @@ class _MesCoursPageState extends State<MesCoursPage> {
                 if (parcours.isNotEmpty) 'parcours': parcours,
               };
               final res = await http.post(
-                Uri.parse("$baseUrl/cours/"),
+                Uri.parse('${ApiConstants.baseUrl}/cours/'),
                 headers: headers,
                 body: jsonEncode(body),
               );
               if (res.statusCode == 201 || res.statusCode == 200) {
-                Navigator.pop(context);
+                if (context.mounted) Navigator.pop(context);
                 await _fetchCours();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: const Text('Cours créé avec succès.'),
-                    backgroundColor: _green,
-                    behavior: SnackBarBehavior.floating,
-                    margin: const EdgeInsets.all(16),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                );
+                ErrorHandler.showSuccess(context, 'Cours créé avec succès.');
               } else {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Erreur création (${res.statusCode})'),
-                    backgroundColor: Colors.red,
-                    behavior: SnackBarBehavior.floating,
-                    margin: const EdgeInsets.all(16),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                );
+                ErrorHandler.showError(context, 'Erreur création (${res.statusCode})');
               }
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: brandBackground,
-              foregroundColor: _white,
+              backgroundColor: YekiColors.primaryDark,
+              foregroundColor: YekiColors.white,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               elevation: 0,
             ),

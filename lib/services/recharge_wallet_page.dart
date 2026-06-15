@@ -121,7 +121,8 @@ class _RechargeWalletPageState extends State<RechargeWalletPage> {
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.04),
+                          // ✅ CORRIGÉ : withValues(alpha: 0.04)
+                          color: Colors.black.withValues(alpha: 0.04),
                           blurRadius: 8,
                           offset: const Offset(0, 2),
                         ),
@@ -231,7 +232,8 @@ class _RechargeWalletPageState extends State<RechargeWalletPage> {
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF2884A0).withOpacity(0.08),
+                  // ✅ CORRIGÉ : withValues(alpha: 0.08)
+                  color: const Color(0xFF2884A0).withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Row(

@@ -1,4 +1,7 @@
-// lib/views/pages/apprenants/passer_exercice_page.dart
+// lib/views/pages/apprenants/passer_exercice.dart
+// ═══════════════════════════════════════════════════════════════════════════
+// PASSER UN EXERCICE — CORRIGÉ
+// ═══════════════════════════════════════════════════════════════════════════
 
 import 'dart:async';
 import 'dart:convert';
@@ -8,6 +11,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:yeki/views/pages/apprenants/resultat_exercice_page.dart';
 import 'package:yeki/widgets/form_preoccupation_sheet.dart';
 import 'package:yeki/views/pages/apprenants/yeki_ia_chat_page.dart';
+import 'package:yeki/core/theme/app_theme.dart';
+import 'package:yeki/core/constants/api_constants.dart';
+import 'package:yeki/utils/error_handler.dart';
 
 class PasserExercicePage extends StatefulWidget {
   final int exerciceId;
@@ -26,14 +32,6 @@ class PasserExercicePage extends StatefulWidget {
 }
 
 class _PasserExercicePageState extends State<PasserExercicePage> {
-  final Color primaryColor = const Color(0xFF2884A0);
-  final Color darkBlue = const Color(0xFF1A1C1E);
-  final Color bgColor = const Color(0xFFF8FAFB);
-  final Color greenColor = const Color(0xFF10B981);
-  final Color orangeColor = const Color(0xFFF97316);
-  final Color redColor = const Color(0xFFEF4444);
-  final Color violetColor = const Color(0xFF6A1B9A);
-
   Map<String, dynamic> exercice = {};
   bool loading = true;
   bool submitted = false;
@@ -85,19 +83,18 @@ class _PasserExercicePageState extends State<PasserExercicePage> {
     try {
       final token = await getToken();
       if (token == null) {
-        _showSnackbar("Veuillez vous reconnecter", error: true);
-        setState(() => loading = false);
+        if (mounted) {
+          ErrorHandler.showError(context, "Veuillez vous reconnecter");
+          setState(() => loading = false);
+        }
         return;
       }
 
-      final headers = {
-        "Content-Type": "application/json",
-        "Authorization": "Token $token",
-      };
+      final headers = ApiHeaders.auth(token);
 
       // Étape 1: Démarrer la session
       final startRes = await http.post(
-        Uri.parse("https://yeki.pythonanywhere.com/api/exercices/${widget.exerciceId}/demarrer/"),
+        Uri.parse(ApiConstants.exerciceDemarrer(widget.exerciceId)),
         headers: headers,
       );
 
@@ -107,20 +104,19 @@ class _PasserExercicePageState extends State<PasserExercicePage> {
         dureeTotale = _toInt(startData['duree_totale']);
         tentativesRestantes = _toInt(startData['tentatives_restantes']);
         tentativesMax = _toInt(startData['tentatives_max']);
-        
-        debugPrint("Démarrage réussi - tempsRestant: $tempsRestant, tentativesRestantes: $tentativesRestantes");
       } else if (startRes.statusCode == 403) {
-        // Tentatives épuisées
         final errorData = jsonDecode(startRes.body);
         tentativesEpuisees = true;
-        _showSnackbar(errorData['detail'] ?? "Nombre maximum de tentatives atteint", error: true);
-        setState(() => loading = false);
+        if (mounted) {
+          ErrorHandler.showError(context, errorData['detail'] ?? "Nombre maximum de tentatives atteint");
+          setState(() => loading = false);
+        }
         return;
       }
 
       // Étape 2: Charger le contenu de l'exercice
       final exoRes = await http.get(
-        Uri.parse("https://yeki.pythonanywhere.com/api/exercices/${widget.exerciceId}/"),
+        Uri.parse(ApiConstants.exerciceDetail(widget.exerciceId)),
         headers: headers,
       );
 
@@ -140,16 +136,19 @@ class _PasserExercicePageState extends State<PasserExercicePage> {
           startTimer();
         }
         
-        // Si tentatives épuisées, récupérer le dernier résultat
         if (tentativesEpuisees) {
           await _recupererDernierResultat(token);
         }
       } else {
-        _showSnackbar("Erreur chargement de l'exercice", error: true);
+        if (mounted) {
+          ErrorHandler.showError(context, "Erreur chargement de l'exercice");
+        }
       }
     } catch (e) {
       debugPrint("Erreur chargement: $e");
-      _showSnackbar("Erreur de connexion: ${e.toString()}", error: true);
+      if (mounted) {
+        ErrorHandler.showError(context, "Erreur de connexion: ${e.toString()}");
+      }
     }
     if (mounted) setState(() => loading = false);
   }
@@ -157,13 +156,10 @@ class _PasserExercicePageState extends State<PasserExercicePage> {
   Future<void> _recupererDernierResultat(String token) async {
     try {
       final res = await http.get(
-        Uri.parse("https://yeki.pythonanywhere.com/api/evaluations/exercice/${widget.exerciceId}/"),
-        headers: {
-          "Authorization": "Token $token",
-          "Content-Type": "application/json",
-        },
+        Uri.parse(ApiConstants.resultatExercice(widget.exerciceId)),
+        headers: ApiHeaders.auth(token),
       );
-      if (res.statusCode == 200) {
+      if (res.statusCode == 200 && mounted) {
         final data = jsonDecode(res.body);
         setState(() {
           resultat = data;
@@ -204,7 +200,9 @@ class _PasserExercicePageState extends State<PasserExercicePage> {
     final token = await getToken();
     if (token == null) {
       setState(() => submitting = false);
-      _showSnackbar("Veuillez vous reconnecter.", error: true);
+      if (mounted) {
+        ErrorHandler.showError(context, "Veuillez vous reconnecter.");
+      }
       return;
     }
 
@@ -217,17 +215,18 @@ class _PasserExercicePageState extends State<PasserExercicePage> {
         context: context,
         builder: (ctx) => AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          backgroundColor: YekiColors.white,
           title: const Text("Attention"),
           content: Text("Vous n'avez pas répondu à $nonRepondues question(s).\nVoulez-vous vraiment soumettre ?"),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx, false),
-              child: const Text("Annuler"),
+              child: const Text("Annuler", style: TextStyle(color: YekiColors.textMedium)),
             ),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: primaryColor),
+              style: ElevatedButton.styleFrom(backgroundColor: YekiColors.primaryDark),
               onPressed: () => Navigator.pop(ctx, true),
-              child: const Text("Soumettre", style: TextStyle(color: Colors.white)),
+              child: const Text("Soumettre", style: TextStyle(color: YekiColors.white)),
             ),
           ],
         ),
@@ -244,17 +243,12 @@ class _PasserExercicePageState extends State<PasserExercicePage> {
         (key, value) => MapEntry(key.toString(), value),
       );
       final response = await http.post(
-        Uri.parse("https://yeki.pythonanywhere.com/api/exercices/${widget.exerciceId}/evaluer/"),
-        headers: {
-          "Authorization": "Token $token",
-          "Content-Type": "application/json",
-        },
+        Uri.parse(ApiConstants.exerciceEvaluer(widget.exerciceId)),
+        headers: ApiHeaders.auth(token),
         body: jsonEncode({"reponses": reponsesString}),
       );
 
-      debugPrint("Soumission - status: ${response.statusCode}");
-
-      if (response.statusCode == 200) {
+      if (response.statusCode == 200 && mounted) {
         final data = jsonDecode(response.body);
         setState(() {
           resultat = data;
@@ -263,39 +257,32 @@ class _PasserExercicePageState extends State<PasserExercicePage> {
           showCorrection = true;
         });
 
-        _showSnackbar(
+        ErrorHandler.showSuccess(
+          context,
           auto ? "⏰ Temps écoulé ! Exercice soumis automatiquement." : "✓ Exercice soumis avec succès !",
-          error: false,
         );
       } else {
         setState(() => submitting = false);
-        try {
-          final errorData = jsonDecode(response.body);
-          _showSnackbar(errorData['detail'] ?? "Erreur lors de la soumission", error: true);
-        } catch (_) {
-          _showSnackbar("Erreur ${response.statusCode}", error: true);
+        if (mounted) {
+          try {
+            final errorData = jsonDecode(response.body);
+            ErrorHandler.showError(context, errorData['detail'] ?? "Erreur lors de la soumission");
+          } catch (_) {
+            ErrorHandler.showError(context, "Erreur ${response.statusCode}");
+          }
         }
       }
     } catch (e) {
       debugPrint("Erreur soumission: $e");
       setState(() => submitting = false);
-      _showSnackbar("Erreur réseau: ${e.toString()}", error: true);
+      if (mounted) {
+        ErrorHandler.showError(context, "Erreur réseau: ${e.toString()}");
+      }
     }
   }
 
-  void _showSnackbar(String message, {bool error = false}) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: error ? redColor : greenColor,
-        behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 3),
-      ),
-    );
-  }
-
   void _voirResultats() {
+    if (!mounted) return;
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
@@ -310,6 +297,7 @@ class _PasserExercicePageState extends State<PasserExercicePage> {
   }
 
   void _ouvrirPreoccupation() {
+    if (!mounted) return;
     ouvrirPreoccupation(
       context: context,
       source: 'exercice',
@@ -321,6 +309,7 @@ class _PasserExercicePageState extends State<PasserExercicePage> {
   }
 
   void _ouvrirIA() {
+    if (!mounted) return;
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -337,31 +326,27 @@ class _PasserExercicePageState extends State<PasserExercicePage> {
 
   void _retour() {
     timer?.cancel();
-    Navigator.pop(context);
+    if (mounted) Navigator.pop(context);
   }
 
   @override
   Widget build(BuildContext context) {
     if (loading) {
       return Scaffold(
-        backgroundColor: bgColor,
+        backgroundColor: YekiColors.backgroundLight,
         body: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              CircularProgressIndicator(color: primaryColor),
+              YekiLoader(),
               const SizedBox(height: 16),
-              Text(
-                "Chargement de l'exercice...",
-                style: TextStyle(color: Colors.grey.shade600),
-              ),
+              Text("Chargement de l'exercice...", style: TextStyle(color: YekiColors.textLight)),
             ],
           ),
         ),
       );
     }
 
-    // Affichage du résultat si tentatives épuisées ou déjà soumis
     if ((tentativesEpuisees || submitted) && resultat != null) {
       return _buildResultView();
     }
@@ -370,12 +355,12 @@ class _PasserExercicePageState extends State<PasserExercicePage> {
     double progress = questions.isEmpty ? 0 : reponses.length / questions.length;
 
     return Scaffold(
-      backgroundColor: bgColor,
+      backgroundColor: YekiColors.backgroundLight,
       appBar: AppBar(
-        backgroundColor: darkBlue,
+        backgroundColor: YekiColors.textDark,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.close, color: Colors.white),
+          icon: const Icon(Icons.close, color: YekiColors.white),
           onPressed: _retour,
         ),
         title: Column(
@@ -383,23 +368,23 @@ class _PasserExercicePageState extends State<PasserExercicePage> {
           children: [
             Text(
               exercice['titre'] ?? "Examen",
-              style: const TextStyle(fontSize: 16, color: Colors.white, fontWeight: FontWeight.bold),
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
             ),
             Text(
               "${reponses.length}/${questions.length} questions répondues",
-              style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(0.7)),
+              style: TextStyle(fontSize: 12, color: YekiColors.white.withValues(alpha: 0.7)),
             ),
           ],
         ),
         actions: [
           _buildTimerBadge(),
           IconButton(
-            icon: const Icon(Icons.psychology_rounded, color: Colors.white),
+            icon: const Icon(Icons.psychology_rounded),
             onPressed: _ouvrirIA,
             tooltip: "Yéki IA",
           ),
           IconButton(
-            icon: const Icon(Icons.help_outline, color: Colors.white),
+            icon: const Icon(Icons.help_outline),
             onPressed: _ouvrirPreoccupation,
             tooltip: "Poser une question",
           ),
@@ -409,8 +394,8 @@ class _PasserExercicePageState extends State<PasserExercicePage> {
         children: [
           LinearProgressIndicator(
             value: progress,
-            backgroundColor: primaryColor.withOpacity(0.1),
-            color: primaryColor,
+            backgroundColor: YekiColors.primaryDark.withValues(alpha: 0.1),
+            color: YekiColors.primaryDark,
             minHeight: 6,
           ),
           Expanded(
@@ -442,7 +427,6 @@ class _PasserExercicePageState extends State<PasserExercicePage> {
         : _toDouble(resultat!['total']);
     final details = resultat!['detail'] as List? ?? [];
     
-    // Calculer les points réels
     double totalPoints = 0;
     double pointsObtenus = 0;
     for (var d in details) {
@@ -458,20 +442,20 @@ class _PasserExercicePageState extends State<PasserExercicePage> {
     final scorePercent = totalPoints > 0 ? (pointsObtenus / totalPoints) : 0.0;
 
     return Scaffold(
-      backgroundColor: bgColor,
+      backgroundColor: YekiColors.backgroundLight,
       appBar: AppBar(
-        backgroundColor: darkBlue,
+        backgroundColor: YekiColors.textDark,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          icon: const Icon(Icons.arrow_back),
           onPressed: _retour,
         ),
-        title: const Text("Résultat", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        title: const Text("Résultat", style: TextStyle(fontWeight: FontWeight.bold)),
         actions: [
           TextButton.icon(
             onPressed: _voirResultats,
-            icon: const Icon(Icons.assignment_turned_in, color: Colors.white, size: 18),
-            label: const Text("Détails", style: TextStyle(color: Colors.white)),
+            icon: const Icon(Icons.assignment_turned_in, size: 18),
+            label: const Text("Détails"),
           ),
         ],
       ),
@@ -495,19 +479,19 @@ class _PasserExercicePageState extends State<PasserExercicePage> {
                 children: [
                   Icon(
                     scorePercent >= 0.5 ? Icons.emoji_events_rounded : Icons.refresh_rounded,
-                    color: Colors.white,
+                    color: YekiColors.white,
                     size: 48,
                   ),
                   const SizedBox(height: 12),
                   Text(
                     scorePercent >= 0.5 ? 'Bravo !' : tentativesEpuisees ? 'Tentatives épuisées' : 'Continuez vos efforts !',
-                    style: const TextStyle(color: Colors.white70, fontSize: 14),
+                    style: TextStyle(color: YekiColors.white.withValues(alpha: 0.7), fontSize: 14),
                   ),
                   const SizedBox(height: 8),
                   Text(
                     '${pointsObtenus.toStringAsFixed(1)} / ${totalPoints.toStringAsFixed(0)}',
                     style: const TextStyle(
-                      color: Colors.white,
+                      color: YekiColors.white,
                       fontSize: 44,
                       fontWeight: FontWeight.w900,
                     ),
@@ -515,12 +499,12 @@ class _PasserExercicePageState extends State<PasserExercicePage> {
                   const SizedBox(height: 8),
                   Text(
                     'Note : ${note.toStringAsFixed(1)} / ${noteSur.toStringAsFixed(0)}',
-                    style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 14, fontWeight: FontWeight.w600),
+                    style: TextStyle(color: YekiColors.white.withValues(alpha: 0.9), fontSize: 14, fontWeight: FontWeight.w600),
                   ),
                   const SizedBox(height: 4),
                   Text(
                     '$bonnes bonne${bonnes > 1 ? 's' : ''} réponse${bonnes > 1 ? 's' : ''} sur $total',
-                    style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 13),
+                    style: TextStyle(color: YekiColors.white.withValues(alpha: 0.8), fontSize: 13),
                   ),
                   if (tentativesEpuisees)
                     Padding(
@@ -528,12 +512,12 @@ class _PasserExercicePageState extends State<PasserExercicePage> {
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.2),
+                          color: YekiColors.white.withValues(alpha: 0.2),
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: const Text(
                           'Maximum de tentatives atteint',
-                          style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
+                          style: TextStyle(color: YekiColors.white, fontSize: 12, fontWeight: FontWeight.w600),
                         ),
                       ),
                     ),
@@ -551,20 +535,20 @@ class _PasserExercicePageState extends State<PasserExercicePage> {
                 child: Container(
                   padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 20),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: YekiColors.white,
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: primaryColor.withOpacity(0.3)),
+                    border: Border.all(color: YekiColors.primaryDark.withValues(alpha: 0.3)),
                   ),
                   child: Row(
                     children: [
-                      Icon(Icons.list_alt_rounded, color: primaryColor, size: 20),
+                      Icon(Icons.list_alt_rounded, color: YekiColors.primaryDark, size: 20),
                       const SizedBox(width: 12),
                       Text(
                         'Voir la correction détaillée',
-                        style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: darkBlue),
+                        style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
                       ),
                       const Spacer(),
-                      Icon(showCorrection ? Icons.expand_less : Icons.expand_more, color: primaryColor),
+                      Icon(showCorrection ? Icons.expand_less : Icons.expand_more, color: YekiColors.primaryDark),
                     ],
                   ),
                 ),
@@ -572,16 +556,10 @@ class _PasserExercicePageState extends State<PasserExercicePage> {
             if (showCorrection)
               ...details.asMap().entries.map((e) => _buildDetailQuestion(e.key, e.value)),
             const SizedBox(height: 30),
-            ElevatedButton.icon(
+            YekiButton(
+              label: "Voir les résultats complets",
+              icon: Icons.assignment_turned_in,
               onPressed: _voirResultats,
-              icon: const Icon(Icons.assignment_turned_in),
-              label: const Text("Voir les résultats complets"),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: primaryColor,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                elevation: 0,
-              ),
             ),
             const SizedBox(height: 20),
           ],
@@ -596,45 +574,36 @@ class _PasserExercicePageState extends State<PasserExercicePage> {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [primaryColor.withOpacity(0.08), primaryColor.withOpacity(0.04)],
+          colors: [YekiColors.primaryDark.withValues(alpha: 0.08), YekiColors.primaryDark.withValues(alpha: 0.04)],
           begin: Alignment.centerLeft,
           end: Alignment.centerRight,
         ),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: primaryColor.withOpacity(0.25)),
+        border: Border.all(color: YekiColors.primaryDark.withValues(alpha: 0.25)),
       ),
       child: Row(
         children: [
           Container(
             padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(color: primaryColor.withOpacity(0.15), shape: BoxShape.circle),
-            child: Icon(Icons.psychology_rounded, color: primaryColor, size: 22),
+            decoration: BoxDecoration(color: YekiColors.primaryDark.withValues(alpha: 0.15), shape: BoxShape.circle),
+            child: Icon(Icons.psychology_rounded, color: YekiColors.primaryDark, size: 22),
           ),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Posez une question à Yéki IA',
-                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: darkBlue),
-                ),
+                Text('Posez une question à Yéki IA', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14)),
                 const SizedBox(height: 2),
-                Text(
-                  'Obtenez des explications personnalisées sur cet exercice',
-                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600, height: 1.3),
-                ),
+                Text('Obtenez des explications personnalisées sur cet exercice', style: TextStyle(fontSize: 12, height: 1.3)),
               ],
             ),
           ),
           const SizedBox(width: 8),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(color: primaryColor, borderRadius: BorderRadius.circular(10)),
-            child: const Text(
-              'Discuter',
-              style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12),
-            ),
+            decoration: BoxDecoration(color: YekiColors.primaryDark, borderRadius: BorderRadius.circular(8)),
+            child: const Text('Discuter', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12)),
           ),
         ],
       ),
@@ -647,45 +616,36 @@ class _PasserExercicePageState extends State<PasserExercicePage> {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [orangeColor.withOpacity(0.08), orangeColor.withOpacity(0.04)],
+          colors: [YekiColors.warning.withValues(alpha: 0.08), YekiColors.warning.withValues(alpha: 0.04)],
           begin: Alignment.centerLeft,
           end: Alignment.centerRight,
         ),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: orangeColor.withOpacity(0.25)),
+        border: Border.all(color: YekiColors.warning.withValues(alpha: 0.25)),
       ),
       child: Row(
         children: [
           Container(
             padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(color: orangeColor.withOpacity(0.15), shape: BoxShape.circle),
-            child: Icon(Icons.help_outline_rounded, color: orangeColor, size: 22),
+            decoration: BoxDecoration(color: YekiColors.warning.withValues(alpha: 0.15), shape: BoxShape.circle),
+            child: Icon(Icons.help_outline_rounded, color: YekiColors.warning, size: 22),
           ),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Une préoccupation sur cet exercice ?',
-                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: darkBlue),
-                ),
+                Text('Une préoccupation sur cet exercice ?', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14)),
                 const SizedBox(height: 2),
-                Text(
-                  'Posez-la dans le forum — votre professeur répond sous 24h',
-                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600, height: 1.3),
-                ),
+                Text('Posez-la dans le forum — votre professeur répond sous 24h', style: TextStyle(fontSize: 12, height: 1.3)),
               ],
             ),
           ),
           const SizedBox(width: 8),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(color: orangeColor, borderRadius: BorderRadius.circular(10)),
-            child: const Text(
-              'Forum',
-              style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12),
-            ),
+            decoration: BoxDecoration(color: YekiColors.warning, borderRadius: BorderRadius.circular(8)),
+            child: const Text('Forum', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12)),
           ),
         ],
       ),
@@ -694,7 +654,7 @@ class _PasserExercicePageState extends State<PasserExercicePage> {
 
   Widget _buildDetailQuestion(int idx, Map d) {
     final isCorrect = d['correct'] == true;
-    final color = isCorrect ? greenColor : redColor;
+    final color = isCorrect ? YekiColors.success : YekiColors.error;
     final pointsMax = _toDouble(d['points_max']);
     final pointsObtenus = _toDouble(d['points_obtenus']);
 
@@ -702,10 +662,10 @@ class _PasserExercicePageState extends State<PasserExercicePage> {
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: YekiColors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color.withOpacity(0.2)),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8)],
+        border: Border.all(color: color.withValues(alpha: 0.2)),
+        boxShadow: YekiShadows.subtle,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -715,20 +675,17 @@ class _PasserExercicePageState extends State<PasserExercicePage> {
               Container(
                 width: 28,
                 height: 28,
-                decoration: BoxDecoration(color: color.withOpacity(0.1), shape: BoxShape.circle),
+                decoration: BoxDecoration(color: color.withValues(alpha: 0.1), shape: BoxShape.circle),
                 child: Icon(isCorrect ? Icons.check_rounded : Icons.close_rounded, color: color, size: 16),
               ),
               const SizedBox(width: 10),
-              Text(
-                'Question ${idx + 1}',
-                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: color),
-              ),
+              Text('Question ${idx + 1}', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: color)),
               const Spacer(),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: color.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(6),
+                  color: color.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
                   '${pointsObtenus.toStringAsFixed(0)} / ${pointsMax.toStringAsFixed(0)} pts',
@@ -738,35 +695,29 @@ class _PasserExercicePageState extends State<PasserExercicePage> {
             ],
           ),
           const SizedBox(height: 10),
-          Text(
-            d['question'] ?? '',
-            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: darkBlue, height: 1.4),
-          ),
+          Text(d['question'] ?? '', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, height: 1.4)),
           const SizedBox(height: 10),
           if (d['reponse_utilisateur'] != null && d['reponse_utilisateur'].toString().isNotEmpty)
-            _reponseRow('Votre réponse', d['reponse_utilisateur'].toString(), isCorrect ? greenColor : redColor),
+            _reponseRow('Votre réponse', d['reponse_utilisateur'].toString(), isCorrect ? YekiColors.success : YekiColors.error),
           if (!isCorrect && d['bonne_reponse'] != null && d['bonne_reponse'].toString().isNotEmpty) ...[
             const SizedBox(height: 6),
-            _reponseRow('Bonne réponse', d['bonne_reponse'].toString(), greenColor),
+            _reponseRow('Bonne réponse', d['bonne_reponse'].toString(), YekiColors.success),
           ],
           if (d['explication'] != null && d['explication'].toString().isNotEmpty) ...[
             const SizedBox(height: 10),
             Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: Colors.blue.shade50,
-                borderRadius: BorderRadius.circular(10),
+                color: YekiColors.info.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(8),
               ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(Icons.lightbulb_outline_rounded, size: 15, color: Colors.blue),
+                  Icon(Icons.lightbulb_outline_rounded, size: 15, color: YekiColors.info),
                   const SizedBox(width: 8),
                   Expanded(
-                    child: Text(
-                      d['explication'],
-                      style: TextStyle(fontSize: 12, color: Colors.blue.shade800, height: 1.4),
-                    ),
+                    child: Text(d['explication'], style: TextStyle(fontSize: 12, height: 1.4)),
                   ),
                 ],
               ),
@@ -782,12 +733,9 @@ class _PasserExercicePageState extends State<PasserExercicePage> {
     child: Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('$label : ', style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
+        Text('$label : ', style: TextStyle(fontSize: 12, color: YekiColors.textLight)),
         Expanded(
-          child: Text(
-            valeur,
-            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: color),
-          ),
+          child: Text(valeur, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: color)),
         ),
       ],
     ),
@@ -800,18 +748,15 @@ class _PasserExercicePageState extends State<PasserExercicePage> {
       margin: const EdgeInsets.symmetric(vertical: 10, horizontal: 15),
       padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
-        color: isUrgent ? Colors.redAccent : primaryColor.withOpacity(0.2),
+        color: isUrgent ? YekiColors.error : YekiColors.primaryDark.withValues(alpha: 0.2),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Center(
         child: Row(
           children: [
-            const Icon(Icons.timer_outlined, size: 16, color: Colors.white),
+            const Icon(Icons.timer_outlined, size: 16, color: YekiColors.white),
             const SizedBox(width: 5),
-            Text(
-              formatTime(tempsRestant),
-              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-            ),
+            Text(formatTime(tempsRestant), style: const TextStyle(color: YekiColors.white, fontWeight: FontWeight.bold)),
           ],
         ),
       ),
@@ -822,16 +767,16 @@ class _PasserExercicePageState extends State<PasserExercicePage> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: YekiColors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: primaryColor.withOpacity(0.1)),
+        border: Border.all(color: YekiColors.primaryDark.withValues(alpha: 0.1)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(Icons.description_outlined, color: primaryColor, size: 20),
+              Icon(Icons.description_outlined, color: YekiColors.primaryDark, size: 20),
               const SizedBox(width: 8),
               const Text("Consigne", style: TextStyle(fontWeight: FontWeight.bold)),
             ],
@@ -839,15 +784,13 @@ class _PasserExercicePageState extends State<PasserExercicePage> {
           const Divider(),
           Text(
             exercice['enonce'] ?? "Lisez attentivement les questions suivantes.",
-            style: TextStyle(color: darkBlue.withOpacity(0.8), height: 1.5),
+            style: const TextStyle(height: 1.5),
           ),
           if (!tentativesEpuisees && tentativesRestantes > 0)
             Padding(
               padding: const EdgeInsets.only(top: 8),
-              child: Text(
-                "Tentatives restantes : $tentativesRestantes / $tentativesMax",
-                style: TextStyle(fontSize: 12, color: primaryColor),
-              ),
+              child: Text("Tentatives restantes : $tentativesRestantes / $tentativesMax",
+                  style: TextStyle(fontSize: 12, color: YekiColors.primaryDark)),
             ),
           if (tentativesEpuisees)
             Padding(
@@ -855,19 +798,17 @@ class _PasserExercicePageState extends State<PasserExercicePage> {
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
-                  color: redColor.withOpacity(0.1),
+                  color: YekiColors.error.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: redColor.withOpacity(0.3)),
+                  border: Border.all(color: YekiColors.error.withValues(alpha: 0.3)),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.warning_amber_rounded, color: redColor, size: 14),
+                    Icon(Icons.warning_amber_rounded, color: YekiColors.error, size: 14),
                     const SizedBox(width: 6),
-                    Text(
-                      "Vous avez utilisé toutes vos tentatives",
-                      style: TextStyle(fontSize: 12, color: redColor, fontWeight: FontWeight.w600),
-                    ),
+                    Text("Vous avez utilisé toutes vos tentatives",
+                        style: TextStyle(fontSize: 12, color: YekiColors.error, fontWeight: FontWeight.w600)),
                   ],
                 ),
               ),
@@ -886,15 +827,9 @@ class _PasserExercicePageState extends State<PasserExercicePage> {
       margin: const EdgeInsets.only(bottom: 20),
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: YekiColors.white,
         borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.03),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        boxShadow: YekiShadows.subtle,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -903,26 +838,21 @@ class _PasserExercicePageState extends State<PasserExercicePage> {
             children: [
               CircleAvatar(
                 radius: 12,
-                backgroundColor: primaryColor,
-                child: Text("$index", style: const TextStyle(color: Colors.white, fontSize: 12)),
+                backgroundColor: YekiColors.primaryDark,
+                child: Text("$index", style: const TextStyle(color: YekiColors.white, fontSize: 12)),
               ),
               const SizedBox(width: 10),
               Expanded(
-                child: Text(
-                  q['text'] ?? "",
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                ),
+                child: Text(q['text'] ?? "", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
               ),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: primaryColor.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(6),
+                  color: YekiColors.primaryDark.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
                 ),
-                child: Text(
-                  "${_toInt(q['points'])} pt",
-                  style: TextStyle(fontSize: 11, color: primaryColor, fontWeight: FontWeight.w600),
-                ),
+                child: Text("${_toInt(q['points'])} pt",
+                    style: TextStyle(fontSize: 11, color: YekiColors.primaryDark, fontWeight: FontWeight.w600)),
               ),
             ],
           ),
@@ -936,7 +866,7 @@ class _PasserExercicePageState extends State<PasserExercicePage> {
               enabled: !tentativesEpuisees,
               decoration: InputDecoration(
                 hintText: tentativesEpuisees ? "Tentatives épuisées" : "Saisissez votre réponse ici...",
-                fillColor: bgColor,
+                fillColor: YekiColors.backgroundLight,
                 filled: true,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
@@ -944,7 +874,7 @@ class _PasserExercicePageState extends State<PasserExercicePage> {
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: primaryColor, width: 1.5),
+                  borderSide: const BorderSide(color: YekiColors.primaryDark, width: 1.5),
                 ),
               ),
             ),
@@ -961,10 +891,10 @@ class _PasserExercicePageState extends State<PasserExercicePage> {
         margin: const EdgeInsets.only(bottom: 10),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
-          color: isSelected ? primaryColor.withOpacity(0.1) : Colors.transparent,
+          color: isSelected ? YekiColors.primaryDark.withValues(alpha: 0.1) : Colors.transparent,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: isSelected ? primaryColor : Colors.grey.shade200,
+            color: isSelected ? YekiColors.primaryDark : YekiColors.borderLight,
             width: 1.5,
           ),
         ),
@@ -972,18 +902,12 @@ class _PasserExercicePageState extends State<PasserExercicePage> {
           children: [
             Icon(
               isSelected ? Icons.check_circle : Icons.circle_outlined,
-              color: isSelected ? primaryColor : Colors.grey,
+              color: isSelected ? YekiColors.primaryDark : YekiColors.textLight,
               size: 20,
             ),
             const SizedBox(width: 12),
             Expanded(
-              child: Text(
-                text,
-                style: TextStyle(
-                  color: isSelected ? primaryColor : darkBlue,
-                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                ),
-              ),
+              child: Text(text, style: TextStyle(color: isSelected ? YekiColors.primaryDark : YekiColors.textDark, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal)),
             ),
           ],
         ),
@@ -993,19 +917,10 @@ class _PasserExercicePageState extends State<PasserExercicePage> {
 
   Widget _buildSubmitButton() {
     if (tentativesEpuisees) {
-      return SizedBox(
-        width: double.infinity,
-        child: ElevatedButton.icon(
-          onPressed: _voirResultats,
-          icon: const Icon(Icons.assignment_turned_in),
-          label: const Text("Voir les résultats"),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: primaryColor,
-            padding: const EdgeInsets.symmetric(vertical: 18),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            elevation: 0,
-          ),
-        ),
+      return YekiButton(
+        label: "Voir les résultats",
+        icon: Icons.assignment_turned_in,
+        onPressed: _voirResultats,
       );
     }
 
@@ -1017,33 +932,13 @@ class _PasserExercicePageState extends State<PasserExercicePage> {
         if (!toutesRepondues && questions.isNotEmpty)
           Padding(
             padding: const EdgeInsets.only(bottom: 12),
-            child: Text(
-              "${questions.length - reponses.length} question(s) restante(s)",
-              style: TextStyle(fontSize: 12, color: orangeColor, fontWeight: FontWeight.w600),
-            ),
+            child: Text("${questions.length - reponses.length} question(s) restante(s)",
+                style: TextStyle(fontSize: 12, color: YekiColors.warning, fontWeight: FontWeight.w600)),
           ),
-        SizedBox(
-          width: double.infinity,
-          child: ElevatedButton(
-            onPressed: submitting ? null : () => soumettre(),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: primaryColor,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 18),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              elevation: 0,
-            ),
-            child: submitting
-                ? const SizedBox(
-                    height: 20,
-                    width: 20,
-                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                  )
-                : const Text(
-                    "Terminer l'examen",
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
-          ),
+        YekiButton(
+          label: "Terminer l'examen",
+          onPressed: submitting ? null : () => soumettre(),
+          isLoading: submitting,
         ),
       ],
     );

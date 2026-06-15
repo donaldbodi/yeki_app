@@ -313,9 +313,11 @@ class _CachedPdfViewerState extends State<CachedPdfViewer> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
-          color: color.withOpacity(0.1),
+          // ✅ CORRIGÉ : withValues(alpha: 0.1) au lieu de withValues(0.1)
+          color: color.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: color.withOpacity(0.3)),
+          // ✅ CORRIGÉ : withValues(alpha: 0.3)
+          border: Border.all(color: color.withValues(alpha: 0.3)),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -333,9 +335,11 @@ class _CachedPdfViewerState extends State<CachedPdfViewer> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: const Color(0xFF135F74).withOpacity(0.1),
+        // ✅ CORRIGÉ : withValues(alpha: 0.1)
+        color: const Color(0xFF135F74).withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFF135F74).withOpacity(0.3)),
+        // ✅ CORRIGÉ : withValues(alpha: 0.3)
+        border: Border.all(color: const Color(0xFF135F74).withValues(alpha: 0.3)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
