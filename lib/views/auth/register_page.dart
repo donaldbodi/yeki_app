@@ -1,11 +1,15 @@
 // lib/views/auth/register_page.dart
 // ═══════════════════════════════════════════════════════════════════════════
+//  YEKI REGISTER PAGE — GLASSMORPHISM LIGHT EDITION
+//  INSCRIPTION ÉLÉGANTE AVEC FORMULAIRES MODERNES
+// ═══════════════════════════════════════════════════════════════════════════
 
+import 'dart:ui';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:yeki/views/auth/login_page.dart';
-import 'package:yeki/core/theme/app_theme.dart';
+import 'package:yeki/core/theme/yeki_design_system.dart';
 import 'package:yeki/core/constants/api_constants.dart';
 import 'package:yeki/utils/error_handler.dart';
 
@@ -51,19 +55,23 @@ class _RegisterPageState extends State<RegisterPage> with SingleTickerProviderSt
 
   late AnimationController _animCtrl;
   late Animation<double> _fadeAnim;
+  late Animation<Offset> _slideAnim;
 
   @override
   void initState() {
     super.initState();
     _animCtrl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 800),
+      duration: const Duration(milliseconds: 900),
     );
     _fadeAnim = CurvedAnimation(parent: _animCtrl, curve: Curves.easeIn);
+    _slideAnim = Tween<Offset>(
+      begin: const Offset(0, 0.3),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(parent: _animCtrl, curve: Curves.easeOutCubic));
     _animCtrl.forward();
     _fetchCursus();
 
-    // Listeners pour validation en temps réel
     _emailController.addListener(_validateEmail);
     _usernameController.addListener(_validateUsername);
     _passwordController.addListener(_validatePassword);
@@ -81,19 +89,16 @@ class _RegisterPageState extends State<RegisterPage> with SingleTickerProviderSt
     super.dispose();
   }
 
-  // ✅ Validation email en temps réel (UNIQUE)
   void _validateEmail() {
     final email = _emailController.text.trim();
     if (email.isEmpty) {
       setState(() => _emailError = null);
       return;
     }
-
     final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
     if (!emailRegex.hasMatch(email)) {
       setState(() => _emailError = "Email invalide");
     } else {
-      // L'unicité sera vérifiée par l'API au moment de l'envoi
       setState(() => _emailError = null);
     }
   }
@@ -139,7 +144,6 @@ class _RegisterPageState extends State<RegisterPage> with SingleTickerProviderSt
     }
   }
 
-  // API Calls
   Future<void> _fetchCursus() async {
     setState(() => loadingCursus = true);
     try {
@@ -249,7 +253,6 @@ class _RegisterPageState extends State<RegisterPage> with SingleTickerProviderSt
         final data = response.data;
         final errorMessage = data?['detail'] ?? "Erreur lors de l'inscription";
 
-        // ✅ Gestion spécifique de l'erreur email existant
         if (data?['error_type'] == 'email_exists' ||
             errorMessage.contains("email") ||
             errorMessage.contains("déjà utilisée") ||
@@ -285,185 +288,390 @@ class _RegisterPageState extends State<RegisterPage> with SingleTickerProviderSt
 
   @override
   Widget build(BuildContext context) {
+    final bool isMobile = YekiResponsive.isMobile(context);
+    final double padding = isMobile ? 20.0 : 48.0;
+
     return Scaffold(
-      backgroundColor: YekiColors.primaryDark,
-      body: Stack(
-        children: [
-          Positioned(
-            top: -40,
-            left: -40,
-            child: _buildCircle(180, YekiColors.white.withValues(alpha: 0.03)),
-          ),
-          Positioned(
-            bottom: 20,
-            right: -30,
-            child: _buildCircle(120, YekiColors.white.withValues(alpha: 0.02)),
-          ),
-          SafeArea(
-            child: FadeTransition(
-              opacity: _fadeAnim,
-              child: Center(
-                child: SingleChildScrollView(
-                  physics: const BouncingScrollPhysics(),
-                  padding: const EdgeInsets.symmetric(horizontal: 40),
-                  child: Column(
-                    children: [
-                      const SizedBox(height: 20),
-                      _buildHeader(),
-                      const SizedBox(height: 40),
-                      _buildSectionLabel("IDENTITÉ"),
-                      _buildModernField(
-                        controller: _nameController,
-                        label: "Nom complet",
-                        icon: Icons.person_outline_rounded,
-                      ),
-                      const SizedBox(height: 15),
-                      _buildModernField(
-                        controller: _emailController,
-                        label: "Email académique",
-                        icon: Icons.alternate_email_rounded,
-                        errorText: _emailError,
-                      ),
-                      const SizedBox(height: 15),
-                      _buildModernField(
-                        controller: _usernameController,
-                        label: "Nom d'utilisateur",
-                        icon: Icons.badge_outlined,
-                        errorText: _usernameError,
-                      ),
-                      const SizedBox(height: 30),
-                      _buildSectionLabel("VOTRE STATUT"),
-                      _buildModernDropdown<String>(
-                        label: "Vous êtes ?",
-                        value: selectedUserType,
-                        items: ["Apprenant", "Enseignant"].map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
-                        onChanged: (v) => setState(() {
-                          selectedUserType = v;
-                          selectedCursus = null;
-                          selectedDepartementId = null;
-                        }),
-                      ),
-                      if (selectedUserType == "Apprenant") ...[
-                        const SizedBox(height: 15),
-                        loadingCursus
-                            ? const Padding(
-                                padding: EdgeInsets.symmetric(vertical: 10),
-                                child: LinearProgressIndicator(
-                                  color: YekiColors.white,
-                                  backgroundColor: Colors.transparent,
-                                ),
-                              )
-                            : _buildModernDropdown<String>(
-                                label: "Parcours",
-                                value: selectedCursus,
-                                items: cursusOptions.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
-                                onChanged: (v) {
-                                  final id = _parcoursRaw.firstWhere((p) => p['nom'] == v)['id'];
-                                  setState(() => selectedCursus = v);
-                                  _fetchDepartements(id);
-                                },
-                              ),
-                        if (selectedCursus != null) ...[
-                          const SizedBox(height: 15),
-                          loadingDepartements
-                              ? const LinearProgressIndicator(
-                                  color: YekiColors.white,
-                                  backgroundColor: Colors.transparent,
-                                )
-                              : _buildModernDropdown<int>(
-                                  label: "Département",
-                                  value: selectedDepartementId,
-                                  items: departementOptions.map((d) => DropdownMenuItem(
-                                    value: d['id'] as int,
-                                    child: Text(d['nom']),
-                                  )).toList(),
-                                  onChanged: (v) {
-                                    setState(() => selectedDepartementId = v);
-                                    _fetchNiveaux(v!);
-                                  },
-                                ),
+      backgroundColor: YekiColors.bgLight,
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: YekiGradients.mainBackground,
+        ),
+        child: Stack(
+          children: [
+            _buildDecorations(),
+            SafeArea(
+              child: FadeTransition(
+                opacity: _fadeAnim,
+                child: Center(
+                  child: SingleChildScrollView(
+                    physics: const BouncingScrollPhysics(),
+                    padding: EdgeInsets.symmetric(horizontal: padding, vertical: 20),
+                    child: SlideTransition(
+                      position: _slideAnim,
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          _buildHeader(),
+                          const SizedBox(height: 30),
+                          _buildGlassCard(),
+                          const SizedBox(height: 20),
+                          _buildFooterLink(),
+                          const SizedBox(height: 20),
                         ],
-                        if (selectedDepartementId != null) ...[
-                          const SizedBox(height: 15),
-                          loadingNiveaux
-                              ? const LinearProgressIndicator(
-                                  color: YekiColors.white,
-                                  backgroundColor: Colors.transparent,
-                                )
-                              : _buildModernDropdown<String>(
-                                  label: "Niveau d'étude",
-                                  value: selectedNiveau,
-                                  items: niveauOptions.map((n) => DropdownMenuItem(value: n, child: Text(n))).toList(),
-                                  onChanged: (v) => setState(() => selectedNiveau = v),
-                                ),
-                        ],
-                      ],
-                      const SizedBox(height: 30),
-                      _buildSectionLabel("SÉCURITÉ"),
-                      _buildModernField(
-                        controller: _passwordController,
-                        label: "Mot de passe",
-                        icon: Icons.lock_outline_rounded,
-                        isPassword: true,
-                        obscure: _obscurePassword,
-                        onToggle: () => setState(() => _obscurePassword = !_obscurePassword),
-                        errorText: _passwordError,
                       ),
-                      const SizedBox(height: 15),
-                      _buildModernField(
-                        controller: _confirmPasswordController,
-                        label: "Confirmation",
-                        icon: Icons.shield_outlined,
-                        isPassword: true,
-                        obscure: _obscureConfirm,
-                        onToggle: () => setState(() => _obscureConfirm = !_obscureConfirm),
-                        errorText: _confirmError,
-                      ),
-                      const SizedBox(height: 45),
-                      _isLoading
-                          ? const YekiLoader(color: YekiColors.white)
-                          : _buildSubmitButton(),
-                      const SizedBox(height: 30),
-                      _buildFooterLink(),
-                      const SizedBox(height: 40),
-                    ],
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildCircle(double size, Color color) {
+  Widget _buildGlassCard() {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(28),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 25, sigmaY: 25),
+        child: Container(
+          width: double.infinity,
+          constraints: const BoxConstraints(maxWidth: 420),
+          padding: const EdgeInsets.all(32),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                YekiColors.white.withValues(alpha: 0.75),
+                YekiColors.white.withValues(alpha: 0.45),
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(28),
+            border: Border.all(
+              color: YekiColors.white.withValues(alpha: 0.9),
+              width: 1.5,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: YekiColors.primary.withValues(alpha: 0.06),
+                blurRadius: 40,
+                offset: const Offset(0, 20),
+              ),
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.03),
+                blurRadius: 20,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Column(
+            children: [
+              // En-tête de la carte
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Créer un compte',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w900,
+                            color: YekiColors.textDark,
+                            letterSpacing: -0.3,
+                          ),
+                        ),
+                        Text(
+                          'Rejoignez la communauté Yéki',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: YekiColors.textMedium,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: YekiColors.primary.withValues(alpha: 0.06),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Icon(
+                      Icons.person_add_rounded,
+                      color: YekiColors.primary,
+                      size: 22,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+
+              _buildSectionLabel("IDENTITÉ"),
+              _buildModernField(
+                controller: _nameController,
+                label: "Nom complet",
+                hint: "Jean Dupont",
+                icon: Icons.person_outline_rounded,
+              ),
+              const SizedBox(height: 14),
+              _buildModernField(
+                controller: _emailController,
+                label: "Email académique",
+                hint: "jean.dupont@email.com",
+                icon: Icons.alternate_email_rounded,
+                errorText: _emailError,
+              ),
+              const SizedBox(height: 14),
+              _buildModernField(
+                controller: _usernameController,
+                label: "Nom d'utilisateur",
+                hint: "jean.dupont",
+                icon: Icons.badge_outlined,
+                errorText: _usernameError,
+              ),
+              const SizedBox(height: 20),
+
+              _buildSectionLabel("VOTRE STATUT"),
+              _buildModernDropdown<String>(
+                label: "Vous êtes ?",
+                value: selectedUserType,
+                items: ["Apprenant", "Enseignant"].map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
+                onChanged: (v) => setState(() {
+                  selectedUserType = v;
+                  selectedCursus = null;
+                  selectedDepartementId = null;
+                  selectedNiveau = null;
+                }),
+              ),
+              if (selectedUserType == "Apprenant") ...[
+                const SizedBox(height: 14),
+                loadingCursus
+                    ? _buildLoadingIndicator()
+                    : _buildModernDropdown<String>(
+                        label: "Parcours",
+                        value: selectedCursus,
+                        items: cursusOptions.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
+                        onChanged: (v) {
+                          final id = _parcoursRaw.firstWhere((p) => p['nom'] == v)['id'];
+                          setState(() => selectedCursus = v);
+                          _fetchDepartements(id);
+                        },
+                      ),
+                if (selectedCursus != null) ...[
+                  const SizedBox(height: 14),
+                  loadingDepartements
+                      ? _buildLoadingIndicator()
+                      : _buildModernDropdown<int>(
+                          label: "Département",
+                          value: selectedDepartementId,
+                          items: departementOptions.map((d) => DropdownMenuItem(
+                            value: d['id'] as int,
+                            child: Text(d['nom']),
+                          )).toList(),
+                          onChanged: (v) {
+                            setState(() => selectedDepartementId = v);
+                            _fetchNiveaux(v!);
+                          },
+                        ),
+                ],
+                if (selectedDepartementId != null) ...[
+                  const SizedBox(height: 14),
+                  loadingNiveaux
+                      ? _buildLoadingIndicator()
+                      : _buildModernDropdown<String>(
+                          label: "Niveau d'étude",
+                          value: selectedNiveau,
+                          items: niveauOptions.map((n) => DropdownMenuItem(value: n, child: Text(n))).toList(),
+                          onChanged: (v) => setState(() => selectedNiveau = v),
+                        ),
+                ],
+              ],
+              const SizedBox(height: 20),
+
+              _buildSectionLabel("SÉCURITÉ"),
+              _buildModernField(
+                controller: _passwordController,
+                label: "Mot de passe",
+                hint: "••••••••",
+                icon: Icons.lock_outline_rounded,
+                isPassword: true,
+                obscure: _obscurePassword,
+                onToggle: () => setState(() => _obscurePassword = !_obscurePassword),
+                errorText: _passwordError,
+              ),
+              const SizedBox(height: 14),
+              _buildModernField(
+                controller: _confirmPasswordController,
+                label: "Confirmation",
+                hint: "••••••••",
+                icon: Icons.shield_outlined,
+                isPassword: true,
+                obscure: _obscureConfirm,
+                onToggle: () => setState(() => _obscureConfirm = !_obscureConfirm),
+                errorText: _confirmError,
+              ),
+              const SizedBox(height: 24),
+
+              _isLoading
+                  ? Container(
+                      height: 56,
+                      alignment: Alignment.center,
+                      child: const CircularProgressIndicator(
+                        color: YekiColors.primary,
+                        strokeWidth: 2.5,
+                      ),
+                    )
+                  : _buildSubmitButton(),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLoadingIndicator() {
     return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(shape: BoxShape.circle, color: color),
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: LinearProgressIndicator(
+        color: YekiColors.primary,
+        backgroundColor: YekiColors.primary.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(4),
+        minHeight: 3,
+      ),
+    );
+  }
+
+  Widget _buildDecorations() {
+    return Stack(
+      children: [
+        Positioned(
+          top: -60,
+          right: -60,
+          child: Container(
+            width: 250,
+            height: 250,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: LinearGradient(
+                colors: [
+                  YekiColors.primary.withValues(alpha: 0.10),
+                  YekiColors.primaryLight.withValues(alpha: 0.04),
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+            ),
+          ),
+        ),
+        Positioned(
+          bottom: -80,
+          left: -80,
+          child: Container(
+            width: 300,
+            height: 300,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: LinearGradient(
+                colors: [
+                  YekiColors.accent.withValues(alpha: 0.06),
+                  YekiColors.gold.withValues(alpha: 0.03),
+                ],
+                begin: Alignment.bottomLeft,
+                end: Alignment.topRight,
+              ),
+            ),
+          ),
+        ),
+        Positioned(
+          top: 150,
+          left: -40,
+          child: Container(
+            width: 120,
+            height: 120,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: YekiColors.gold.withValues(alpha: 0.04),
+            ),
+          ),
+        ),
+        Positioned(
+          bottom: 200,
+          right: -20,
+          child: Container(
+            width: 100,
+            height: 100,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: YekiColors.primary.withValues(alpha: 0.04),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
   Widget _buildHeader() {
     return Column(
       children: [
-        const Text(
-          'REJOINDRE YEKI',
-          style: TextStyle(
-            color: YekiColors.white,
-            fontWeight: FontWeight.w900,
-            letterSpacing: 8,
-            fontSize: 18,
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                YekiColors.primary.withValues(alpha: 0.10),
+                YekiColors.primaryLight.withValues(alpha: 0.05),
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: YekiColors.primary.withValues(alpha: 0.15),
+              width: 2,
+            ),
+          ),
+          child: Icon(
+            Icons.school_rounded,
+            color: YekiColors.primary,
+            size: 32,
           ),
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 12),
+        Text(
+          'REJOINDRE YEKI',
+          style: TextStyle(
+            color: YekiColors.textDark,
+            fontWeight: FontWeight.w900,
+            letterSpacing: 6,
+            fontSize: 16,
+          ),
+        ),
+        const SizedBox(height: 6),
         Container(
           width: 40,
           height: 3,
           decoration: BoxDecoration(
-            color: YekiColors.accent,
-            borderRadius: YekiRadius.borderRadiusSm,
+            gradient: LinearGradient(
+              colors: [YekiColors.primary, YekiColors.primaryLight],
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+            ),
+            borderRadius: BorderRadius.circular(2),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'Créez votre espace d\'apprentissage',
+          style: TextStyle(
+            color: YekiColors.textMedium,
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
           ),
         ),
       ],
@@ -474,11 +682,11 @@ class _RegisterPageState extends State<RegisterPage> with SingleTickerProviderSt
     return Align(
       alignment: Alignment.centerLeft,
       child: Padding(
-        padding: const EdgeInsets.only(left: 5, bottom: 12),
+        padding: const EdgeInsets.only(left: 5, bottom: 10),
         child: Text(
           label,
           style: TextStyle(
-            color: YekiColors.white.withValues(alpha: 0.3),
+            color: YekiColors.textMedium,
             fontSize: 10,
             fontWeight: FontWeight.w900,
             letterSpacing: 2,
@@ -491,61 +699,85 @@ class _RegisterPageState extends State<RegisterPage> with SingleTickerProviderSt
   Widget _buildModernField({
     required TextEditingController controller,
     required String label,
+    required String hint,
     required IconData icon,
     bool isPassword = false,
     bool? obscure,
     VoidCallback? onToggle,
     String? errorText,
   }) {
-    return SizedBox(
-      width: 320,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          TextFormField(
-            controller: controller,
-            obscureText: isPassword && (obscure ?? true),
-            style: const TextStyle(color: YekiColors.white, fontSize: 14, fontWeight: FontWeight.w500),
-            cursorColor: YekiColors.white,
-            decoration: InputDecoration(
-              labelText: label,
-              labelStyle: TextStyle(color: YekiColors.white.withValues(alpha: 0.4), fontSize: 13),
-              floatingLabelStyle: const TextStyle(color: YekiColors.white, fontWeight: FontWeight.bold, fontSize: 12),
-              prefixIcon: Icon(icon, color: YekiColors.white.withValues(alpha: 0.7), size: 18),
-              suffixIcon: isPassword
-                  ? IconButton(
-                      icon: Icon(
-                        obscure! ? Icons.visibility_off_rounded : Icons.visibility_rounded,
-                        color: YekiColors.white,
-                        size: 18,
-                      ),
-                      onPressed: onToggle,
-                    )
-                  : null,
-              filled: true,
-              fillColor: YekiColors.white.withValues(alpha: 0.1),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: YekiRadius.borderRadiusMd,
-                borderSide: BorderSide(color: YekiColors.white.withValues(alpha: 0.05)),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: YekiRadius.borderRadiusMd,
-                borderSide: const BorderSide(color: YekiColors.white, width: 1.5),
-              ),
-              errorBorder: OutlineInputBorder(
-                borderRadius: YekiRadius.borderRadiusMd,
-                borderSide: const BorderSide(color: YekiColors.error, width: 1),
-              ),
-              focusedErrorBorder: OutlineInputBorder(
-                borderRadius: YekiRadius.borderRadiusMd,
-                borderSide: const BorderSide(color: YekiColors.error, width: 1.5),
-              ),
-              errorText: errorText,
-              errorStyle: const TextStyle(color: YekiColors.error, fontSize: 11),
-            ),
+    final bool hasError = errorText != null;
+    final bool hasFocus = controller.text.isNotEmpty;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: YekiColors.white.withValues(alpha: 0.4),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: hasError
+              ? YekiColors.error.withValues(alpha: 0.3)
+              : hasFocus
+                  ? YekiColors.primary.withValues(alpha: 0.3)
+                  : YekiColors.white.withValues(alpha: 0.6),
+          width: hasError ? 2 : 1.5,
+        ),
+      ),
+      child: TextFormField(
+        controller: controller,
+        obscureText: isPassword && (obscure ?? true),
+        style: TextStyle(
+          color: YekiColors.textDark,
+          fontSize: 14,
+          fontWeight: FontWeight.w500,
+        ),
+        cursorColor: YekiColors.primary,
+        decoration: InputDecoration(
+          labelText: label,
+          labelStyle: TextStyle(
+            color: hasError ? YekiColors.error : YekiColors.textMedium,
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
           ),
-        ],
+          floatingLabelBehavior: FloatingLabelBehavior.auto,
+          hintText: hint,
+          hintStyle: TextStyle(
+            color: YekiColors.textLight,
+            fontSize: 14,
+            fontWeight: FontWeight.w400,
+          ),
+          prefixIcon: Icon(
+            icon,
+            color: hasError ? YekiColors.error : (hasFocus ? YekiColors.primary : YekiColors.textMedium),
+            size: 18,
+          ),
+          suffixIcon: isPassword
+              ? IconButton(
+                  icon: Icon(
+                    obscure! ? Icons.visibility_off_rounded : Icons.visibility_rounded,
+                    color: YekiColors.textMedium,
+                    size: 18,
+                  ),
+                  onPressed: onToggle,
+                )
+              : null,
+          filled: true,
+          fillColor: Colors.transparent,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 16),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: BorderSide.none,
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: BorderSide.none,
+          ),
+          errorText: errorText,
+          errorStyle: TextStyle(
+            color: YekiColors.error,
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
       ),
     );
   }
@@ -556,30 +788,56 @@ class _RegisterPageState extends State<RegisterPage> with SingleTickerProviderSt
     required List<DropdownMenuItem<T>> items,
     required ValueChanged<T?> onChanged,
   }) {
-    return SizedBox(
-      width: 320,
+    final bool hasValue = value != null;
+    
+    return Container(
+      decoration: BoxDecoration(
+        color: YekiColors.white.withValues(alpha: 0.4),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: hasValue
+              ? YekiColors.primary.withValues(alpha: 0.3)
+              : YekiColors.white.withValues(alpha: 0.6),
+          width: 1.5,
+        ),
+      ),
       child: DropdownButtonFormField<T>(
         value: value,
         items: items,
         onChanged: onChanged,
-        dropdownColor: YekiColors.primaryDark,
-        icon: const Icon(Icons.expand_more_rounded, color: YekiColors.white),
-        style: const TextStyle(color: YekiColors.white, fontSize: 14, fontWeight: FontWeight.w500),
+        dropdownColor: YekiColors.white,
+        icon: Icon(
+          Icons.expand_more_rounded,
+          color: hasValue ? YekiColors.primary : YekiColors.textMedium,
+        ),
+        style: TextStyle(
+          color: YekiColors.textDark,
+          fontSize: 14,
+          fontWeight: FontWeight.w500,
+        ),
         decoration: InputDecoration(
           labelText: label,
-          labelStyle: TextStyle(color: YekiColors.white.withValues(alpha: 0.4), fontSize: 13),
-          floatingLabelStyle: const TextStyle(color: YekiColors.white, fontWeight: FontWeight.bold, fontSize: 12),
-          prefixIcon: const Icon(Icons.account_tree_outlined, color: YekiColors.white, size: 18),
+          labelStyle: TextStyle(
+            color: YekiColors.textMedium,
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+          ),
+          floatingLabelBehavior: FloatingLabelBehavior.auto,
+          prefixIcon: Icon(
+            Icons.account_tree_outlined,
+            color: hasValue ? YekiColors.primary : YekiColors.textMedium,
+            size: 18,
+          ),
           filled: true,
-          fillColor: YekiColors.white.withValues(alpha: 0.1),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+          fillColor: Colors.transparent,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 16),
           enabledBorder: OutlineInputBorder(
-            borderRadius: YekiRadius.borderRadiusMd,
-            borderSide: BorderSide(color: YekiColors.white.withValues(alpha: 0.05)),
+            borderRadius: BorderRadius.circular(14),
+            borderSide: BorderSide.none,
           ),
           focusedBorder: OutlineInputBorder(
-            borderRadius: YekiRadius.borderRadiusMd,
-            borderSide: const BorderSide(color: YekiColors.white, width: 1.5),
+            borderRadius: BorderRadius.circular(14),
+            borderSide: BorderSide.none,
           ),
         ),
       ),
@@ -591,44 +849,99 @@ class _RegisterPageState extends State<RegisterPage> with SingleTickerProviderSt
     return GestureDetector(
       onTap: isValid ? _submitRegistration : null,
       child: Container(
-        width: 320,
-        height: 60,
-        alignment: Alignment.center,
+        width: double.infinity,
+        height: 56,
         decoration: BoxDecoration(
-          color: isValid ? YekiColors.accent : Colors.grey.shade600,
-          borderRadius: YekiRadius.borderRadiusMd,
-          boxShadow: isValid ? YekiShadows.accent : [],
+          gradient: isValid
+              ? LinearGradient(
+                  colors: [
+                    YekiColors.primary,
+                    YekiColors.primaryLight,
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                )
+              : LinearGradient(
+                  colors: [
+                    YekiColors.textLight,
+                    YekiColors.textLight.withValues(alpha: 0.8),
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: isValid
+              ? [
+                  BoxShadow(
+                    color: YekiColors.primary.withValues(alpha: 0.25),
+                    blurRadius: 20,
+                    offset: const Offset(0, 8),
+                  ),
+                ]
+              : [],
         ),
-        child: const Text(
-          'CRÉER MON COMPTE',
-          style: TextStyle(
-            color: YekiColors.white,
-            fontWeight: FontWeight.w900,
-            fontSize: 13,
-            letterSpacing: 1.5,
-          ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.person_add_rounded,
+              color: YekiColors.white,
+              size: 18,
+            ),
+            const SizedBox(width: 10),
+            Text(
+              'CRÉER MON COMPTE',
+              style: TextStyle(
+                color: YekiColors.white,
+                fontWeight: FontWeight.w800,
+                fontSize: 13,
+                letterSpacing: 1.5,
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 
   Widget _buildFooterLink() {
-    return TextButton(
-      onPressed: () => Navigator.pop(context),
-      child: RichText(
-        text: TextSpan(
-          style: TextStyle(color: YekiColors.white.withValues(alpha: 0.6), fontSize: 14),
-          children: const [
-            TextSpan(text: "Déjà membre ? "),
-            TextSpan(
-              text: "CONNEXION",
-              style: TextStyle(
-                color: YekiColors.white,
-                fontWeight: FontWeight.w900,
-                decoration: TextDecoration.underline,
-              ),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      decoration: BoxDecoration(
+        color: YekiColors.white.withValues(alpha: 0.4),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: YekiColors.white.withValues(alpha: 0.6),
+          width: 1.0,
+        ),
+      ),
+      child: TextButton(
+        onPressed: () => Navigator.pop(context),
+        style: TextButton.styleFrom(
+          padding: EdgeInsets.zero,
+          minimumSize: const Size(0, 0),
+        ),
+        child: RichText(
+          text: TextSpan(
+            style: TextStyle(
+              color: YekiColors.textMedium,
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
             ),
-          ],
+            children: const [
+              TextSpan(text: "Déjà membre ? "),
+              TextSpan(
+                text: "CONNEXION",
+                style: TextStyle(
+                  color: YekiColors.primary,
+                  fontWeight: FontWeight.w900,
+                  decoration: TextDecoration.underline,
+                  decorationColor: YekiColors.primary,
+                  decorationThickness: 2,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

@@ -1,16 +1,17 @@
 // lib/views/auth/forgot_password_flow.dart
 // ═══════════════════════════════════════════════════════════════════════════
-// MOT DE PASSE OUBLIÉ — 3 ÉCRANS (CORRIGÉ)
+// MOT DE PASSE OUBLIÉ — GLASSMORPHISM LIGHT EDITION
+// 3 ÉCRANS ÉLÉGANTS
 // ═══════════════════════════════════════════════════════════════════════════
 
 import 'dart:async';
 import 'dart:convert';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
-import 'package:yeki/core/theme/app_theme.dart';
+import 'package:yeki/core/theme/yeki_design_system.dart';
 import 'package:yeki/core/constants/api_constants.dart';
-//import 'package:yeki/utils/error_handler.dart';
 
 // ═══════════════════════════════════════════════════════════════════════════
 //  ÉCRAN 1 — Saisie de l'email
@@ -30,15 +31,20 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage>
 
   late AnimationController _animCtrl;
   late Animation<double> _fadeAnim;
+  late Animation<Offset> _slideAnim;
 
   @override
   void initState() {
     super.initState();
     _animCtrl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 800),
+      duration: const Duration(milliseconds: 900),
     );
     _fadeAnim = CurvedAnimation(parent: _animCtrl, curve: Curves.easeIn);
+    _slideAnim = Tween<Offset>(
+      begin: const Offset(0, 0.3),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(parent: _animCtrl, curve: Curves.easeOutCubic));
     _animCtrl.forward();
   }
 
@@ -93,59 +99,127 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage>
 
   @override
   Widget build(BuildContext context) {
+    final bool isMobile = YekiResponsive.isMobile(context);
+    final double padding = isMobile ? 20.0 : 48.0;
+
     return Scaffold(
-      backgroundColor: YekiColors.primaryDark,
-      body: Stack(
-        children: [
-          _buildDecorations(),
-          SafeArea(
-            child: FadeTransition(
-              opacity: _fadeAnim,
-              child: SingleChildScrollView(
-                physics: const BouncingScrollPhysics(),
-                padding: const EdgeInsets.symmetric(horizontal: 40),
-                child: Column(
-                  children: [
-                    const SizedBox(height: 20),
-                    _buildBackButton(),
-                    const SizedBox(height: 10),
-                    _buildHeader(
-                      icon: Icons.mark_email_unread_outlined,
-                      title: 'MOT DE PASSE OUBLIÉ',
-                    ),
-                    const SizedBox(height: 40),
-                    _buildSectionLabel("IDENTIFICATION"),
-                    _buildModernField(
-                      controller: _emailCtrl,
-                      label: "Email académique",
-                      icon: Icons.alternate_email_rounded,
-                      keyboardType: TextInputType.emailAddress,
-                      onChanged: (_) => setState(() => _error = ''),
-                      onSubmitted: (_) => _envoyerCode(),
-                    ),
-                    if (_error.isNotEmpty) ...[
-                      const SizedBox(height: 12),
-                      _buildErrorWidget(_error),
-                    ],
-                    const SizedBox(height: 40),
-                    _buildStepIndicator(step: 0),
-                    const SizedBox(height: 30),
-                    _loading
-                        ? const YekiLoader(color: YekiColors.white)
-                        : _buildSubmitButton(
-                            label: 'ENVOYER LE CODE',
-                            icon: Icons.send_outlined,
-                            onTap: _envoyerCode,
+      backgroundColor: YekiColors.bgLight,
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: YekiGradients.mainBackground,
+        ),
+        child: Stack(
+          children: [
+            _buildDecorations(),
+            SafeArea(
+              child: FadeTransition(
+                opacity: _fadeAnim,
+                child: Center(
+                  child: SingleChildScrollView(
+                    physics: const BouncingScrollPhysics(),
+                    padding: EdgeInsets.symmetric(horizontal: padding, vertical: 20),
+                    child: SlideTransition(
+                      position: _slideAnim,
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          _buildBackButton(),
+                          const SizedBox(height: 10),
+                          _buildHeader(
+                            icon: Icons.mark_email_unread_outlined,
+                            title: 'MOT DE PASSE OUBLIÉ',
+                            subtitle: 'Entrez votre email pour recevoir un code',
                           ),
-                    const SizedBox(height: 30),
-                    _buildFooterLink(context),
-                    const SizedBox(height: 40),
-                  ],
+                          const SizedBox(height: 40),
+                          _buildGlassCard(),
+                          const SizedBox(height: 20),
+                          _buildFooterLink(context),
+                          const SizedBox(height: 30),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGlassCard() {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(28),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 25, sigmaY: 25),
+        child: Container(
+          width: double.infinity,
+          constraints: const BoxConstraints(maxWidth: 420),
+          padding: const EdgeInsets.all(32),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                YekiColors.white.withValues(alpha: 0.75),
+                YekiColors.white.withValues(alpha: 0.45),
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(28),
+            border: Border.all(
+              color: YekiColors.white.withValues(alpha: 0.9),
+              width: 1.5,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: YekiColors.primary.withValues(alpha: 0.06),
+                blurRadius: 40,
+                offset: const Offset(0, 20),
+              ),
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.03),
+                blurRadius: 20,
+                offset: const Offset(0, 8),
+              ),
+            ],
           ),
-        ],
+          child: Column(
+            children: [
+              _buildSectionLabel("IDENTIFICATION"),
+              _buildModernField(
+                controller: _emailCtrl,
+                label: "Email académique",
+                hint: "exemple@email.com",
+                icon: Icons.alternate_email_rounded,
+                keyboardType: TextInputType.emailAddress,
+                onChanged: (_) => setState(() => _error = ''),
+                onSubmitted: (_) => _envoyerCode(),
+              ),
+              if (_error.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                _buildErrorWidget(_error),
+              ],
+              const SizedBox(height: 8),
+              _buildStepIndicator(step: 0),
+              const SizedBox(height: 24),
+              _loading
+                  ? Container(
+                      height: 56,
+                      alignment: Alignment.center,
+                      child: const CircularProgressIndicator(
+                        color: YekiColors.primary,
+                        strokeWidth: 2.5,
+                      ),
+                    )
+                  : _buildSubmitButton(
+                      label: 'ENVOYER LE CODE',
+                      icon: Icons.send_outlined,
+                      onTap: _envoyerCode,
+                    ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -154,7 +228,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage>
     return Align(
       alignment: Alignment.centerLeft,
       child: IconButton(
-        icon: const Icon(Icons.arrow_back_ios_new, color: YekiColors.white, size: 18),
+        icon: Icon(Icons.arrow_back_ios_new, color: YekiColors.primaryDark, size: 18),
         onPressed: () => Navigator.of(context).maybePop(),
         padding: EdgeInsets.zero,
       ),
@@ -165,30 +239,62 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage>
     return Stack(
       children: [
         Positioned(
-          top: -40,
-          left: -40,
-          child: _buildCircle(180, YekiColors.white.withValues(alpha: 0.03)),
+          top: -60,
+          right: -60,
+          child: Container(
+            width: 250,
+            height: 250,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: LinearGradient(
+                colors: [
+                  YekiColors.primary.withValues(alpha: 0.10),
+                  YekiColors.primaryLight.withValues(alpha: 0.04),
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+            ),
+          ),
         ),
         Positioned(
-          bottom: 20,
-          right: -30,
-          child: _buildCircle(120, YekiColors.white.withValues(alpha: 0.02)),
+          bottom: -80,
+          left: -80,
+          child: Container(
+            width: 300,
+            height: 300,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: LinearGradient(
+                colors: [
+                  YekiColors.accent.withValues(alpha: 0.06),
+                  YekiColors.gold.withValues(alpha: 0.03),
+                ],
+                begin: Alignment.bottomLeft,
+                end: Alignment.topRight,
+              ),
+            ),
+          ),
+        ),
+        Positioned(
+          top: 200,
+          left: -40,
+          child: Container(
+            width: 150,
+            height: 150,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: YekiColors.gold.withValues(alpha: 0.04),
+            ),
+          ),
         ),
       ],
-    );
-  }
-
-  Widget _buildCircle(double size, Color color) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(shape: BoxShape.circle, color: color),
     );
   }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-//  ÉCRAN 2 — Saisie du code OTP (CORRIGÉ)
+//  ÉCRAN 2 — Saisie du code OTP
 // ═══════════════════════════════════════════════════════════════════════════
 class VerifyOTPPage extends StatefulWidget {
   final String email;
@@ -215,12 +321,20 @@ class _VerifyOTPPageState extends State<VerifyOTPPage>
 
   late AnimationController _animCtrl;
   late Animation<double> _fadeAnim;
+  late Animation<Offset> _slideAnim;
 
   @override
   void initState() {
     super.initState();
-    _animCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 800));
+    _animCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    );
     _fadeAnim = CurvedAnimation(parent: _animCtrl, curve: Curves.easeIn);
+    _slideAnim = Tween<Offset>(
+      begin: const Offset(0, 0.3),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(parent: _animCtrl, curve: Curves.easeOutCubic));
     _animCtrl.forward();
     _startCountdown();
 
@@ -231,7 +345,7 @@ class _VerifyOTPPageState extends State<VerifyOTPPage>
           _otpCtrl[i].text = code[i];
         }
         setState(() {
-          _successMsg = '(Mode DEBUG) Code pré-rempli : ${widget.debugCode}';
+          _successMsg = 'Code pré-rempli : ${widget.debugCode}';
         });
       });
     }
@@ -317,7 +431,7 @@ class _VerifyOTPPageState extends State<VerifyOTPPage>
         setState(() {
           _successMsg = 'Nouveau code envoyé !';
           if (data['debug_code'] != null) {
-            _successMsg = '(DEBUG) Nouveau code : ${data['debug_code']}';
+            _successMsg = 'Nouveau code : ${data['debug_code']}';
             final code = data['debug_code'].toString();
             for (int i = 0; i < 6 && i < code.length; i++) {
               _otpCtrl[i].text = code[i];
@@ -345,71 +459,140 @@ class _VerifyOTPPageState extends State<VerifyOTPPage>
 
   @override
   Widget build(BuildContext context) {
+    final bool isMobile = YekiResponsive.isMobile(context);
+    final double padding = isMobile ? 20.0 : 48.0;
+
     return Scaffold(
-      backgroundColor: YekiColors.primaryDark,
-      body: Stack(
-        children: [
-          _buildDecorations(),
-          SafeArea(
-            child: FadeTransition(
-              opacity: _fadeAnim,
-              child: SingleChildScrollView(
-                physics: const BouncingScrollPhysics(),
-                padding: const EdgeInsets.symmetric(horizontal: 40),
-                child: Column(
-                  children: [
-                    const SizedBox(height: 20),
-                    _buildBackButton(),
-                    const SizedBox(height: 10),
-                    _buildHeader(
-                      icon: Icons.shield_outlined,
-                      title: 'VÉRIFICATION',
-                    ),
-                    const SizedBox(height: 40),
-                    _buildSectionLabel("CODE ENVOYÉ À"),
-                    Padding(
-                      padding: const EdgeInsets.only(left: 15, bottom: 20),
-                      child: Text(
-                        widget.email,
-                        style: TextStyle(
-                          color: YekiColors.accent,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 0.5,
-                        ),
+      backgroundColor: YekiColors.bgLight,
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: YekiGradients.mainBackground,
+        ),
+        child: Stack(
+          children: [
+            _buildDecorations(),
+            SafeArea(
+              child: FadeTransition(
+                opacity: _fadeAnim,
+                child: Center(
+                  child: SingleChildScrollView(
+                    physics: const BouncingScrollPhysics(),
+                    padding: EdgeInsets.symmetric(horizontal: padding, vertical: 20),
+                    child: SlideTransition(
+                      position: _slideAnim,
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          _buildBackButton(),
+                          const SizedBox(height: 10),
+                          _buildHeader(
+                            icon: Icons.shield_outlined,
+                            title: 'VÉRIFICATION',
+                            subtitle: 'Saisissez le code reçu par email',
+                          ),
+                          const SizedBox(height: 30),
+                          _buildGlassCard(),
+                          const SizedBox(height: 20),
+                          _buildFooterLink(context),
+                          const SizedBox(height: 30),
+                        ],
                       ),
                     ),
-                    _buildSectionLabel("SAISIE DU CODE"),
-                    _buildOTPFields(),
-                    if (_error.isNotEmpty) ...[
-                      const SizedBox(height: 12),
-                      _buildErrorWidget(_error),
-                    ],
-                    if (_successMsg.isNotEmpty) ...[
-                      const SizedBox(height: 12),
-                      _buildSuccessWidget(_successMsg),
-                    ],
-                    const SizedBox(height: 30),
-                    _buildStepIndicator(step: 1),
-                    const SizedBox(height: 30),
-                    _loading
-                        ? const YekiLoader(color: YekiColors.white)
-                        : _buildSubmitButton(
-                            label: 'VÉRIFIER LE CODE',
-                            icon: Icons.verified_outlined,
-                            onTap: _verifier,
-                          ),
-                    const SizedBox(height: 20),
-                    _buildResendRow(),
-                    const SizedBox(height: 20),
-                    _buildFooterLink(context),
-                    const SizedBox(height: 40),
-                  ],
+                  ),
                 ),
               ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGlassCard() {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(28),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 25, sigmaY: 25),
+        child: Container(
+          width: double.infinity,
+          constraints: const BoxConstraints(maxWidth: 420),
+          padding: const EdgeInsets.all(32),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                YekiColors.white.withValues(alpha: 0.75),
+                YekiColors.white.withValues(alpha: 0.45),
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(28),
+            border: Border.all(
+              color: YekiColors.white.withValues(alpha: 0.9),
+              width: 1.5,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: YekiColors.primary.withValues(alpha: 0.06),
+                blurRadius: 40,
+                offset: const Offset(0, 20),
+              ),
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.03),
+                blurRadius: 20,
+                offset: const Offset(0, 8),
+              ),
+            ],
           ),
-        ],
+          child: Column(
+            children: [
+              _buildSectionLabel("CODE ENVOYÉ À"),
+              Padding(
+                padding: const EdgeInsets.only(left: 15, bottom: 16),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    widget.email,
+                    style: TextStyle(
+                      color: YekiColors.primary,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ),
+              _buildSectionLabel("SAISIE DU CODE"),
+              _buildOTPFields(),
+              if (_error.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                _buildErrorWidget(_error),
+              ],
+              if (_successMsg.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                _buildSuccessWidget(_successMsg),
+              ],
+              const SizedBox(height: 8),
+              _buildStepIndicator(step: 1),
+              const SizedBox(height: 24),
+              _loading
+                  ? Container(
+                      height: 56,
+                      alignment: Alignment.center,
+                      child: const CircularProgressIndicator(
+                        color: YekiColors.primary,
+                        strokeWidth: 2.5,
+                      ),
+                    )
+                  : _buildSubmitButton(
+                      label: 'VÉRIFIER LE CODE',
+                      icon: Icons.verified_outlined,
+                      onTap: _verifier,
+                    ),
+              const SizedBox(height: 12),
+              _buildResendRow(),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -418,7 +601,7 @@ class _VerifyOTPPageState extends State<VerifyOTPPage>
     return Align(
       alignment: Alignment.centerLeft,
       child: IconButton(
-        icon: const Icon(Icons.arrow_back_ios_new, color: YekiColors.white, size: 18),
+        icon: Icon(Icons.arrow_back_ios_new, color: YekiColors.primaryDark, size: 18),
         onPressed: () => Navigator.of(context).maybePop(),
         padding: EdgeInsets.zero,
       ),
@@ -429,24 +612,44 @@ class _VerifyOTPPageState extends State<VerifyOTPPage>
     return Stack(
       children: [
         Positioned(
-          top: -40,
-          left: -40,
-          child: _buildCircle(180, YekiColors.white.withValues(alpha: 0.03)),
+          top: -60,
+          right: -60,
+          child: Container(
+            width: 250,
+            height: 250,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: LinearGradient(
+                colors: [
+                  YekiColors.primary.withValues(alpha: 0.10),
+                  YekiColors.primaryLight.withValues(alpha: 0.04),
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+            ),
+          ),
         ),
         Positioned(
-          bottom: 20,
-          right: -30,
-          child: _buildCircle(120, YekiColors.white.withValues(alpha: 0.02)),
+          bottom: -80,
+          left: -80,
+          child: Container(
+            width: 300,
+            height: 300,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: LinearGradient(
+                colors: [
+                  YekiColors.accent.withValues(alpha: 0.06),
+                  YekiColors.gold.withValues(alpha: 0.03),
+                ],
+                begin: Alignment.bottomLeft,
+                end: Alignment.topRight,
+              ),
+            ),
+          ),
         ),
       ],
-    );
-  }
-
-  Widget _buildCircle(double size, Color color) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(shape: BoxShape.circle, color: color),
     );
   }
 
@@ -457,8 +660,8 @@ class _VerifyOTPPageState extends State<VerifyOTPPage>
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: List.generate(6, (i) {
           return SizedBox(
-            width: 42,
-            height: 52,
+            width: 44,
+            height: 54,
             child: TextField(
               controller: _otpCtrl[i],
               focusNode: _focusNodes[i],
@@ -466,33 +669,37 @@ class _VerifyOTPPageState extends State<VerifyOTPPage>
               keyboardType: TextInputType.number,
               maxLength: 1,
               style: const TextStyle(
-                fontSize: 20,
+                fontSize: 22,
                 fontWeight: FontWeight.bold,
-                color: YekiColors.white,
+                color: YekiColors.primaryDark,
               ),
               inputFormatters: [FilteringTextInputFormatter.digitsOnly],
               decoration: InputDecoration(
                 counterText: '',
                 filled: true,
-                fillColor: YekiColors.white.withValues(alpha: 0.1),
+                fillColor: YekiColors.white.withValues(alpha: 0.5),
                 border: OutlineInputBorder(
-                  borderRadius: YekiRadius.borderRadiusMd,
+                  borderRadius: BorderRadius.circular(14),
                   borderSide: BorderSide(
                     color: _error.isNotEmpty
-                        ? YekiColors.error.withValues(alpha: 0.5)
-                        : YekiColors.white.withValues(alpha: 0.05),
+                        ? YekiColors.error.withValues(alpha: 0.3)
+                        : YekiColors.white.withValues(alpha: 0.8),
                   ),
                 ),
                 focusedBorder: OutlineInputBorder(
-                  borderRadius: YekiRadius.borderRadiusMd,
-                  borderSide: const BorderSide(color: YekiColors.white, width: 1.5),
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide(
+                    color: YekiColors.primary,
+                    width: 2,
+                  ),
                 ),
                 enabledBorder: OutlineInputBorder(
-                  borderRadius: YekiRadius.borderRadiusMd,
+                  borderRadius: BorderRadius.circular(14),
                   borderSide: BorderSide(
                     color: _otpCtrl[i].text.isNotEmpty
-                        ? YekiColors.accent.withValues(alpha: 0.6)
-                        : YekiColors.white.withValues(alpha: 0.05),
+                        ? YekiColors.primary.withValues(alpha: 0.4)
+                        : YekiColors.white.withValues(alpha: 0.6),
+                    width: 1.5,
                   ),
                 ),
                 contentPadding: EdgeInsets.zero,
@@ -517,35 +724,34 @@ class _VerifyOTPPageState extends State<VerifyOTPPage>
 
   Widget _buildResendRow() {
     final canResend = _resendCountdown == 0;
-    return SizedBox(
-      width: 320,
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(
-            'Pas reçu ? ',
-            style: TextStyle(fontSize: 12, color: YekiColors.white.withValues(alpha: 0.5)),
-          ),
-          _resending
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: YekiLoader(color: YekiColors.accent, size: 14),
-                )
-              : GestureDetector(
-                  onTap: canResend ? _renvoyerCode : null,
-                  child: Text(
-                    canResend ? 'RENVOYER' : 'RENVOYER (${_resendCountdown}s)',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 1,
-                      color: canResend ? YekiColors.accent : YekiColors.white.withValues(alpha: 0.3),
-                    ),
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Text(
+          'Pas reçu ? ',
+          style: TextStyle(fontSize: 13, color: YekiColors.textMedium),
+        ),
+        _resending
+            ? const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  color: YekiColors.primary,
+                  strokeWidth: 2,
+                ),
+              )
+            : GestureDetector(
+                onTap: canResend ? _renvoyerCode : null,
+                child: Text(
+                  canResend ? 'RENVOYER' : 'RENVOYER (${_resendCountdown}s)',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                    color: canResend ? YekiColors.primary : YekiColors.textLight,
                   ),
                 ),
-        ],
-      ),
+              ),
+      ],
     );
   }
 }
@@ -576,6 +782,7 @@ class _ResetPasswordPageState extends State<ResetPasswordPage>
 
   late AnimationController _animCtrl;
   late Animation<double> _fadeAnim;
+  late Animation<Offset> _slideAnim;
 
   bool get _hasLength => _newPwdCtrl.text.length >= 8;
   bool get _hasLetter => RegExp(r'[a-zA-Z]').hasMatch(_newPwdCtrl.text);
@@ -585,8 +792,15 @@ class _ResetPasswordPageState extends State<ResetPasswordPage>
   @override
   void initState() {
     super.initState();
-    _animCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 800));
+    _animCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    );
     _fadeAnim = CurvedAnimation(parent: _animCtrl, curve: Curves.easeIn);
+    _slideAnim = Tween<Offset>(
+      begin: const Offset(0, 0.3),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(parent: _animCtrl, curve: Curves.easeOutCubic));
     _animCtrl.forward();
   }
 
@@ -637,101 +851,169 @@ class _ResetPasswordPageState extends State<ResetPasswordPage>
 
   @override
   Widget build(BuildContext context) {
+    final bool isMobile = YekiResponsive.isMobile(context);
+    final double padding = isMobile ? 20.0 : 48.0;
+
     return Scaffold(
-      backgroundColor: YekiColors.primaryDark,
-      body: _success ? _buildSuccessView() : _buildFormView(),
+      backgroundColor: YekiColors.bgLight,
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: YekiGradients.mainBackground,
+        ),
+        child: _success ? _buildSuccessView() : _buildFormView(padding),
+      ),
     );
   }
 
-  Widget _buildFormView() {
+  Widget _buildFormView(double padding) {
     return Stack(
       children: [
         _buildDecorations(),
         SafeArea(
           child: FadeTransition(
             opacity: _fadeAnim,
-            child: SingleChildScrollView(
-              physics: const BouncingScrollPhysics(),
-              padding: const EdgeInsets.symmetric(horizontal: 40),
-              child: Column(
-                children: [
-                  const SizedBox(height: 20),
-                  _buildBackButton(),
-                  const SizedBox(height: 10),
-                  _buildHeader(
-                    icon: Icons.lock_reset_outlined,
-                    title: 'NOUVEAU MOT DE PASSE',
-                  ),
-                  const SizedBox(height: 40),
-                  _buildSectionLabel("SÉCURITÉ"),
-                  _buildModernField(
-                    controller: _newPwdCtrl,
-                    label: "Nouveau mot de passe",
-                    icon: Icons.lock_outline_rounded,
-                    isPassword: true,
-                    obscure: _obscureNew,
-                    onToggle: () => setState(() => _obscureNew = !_obscureNew),
-                    onChanged: (_) => setState(() => _error = ''),
-                  ),
-                  const SizedBox(height: 12),
-                  _buildPasswordRules(),
-                  const SizedBox(height: 15),
-                  _buildModernField(
-                    controller: _confirmPwdCtrl,
-                    label: "Confirmation",
-                    icon: Icons.shield_outlined,
-                    isPassword: true,
-                    obscure: _obscureConfirm,
-                    onToggle: () => setState(() => _obscureConfirm = !_obscureConfirm),
-                    onChanged: (_) => setState(() => _error = ''),
-                  ),
-                  if (_confirmPwdCtrl.text.isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    SizedBox(
-                      width: 320,
-                      child: Row(
-                        children: [
-                          Icon(
-                            _matches ? Icons.check_circle : Icons.cancel,
-                            size: 14,
-                            color: _matches ? YekiColors.success : YekiColors.error,
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            _matches
-                                ? 'Les mots de passe correspondent'
-                                : 'Les mots de passe ne correspondent pas',
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: _matches ? YekiColors.success : YekiColors.error,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
+            child: Center(
+              child: SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
+                padding: EdgeInsets.symmetric(horizontal: padding, vertical: 20),
+                child: SlideTransition(
+                  position: _slideAnim,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      _buildBackButton(),
+                      const SizedBox(height: 10),
+                      _buildHeader(
+                        icon: Icons.lock_reset_outlined,
+                        title: 'NOUVEAU MOT DE PASSE',
+                        subtitle: 'Créez un mot de passe sécurisé',
                       ),
-                    ),
-                  ],
-                  if (_error.isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    _buildErrorWidget(_error),
-                  ],
-                  const SizedBox(height: 30),
-                  _buildStepIndicator(step: 2),
-                  const SizedBox(height: 30),
-                  _loading
-                      ? const YekiLoader(color: YekiColors.white)
-                      : _buildSubmitButton(
-                          label: 'RÉINITIALISER',
-                          icon: Icons.check_circle_outline,
-                          onTap: _reinitialiser,
-                        ),
-                  const SizedBox(height: 40),
-                ],
+                      const SizedBox(height: 30),
+                      _buildGlassCard(),
+                      const SizedBox(height: 20),
+                      _buildFooterLink(context),
+                      const SizedBox(height: 30),
+                    ],
+                  ),
+                ),
               ),
             ),
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildGlassCard() {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(28),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 25, sigmaY: 25),
+        child: Container(
+          width: double.infinity,
+          constraints: const BoxConstraints(maxWidth: 420),
+          padding: const EdgeInsets.all(32),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                YekiColors.white.withValues(alpha: 0.75),
+                YekiColors.white.withValues(alpha: 0.45),
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(28),
+            border: Border.all(
+              color: YekiColors.white.withValues(alpha: 0.9),
+              width: 1.5,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: YekiColors.primary.withValues(alpha: 0.06),
+                blurRadius: 40,
+                offset: const Offset(0, 20),
+              ),
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.03),
+                blurRadius: 20,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Column(
+            children: [
+              _buildSectionLabel("SÉCURITÉ"),
+              _buildModernField(
+                controller: _newPwdCtrl,
+                label: "Nouveau mot de passe",
+                hint: "••••••••",
+                icon: Icons.lock_outline_rounded,
+                isPassword: true,
+                obscure: _obscureNew,
+                onToggle: () => setState(() => _obscureNew = !_obscureNew),
+                onChanged: (_) => setState(() => _error = ''),
+              ),
+              const SizedBox(height: 8),
+              _buildPasswordRules(),
+              const SizedBox(height: 15),
+              _buildModernField(
+                controller: _confirmPwdCtrl,
+                label: "Confirmation",
+                hint: "••••••••",
+                icon: Icons.shield_outlined,
+                isPassword: true,
+                obscure: _obscureConfirm,
+                onToggle: () => setState(() => _obscureConfirm = !_obscureConfirm),
+                onChanged: (_) => setState(() => _error = ''),
+              ),
+              if (_confirmPwdCtrl.text.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Icon(
+                      _matches ? Icons.check_circle : Icons.cancel,
+                      size: 14,
+                      color: _matches ? YekiColors.success : YekiColors.error,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      _matches
+                          ? 'Les mots de passe correspondent'
+                          : 'Les mots de passe ne correspondent pas',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: _matches ? YekiColors.success : YekiColors.error,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+              if (_error.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                _buildErrorWidget(_error),
+              ],
+              const SizedBox(height: 8),
+              _buildStepIndicator(step: 2),
+              const SizedBox(height: 24),
+              _loading
+                  ? Container(
+                      height: 56,
+                      alignment: Alignment.center,
+                      child: const CircularProgressIndicator(
+                        color: YekiColors.primary,
+                        strokeWidth: 2.5,
+                      ),
+                    )
+                  : _buildSubmitButton(
+                      label: 'RÉINITIALISER',
+                      icon: Icons.check_circle_outline,
+                      onTap: _reinitialiser,
+                    ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -752,28 +1034,35 @@ class _ResetPasswordPageState extends State<ResetPasswordPage>
                       width: 100,
                       height: 100,
                       decoration: BoxDecoration(
-                        color: YekiColors.success.withValues(alpha: 0.1),
+                        gradient: LinearGradient(
+                          colors: [
+                            YekiColors.success.withValues(alpha: 0.10),
+                            YekiColors.success.withValues(alpha: 0.05),
+                          ],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
                         shape: BoxShape.circle,
                         border: Border.all(
-                          color: YekiColors.success.withValues(alpha: 0.3),
-                          width: 1,
+                          color: YekiColors.success.withValues(alpha: 0.2),
+                          width: 2,
                         ),
                       ),
-                      child: const Icon(
+                      child: Icon(
                         Icons.check_circle_outline_rounded,
                         color: YekiColors.success,
                         size: 52,
                       ),
                     ),
                     const SizedBox(height: 30),
-                    const Text(
+                    Text(
                       'MOT DE PASSE\nRÉINITIALISÉ',
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                        color: YekiColors.white,
+                        color: YekiColors.textDark,
                         fontWeight: FontWeight.w900,
                         letterSpacing: 4,
-                        fontSize: 18,
+                        fontSize: 20,
                         height: 1.6,
                       ),
                     ),
@@ -782,8 +1071,8 @@ class _ResetPasswordPageState extends State<ResetPasswordPage>
                       width: 40,
                       height: 3,
                       decoration: BoxDecoration(
-                        color: YekiColors.accent,
-                        borderRadius: YekiRadius.borderRadiusSm,
+                        color: YekiColors.primary,
+                        borderRadius: BorderRadius.circular(2),
                       ),
                     ),
                     const SizedBox(height: 20),
@@ -791,8 +1080,8 @@ class _ResetPasswordPageState extends State<ResetPasswordPage>
                       'Votre mot de passe a été mis à jour avec succès.\nConnectez-vous avec votre nouveau mot de passe.',
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                        color: YekiColors.white.withValues(alpha: 0.5),
-                        fontSize: 12,
+                        color: YekiColors.textMedium,
+                        fontSize: 14,
                         height: 1.7,
                       ),
                     ),
@@ -816,7 +1105,7 @@ class _ResetPasswordPageState extends State<ResetPasswordPage>
     return Align(
       alignment: Alignment.centerLeft,
       child: IconButton(
-        icon: const Icon(Icons.arrow_back_ios_new, color: YekiColors.white, size: 18),
+        icon: Icon(Icons.arrow_back_ios_new, color: YekiColors.primaryDark, size: 18),
         onPressed: () => Navigator.of(context).maybePop(),
         padding: EdgeInsets.zero,
       ),
@@ -827,76 +1116,108 @@ class _ResetPasswordPageState extends State<ResetPasswordPage>
     return Stack(
       children: [
         Positioned(
-          top: -40,
-          left: -40,
-          child: _buildCircle(180, YekiColors.white.withValues(alpha: 0.03)),
+          top: -60,
+          right: -60,
+          child: Container(
+            width: 250,
+            height: 250,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: LinearGradient(
+                colors: [
+                  YekiColors.primary.withValues(alpha: 0.10),
+                  YekiColors.primaryLight.withValues(alpha: 0.04),
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+            ),
+          ),
         ),
         Positioned(
-          bottom: 20,
-          right: -30,
-          child: _buildCircle(120, YekiColors.white.withValues(alpha: 0.02)),
+          bottom: -80,
+          left: -80,
+          child: Container(
+            width: 300,
+            height: 300,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: LinearGradient(
+                colors: [
+                  YekiColors.accent.withValues(alpha: 0.06),
+                  YekiColors.gold.withValues(alpha: 0.03),
+                ],
+                begin: Alignment.bottomLeft,
+                end: Alignment.topRight,
+              ),
+            ),
+          ),
+        ),
+        Positioned(
+          top: 250,
+          left: -40,
+          child: Container(
+            width: 150,
+            height: 150,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: YekiColors.gold.withValues(alpha: 0.04),
+            ),
+          ),
         ),
       ],
     );
   }
 
-  Widget _buildCircle(double size, Color color) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(shape: BoxShape.circle, color: color),
-    );
-  }
-
   Widget _buildPasswordRules() {
-    return SizedBox(
-      width: 320,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          color: YekiColors.white.withValues(alpha: 0.1),
-          borderRadius: YekiRadius.borderRadiusMd,
-          border: Border.all(color: YekiColors.white.withValues(alpha: 0.05)),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: YekiColors.white.withValues(alpha: 0.4),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: YekiColors.white.withValues(alpha: 0.6),
+          width: 1.0,
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'CRITÈRES REQUIS',
-              style: TextStyle(
-                color: YekiColors.white.withValues(alpha: 0.3),
-                fontSize: 9,
-                fontWeight: FontWeight.w900,
-                letterSpacing: 2,
-              ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'CRITÈRES REQUIS',
+            style: TextStyle(
+              color: YekiColors.textMedium,
+              fontSize: 9,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 2,
             ),
-            const SizedBox(height: 10),
-            _buildRule('Au moins 8 caractères', _hasLength),
-            _buildRule('Au moins une lettre', _hasLetter),
-            _buildRule('Au moins un chiffre', _hasDigit),
-          ],
-        ),
+          ),
+          const SizedBox(height: 8),
+          _buildRule('Au moins 8 caractères', _hasLength),
+          _buildRule('Au moins une lettre', _hasLetter),
+          _buildRule('Au moins un chiffre', _hasDigit),
+        ],
       ),
     );
   }
 
   Widget _buildRule(String label, bool valid) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 5),
+      padding: const EdgeInsets.only(bottom: 4),
       child: Row(
         children: [
           Icon(
             valid ? Icons.check_circle : Icons.radio_button_unchecked,
-            size: 13,
-            color: valid ? YekiColors.success : YekiColors.white.withValues(alpha: 0.25),
+            size: 14,
+            color: valid ? YekiColors.success : YekiColors.textLight,
           ),
-          const SizedBox(width: 7),
+          const SizedBox(width: 8),
           Text(
             label,
             style: TextStyle(
-              fontSize: 11,
-              color: valid ? YekiColors.success : YekiColors.white.withValues(alpha: 0.4),
-              fontWeight: valid ? FontWeight.w700 : FontWeight.normal,
+              fontSize: 12,
+              color: valid ? YekiColors.success : YekiColors.textMedium,
+              fontWeight: valid ? FontWeight.w700 : FontWeight.w500,
             ),
           ),
         ],
@@ -906,40 +1227,63 @@ class _ResetPasswordPageState extends State<ResetPasswordPage>
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-//  WIDGETS PARTAGÉS (CORRIGÉS)
+//  WIDGETS PARTAGÉS — GLASSMORPHISM LIGHT
 // ═══════════════════════════════════════════════════════════════════════════
 
-Widget _buildHeader({required IconData icon, required String title}) {
+Widget _buildHeader({required IconData icon, required String title, required String subtitle}) {
   return Column(
     children: [
       Container(
-        width: 76,
-        height: 76,
+        width: 72,
+        height: 72,
         decoration: BoxDecoration(
-          color: YekiColors.white.withValues(alpha: 0.1),
+          gradient: LinearGradient(
+            colors: [
+              YekiColors.primary.withValues(alpha: 0.10),
+              YekiColors.primaryLight.withValues(alpha: 0.05),
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
           shape: BoxShape.circle,
-          border: Border.all(color: YekiColors.white.withValues(alpha: 0.12), width: 1),
+          border: Border.all(
+            color: YekiColors.primary.withValues(alpha: 0.15),
+            width: 1.5,
+          ),
         ),
-        child: Icon(icon, color: YekiColors.white, size: 34),
+        child: Icon(icon, color: YekiColors.primary, size: 32),
       ),
-      const SizedBox(height: 20),
+      const SizedBox(height: 16),
       Text(
         title,
         textAlign: TextAlign.center,
-        style: const TextStyle(
-          color: YekiColors.white,
+        style: TextStyle(
+          color: YekiColors.textDark,
           fontWeight: FontWeight.w900,
-          letterSpacing: 8,
-          fontSize: 15,
+          letterSpacing: 6,
+          fontSize: 16,
         ),
       ),
-      const SizedBox(height: 10),
+      const SizedBox(height: 6),
       Container(
         width: 40,
         height: 3,
         decoration: BoxDecoration(
-          color: YekiColors.accent,
-          borderRadius: YekiRadius.borderRadiusSm,
+          gradient: LinearGradient(
+            colors: [YekiColors.primary, YekiColors.primaryLight],
+            begin: Alignment.centerLeft,
+            end: Alignment.centerRight,
+          ),
+          borderRadius: BorderRadius.circular(2),
+        ),
+      ),
+      const SizedBox(height: 6),
+      Text(
+        subtitle,
+        style: TextStyle(
+          color: YekiColors.textMedium,
+          fontSize: 13,
+          fontWeight: FontWeight.w500,
         ),
       ),
     ],
@@ -950,11 +1294,11 @@ Widget _buildSectionLabel(String label) {
   return Align(
     alignment: Alignment.centerLeft,
     child: Padding(
-      padding: const EdgeInsets.only(left: 5, bottom: 12),
+      padding: const EdgeInsets.only(left: 5, bottom: 10),
       child: Text(
         label,
         style: TextStyle(
-          color: YekiColors.white.withValues(alpha: 0.3),
+          color: YekiColors.textMedium,
           fontSize: 10,
           fontWeight: FontWeight.w900,
           letterSpacing: 2,
@@ -967,6 +1311,7 @@ Widget _buildSectionLabel(String label) {
 Widget _buildModernField({
   required TextEditingController controller,
   required String label,
+  required String hint,
   required IconData icon,
   bool isPassword = false,
   bool? obscure,
@@ -975,41 +1320,70 @@ Widget _buildModernField({
   ValueChanged<String>? onChanged,
   ValueChanged<String>? onSubmitted,
 }) {
-  return SizedBox(
-    width: 320,
+  final bool hasFocus = controller.text.isNotEmpty;
+  
+  return Container(
+    decoration: BoxDecoration(
+      color: YekiColors.white.withValues(alpha: 0.4),
+      borderRadius: BorderRadius.circular(14),
+      border: Border.all(
+        color: hasFocus 
+            ? YekiColors.primary.withValues(alpha: 0.3)
+            : YekiColors.white.withValues(alpha: 0.6),
+        width: 1.5,
+      ),
+    ),
     child: TextFormField(
       controller: controller,
       obscureText: isPassword && (obscure ?? true),
       keyboardType: keyboardType,
       onChanged: onChanged,
       onFieldSubmitted: onSubmitted,
-      style: const TextStyle(color: YekiColors.white, fontSize: 14, fontWeight: FontWeight.w500),
-      cursorColor: YekiColors.white,
+      style: TextStyle(
+        color: YekiColors.textDark,
+        fontSize: 14,
+        fontWeight: FontWeight.w500,
+      ),
+      cursorColor: YekiColors.primary,
       decoration: InputDecoration(
         labelText: label,
-        labelStyle: TextStyle(color: YekiColors.white.withValues(alpha: 0.4), fontSize: 13),
-        floatingLabelStyle: const TextStyle(color: YekiColors.white, fontWeight: FontWeight.bold, fontSize: 12),
-        prefixIcon: Icon(icon, color: YekiColors.white.withValues(alpha: 0.7), size: 18),
+        labelStyle: TextStyle(
+          color: YekiColors.textMedium,
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+        ),
+        floatingLabelBehavior: FloatingLabelBehavior.auto,
+        hintText: hint,
+        hintStyle: TextStyle(
+          color: YekiColors.textLight,
+          fontSize: 14,
+          fontWeight: FontWeight.w400,
+        ),
+        prefixIcon: Icon(
+          icon,
+          color: hasFocus ? YekiColors.primary : YekiColors.textMedium,
+          size: 18,
+        ),
         suffixIcon: isPassword
             ? IconButton(
                 icon: Icon(
                   obscure! ? Icons.visibility_off_rounded : Icons.visibility_rounded,
-                  color: YekiColors.white,
+                  color: YekiColors.textMedium,
                   size: 18,
                 ),
                 onPressed: onToggle,
               )
             : null,
         filled: true,
-        fillColor: YekiColors.white.withValues(alpha: 0.1),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+        fillColor: Colors.transparent,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 16),
         enabledBorder: OutlineInputBorder(
-          borderRadius: YekiRadius.borderRadiusMd,
-          borderSide: BorderSide(color: YekiColors.white.withValues(alpha: 0.05)),
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide.none,
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: YekiRadius.borderRadiusMd,
-          borderSide: const BorderSide(color: YekiColors.white, width: 1.5),
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide.none,
         ),
       ),
     ),
@@ -1024,24 +1398,36 @@ Widget _buildSubmitButton({
   return GestureDetector(
     onTap: onTap,
     child: Container(
-      width: 320,
-      height: 60,
-      alignment: Alignment.center,
+      width: double.infinity,
+      height: 56,
       decoration: BoxDecoration(
-        color: YekiColors.accent,
-        borderRadius: YekiRadius.borderRadiusMd,
-        boxShadow: YekiShadows.accent,
+        gradient: LinearGradient(
+          colors: [
+            YekiColors.primary,
+            YekiColors.primaryLight,
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: YekiColors.primary.withValues(alpha: 0.25),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, color: YekiColors.white, size: 16),
+          Icon(icon, color: YekiColors.white, size: 18),
           const SizedBox(width: 10),
           Text(
             label,
             style: const TextStyle(
               color: YekiColors.white,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w800,
               fontSize: 13,
               letterSpacing: 1.5,
             ),
@@ -1062,98 +1448,127 @@ Widget _buildStepIndicator({required int step}) {
         duration: const Duration(milliseconds: 300),
         margin: const EdgeInsets.symmetric(horizontal: 4),
         width: isActive ? 28 : 10,
-        height: 10,
+        height: 8,
         decoration: BoxDecoration(
           color: isComplete
               ? YekiColors.success.withValues(alpha: 0.8)
-              : (isActive ? YekiColors.accent : YekiColors.white.withValues(alpha: 0.15)),
-          borderRadius: YekiRadius.borderRadiusSm,
+              : (isActive ? YekiColors.primary : YekiColors.textLight.withValues(alpha: 0.3)),
+          borderRadius: BorderRadius.circular(4),
         ),
-        child: isComplete ? const Icon(Icons.check, size: 8, color: YekiColors.white) : null,
+        child: isComplete ? Icon(Icons.check, size: 6, color: YekiColors.white) : null,
       );
     }),
   );
 }
 
 Widget _buildErrorWidget(String message) {
-  return SizedBox(
-    width: 320,
-    child: Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
+  return Container(
+    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+    decoration: BoxDecoration(
+      color: YekiColors.error.withValues(alpha: 0.06),
+      borderRadius: BorderRadius.circular(12),
+      border: Border.all(
         color: YekiColors.error.withValues(alpha: 0.12),
-        borderRadius: YekiRadius.borderRadiusMd,
-        border: Border.all(color: YekiColors.error.withValues(alpha: 0.3), width: 0.8),
+        width: 1.0,
       ),
-      child: Row(
-        children: [
-          const Icon(Icons.error_outline, color: YekiColors.error, size: 14),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              message,
-              style: const TextStyle(fontSize: 11, color: YekiColors.error, fontWeight: FontWeight.w600),
+    ),
+    child: Row(
+      children: [
+        Icon(Icons.error_outline_rounded, color: YekiColors.error, size: 16),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            message,
+            style: TextStyle(
+              fontSize: 12,
+              color: YekiColors.error,
+              fontWeight: FontWeight.w600,
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     ),
   );
 }
 
 Widget _buildSuccessWidget(String message) {
-  return SizedBox(
-    width: 320,
-    child: Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        color: YekiColors.success.withValues(alpha: 0.08),
-        borderRadius: YekiRadius.borderRadiusMd,
-        border: Border.all(color: YekiColors.success.withValues(alpha: 0.3), width: 0.8),
+  return Container(
+    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+    decoration: BoxDecoration(
+      color: YekiColors.success.withValues(alpha: 0.06),
+      borderRadius: BorderRadius.circular(12),
+      border: Border.all(
+        color: YekiColors.success.withValues(alpha: 0.12),
+        width: 1.0,
       ),
-      child: Row(
-        children: [
-          const Icon(Icons.check_circle_outline, color: YekiColors.success, size: 14),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              message,
-              style: const TextStyle(fontSize: 11, color: YekiColors.success, fontWeight: FontWeight.w600),
+    ),
+    child: Row(
+      children: [
+        Icon(Icons.check_circle_outline_rounded, color: YekiColors.success, size: 16),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            message,
+            style: TextStyle(
+              fontSize: 12,
+              color: YekiColors.success,
+              fontWeight: FontWeight.w600,
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     ),
   );
 }
 
 Widget _buildFooterLink(BuildContext context) {
-  return TextButton(
-    onPressed: () => Navigator.of(context).pop(),
-    child: RichText(
-      text: TextSpan(
-        style: TextStyle(color: YekiColors.white.withValues(alpha: 0.6), fontSize: 13),
-        children: const [
-          TextSpan(text: "Retour à "),
-          TextSpan(
-            text: "LA CONNEXION",
-            style: TextStyle(
-              color: YekiColors.white,
-              fontWeight: FontWeight.w900,
-              decoration: TextDecoration.underline,
-            ),
+  return Container(
+    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+    decoration: BoxDecoration(
+      color: YekiColors.white.withValues(alpha: 0.4),
+      borderRadius: BorderRadius.circular(16),
+      border: Border.all(
+        color: YekiColors.white.withValues(alpha: 0.6),
+        width: 1.0,
+      ),
+    ),
+    child: TextButton(
+      onPressed: () => Navigator.of(context).pop(),
+      style: TextButton.styleFrom(
+        padding: EdgeInsets.zero,
+        minimumSize: const Size(0, 0),
+      ),
+      child: RichText(
+        text: TextSpan(
+          style: TextStyle(
+            color: YekiColors.textMedium,
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
           ),
-        ],
+          children: const [
+            TextSpan(text: "Retour à "),
+            TextSpan(
+              text: "LA CONNEXION",
+              style: TextStyle(
+                color: YekiColors.primary,
+                fontWeight: FontWeight.w900,
+                decoration: TextDecoration.underline,
+                decorationColor: YekiColors.primary,
+                decorationThickness: 2,
+              ),
+            ),
+          ],
+        ),
       ),
     ),
   );
 }
 
 PageRouteBuilder _slideRoute(Widget page) => PageRouteBuilder(
-      pageBuilder: (_, __, ___) => page,
-      transitionsBuilder: (_, anim, __, child) => SlideTransition(
+      pageBuilder: (_, _, _) => page,
+      transitionsBuilder: (_, anim, _, child) => SlideTransition(
         position: Tween<Offset>(
-          begin: const Offset(1, 0),
+          begin: const Offset(0.3, 0),
           end: Offset.zero,
         ).animate(CurvedAnimation(parent: anim, curve: Curves.easeOutCubic)),
         child: child,

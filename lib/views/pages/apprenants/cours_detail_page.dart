@@ -1,6 +1,6 @@
-// lib/views/pages/apprenants/cours_detail_tabs.dart
+// lib/views/pages/apprenants/cours_detail_page.dart
 // ════════════════════════════════════════════════════════════════
-// DÉTAILS DU COURS — Expérience Immersive & Premium (V2)
+// DÉTAILS DU COURS — GLASSMORPHISM LIGHT EDITION
 // ════════════════════════════════════════════════════════════════
 
 import 'dart:ui';
@@ -10,7 +10,7 @@ import 'package:yeki/views/pages/apprenants/devoirs_cours_page.dart';
 import 'package:yeki/views/pages/apprenants/forum_page.dart';
 import 'package:yeki/views/pages/apprenants/lecons_cours.dart';
 import 'package:yeki/views/pages/apprenants/exercices_cours.dart';
-import 'package:yeki/core/theme/app_theme.dart';
+import 'package:yeki/core/theme/yeki_design_system.dart';
 
 class CoursDetailTabs extends StatefulWidget {
   final String coursId;
@@ -106,39 +106,96 @@ class _CoursDetailTabsState extends State<CoursDetailTabs>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: YekiColors.backgroundLight,
-      body: Stack(
-        children: [
-          // Le contenu des onglets est étendu derrière le header transparent/flouté
-          Positioned.fill(
-            child: Padding(
-              padding: const EdgeInsets.only(top: 130),
-              child: _buildTabViews(),
+      backgroundColor: YekiColors.bgLight,
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: YekiGradients.mainBackground,
+        ),
+        child: Stack(
+          children: [
+            // Sphères décoratives
+            Positioned(
+              top: -30,
+              right: -30,
+              child: Container(
+                width: 200,
+                height: 200,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: _courseColor.withValues(alpha: 0.08),
+                ),
+              ),
             ),
-          ),
-          
-          // Header flouté (Glassmorphism) + TabBar épinglés en haut
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            child: ClipRect(
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-                child: Container(
-                  color: YekiColors.white.withValues(alpha: 0.85),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      _buildHeader(),
-                      _buildTabBarCapsule(),
-                    ],
+            Positioned(
+              bottom: 100,
+              left: -50,
+              child: Container(
+                width: 180,
+                height: 180,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: YekiColors.accent.withValues(alpha: 0.06),
+                ),
+              ),
+            ),
+            Positioned(
+              bottom: 50,
+              right: -20,
+              child: Container(
+                width: 120,
+                height: 120,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: YekiColors.gold.withValues(alpha: 0.05),
+                ),
+              ),
+            ),
+            // Le contenu des onglets
+            Positioned.fill(
+              child: Padding(
+                padding: const EdgeInsets.only(top: 130),
+                child: _buildTabViews(),
+              ),
+            ),
+            
+            // Header flouté (Glassmorphism) + TabBar
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: ClipRect(
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          YekiColors.white.withValues(alpha: 0.80),
+                          YekiColors.white.withValues(alpha: 0.60),
+                        ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      border: Border(
+                        bottom: BorderSide(
+                          color: YekiColors.white.withValues(alpha: 0.5),
+                          width: 1,
+                        ),
+                      ),
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _buildHeader(),
+                        _buildTabBarCapsule(),
+                      ],
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -147,7 +204,7 @@ class _CoursDetailTabsState extends State<CoursDetailTabs>
     return SafeArea(
       bottom: false,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 8, 20, 4),
+        padding: const EdgeInsets.fromLTRB(8, 8, 16, 4),
         child: Row(
           children: [
             IconButton(
@@ -167,9 +224,9 @@ class _CoursDetailTabsState extends State<CoursDetailTabs>
                     widget.titre,
                     style: const TextStyle(
                       color: YekiColors.textDark,
-                      fontSize: 19,
+                      fontSize: 18,
                       fontWeight: FontWeight.w900,
-                      letterSpacing: -0.6,
+                      letterSpacing: -0.4,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -185,32 +242,13 @@ class _CoursDetailTabsState extends State<CoursDetailTabs>
                       const SizedBox(width: 6),
                       Text(
                         "Espace d'apprentissage",
-                        style: TextStyle(color: YekiColors.textMedium, fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: -0.1),
+                        style: TextStyle(color: YekiColors.textMedium, fontSize: 11, fontWeight: FontWeight.w600),
                       ),
                     ],
                   ),
                 ],
               ),
             ),
-            if (!widget.isPremium)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(
-                  color: YekiColors.accent.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.lock_outline_rounded, color: YekiColors.accent, size: 13),
-                    SizedBox(width: 4),
-                    Text(
-                      'Mode Limité',
-                      style: TextStyle(color: YekiColors.accent, fontSize: 10, fontWeight: FontWeight.w800),
-                    ),
-                  ],
-                ),
-              ),
           ],
         ),
       ),
@@ -224,10 +262,10 @@ class _CoursDetailTabsState extends State<CoursDetailTabs>
         height: 44,
         padding: const EdgeInsets.all(4),
         decoration: BoxDecoration(
-          color: YekiColors.backgroundLight,
+          color: YekiColors.white.withValues(alpha: 0.4),
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: YekiColors.textDark.withValues(alpha: 0.08), 
+            color: YekiColors.white.withValues(alpha: 0.6),
             width: 1,
           ),
         ),
@@ -237,16 +275,16 @@ class _CoursDetailTabsState extends State<CoursDetailTabs>
           padding: EdgeInsets.zero,
           labelPadding: const EdgeInsets.symmetric(horizontal: 4),
           indicator: BoxDecoration(
-            color: _courseColor,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(
-              color: YekiColors.white.withValues(alpha: 0.15),
-              width: 1,
+            gradient: LinearGradient(
+              colors: [_courseColor, _courseColor.withValues(alpha: 0.8)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
             ),
+            borderRadius: BorderRadius.circular(10),
             boxShadow: [
               BoxShadow(
                 color: _courseColor.withValues(alpha: 0.25),
-                blurRadius: 6,
+                blurRadius: 8,
                 offset: const Offset(0, 3),
               ),
             ],
@@ -324,7 +362,7 @@ class _CoursDetailTabsState extends State<CoursDetailTabs>
 
   Widget _buildPremiumLock(String feature) {
     return Container(
-      color: YekiColors.backgroundLight,
+      color: Colors.transparent,
       child: Center(
         child: SingleChildScrollView(
           physics: const BouncingScrollPhysics(),
@@ -342,31 +380,41 @@ class _CoursDetailTabsState extends State<CoursDetailTabs>
                       height: 110,
                       decoration: BoxDecoration(
                         gradient: RadialGradient(
-                          colors: [YekiColors.gold.withValues(alpha: 0.25), YekiColors.gold.withValues(alpha: 0.0)],
+                          colors: [YekiColors.gold.withValues(alpha: 0.15), YekiColors.gold.withValues(alpha: 0.0)],
                         ),
                       ),
                     ),
-                    Container(
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        color: YekiColors.white,
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: YekiColors.gold.withValues(alpha: 0.15),
-                            blurRadius: 20,
-                            offset: const Offset(0, 8),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(55),
+                      child: BackdropFilter(
+                        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                        child: Container(
+                          padding: const EdgeInsets.all(20),
+                          decoration: BoxDecoration(
+                            color: YekiColors.white.withValues(alpha: 0.5),
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: YekiColors.white.withValues(alpha: 0.8),
+                              width: 2,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: YekiColors.gold.withValues(alpha: 0.15),
+                                blurRadius: 20,
+                                offset: const Offset(0, 8),
+                              ),
+                            ],
                           ),
-                        ],
+                          child: const Icon(Icons.workspace_premium_rounded, color: YekiColors.gold, size: 42),
+                        ),
                       ),
-                      child: const Icon(Icons.workspace_premium_rounded, color: YekiColors.gold, size: 42),
                     ),
                   ],
                 ),
                 const SizedBox(height: 20),
-                const Text(
+                Text(
                   'Débloquez tout le potentiel',
-                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: YekiColors.textDark, letterSpacing: -0.6),
+                  style: YekiTextStyles.h2(context).copyWith(fontSize: 22),
                 ),
                 const SizedBox(height: 8),
                 Padding(
@@ -374,46 +422,126 @@ class _CoursDetailTabsState extends State<CoursDetailTabs>
                   child: Text(
                     'Rejoignez la communauté Premium pour accéder sans limite aux $feature, fiches de révision et corrections d\'experts.',
                     textAlign: TextAlign.center,
-                    style: const TextStyle(color: YekiColors.textMedium, fontSize: 13.5, height: 1.45, fontWeight: FontWeight.w500),
+                    style: YekiTextStyles.body(context).copyWith(fontSize: 13.5, height: 1.45),
                   ),
                 ),
                 const SizedBox(height: 32),
                 
-                // Formule Annuelle (Mise en valeur asymétrique - Best Value)
-                Container(
-                  width: double.infinity,
-                  decoration: BoxDecoration(
-                    color: YekiColors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: YekiColors.primaryDark, width: 2),
-                    boxShadow: [
-                      BoxShadow(
-                        color: YekiColors.primaryDark.withValues(alpha: 0.08),
-                        blurRadius: 15,
-                        offset: const Offset(0, 6),
-                      ),
-                    ],
-                  ),
-                  child: Stack(
-                    clipBehavior: Clip.none,
-                    children: [
-                      // Badge Économie flottant
-                      Positioned(
-                        top: -12,
-                        right: 16,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: YekiColors.accent,
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: const Text(
-                            '-26% ÉCONOMIE',
-                            style: TextStyle(color: YekiColors.white, fontSize: 9, fontWeight: FontWeight.w900, letterSpacing: 0.5),
-                          ),
+                // Formule Annuelle
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(16),
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+                    child: Container(
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            YekiColors.white.withValues(alpha: 0.7),
+                            YekiColors.white.withValues(alpha: 0.4),
+                          ],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: YekiColors.primary.withValues(alpha: 0.3),
+                          width: 2,
                         ),
                       ),
-                      InkWell(
+                      child: Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          // Badge Économie
+                          Positioned(
+                            top: -12,
+                            right: 16,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: [YekiColors.accent, YekiColors.accent.withValues(alpha: 0.8)],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: const Text(
+                                '-26% ÉCONOMIE',
+                                style: TextStyle(color: YekiColors.white, fontSize: 9, fontWeight: FontWeight.w900, letterSpacing: 0.5),
+                              ),
+                            ),
+                          ),
+                          InkWell(
+                            onTap: () => _triggerHaptic(),
+                            borderRadius: BorderRadius.circular(16),
+                            child: Padding(
+                              padding: const EdgeInsets.all(18),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      color: YekiColors.primary.withValues(alpha: 0.1),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: const Icon(Icons.flash_on_rounded, color: YekiColors.primary, size: 20),
+                                  ),
+                                  const SizedBox(width: 14),
+                                  const Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          'Formule Annuelle',
+                                          style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: YekiColors.textDark),
+                                        ),
+                                        SizedBox(height: 2),
+                                        Text(
+                                          'Accès total pendant 12 mois',
+                                          style: TextStyle(color: YekiColors.textMedium, fontSize: 11, fontWeight: FontWeight.w500),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const Text(
+                                    '13 000 F',
+                                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: YekiColors.primary, letterSpacing: -0.5),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                
+                // Formule Mensuelle
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(16),
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+                    child: Container(
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            YekiColors.white.withValues(alpha: 0.5),
+                            YekiColors.white.withValues(alpha: 0.3),
+                          ],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: YekiColors.white.withValues(alpha: 0.5),
+                          width: 1,
+                        ),
+                      ),
+                      child: InkWell(
                         onTap: () => _triggerHaptic(),
                         borderRadius: BorderRadius.circular(16),
                         child: Padding(
@@ -423,10 +551,10 @@ class _CoursDetailTabsState extends State<CoursDetailTabs>
                               Container(
                                 padding: const EdgeInsets.all(8),
                                 decoration: BoxDecoration(
-                                  color: YekiColors.primaryDark.withValues(alpha: 0.1),
+                                  color: YekiColors.textMedium.withValues(alpha: 0.06),
                                   shape: BoxShape.circle,
                                 ),
-                                child: const Icon(Icons.flash_on_rounded, color: YekiColors.primaryDark, size: 20),
+                                child: const Icon(Icons.calendar_today_rounded, color: YekiColors.textMedium, size: 18),
                               ),
                               const SizedBox(width: 14),
                               const Expanded(
@@ -434,82 +562,31 @@ class _CoursDetailTabsState extends State<CoursDetailTabs>
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      'Formule Annuelle',
-                                      style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: YekiColors.textDark),
+                                      'Abonnement Mensuel',
+                                      style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: YekiColors.textDark),
                                     ),
                                     SizedBox(height: 2),
                                     Text(
-                                      'Accès total pendant 12 mois',
-                                      style: TextStyle(color: YekiColors.textMedium, fontSize: 11, fontWeight: FontWeight.w500),
+                                      'Liberté totale, sans engagement',
+                                      style: TextStyle(color: YekiColors.textMedium, fontSize: 11),
                                     ),
                                   ],
                                 ),
                               ),
                               const Text(
-                                '13 000 F',
-                                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: YekiColors.primaryDark, letterSpacing: -0.5),
+                                '1 500 F',
+                                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: YekiColors.textDark, letterSpacing: -0.5),
                               ),
                             ],
                           ),
                         ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 12),
-                
-                // Formule Mensuelle Standard
-                Container(
-                  width: double.infinity,
-                  decoration: BoxDecoration(
-                    color: YekiColors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: YekiColors.textMedium.withValues(alpha: 0.12), width: 1),
-                  ),
-                  child: InkWell(
-                    onTap: () => _triggerHaptic(),
-                    borderRadius: BorderRadius.circular(16),
-                    child: Padding(
-                      padding: const EdgeInsets.all(18),
-                      child: Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: YekiColors.textMedium.withValues(alpha: 0.06),
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Icon(Icons.calendar_today_rounded, color: YekiColors.textMedium, size: 18),
-                          ),
-                          const SizedBox(width: 14),
-                          const Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Abonnement Mensuel',
-                                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: YekiColors.textDark),
-                                ),
-                                SizedBox(height: 2),
-                                Text(
-                                  'Liberté totale, sans engagement',
-                                  style: TextStyle(color: YekiColors.textMedium, fontSize: 11),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const Text(
-                            '1 500 F',
-                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: YekiColors.textDark, letterSpacing: -0.5),
-                          ),
-                        ],
                       ),
                     ),
                   ),
                 ),
                 const SizedBox(height: 28),
                 
-                // Rassurance : Sécurisé & Flexible
+                // Rassurance
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [

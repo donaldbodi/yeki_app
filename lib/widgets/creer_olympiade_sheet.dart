@@ -1,24 +1,28 @@
 // lib/widgets/creer_olympiade_sheet.dart
+// VERSION COMPLÈTE AVEC PRIX ET RECOMPENSES
 
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:yeki/core/theme/app_theme.dart';
+import 'package:yeki/core/constants/api_constants.dart';
 
 const String _baseUrlO = 'https://yeki.pythonanywhere.com/api';
 const Color _primaryO = Color(0xFF6A1B9A);
-const Color _darkO = Color(0xFF0D1B2A);
 
 class CreerOlympiadeSheet extends StatefulWidget {
   final int departementId;
   final String departementNom;
   final VoidCallback onSuccess;
+  final String parcoursType; // 'cursus', 'prepa', 'formation'
 
   const CreerOlympiadeSheet({
     super.key,
     required this.departementId,
     required this.departementNom,
     required this.onSuccess,
+    this.parcoursType = 'cursus',
   });
 
   @override
@@ -29,17 +33,31 @@ class _CreerOlympiadeSheetState extends State<CreerOlympiadeSheet>
     with SingleTickerProviderStateMixin {
   bool _loading = false;
   late TabController _tabCtrl;
+  
+  // Données du département pour calculer le prix global
+  int _nbApprenants = 0;
 
   // ── Étape 1 : Infos générales ─────────────────────────────────
   final _titreCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
   final _editionCtrl = TextEditingController();
+  final _recompenseCtrl = TextEditingController();
   final _prix1Ctrl = TextEditingController();
   final _prix2Ctrl = TextEditingController();
   final _prix3Ctrl = TextEditingController();
+  final _prixParticipationCtrl = TextEditingController(text: '0');
 
   String _matiere = 'Mathématiques';
   String _niveau = 'Terminale';
+  bool _demandePaiementParticipants = false;
+  
+  // Niveaux accessibles
+  List<String> _niveauxSelectionnes = [];
+  List<String> _niveauxDisponibles = [];
+  bool _niveauxCharges = false;
+  
+  // Prix global (calculé automatiquement)
+  int _prixGlobal = 0;
 
   // ── Étape 2 : Dates ───────────────────────────────────────────
   DateTime? _dateOuvInscription;
@@ -56,36 +74,23 @@ class _CreerOlympiadeSheetState extends State<CreerOlympiadeSheet>
   bool _uneSeuleSession = true;
 
   static const List<String> _matieres = [
-    'Mathématiques',
-    'Physique',
-    'Chimie',
-    'SVT',
-    'Informatique',
-    'Français',
-    'Anglais',
-    'Histoire-Géo',
-    'Philosophie',
-    'Économie',
-    'Autre',
+    'Mathématiques', 'Physique', 'Chimie', 'SVT',
+    'Informatique', 'Français', 'Anglais', 'Histoire-Géo',
+    'Philosophie', 'Économie', 'Autre',
   ];
 
   static const List<String> _niveaux = [
-    'Terminale',
-    '1ère',
-    '2nde',
-    '3ème',
-    'Licence 1',
-    'Licence 2',
-    'Licence 3',
-    'Master 1',
-    'Master 2',
-    'Autre',
+    'Terminale', '1ère', '2nde', '3ème',
+    'Licence 1', 'Licence 2', 'Licence 3',
+    'Master 1', 'Master 2', 'Autre',
   ];
 
   @override
   void initState() {
     super.initState();
     _tabCtrl = TabController(length: 3, vsync: this);
+    _chargerNiveaux();
+    _chargerNbApprenants();
   }
 
   @override
@@ -94,9 +99,11 @@ class _CreerOlympiadeSheetState extends State<CreerOlympiadeSheet>
     _titreCtrl.dispose();
     _descCtrl.dispose();
     _editionCtrl.dispose();
+    _recompenseCtrl.dispose();
     _prix1Ctrl.dispose();
     _prix2Ctrl.dispose();
     _prix3Ctrl.dispose();
+    _prixParticipationCtrl.dispose();
     _dureeCtrl.dispose();
     _nbQuestionsCtrl.dispose();
     _maxFocusCtrl.dispose();
@@ -106,6 +113,55 @@ class _CreerOlympiadeSheetState extends State<CreerOlympiadeSheet>
   Future<String?> _getToken() async {
     final p = await SharedPreferences.getInstance();
     return p.getString('token');
+  }
+
+  Future<void> _chargerNiveaux() async {
+    if (_niveauxCharges) return;
+    final token = await _getToken();
+    if (token == null) return;
+    try {
+      final res = await http.get(
+        Uri.parse(ApiConstants.niveaux),
+        headers: ApiHeaders.auth(token),
+      );
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        setState(() {
+          _niveauxDisponibles = List<String>.from(data);
+          _niveauxCharges = true;
+        });
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _chargerNbApprenants() async {
+    final token = await _getToken();
+    if (token == null) return;
+    try {
+      final res = await http.get(
+        Uri.parse('${ApiConstants.baseUrl}/departements/${widget.departementId}/apprenants/'),
+        headers: ApiHeaders.auth(token),
+      );
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        setState(() {
+          _nbApprenants = data.length;
+          _calculerPrixGlobal();
+        });
+      }
+    } catch (_) {}
+  }
+
+  void _calculerPrixGlobal() {
+    // Prix global = nombre d'apprenants * 100 FCFA
+    // Seulement pour les départements cursus et prepa
+    if (widget.parcoursType == 'cursus' || widget.parcoursType == 'prepa') {
+      _prixGlobal = _nbApprenants * 100;
+    } else {
+      // Pour les formations, le prix global est 0 (validation admin requise)
+      _prixGlobal = 0;
+    }
+    setState(() {});
   }
 
   bool _validerEtape1() {
@@ -147,11 +203,6 @@ class _CreerOlympiadeSheetState extends State<CreerOlympiadeSheet>
     setState(() => _loading = true);
     final token = await _getToken();
 
-    // Vérifier si l'olympiade est gratuite (aucun prix renseigné)
-    final aDesPrix = _prix1Ctrl.text.trim().isNotEmpty ||
-        _prix2Ctrl.text.trim().isNotEmpty ||
-        _prix3Ctrl.text.trim().isNotEmpty;
-
     try {
       final body = {
         'titre': _titreCtrl.text.trim(),
@@ -162,6 +213,10 @@ class _CreerOlympiadeSheetState extends State<CreerOlympiadeSheet>
         'prix_1er': _prix1Ctrl.text.trim(),
         'prix_2eme': _prix2Ctrl.text.trim(),
         'prix_3eme': _prix3Ctrl.text.trim(),
+        'recompense': _recompenseCtrl.text.trim(),
+        'prix_participation': int.tryParse(_prixParticipationCtrl.text.trim()) ?? 0,
+        'demande_paiement_participants': _demandePaiementParticipants,
+        'niveaux_accessibles': _niveauxSelectionnes,
         'date_ouverture_inscription': _dateOuvInscription!.toIso8601String(),
         'date_cloture_inscription': _dateCloInscription!.toIso8601String(),
         'date_debut_olympiade': _dateDebutOlympiade!.toIso8601String(),
@@ -185,14 +240,18 @@ class _CreerOlympiadeSheetState extends State<CreerOlympiadeSheet>
       );
 
       if (res.statusCode == 201) {
+        final data = jsonDecode(res.body);
         if (mounted) Navigator.pop(context);
-        widget.onSuccess();
         
-        if (!aDesPrix) {
-          _showSuccess('Olympiade créée ! En attente de validation par l\'administrateur du parcours.');
+        if (data['prix_global'] > 0) {
+          _showSuccess(
+            'Olympiade créée ! Un paiement de ${data['prix_global']} FCFA est requis.\n'
+            'Référence: ${data['id']}'
+          );
         } else {
-          _showSuccess('Olympiade créée avec succès !');
+          _showSuccess('Olympiade créée ! En attente de validation par l\'administrateur.');
         }
+        widget.onSuccess();
       } else {
         final err = jsonDecode(res.body);
         _showError(err['detail'] ?? 'Erreur lors de la création');
@@ -207,7 +266,7 @@ class _CreerOlympiadeSheetState extends State<CreerOlympiadeSheet>
   Future<DateTime?> _pickDateTime(BuildContext ctx, {DateTime? initial}) async {
     final date = await showDatePicker(
       context: ctx,
-      initialDate: initial ?? DateTime.now(),
+      initialDate: initial ?? DateTime.now().add(const Duration(days: 30)),
       firstDate: DateTime.now(),
       lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
       builder: (ctx, child) => Theme(
@@ -247,7 +306,7 @@ class _CreerOlympiadeSheetState extends State<CreerOlympiadeSheet>
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(msg),
-        backgroundColor: Colors.red,
+        backgroundColor: YekiColors.error,
         behavior: SnackBarBehavior.floating,
         margin: const EdgeInsets.all(16),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -260,7 +319,7 @@ class _CreerOlympiadeSheetState extends State<CreerOlympiadeSheet>
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(msg),
-        backgroundColor: Colors.green,
+        backgroundColor: YekiColors.success,
         behavior: SnackBarBehavior.floating,
         margin: const EdgeInsets.all(16),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -314,7 +373,7 @@ class _CreerOlympiadeSheetState extends State<CreerOlympiadeSheet>
                         style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
-                          color: _darkO,
+                          color: YekiColors.textDark,
                         ),
                       ),
                       Text(
@@ -436,37 +495,155 @@ class _CreerOlympiadeSheetState extends State<CreerOlympiadeSheet>
             items: _niveaux,
             onChanged: (v) => setState(() => _niveau = v!),
           ),
-          const SizedBox(height: 20),
-          _buildSectionTitle('🏆 Prix & Récompenses (optionnel)'),
-          const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: Colors.blue.shade50,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: const Row(
-              children: [
-                Icon(Icons.info_outline, size: 14, color: Colors.blue),
-                SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'Si aucun prix n\'est renseigné, l\'olympiade sera gratuite et devra être validée par l\'administrateur du parcours.',
-                    style: TextStyle(fontSize: 11, color: Colors.blue),
+          const SizedBox(height: 14),
+          
+          // Niveaux accessibles
+          _buildLabel('Niveaux accessibles'),
+          _buildNiveauxSelector(),
+          const SizedBox(height: 14),
+          
+          // Prix global (affiché seulement pour cursus et prepa)
+          if (widget.parcoursType == 'cursus' || widget.parcoursType == 'prepa') ...[
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: YekiColors.primaryDark.withValues(alpha: 0.05),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: YekiColors.primaryDark.withValues(alpha: 0.15)),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.attach_money_rounded, color: YekiColors.primaryDark, size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Prix global de l\'olympiade',
+                          style: TextStyle(fontSize: 12, color: YekiColors.textLight),
+                        ),
+                        Text(
+                          '${_prixGlobal} FCFA',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: _prixGlobal > 0 ? YekiColors.primaryDark : YekiColors.textLight,
+                          ),
+                        ),
+                        if (_prixGlobal == 0)
+                          Text(
+                            'Aucun apprenant dans ce département → validation admin requise',
+                            style: TextStyle(fontSize: 11, color: YekiColors.warning),
+                          ),
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
+            const SizedBox(height: 14),
+          ],
+          
+          // Prix participation participants
+          _buildLabel('Demander un paiement aux participants'),
+          SwitchListTile(
+            value: _demandePaiementParticipants,
+            onChanged: (v) => setState(() => _demandePaiementParticipants = v),
+            title: const Text('Les participants doivent payer'),
+            subtitle: const Text('Cochez pour activer le paiement par participant'),
+            activeColor: _primaryO,
+            dense: true,
+            contentPadding: EdgeInsets.zero,
           ),
-          const SizedBox(height: 12),
+          if (_demandePaiementParticipants) ...[
+            const SizedBox(height: 8),
+            _buildLabel('Prix de participation (max 200 FCFA)'),
+            _buildField(
+              controller: _prixParticipationCtrl,
+              hint: '0',
+              keyboardType: TextInputType.number,
+            ),
+          ],
+          const SizedBox(height: 14),
+          
+          _buildSectionTitle('🏆 Prix & Récompenses'),
+          const SizedBox(height: 8),
           _buildPrixField('1er Prix', _prix1Ctrl, const Color(0xFFFFD700)),
           const SizedBox(height: 10),
           _buildPrixField('2ème Prix', _prix2Ctrl, const Color(0xFFBDBDBD)),
           const SizedBox(height: 10),
           _buildPrixField('3ème Prix', _prix3Ctrl, const Color(0xFFCD7F32)),
+          const SizedBox(height: 10),
+          _buildLabel('Récompenses (description)'),
+          _buildField(
+            controller: _recompenseCtrl,
+            hint: 'Trophées, certificats, bourses…',
+            maxLines: 3,
+          ),
           const SizedBox(height: 20),
         ],
       ),
+    );
+  }
+
+  Widget _buildNiveauxSelector() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF8F4FC),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.grey.shade200, width: 1),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: null,
+              isExpanded: true,
+              hint: const Text('Ajouter un niveau...'),
+              items: _niveauxDisponibles.where((n) => !_niveauxSelectionnes.contains(n)).map((n) {
+                return DropdownMenuItem<String>(
+                  value: n,
+                  child: Text(n),
+                );
+              }).toList(),
+              onChanged: (value) {
+                if (value != null && !_niveauxSelectionnes.contains(value)) {
+                  setState(() => _niveauxSelectionnes.add(value));
+                }
+              },
+            ),
+          ),
+        ),
+        if (_niveauxSelectionnes.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: _niveauxSelectionnes.map((n) => Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: _primaryO.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: _primaryO.withValues(alpha: 0.2), width: 0.8),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(n, style: TextStyle(fontSize: 12, color: _primaryO)),
+                  const SizedBox(width: 4),
+                  GestureDetector(
+                    onTap: () => setState(() => _niveauxSelectionnes.remove(n)),
+                    child: Icon(Icons.close_rounded, size: 14, color: _primaryO),
+                  ),
+                ],
+              ),
+            )).toList(),
+          ),
+        ],
+      ],
     );
   }
 
@@ -641,7 +818,7 @@ class _CreerOlympiadeSheetState extends State<CreerOlympiadeSheet>
           style: const TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.w600,
-            color: _darkO,
+            color: YekiColors.textDark,
           ),
         ),
       );
@@ -690,7 +867,7 @@ class _CreerOlympiadeSheetState extends State<CreerOlympiadeSheet>
           value: value,
           isExpanded: true,
           underline: const SizedBox(),
-          style: const TextStyle(color: _darkO, fontSize: 14),
+          style: const TextStyle(color: YekiColors.textDark, fontSize: 14),
           items: items
               .map((i) => DropdownMenuItem(value: i, child: Text(i)))
               .toList(),
@@ -785,7 +962,7 @@ class _CreerOlympiadeSheetState extends State<CreerOlympiadeSheet>
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
-                        color: value != null ? _darkO : Colors.grey.shade400,
+                        color: value != null ? YekiColors.textDark : Colors.grey.shade400,
                       ),
                     ),
                   ],
@@ -890,7 +1067,7 @@ class _CreerOlympiadeSheetState extends State<CreerOlympiadeSheet>
             style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w600,
-              color: value ? _darkO : Colors.grey.shade700,
+              color: value ? YekiColors.textDark : Colors.grey.shade700,
             ),
           ),
           subtitle: Text(
@@ -905,7 +1082,7 @@ class _CreerOlympiadeSheetState extends State<CreerOlympiadeSheet>
         style: const TextStyle(
           fontSize: 14,
           fontWeight: FontWeight.bold,
-          color: _darkO,
+          color: YekiColors.textDark,
         ),
       );
 }

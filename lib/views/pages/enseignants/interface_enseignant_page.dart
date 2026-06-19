@@ -214,7 +214,7 @@ class _EnseignantHomePageState extends State<EnseignantHomePage>
   Widget _getDashboardPage(RoleEnseignant role) {
     switch (role) {
       case RoleEnseignant.administrateurGeneral:    
-        return const AdminDashboardPage();
+        return const AdminGeneralPage();
       case RoleEnseignant.enseignantAdministrateur: 
         return const EnseignantAdminDashboardPage();
       case RoleEnseignant.enseignantCadre: 

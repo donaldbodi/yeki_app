@@ -284,7 +284,7 @@ class _LectureLeconPageState extends State<LectureLeconPage>
           ]),
           AnimatedBuilder(
             animation: _drawerCtrl,
-            builder: (_, __) {
+            builder: (_, _) {
               final slide = CurvedAnimation(parent: _drawerCtrl, curve: Curves.easeOutCubic);
               return slide.value > 0
                   ? Stack(children: [

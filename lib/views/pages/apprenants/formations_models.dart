@@ -1,7 +1,7 @@
 // lib/views/pages/apprenants/formations_models.dart
 // ════════════════════════════════════════════════════════════════
 // MODÈLES POUR FORMATIONS, CONCOURS ET OLYMPIADES
-// AVEC GESTION DES NIVEAUX ACCESSIBLES
+// AVEC GESTION DES NIVEAUX ACCESSIBLES ET ACCÈS RESTREINT
 // ════════════════════════════════════════════════════════════════
 
 import 'dart:convert';
@@ -66,6 +66,7 @@ class DepartementItem {
   final String? imageUrl;
   final String couleur;
   final int prix;
+  final int prixPresentiel;
   final int nbCours;
   final double progressionMoyenne;
   final String statut;
@@ -94,6 +95,9 @@ class DepartementItem {
   final List<CoursItem> cours;
   final Map<String, dynamic>? cadre;
   final double progression;
+  final bool accesRestreint;
+  final bool estAccessible;
+  final String demandeStatut;
   
   DepartementItem({
     required this.id,
@@ -102,6 +106,7 @@ class DepartementItem {
     this.imageUrl,
     required this.couleur,
     required this.prix,
+    required this.prixPresentiel,
     required this.nbCours,
     required this.progressionMoyenne,
     required this.statut,
@@ -130,6 +135,9 @@ class DepartementItem {
     required this.cours,
     this.cadre,
     required this.progression,
+    required this.accesRestreint,
+    required this.estAccessible,
+    required this.demandeStatut,
   });
   
   factory DepartementItem.fromJson(Map<String, dynamic> json) {
@@ -140,6 +148,7 @@ class DepartementItem {
       imageUrl: json['image_url'],
       couleur: json['couleur'] ?? '#2884A0',
       prix: json['prix'] ?? 0,
+      prixPresentiel: json['prix_presentiel'] ?? 0,
       nbCours: json['nb_cours'] ?? 0,
       progressionMoyenne: (json['progression_moyenne'] as num?)?.toDouble() ?? 0.0,
       statut: json['statut'] ?? 'NOUVEAU',
@@ -172,6 +181,9 @@ class DepartementItem {
       cours: (json['cours'] as List?)?.map((c) => CoursItem.fromJson(c)).toList() ?? [],
       cadre: json['cadre'],
       progression: (json['progression'] as num?)?.toDouble() ?? 0.0,
+      accesRestreint: json['acces_restreint'] ?? false,
+      estAccessible: json['est_accessible'] ?? true,
+      demandeStatut: json['demande_statut'] ?? '',
     );
   }
   
@@ -186,8 +198,52 @@ class DepartementItem {
   
   bool get estAccessibleParNiveau {
     if (niveauxAccessibles.isEmpty) return true;
-    // La vérification réelle se fait côté backend
     return true;
+  }
+  
+  // Propriété calculée pour savoir si l'utilisateur peut accéder
+  bool get peutAcceder {
+    if (!accesRestreint) return true;
+    return estAccessible;
+  }
+  
+  // Propriété calculée pour savoir si une demande est en attente
+  bool get demandeEnAttente => demandeStatut == 'en_attente';
+  
+  // Propriété calculée pour savoir si la demande a été refusée
+  bool get demandeRefusee => demandeStatut == 'refusee';
+  
+  // Propriété calculée pour savoir si la demande a été acceptée
+  bool get demandeAcceptee => demandeStatut == 'acceptee';
+  
+  // Propriété calculée pour savoir si aucune demande n'a été faite
+  bool get aucuneDemande => demandeStatut == '' || demandeStatut == 'non_demandee';
+  
+  // Message d'état d'accès
+  String get messageAcces {
+    if (!accesRestreint) return 'Accès libre';
+    if (estAccessible) return 'Accès autorisé';
+    if (demandeEnAttente) return 'Demande en attente de traitement';
+    if (demandeRefusee) return 'Accès refusé. Contactez le service client.';
+    return 'Demander l\'accès à cette formation';
+  }
+  
+  // Couleur de l'état d'accès
+  Color get couleurAcces {
+    if (!accesRestreint) return Colors.green;
+    if (estAccessible) return Colors.green;
+    if (demandeEnAttente) return Colors.orange;
+    if (demandeRefusee) return Colors.red;
+    return Colors.grey;
+  }
+  
+  // Icône de l'état d'accès
+  IconData get iconeAcces {
+    if (!accesRestreint) return Icons.lock_open_rounded;
+    if (estAccessible) return Icons.check_circle_rounded;
+    if (demandeEnAttente) return Icons.hourglass_empty_rounded;
+    if (demandeRefusee) return Icons.cancel_rounded;
+    return Icons.lock_outline_rounded;
   }
 }
 

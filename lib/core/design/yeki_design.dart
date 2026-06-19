@@ -12,6 +12,8 @@ const Color kTealDark  = Color(0xFF1F5F75);
 const Color kTealLight = Color(0xFF39A0C2);
 const Color kGold      = Color(0xFFE2A84B);
 const Color kAccent    = Color(0xFFFF7F77);
+const Color kPurple    = Color.fromARGB(255, 218, 61, 108);
+const Color kGreen    = Color.fromARGB(255, 119, 255, 248);
 
 // ── Palette Apprenant ─────────────────────────────────────────────
 const Color kABg       = Color(0xFFF4F8FC);   // fond général

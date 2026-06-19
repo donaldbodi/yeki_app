@@ -1,34 +1,18 @@
 // lib/views/pages/apprenants/concours_detail_page.dart
 // ════════════════════════════════════════════════════════════════
-// DÉTAIL PRÉPA CONCOURS — Design Light Harmonisé
-// Affiche arrêté, date examen, places, frais, débouchés, cours…
-// CORRIGÉ - Version avec DateTime?
+// DÉTAIL PRÉPA CONCOURS — GLASSMORPHISM LIGHT EDITION
 // ════════════════════════════════════════════════════════════════
 
 import 'dart:convert';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
 import 'package:yeki/views/pages/apprenants/cours_detail_page.dart';
 import 'formations_models.dart';
-import 'package:yeki/core/theme/app_theme.dart';
+import 'package:yeki/core/theme/yeki_design_system.dart';
 import 'package:yeki/core/constants/api_constants.dart';
-
-// Palette harmonisée
-const Color brandBackground = Color(0xFF135F74);
-const Color actionOrange = Color(0xFFFF6B00);
-const Color _textDark = Color(0xFF1A1C1E);
-const Color _textMedium = Color(0xFF5A5C5E);
-const Color _textLight = Color(0xFF8A8C8E);
-const Color _borderLight = Color(0xFFE0E4E8);
-const Color _borderMedium = Color(0xFFD0D4D8);
-const Color _bgLight = Color(0xFFF8FAFC);
-const Color _white = Color(0xFFFFFFFF);
-const Color _green = Color(0xFF10B981);
-const Color _red = Color(0xFFEF4444);
-const Color _gold = Color(0xFFE2A84B);
-const Color _purple = Color(0xFF8B5CF6);
 
 Future<String?> _getToken() async =>
     (await SharedPreferences.getInstance()).getString('token');
@@ -38,7 +22,6 @@ Map<String, String> _headers(String? t) => {
   if (t != null) 'Authorization': 'Token $t',
 };
 
-// ══════════════════════════════════════════════════════════════
 class DetailConcoursPage extends StatefulWidget {
   final int concoursId;
   final DepartementItem? deptPrecharge;
@@ -102,7 +85,7 @@ class _DetailConcoursPageState extends State<DetailConcoursPage>
       final hex = (_dept?.couleur ?? '#135F74').replaceAll('#', '');
       return Color(int.parse('FF$hex', radix: 16));
     } catch (_) {
-      return brandBackground;
+      return YekiColors.primary;
     }
   }
 
@@ -110,31 +93,33 @@ class _DetailConcoursPageState extends State<DetailConcoursPage>
   Widget build(BuildContext context) {
     if (_loading) {
       return Scaffold(
-        backgroundColor: _bgLight,
-        body: const Center(child: YekiLoader()),
+        backgroundColor: YekiColors.bgLight,
+        body: Container(
+          decoration: const BoxDecoration(gradient: YekiGradients.mainBackground),
+          child: const Center(child: CircularProgressIndicator(color: YekiColors.primary)),
+        ),
       );
     }
     if (_dept == null) {
       return Scaffold(
-        backgroundColor: _bgLight,
-        body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.error_outline, size: 60, color: _textLight),
-              const SizedBox(height: 16),
-              const Text('Concours introuvable', style: TextStyle(color: _textMedium)),
-              const SizedBox(height: 12),
-              ElevatedButton(
-                onPressed: () => Navigator.pop(context),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: brandBackground,
-                  foregroundColor: _white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        backgroundColor: YekiColors.bgLight,
+        body: Container(
+          decoration: const BoxDecoration(gradient: YekiGradients.mainBackground),
+          child: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.error_outline, size: 60, color: YekiColors.textLight),
+                const SizedBox(height: 16),
+                const Text('Concours introuvable', style: TextStyle(color: YekiColors.textMedium)),
+                const SizedBox(height: 12),
+                YekiButton(
+                  label: 'Retour',
+                  onPressed: () => Navigator.pop(context),
+                  width: 200,
                 ),
-                child: const Text('Retour'),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       );
@@ -143,18 +128,52 @@ class _DetailConcoursPageState extends State<DetailConcoursPage>
     final dept = _dept!;
 
     return Scaffold(
-      backgroundColor: _bgLight,
-      body: NestedScrollView(
-        headerSliverBuilder: (_, _) => [
-          _buildSliverAppBar(dept),
-          SliverToBoxAdapter(child: _buildTabs()),
-        ],
-        body: TabBarView(
-          controller: _tabCtrl,
+      backgroundColor: YekiColors.bgLight,
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: YekiGradients.mainBackground,
+        ),
+        child: Stack(
           children: [
-            _TabInfos(dept: dept, accentColor: _accentColor),
-            _TabCours(dept: dept, accentColor: _accentColor),
-            _TabDebouches(dept: dept, accentColor: _accentColor),
+            // Sphères décoratives
+            Positioned(
+              top: -40,
+              right: -40,
+              child: Container(
+                width: 200,
+                height: 200,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: _accentColor.withValues(alpha: 0.08),
+                ),
+              ),
+            ),
+            Positioned(
+              bottom: 100,
+              left: -50,
+              child: Container(
+                width: 180,
+                height: 180,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: YekiColors.accent.withValues(alpha: 0.06),
+                ),
+              ),
+            ),
+            NestedScrollView(
+              headerSliverBuilder: (_, _) => [
+                _buildSliverAppBar(dept),
+                SliverToBoxAdapter(child: _buildTabs()),
+              ],
+              body: TabBarView(
+                controller: _tabCtrl,
+                children: [
+                  _TabInfos(dept: dept, accentColor: _accentColor),
+                  _TabCours(dept: dept, accentColor: _accentColor),
+                  _TabDebouches(dept: dept, accentColor: _accentColor),
+                ],
+              ),
+            ),
           ],
         ),
       ),
@@ -173,11 +192,14 @@ class _DetailConcoursPageState extends State<DetailConcoursPage>
         icon: Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: Colors.black26,
+            color: Colors.black.withValues(alpha: 0.2),
             borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: YekiColors.white.withValues(alpha: 0.1),
+              width: 1,
+            ),
           ),
-          child: const Icon(Icons.arrow_back_ios_new_rounded,
-              color: _white, size: 16),
+          child: const Icon(Icons.arrow_back_ios_new_rounded, color: YekiColors.white, size: 16),
         ),
         onPressed: () => Navigator.pop(context),
       ),
@@ -209,16 +231,20 @@ class _DetailConcoursPageState extends State<DetailConcoursPage>
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
-                    color: _gold,
+                    gradient: LinearGradient(
+                      colors: [YekiColors.gold, YekiColors.gold.withValues(alpha: 0.8)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: const Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.emoji_events_rounded, size: 12, color: _white),
+                      Icon(Icons.emoji_events_rounded, size: 12, color: YekiColors.white),
                       SizedBox(width: 4),
                       Text('Prépa Concours',
-                          style: TextStyle(color: _white, fontSize: 11, fontWeight: FontWeight.bold)),
+                          style: TextStyle(color: YekiColors.white, fontSize: 11, fontWeight: FontWeight.bold)),
                     ],
                   ),
                 ),
@@ -226,14 +252,14 @@ class _DetailConcoursPageState extends State<DetailConcoursPage>
                 Text(
                   dept.nomConcours.isNotEmpty ? dept.nomConcours : dept.nom,
                   style: const TextStyle(
-                      color: _white, fontSize: 22, fontWeight: FontWeight.w900, height: 1.2),
+                      color: YekiColors.white, fontSize: 22, fontWeight: FontWeight.w900, height: 1.2),
                 ),
                 if (dept.nom != dept.nomConcours && dept.nom.isNotEmpty)
                   Text(dept.nom,
-                      style: TextStyle(color: _white.withValues(alpha: 0.8), fontSize: 13)),
+                      style: TextStyle(color: YekiColors.white.withValues(alpha: 0.8), fontSize: 13)),
                 if (dept.cadre != null)
                   Text('Cadre : ${dept.cadre!['nom']}',
-                      style: TextStyle(color: _white.withValues(alpha: 0.7), fontSize: 12)),
+                      style: TextStyle(color: YekiColors.white.withValues(alpha: 0.7), fontSize: 12)),
               ],
             ),
           ),
@@ -245,13 +271,13 @@ class _DetailConcoursPageState extends State<DetailConcoursPage>
                     value: '${dept.nbCours}',
                     label: 'cours',
                     icon: Icons.book_rounded,
-                    color: _white),
+                    color: YekiColors.white),
                 const SizedBox(height: 8),
                 _StatBubble(
                     value: dept.prix == 0 ? 'Gratuit' : '${dept.prix} F',
                     label: 'accès',
                     icon: dept.prix == 0 ? Icons.lock_open_rounded : Icons.lock_rounded,
-                    color: dept.prix == 0 ? _green : _gold),
+                    color: dept.prix == 0 ? YekiColors.success : YekiColors.gold),
               ],
             ),
           ),
@@ -275,21 +301,38 @@ class _DetailConcoursPageState extends State<DetailConcoursPage>
       ),
       child: Center(
         child: Icon(Icons.emoji_events_rounded,
-            size: 80, color: _white.withValues(alpha: 0.1)),
+            size: 80, color: YekiColors.white.withValues(alpha: 0.1)),
       ),
     );
   }
 
   Widget _buildTabs() {
     return Container(
-      color: _white,
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: YekiColors.white.withValues(alpha: 0.4),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: YekiColors.white.withValues(alpha: 0.6),
+          width: 1,
+        ),
+      ),
       child: TabBar(
         controller: _tabCtrl,
         labelColor: _accentColor,
-        unselectedLabelColor: _textLight,
-        indicatorColor: _accentColor,
-        indicatorWeight: 3,
-        labelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+        unselectedLabelColor: YekiColors.textLight,
+        indicator: BoxDecoration(
+          color: YekiColors.white.withValues(alpha: 0.6),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: YekiColors.white.withValues(alpha: 0.8),
+            width: 1,
+          ),
+        ),
+        indicatorWeight: 0,
+        labelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+        unselectedLabelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
         tabs: const [
           Tab(icon: Icon(Icons.info_outline_rounded, size: 18), text: 'Infos'),
           Tab(icon: Icon(Icons.book_rounded, size: 18), text: 'Cours'),
@@ -300,63 +343,74 @@ class _DetailConcoursPageState extends State<DetailConcoursPage>
   }
 
   Widget _buildBottomBar(DepartementItem dept) {
-    final progression = dept.progressionMoyenne;
-    return Container(
-      padding: EdgeInsets.only(
-          left: 20, right: 20, top: 12,
-          bottom: MediaQuery.of(context).padding.bottom + 12),
-      decoration: BoxDecoration(
-        color: _white,
-        border: Border(top: BorderSide(color: _borderLight, width: 1)),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  progression > 0
-                      ? '${progression.toStringAsFixed(0)}% complété'
-                      : '${dept.nbCours} cours disponibles',
-                  style: const TextStyle(fontSize: 12, color: _textLight),
-                ),
-                const SizedBox(height: 6),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(4),
-                  child: LinearProgressIndicator(
-                    value: progression / 100,
-                    backgroundColor: _borderLight,
-                    valueColor: AlwaysStoppedAnimation<Color>(_accentColor),
-                    minHeight: 6,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 16),
-          YekiButton(
-            label: progression > 0 ? 'Continuer' : 'Commencer',
-            onPressed: dept.cours.isNotEmpty
-                ? () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => CoursDetailTabs(
-                          coursId: dept.cours.first.id.toString(),
-                          titre: dept.cours.first.title,
-                          coursColor: _accentColor.value,
-                        ),
-                      ),
-                    )
-                : null,
-            backgroundColor: _accentColor,
-            width: 120,
-          ),
+  final progression = dept.progressionMoyenne;
+  return Container(
+    padding: EdgeInsets.only(
+        left: 20, right: 20, top: 12,
+        bottom: MediaQuery.of(context).padding.bottom + 12),
+    decoration: BoxDecoration(
+      gradient: LinearGradient(
+        colors: [
+          YekiColors.white.withValues(alpha: 0.8),
+          YekiColors.white.withValues(alpha: 0.5),
         ],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
       ),
-    );
-  }
+      border: Border(
+        top: BorderSide(
+          color: YekiColors.white.withValues(alpha: 0.5),
+          width: 1,
+        ),
+      ),
+    ),
+    child: Row(
+      children: [
+        Expanded(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                progression > 0
+                    ? '${progression.toStringAsFixed(0)}% complété'
+                    : '${dept.nbCours} cours disponibles',
+                style: TextStyle(fontSize: 12, color: YekiColors.textMedium),
+              ),
+              const SizedBox(height: 6),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: LinearProgressIndicator(
+                  value: progression / 100,
+                  backgroundColor: YekiColors.textLight.withValues(alpha: 0.2),
+                  valueColor: AlwaysStoppedAnimation<Color>(_accentColor),
+                  minHeight: 6,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 16),
+        YekiButton(
+          label: progression > 0 ? 'Continuer' : 'Commencer',
+          onPressed: dept.cours.isNotEmpty
+              ? () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => CoursDetailTabs(
+                        coursId: dept.cours.first.id.toString(),
+                        titre: dept.cours.first.title,
+                        coursColor: _accentColor.value,
+                      ),
+                    ),
+                  )
+              : () {}, // ← Correction : fonction vide au lieu de null
+          width: 120,
+        ),
+      ],
+    ),
+  );
+}
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -377,15 +431,24 @@ class _TabInfos extends StatelessWidget {
           if (dept.description.isNotEmpty) ...[
             _SectionTitle(title: 'À propos', icon: Icons.info_outline_rounded, color: accentColor),
             const SizedBox(height: 10),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: _white,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: _borderLight, width: 1),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: YekiColors.white.withValues(alpha: 0.5),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: YekiColors.white.withValues(alpha: 0.6),
+                      width: 1,
+                    ),
+                  ),
+                  child: Text(dept.description,
+                      style: TextStyle(fontSize: 14, height: 1.6, color: YekiColors.textMedium)),
+                ),
               ),
-              child: Text(dept.description,
-                  style: const TextStyle(fontSize: 14, height: 1.6, color: _textMedium)),
             ),
             const SizedBox(height: 24),
           ],
@@ -455,7 +518,7 @@ class _DatesCard extends StatelessWidget {
         label: "Clôture des inscriptions",
         value: _fmt(dept.dateLimiteInscription),
         icon: Icons.how_to_reg_rounded,
-        color: past ? _red : soon ? _gold : _green,
+        color: past ? YekiColors.error : soon ? YekiColors.gold : YekiColors.success,
         badge: past ? 'Fermé' : soon ? 'Bientôt' : null,
       ));
     }
@@ -466,78 +529,96 @@ class _DatesCard extends StatelessWidget {
         label: "Date de l'examen",
         value: _fmt(dept.dateExamen),
         icon: Icons.event_rounded,
-        color: past ? _textLight : _red,
+        color: past ? YekiColors.textLight : YekiColors.error,
         badge: past ? 'Passé' : null,
       ));
     }
     
     if (rows.isEmpty) {
-      return Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: _bgLight,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: _borderLight, width: 1),
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: YekiColors.white.withValues(alpha: 0.4),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: YekiColors.white.withValues(alpha: 0.6),
+                width: 1,
+              ),
+            ),
+            child: const Text('Dates non précisées',
+                style: TextStyle(color: YekiColors.textMedium, fontSize: 13)),
+          ),
         ),
-        child: const Text('Dates non précisées',
-            style: TextStyle(color: _textLight, fontSize: 13)),
       );
     }
     
-    return Container(
-      decoration: BoxDecoration(
-        color: _white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _borderLight, width: 1),
-      ),
-      child: Column(
-        children: List.generate(rows.length, (i) {
-          final r = rows[i];
-          return Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 44, height: 44,
-                      decoration: BoxDecoration(
-                        color: r.color.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: r.color.withValues(alpha: 0.2), width: 0.8),
-                      ),
-                      child: Icon(r.icon, color: r.color, size: 20),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(r.label,
-                              style: TextStyle(fontSize: 11, color: _textLight)),
-                          Text(r.value,
-                              style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: r.color)),
-                        ],
-                      ),
-                    ),
-                    if (r.badge != null)
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: r.color,
-                          borderRadius: BorderRadius.circular(8),
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(16),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+        child: Container(
+          decoration: BoxDecoration(
+            color: YekiColors.white.withValues(alpha: 0.5),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: YekiColors.white.withValues(alpha: 0.6),
+              width: 1,
+            ),
+          ),
+          child: Column(
+            children: List.generate(rows.length, (i) {
+              final r = rows[i];
+              return Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 44, height: 44,
+                          decoration: BoxDecoration(
+                            color: r.color.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: r.color.withValues(alpha: 0.2), width: 0.8),
+                          ),
+                          child: Icon(r.icon, color: r.color, size: 20),
                         ),
-                        child: Text(r.badge!,
-                            style: const TextStyle(color: _white, fontSize: 10, fontWeight: FontWeight.bold)),
-                      ),
-                  ],
-                ),
-              ),
-              if (i < rows.length - 1)
-                Divider(height: 1, indent: 72, color: _borderLight),
-            ],
-          );
-        }),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(r.label,
+                                  style: TextStyle(fontSize: 11, color: YekiColors.textMedium)),
+                              Text(r.value,
+                                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: r.color)),
+                            ],
+                          ),
+                        ),
+                        if (r.badge != null)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: r.color,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(r.badge!,
+                                style: const TextStyle(color: YekiColors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                          ),
+                      ],
+                    ),
+                  ),
+                  if (i < rows.length - 1)
+                    Divider(height: 1, indent: 72, color: YekiColors.textLight.withValues(alpha: 0.1)),
+                ],
+              );
+            }),
+          ),
+        ),
       ),
     );
   }
@@ -574,46 +655,55 @@ class _DetailsCard extends StatelessWidget {
     if (dept.placesDisponibles != null) {
       items.add(_DetailItem(
           icon: Icons.people_rounded, label: 'Places disponibles',
-          value: '${dept.placesDisponibles}', color: _purple));
+          value: '${dept.placesDisponibles}', color: YekiColors.purple));
     }
     if (dept.fraisDossier > 0) {
       items.add(_DetailItem(
           icon: Icons.receipt_long_rounded, label: 'Frais de dossier',
-          value: '${dept.fraisDossier} FCFA', color: _gold));
+          value: '${dept.fraisDossier} FCFA', color: YekiColors.gold));
     }
 
-    return Container(
-      decoration: BoxDecoration(
-        color: _white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _borderLight, width: 1),
-      ),
-      child: Column(
-        children: List.generate(items.length, (i) {
-          final item = items[i];
-          return Column(
-            children: [
-              ListTile(
-                leading: Container(
-                  width: 42, height: 42,
-                  decoration: BoxDecoration(
-                    color: item.color.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: item.color.withValues(alpha: 0.2), width: 0.8),
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(16),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+        child: Container(
+          decoration: BoxDecoration(
+            color: YekiColors.white.withValues(alpha: 0.5),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: YekiColors.white.withValues(alpha: 0.6),
+              width: 1,
+            ),
+          ),
+          child: Column(
+            children: List.generate(items.length, (i) {
+              final item = items[i];
+              return Column(
+                children: [
+                  ListTile(
+                    leading: Container(
+                      width: 42, height: 42,
+                      decoration: BoxDecoration(
+                        color: item.color.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: item.color.withValues(alpha: 0.2), width: 0.8),
+                      ),
+                      child: Icon(item.icon, color: item.color, size: 18),
+                    ),
+                    title: Text(item.label,
+                        style: TextStyle(fontSize: 11, color: YekiColors.textMedium)),
+                    subtitle: Text(item.value,
+                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: YekiColors.textDark)),
+                    dense: true,
                   ),
-                  child: Icon(item.icon, color: item.color, size: 18),
-                ),
-                title: Text(item.label,
-                    style: TextStyle(fontSize: 11, color: _textLight)),
-                subtitle: Text(item.value,
-                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: _textDark)),
-                dense: true,
-              ),
-              if (i < items.length - 1)
-                Divider(height: 1, indent: 72, color: _borderLight),
-            ],
-          );
-        }),
+                  if (i < items.length - 1)
+                    Divider(height: 1, indent: 72, color: YekiColors.textLight.withValues(alpha: 0.1)),
+                ],
+              );
+            }),
+          ),
+        ),
       ),
     );
   }
@@ -635,39 +725,48 @@ class _OrgCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: _bgLight,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _borderLight, width: 1),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 50, height: 50,
-            decoration: BoxDecoration(
-              color: accentColor.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: accentColor.withValues(alpha: 0.2), width: 0.8),
-            ),
-            child: Icon(Icons.apartment_rounded, color: accentColor, size: 24),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(dept.organismeConcours,
-                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: _textDark)),
-                if (dept.lienOfficiel.isNotEmpty)
-                  Text(dept.lienOfficiel,
-                      style: TextStyle(fontSize: 12, color: accentColor, decoration: TextDecoration.underline),
-                      maxLines: 1, overflow: TextOverflow.ellipsis),
-              ],
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(16),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: YekiColors.white.withValues(alpha: 0.4),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: YekiColors.white.withValues(alpha: 0.6),
+              width: 1,
             ),
           ),
-        ],
+          child: Row(
+            children: [
+              Container(
+                width: 50, height: 50,
+                decoration: BoxDecoration(
+                  color: accentColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: accentColor.withValues(alpha: 0.2), width: 0.8),
+                ),
+                child: Icon(Icons.apartment_rounded, color: accentColor, size: 24),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(dept.organismeConcours,
+                        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: YekiColors.textDark)),
+                    if (dept.lienOfficiel.isNotEmpty)
+                      Text(dept.lienOfficiel,
+                          style: TextStyle(fontSize: 12, color: accentColor, decoration: TextDecoration.underline),
+                          maxLines: 1, overflow: TextOverflow.ellipsis),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -682,48 +781,56 @@ class _PrixCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isGratuit = dept.prix == 0;
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: isGratuit ? _green.withValues(alpha: 0.05) : _gold.withValues(alpha: 0.05),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-            color: isGratuit ? _green.withValues(alpha: 0.3) : _gold.withValues(alpha: 0.3), width: 1),
-      ),
-      child: Row(
-        children: [
-          Icon(
-            isGratuit ? Icons.lock_open_rounded : Icons.lock_rounded,
-            color: isGratuit ? _green : _gold,
-            size: 28,
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  isGratuit ? 'Accès gratuit' : '${dept.prix} FCFA',
-                  style: TextStyle(
-                      fontSize: 18, fontWeight: FontWeight.w900, color: isGratuit ? _green : _gold),
-                ),
-                Text(
-                  isGratuit
-                      ? 'Cette préparation est entièrement gratuite'
-                      : 'Paiement unique pour accéder à tous les cours',
-                  style: const TextStyle(fontSize: 12, color: _textLight),
-                ),
-              ],
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(16),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+        child: Container(
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            color: (isGratuit ? YekiColors.success : YekiColors.gold).withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: (isGratuit ? YekiColors.success : YekiColors.gold).withValues(alpha: 0.2),
+              width: 1,
             ),
           ),
-        ],
+          child: Row(
+            children: [
+              Icon(
+                isGratuit ? Icons.lock_open_rounded : Icons.lock_rounded,
+                color: isGratuit ? YekiColors.success : YekiColors.gold,
+                size: 28,
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      isGratuit ? 'Accès gratuit' : '${dept.prix} FCFA',
+                      style: TextStyle(
+                          fontSize: 18, fontWeight: FontWeight.w900, color: isGratuit ? YekiColors.success : YekiColors.gold),
+                    ),
+                    Text(
+                      isGratuit
+                          ? 'Cette préparation est entièrement gratuite'
+                          : 'Paiement unique pour accéder à tous les cours',
+                      style: TextStyle(fontSize: 12, color: YekiColors.textMedium),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
 }
 
 // ══════════════════════════════════════════════════════════════
-// TAB COURS
+// TAB COURS — VERSION GLASSMORPHISM
 // ══════════════════════════════════════════════════════════════
 class _TabCours extends StatelessWidget {
   final DepartementItem dept;
@@ -737,10 +844,10 @@ class _TabCours extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.book_outlined, size: 60, color: _borderMedium),
+            Icon(Icons.book_outlined, size: 60, color: YekiColors.textLight),
             const SizedBox(height: 16),
             Text('Aucun cours disponible pour l\'instant',
-                style: TextStyle(color: _textLight)),
+                style: TextStyle(color: YekiColors.textMedium)),
           ],
         ),
       );
@@ -759,85 +866,94 @@ class _TabCours extends StatelessWidget {
           cardColor = accentColor;
         }
 
-        return GestureDetector(
-          onTap: () => Navigator.push(
-            ctx,
-            MaterialPageRoute(
-              builder: (_) => CoursDetailTabs(
-                coursId: c.id.toString(),
-                titre: c.title,
-                coursColor: cardColor.value,
-              ),
-            ),
-          ),
-          child: Container(
-            margin: const EdgeInsets.only(bottom: 12),
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: _white,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: _borderLight, width: 1),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 52, height: 52,
-                  decoration: BoxDecoration(
-                    color: cardColor.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: cardColor.withValues(alpha: 0.2), width: 0.8),
-                  ),
-                  child: Icon(Icons.book_rounded, color: cardColor, size: 24),
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+            child: Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: YekiColors.white.withValues(alpha: 0.5),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: YekiColors.white.withValues(alpha: 0.6),
+                  width: 1,
                 ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(c.title,
-                          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: _textDark)),
-                      if (c.description.isNotEmpty)
-                        Text(c.description,
-                            style: TextStyle(fontSize: 12, color: _textLight),
-                            maxLines: 1, overflow: TextOverflow.ellipsis),
-                      const SizedBox(height: 6),
-                      Row(
+              ),
+              child: GestureDetector(
+                onTap: () => Navigator.push(
+                  ctx,
+                  MaterialPageRoute(
+                    builder: (_) => CoursDetailTabs(
+                      coursId: c.id.toString(),
+                      titre: c.title,
+                      coursColor: cardColor.value,
+                    ),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 52, height: 52,
+                      decoration: BoxDecoration(
+                        color: cardColor.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: cardColor.withValues(alpha: 0.2), width: 0.8),
+                      ),
+                      child: Icon(Icons.book_rounded, color: cardColor, size: 24),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Icon(Icons.play_lesson_rounded, size: 12, color: _textLight),
-                          const SizedBox(width: 4),
-                          Text('${c.lessons} leçons',
-                              style: TextStyle(fontSize: 11, color: _textLight)),
-                          const SizedBox(width: 12),
-                          Icon(Icons.assignment_rounded, size: 12, color: _textLight),
-                          const SizedBox(width: 4),
-                          Text('${c.assignments} devoirs',
-                              style: TextStyle(fontSize: 11, color: _textLight)),
+                          Text(c.title,
+                              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: YekiColors.textDark)),
+                          if (c.description.isNotEmpty)
+                            Text(c.description,
+                                style: TextStyle(fontSize: 12, color: YekiColors.textMedium),
+                                maxLines: 1, overflow: TextOverflow.ellipsis),
+                          const SizedBox(height: 6),
+                          Row(
+                            children: [
+                              Icon(Icons.play_lesson_rounded, size: 12, color: YekiColors.textMedium),
+                              const SizedBox(width: 4),
+                              Text('${c.lessons} leçons',
+                                  style: TextStyle(fontSize: 11, color: YekiColors.textMedium)),
+                              const SizedBox(width: 12),
+                              Icon(Icons.assignment_rounded, size: 12, color: YekiColors.textMedium),
+                              const SizedBox(width: 4),
+                              Text('${c.assignments} devoirs',
+                                  style: TextStyle(fontSize: 11, color: YekiColors.textMedium)),
+                            ],
+                          ),
                         ],
                       ),
-                    ],
-                  ),
-                ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text('${c.progression.toStringAsFixed(0)}%',
-                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: cardColor)),
-                    const SizedBox(height: 4),
-                    SizedBox(
-                      width: 50,
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(4),
-                        child: LinearProgressIndicator(
-                          value: c.progression / 100,
-                          backgroundColor: _borderLight,
-                          valueColor: AlwaysStoppedAnimation<Color>(cardColor),
-                          minHeight: 4,
+                    ),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text('${c.progression.toStringAsFixed(0)}%',
+                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: cardColor)),
+                        const SizedBox(height: 4),
+                        SizedBox(
+                          width: 50,
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(4),
+                            child: LinearProgressIndicator(
+                              value: c.progression / 100,
+                              backgroundColor: YekiColors.textLight.withValues(alpha: 0.2),
+                              valueColor: AlwaysStoppedAnimation<Color>(cardColor),
+                              minHeight: 4,
+                            ),
+                          ),
                         ),
-                      ),
+                      ],
                     ),
                   ],
                 ),
-              ],
+              ),
             ),
           ),
         );
@@ -847,7 +963,7 @@ class _TabCours extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════
-// TAB DÉBOUCHÉS
+// TAB DÉBOUCHÉS — VERSION GLASSMORPHISM
 // ══════════════════════════════════════════════════════════════
 class _TabDebouches extends StatelessWidget {
   final DepartementItem dept;
@@ -861,10 +977,10 @@ class _TabDebouches extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.trending_up_outlined, size: 60, color: _borderMedium),
+            Icon(Icons.trending_up_outlined, size: 60, color: YekiColors.textLight),
             const SizedBox(height: 12),
             Text('Débouchés non précisés',
-                style: TextStyle(color: _textLight)),
+                style: TextStyle(color: YekiColors.textMedium)),
           ],
         ),
       );
@@ -879,46 +995,55 @@ class _TabDebouches extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
-        Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: _white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: _borderLight, width: 1),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
+        ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+            child: Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: YekiColors.white.withValues(alpha: 0.5),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: YekiColors.white.withValues(alpha: 0.6),
+                  width: 1,
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(Icons.trending_up_rounded, color: accentColor, size: 22),
-                  const SizedBox(width: 10),
-                  Text('Après ce concours',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: accentColor)),
+                  Row(
+                    children: [
+                      Icon(Icons.trending_up_rounded, color: accentColor, size: 22),
+                      const SizedBox(width: 10),
+                      Text('Après ce concours',
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: accentColor)),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  ...lignes.map((l) => Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Container(
+                              width: 6, height: 6,
+                              margin: const EdgeInsets.only(top: 6, right: 12),
+                              decoration: BoxDecoration(
+                                color: accentColor,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            Expanded(
+                              child: Text(l,
+                                  style: TextStyle(fontSize: 14, height: 1.5, color: YekiColors.textMedium)),
+                            ),
+                          ],
+                        ),
+                      )),
                 ],
               ),
-              const SizedBox(height: 16),
-              ...lignes.map((l) => Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Container(
-                          width: 6, height: 6,
-                          margin: const EdgeInsets.only(top: 6, right: 12),
-                          decoration: BoxDecoration(
-                            color: accentColor,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                        Expanded(
-                          child: Text(l,
-                              style: const TextStyle(fontSize: 14, height: 1.5, color: _textMedium)),
-                        ),
-                      ],
-                    ),
-                  )),
-            ],
+            ),
           ),
         ),
       ],
@@ -963,8 +1088,12 @@ class _StatBubble extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: Colors.black45,
+        color: Colors.black.withValues(alpha: 0.3),
         borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: YekiColors.white.withValues(alpha: 0.1),
+          width: 1,
+        ),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -973,7 +1102,7 @@ class _StatBubble extends StatelessWidget {
           Text(value,
               style: TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.bold)),
           Text(label,
-              style: const TextStyle(color: Colors.white70, fontSize: 9)),
+              style: TextStyle(color: YekiColors.white.withValues(alpha: 0.7), fontSize: 9)),
         ],
       ),
     );

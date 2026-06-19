@@ -169,7 +169,7 @@ class _NotificationsPageState extends State<NotificationsPage>
     return Scaffold(
       backgroundColor: YekiColors.backgroundLight,
       body: NestedScrollView(
-        headerSliverBuilder: (_, __) => [_buildSliverAppBar()],
+        headerSliverBuilder: (_, _) => [_buildSliverAppBar()],
         body: Column(
           children: [
             _buildFilters(),

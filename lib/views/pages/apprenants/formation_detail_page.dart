@@ -1,42 +1,27 @@
 // lib/views/pages/apprenants/formation_detail_page.dart
 // ════════════════════════════════════════════════════════════════
-// DÉTAIL FORMATION (Métier + Classique) — Design Light Harmonisé
-// Affiche durée, mode, certificat, objectifs, prérequis, cours…
+// DÉTAIL FORMATION (Métier + Classique) — GLASSMORPHISM EDITION
 // ════════════════════════════════════════════════════════════════
 
 import 'dart:convert';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:yeki/views/pages/apprenants/cours_detail_page.dart';
-import 'formations_models.dart';
-
-// Palette harmonisée
-const Color brandBackground = Color(0xFF135F74);
-const Color actionOrange = Color(0xFFFF6B00);
-const Color _textDark = Color(0xFF1A1C1E);
-const Color _textMedium = Color(0xFF5A5C5E);
-const Color _textLight = Color(0xFF8A8C8E);
-const Color _borderLight = Color(0xFFE0E4E8);
-const Color _borderMedium = Color(0xFFD0D4D8);
-const Color _bgLight = Color(0xFFF8FAFC);
-const Color _white = Color(0xFFFFFFFF);
-const Color _green = Color(0xFF10B981);
-const Color _blue = Color(0xFF2884A0);
-const Color _purple = Color(0xFF8B5CF6);
-const Color _orange = Color(0xFFF97316);
-const Color _gold = Color(0xFFE2A84B);
+import 'package:yeki/views/pages/apprenants/formations_models.dart';
+import 'package:yeki/core/theme/yeki_design_system.dart';
 
 Future<String?> _getToken() async =>
     (await SharedPreferences.getInstance()).getString('token');
+
 Map<String, String> _headers(String? t) => {
   'Content-Type': 'application/json',
   if (t != null) 'Authorization': 'Token $t',
 };
 
-// ══════════════════════════════════════════════════════════════
 class FormationDetailPage extends StatefulWidget {
-  final int              formationId;
+  final int formationId;
   final DepartementItem? deptPrecharge;
 
   const FormationDetailPage({
@@ -60,7 +45,7 @@ class _FormationDetailPageState extends State<FormationDetailPage>
     super.initState();
     _tabCtrl = TabController(length: 3, vsync: this);
     if (widget.deptPrecharge != null) {
-      _dept    = widget.deptPrecharge;
+      _dept = widget.deptPrecharge;
       _loading = false;
     } else {
       _charger();
@@ -84,7 +69,7 @@ class _FormationDetailPageState extends State<FormationDetailPage>
       if (res.statusCode == 200 && mounted) {
         final data = jsonDecode(res.body) as Map<String, dynamic>;
         setState(() {
-          _dept    = DepartementItem.fromJson(data);
+          _dept = DepartementItem.fromJson(data);
           _loading = false;
         });
       }
@@ -94,12 +79,12 @@ class _FormationDetailPageState extends State<FormationDetailPage>
   }
 
   Color get _accentColor {
-    if (_dept == null) return brandBackground;
+    if (_dept == null) return YekiColors.primary;
     try {
       final hex = _dept!.couleur.replaceAll('#', '');
       return Color(int.parse('FF$hex', radix: 16));
     } catch (_) {
-      return _dept!.estFormationMetier ? _orange : brandBackground;
+      return _dept!.estFormationMetier ? YekiColors.warning : YekiColors.primary;
     }
   }
 
@@ -109,30 +94,33 @@ class _FormationDetailPageState extends State<FormationDetailPage>
   Widget build(BuildContext context) {
     if (_loading) {
       return Scaffold(
-        backgroundColor: _bgLight,
-        body: const Center(child: CircularProgressIndicator()),
+        backgroundColor: YekiColors.bgLight,
+        body: Container(
+          decoration: const BoxDecoration(gradient: YekiGradients.mainBackground),
+          child: const Center(child: CircularProgressIndicator(color: YekiColors.primary)),
+        ),
       );
     }
     if (_dept == null) {
       return Scaffold(
-        backgroundColor: _bgLight,
-        body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.error_outline, size: 60, color: _textLight),
-              const SizedBox(height: 16),
-              const Text('Formation introuvable', style: TextStyle(color: _textMedium)),
-              const SizedBox(height: 12),
-              ElevatedButton(
+        backgroundColor: YekiColors.bgLight,
+        body: Container(
+          decoration: const BoxDecoration(gradient: YekiGradients.mainBackground),
+          child: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.error_outline, size: 60, color: YekiColors.textLight),
+                const SizedBox(height: 16),
+                const Text('Formation introuvable', style: TextStyle(color: YekiColors.textMedium)),
+                const SizedBox(height: 12),
+                YekiButton(
+                  label: 'Retour',
                   onPressed: () => Navigator.pop(context),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: brandBackground,
-                    foregroundColor: _white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  child: const Text('Retour')),
-            ],
+                  width: 200,
+                ),
+              ],
+            ),
           ),
         ),
       );
@@ -141,19 +129,53 @@ class _FormationDetailPageState extends State<FormationDetailPage>
     final dept = _dept!;
 
     return Scaffold(
-      backgroundColor: _bgLight,
-      body: NestedScrollView(
-        headerSliverBuilder: (_, _) => [
-          _buildSliverAppBar(dept),
-          SliverToBoxAdapter(child: _buildQuickStats(dept)),
-          SliverToBoxAdapter(child: _buildTabs()),
-        ],
-        body: TabBarView(
-          controller: _tabCtrl,
+      backgroundColor: YekiColors.bgLight,
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: YekiGradients.mainBackground,
+        ),
+        child: Stack(
           children: [
-            _TabAPropos(dept: dept, accentColor: _accentColor),
-            _TabCours(dept: dept, accentColor: _accentColor),
-            _TabProgramme(dept: dept, accentColor: _accentColor),
+            // Sphères décoratives
+            Positioned(
+              top: -40,
+              right: -40,
+              child: Container(
+                width: 200,
+                height: 200,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: _accentColor.withValues(alpha: 0.08),
+                ),
+              ),
+            ),
+            Positioned(
+              bottom: 100,
+              left: -50,
+              child: Container(
+                width: 180,
+                height: 180,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: YekiColors.accent.withValues(alpha: 0.06),
+                ),
+              ),
+            ),
+            NestedScrollView(
+              headerSliverBuilder: (_, _) => [
+                _buildSliverAppBar(dept),
+                SliverToBoxAdapter(child: _buildQuickStats(dept)),
+                SliverToBoxAdapter(child: _buildTabs()),
+              ],
+              body: TabBarView(
+                controller: _tabCtrl,
+                children: [
+                  _TabAPropos(dept: dept, accentColor: _accentColor),
+                  _TabCours(dept: dept, accentColor: _accentColor),
+                  _TabProgramme(dept: dept, accentColor: _accentColor),
+                ],
+              ),
+            ),
           ],
         ),
       ),
@@ -173,10 +195,14 @@ class _FormationDetailPageState extends State<FormationDetailPage>
         icon: Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-              color: Colors.black26,
-              borderRadius: BorderRadius.circular(12)),
-          child: const Icon(Icons.arrow_back_ios_new_rounded,
-              color: _white, size: 16),
+            color: Colors.black.withValues(alpha: 0.2),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: YekiColors.white.withValues(alpha: 0.1),
+              width: 1,
+            ),
+          ),
+          child: const Icon(Icons.arrow_back_ios_new_rounded, color: YekiColors.white, size: 16),
         ),
         onPressed: () => Navigator.pop(context),
       ),
@@ -192,7 +218,7 @@ class _FormationDetailPageState extends State<FormationDetailPage>
               gradient: LinearGradient(
                 colors: [
                   Colors.transparent,
-                  Colors.black.withOpacity(0.65),
+                  Colors.black.withValues(alpha: 0.65),
                 ],
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
@@ -208,7 +234,14 @@ class _FormationDetailPageState extends State<FormationDetailPage>
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
-                    color: _isMetier ? _orange : brandBackground,
+                    gradient: LinearGradient(
+                      colors: [
+                        _isMetier ? YekiColors.warning : YekiColors.primary,
+                        _isMetier ? YekiColors.warning.withValues(alpha: 0.8) : YekiColors.primary.withValues(alpha: 0.8),
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Row(
@@ -216,42 +249,52 @@ class _FormationDetailPageState extends State<FormationDetailPage>
                     children: [
                       Icon(
                         _isMetier ? Icons.work_rounded : Icons.account_balance_rounded,
-                        size: 11, color: _white,
+                        size: 11, color: YekiColors.white,
                       ),
                       const SizedBox(width: 4),
                       Text(
                         _isMetier ? 'Formation Métier' : 'Formation Classique',
-                        style: const TextStyle(color: _white, fontSize: 11, fontWeight: FontWeight.bold),
+                        style: const TextStyle(color: YekiColors.white, fontSize: 11, fontWeight: FontWeight.bold),
                       ),
                     ],
                   ),
                 ),
                 const SizedBox(height: 10),
-                Text(dept.nom,
-                    style: const TextStyle(color: _white, fontSize: 22, fontWeight: FontWeight.w900, height: 1.2),
-                    maxLines: 2),
+                Text(
+                  dept.nom,
+                  style: const TextStyle(color: YekiColors.white, fontSize: 22, fontWeight: FontWeight.w900, height: 1.2),
+                  maxLines: 2,
+                ),
                 if (dept.domaine.isNotEmpty)
-                  Text(dept.domaine,
-                      style: TextStyle(color: _white.withOpacity(0.8), fontSize: 13)),
+                  Text(
+                    dept.domaine,
+                    style: TextStyle(color: YekiColors.white.withValues(alpha: 0.8), fontSize: 13),
+                  ),
                 if (dept.cadre != null)
-                  Text('Cadre : ${dept.cadre!['nom'] ?? ''}',
-                      style: TextStyle(color: _white.withOpacity(0.7), fontSize: 12)),
+                  Text(
+                    'Cadre : ${dept.cadre!['nom'] ?? ''}',
+                    style: TextStyle(color: YekiColors.white.withValues(alpha: 0.7), fontSize: 12),
+                  ),
                 if (dept.estCertifiante)
                   Padding(
                     padding: const EdgeInsets.only(top: 6),
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                       decoration: BoxDecoration(
-                        color: _gold,
+                        gradient: LinearGradient(
+                          colors: [YekiColors.gold, YekiColors.gold.withValues(alpha: 0.8)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: const Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.verified_rounded, size: 11, color: _white),
+                          Icon(Icons.verified_rounded, size: 11, color: YekiColors.white),
                           SizedBox(width: 4),
                           Text('Formation Certifiante',
-                              style: TextStyle(color: _white, fontSize: 10, fontWeight: FontWeight.bold)),
+                              style: TextStyle(color: YekiColors.white, fontSize: 10, fontWeight: FontWeight.bold)),
                         ],
                       ),
                     ),
@@ -268,7 +311,7 @@ class _FormationDetailPageState extends State<FormationDetailPage>
     return Container(
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [c, c.withOpacity(0.7), c.withOpacity(0.4)],
+          colors: [c, c.withValues(alpha: 0.7), c.withValues(alpha: 0.4)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -276,7 +319,7 @@ class _FormationDetailPageState extends State<FormationDetailPage>
       child: Center(
         child: Icon(
           _isMetier ? Icons.work_outline_rounded : Icons.school_outlined,
-          size: 80, color: _white.withOpacity(0.1),
+          size: 80, color: YekiColors.white.withValues(alpha: 0.1),
         ),
       ),
     );
@@ -289,24 +332,32 @@ class _FormationDetailPageState extends State<FormationDetailPage>
     if (dept.dureeFormation.isNotEmpty)
       stats.add(_QuickStat(
           icon: Icons.schedule_rounded, label: 'Durée',
-          value: dept.dureeFormation, color: _blue));
+          value: dept.dureeFormation, color: YekiColors.primary));
     stats.add(_QuickStat(
         icon: Icons.book_rounded, label: 'Cours',
         value: '${dept.nbCours}', color: c));
     if (dept.modeFormation.isNotEmpty)
       stats.add(_QuickStat(
           icon: Icons.devices_rounded, label: 'Mode',
-          value: dept.modeFormationLabel, color: _purple));
+          value: dept.modeFormationLabel, color: YekiColors.purple));
     stats.add(_QuickStat(
         icon: Icons.attach_money_rounded, label: 'Accès',
         value: dept.prix == 0 ? 'Gratuit' : '${dept.prix} F',
-        color: dept.prix == 0 ? _green : _gold));
+        color: dept.prix == 0 ? YekiColors.success : YekiColors.gold));
 
     if (stats.isEmpty) return const SizedBox.shrink();
 
     return Container(
-      color: _white,
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       padding: const EdgeInsets.symmetric(vertical: 16),
+      decoration: BoxDecoration(
+        color: YekiColors.white.withValues(alpha: 0.4),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: YekiColors.white.withValues(alpha: 0.6),
+          width: 1,
+        ),
+      ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: stats.map((s) => _QuickStatWidget(stat: s)).toList(),
@@ -317,14 +368,31 @@ class _FormationDetailPageState extends State<FormationDetailPage>
   Widget _buildTabs() {
     final c = _accentColor;
     return Container(
-      color: _white,
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: YekiColors.white.withValues(alpha: 0.4),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: YekiColors.white.withValues(alpha: 0.6),
+          width: 1,
+        ),
+      ),
       child: TabBar(
         controller: _tabCtrl,
         labelColor: c,
-        unselectedLabelColor: _textLight,
-        indicatorColor: c,
-        indicatorWeight: 3,
+        unselectedLabelColor: YekiColors.textMedium,
+        indicator: BoxDecoration(
+          color: YekiColors.white.withValues(alpha: 0.6),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: YekiColors.white.withValues(alpha: 0.8),
+            width: 1,
+          ),
+        ),
+        indicatorWeight: 0,
         labelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+        unselectedLabelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
         tabs: const [
           Tab(icon: Icon(Icons.info_outline_rounded, size: 18), text: 'À propos'),
           Tab(icon: Icon(Icons.book_rounded, size: 18), text: 'Cours'),
@@ -341,8 +409,20 @@ class _FormationDetailPageState extends State<FormationDetailPage>
           left: 20, right: 20, top: 12,
           bottom: MediaQuery.of(context).padding.bottom + 12),
       decoration: BoxDecoration(
-        color: _white,
-        border: Border(top: BorderSide(color: _borderLight, width: 1)),
+        gradient: LinearGradient(
+          colors: [
+            YekiColors.white.withValues(alpha: 0.8),
+            YekiColors.white.withValues(alpha: 0.5),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        border: Border(
+          top: BorderSide(
+            color: YekiColors.white.withValues(alpha: 0.5),
+            width: 1,
+          ),
+        ),
       ),
       child: Row(
         children: [
@@ -355,15 +435,15 @@ class _FormationDetailPageState extends State<FormationDetailPage>
                   dept.progressionMoyenne > 0
                       ? '${dept.progressionMoyenne.toStringAsFixed(0)}% complété'
                       : '${dept.nbCours} cours disponibles',
-                  style: const TextStyle(fontSize: 12, color: _textLight),
+                  style: TextStyle(fontSize: 12, color: YekiColors.textMedium),
                 ),
                 const SizedBox(height: 6),
                 ClipRRect(
                   borderRadius: BorderRadius.circular(4),
                   child: LinearProgressIndicator(
                     value: dept.progressionMoyenne / 100,
-                    backgroundColor: _borderLight,
-                    valueColor: AlwaysStoppedAnimation(c),
+                    backgroundColor: YekiColors.textLight.withValues(alpha: 0.2),
+                    valueColor: AlwaysStoppedAnimation<Color>(c),
                     minHeight: 6,
                   ),
                 ),
@@ -371,28 +451,19 @@ class _FormationDetailPageState extends State<FormationDetailPage>
             ),
           ),
           const SizedBox(width: 16),
-          ElevatedButton(
+          YekiButton(
+            label: dept.progressionMoyenne > 0 ? 'Continuer' : 'Commencer',
             onPressed: dept.cours.isNotEmpty
                 ? () => Navigator.push(context,
                       MaterialPageRoute(
                         builder: (_) => CoursDetailTabs(
-                            coursId: dept.cours.first.id.toString(),
-                            titre: dept.cours.first.title,
-                            coursColor: c.value,
+                          coursId: dept.cours.first.id.toString(),
+                          titre: dept.cours.first.title,
+                          coursColor: c.value,
                         ),
                       ))
-                : null,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: c,
-              foregroundColor: _white,
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 13),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              elevation: 0,
-            ),
-            child: Text(
-              dept.progressionMoyenne > 0 ? 'Continuer' : 'Commencer',
-              style: const TextStyle(fontWeight: FontWeight.bold),
-            ),
+                : () {},
+            width: 120,
           ),
         ],
       ),
@@ -401,7 +472,7 @@ class _FormationDetailPageState extends State<FormationDetailPage>
 }
 
 // ══════════════════════════════════════════════════════════════
-// TAB À PROPOS
+// TAB À PROPOS — GLASSMORPHISM
 // ══════════════════════════════════════════════════════════════
 class _TabAPropos extends StatelessWidget {
   final DepartementItem dept;
@@ -411,7 +482,7 @@ class _TabAPropos extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -421,15 +492,9 @@ class _TabAPropos extends StatelessWidget {
                 icon: Icons.info_outline_rounded,
                 color: accentColor),
             const SizedBox(height: 10),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: _white,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: _borderLight, width: 1),
-              ),
+            _GlassCard(
               child: Text(dept.description,
-                  style: const TextStyle(fontSize: 14, height: 1.7, color: _textMedium)),
+                  style: TextStyle(fontSize: 14, height: 1.7, color: YekiColors.textMedium)),
             ),
             const SizedBox(height: 24),
           ],
@@ -448,9 +513,9 @@ class _TabAPropos extends StatelessWidget {
             _SectionHeader(
                 title: 'Prérequis',
                 icon: Icons.checklist_rounded,
-                color: _orange),
+                color: YekiColors.warning),
             const SizedBox(height: 10),
-            _BulletList(text: dept.prerequis, color: _orange),
+            _BulletList(text: dept.prerequis, color: YekiColors.warning),
             const SizedBox(height: 24),
           ],
 
@@ -466,7 +531,7 @@ class _TabAPropos extends StatelessWidget {
             _SectionHeader(
                 title: 'Certification',
                 icon: Icons.card_membership_rounded,
-                color: _gold),
+                color: YekiColors.gold),
             const SizedBox(height: 10),
             _CertifCard(dept: dept),
           ],
@@ -477,7 +542,7 @@ class _TabAPropos extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════
-// TAB COURS
+// TAB COURS — GLASSMORPHISM
 // ══════════════════════════════════════════════════════════════
 class _TabCours extends StatelessWidget {
   final DepartementItem dept;
@@ -491,10 +556,10 @@ class _TabCours extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.book_outlined, size: 60, color: _borderMedium),
+            Icon(Icons.book_outlined, size: 60, color: YekiColors.textLight),
             const SizedBox(height: 14),
             Text('Aucun cours disponible',
-                style: TextStyle(color: _textLight)),
+                style: TextStyle(color: YekiColors.textMedium)),
           ],
         ),
       );
@@ -513,85 +578,82 @@ class _TabCours extends StatelessWidget {
           cardColor = accentColor;
         }
 
-        return GestureDetector(
-          onTap: () => Navigator.push(ctx,
-              MaterialPageRoute(
-                  builder: (_) => CoursDetailTabs(
-                    coursId: c.id.toString(),
-                    titre: c.title,
-                    coursColor: cardColor.value,
-                  ))),
-          child: Container(
-            margin: const EdgeInsets.only(bottom: 12),
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: _white,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: _borderLight, width: 1),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 38, height: 38,
-                  decoration: BoxDecoration(
-                    color: cardColor.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: cardColor.withOpacity(0.2), width: 0.8),
+        return _GlassCard(
+          margin: const EdgeInsets.only(bottom: 12),
+          child: GestureDetector(
+            onTap: () => Navigator.push(ctx,
+                MaterialPageRoute(
+                    builder: (_) => CoursDetailTabs(
+                      coursId: c.id.toString(),
+                      titre: c.title,
+                      coursColor: cardColor.value,
+                    ))),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  Container(
+                    width: 38, height: 38,
+                    decoration: BoxDecoration(
+                      color: cardColor.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: cardColor.withValues(alpha: 0.2), width: 0.8),
+                    ),
+                    child: Center(
+                      child: Text('${i + 1}',
+                          style: TextStyle(color: cardColor, fontWeight: FontWeight.bold, fontSize: 14)),
+                    ),
                   ),
-                  child: Center(
-                    child: Text('${i + 1}',
-                        style: TextStyle(color: cardColor, fontWeight: FontWeight.bold, fontSize: 14)),
-                  ),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(c.title,
-                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: _textDark)),
-                      if (c.enseignantPrincipal != '—')
-                        Text(c.enseignantPrincipal,
-                            style: TextStyle(fontSize: 11, color: _textLight)),
-                      const SizedBox(height: 6),
-                      Row(
-                        children: [
-                          Icon(Icons.play_lesson_rounded, size: 11, color: _textLight),
-                          const SizedBox(width: 3),
-                          Text('${c.lessons} leçons',
-                              style: TextStyle(fontSize: 11, color: _textLight)),
-                          const SizedBox(width: 10),
-                          Icon(Icons.assignment_rounded, size: 11, color: _textLight),
-                          const SizedBox(width: 3),
-                          Text('${c.assignments}',
-                              style: TextStyle(fontSize: 11, color: _textLight)),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                SizedBox(
-                  width: 50,
-                  child: Column(
-                    children: [
-                      Text('${c.progression.toStringAsFixed(0)}%',
-                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: cardColor)),
-                      const SizedBox(height: 4),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(4),
-                        child: LinearProgressIndicator(
-                          value: c.progression / 100,
-                          backgroundColor: _borderLight,
-                          valueColor: AlwaysStoppedAnimation(cardColor),
-                          minHeight: 4,
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(c.title,
+                            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: YekiColors.textDark)),
+                        if (c.enseignantPrincipal != '—')
+                          Text(c.enseignantPrincipal,
+                              style: TextStyle(fontSize: 11, color: YekiColors.textMedium)),
+                        const SizedBox(height: 6),
+                        Row(
+                          children: [
+                            Icon(Icons.play_lesson_rounded, size: 11, color: YekiColors.textMedium),
+                            const SizedBox(width: 3),
+                            Text('${c.lessons} leçons',
+                                style: TextStyle(fontSize: 11, color: YekiColors.textMedium)),
+                            const SizedBox(width: 10),
+                            Icon(Icons.assignment_rounded, size: 11, color: YekiColors.textMedium),
+                            const SizedBox(width: 3),
+                            Text('${c.assignments}',
+                                style: TextStyle(fontSize: 11, color: YekiColors.textMedium)),
+                          ],
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-                const SizedBox(width: 8),
-                Icon(Icons.chevron_right_rounded, color: _textLight),
-              ],
+                  SizedBox(
+                    width: 50,
+                    child: Column(
+                      children: [
+                        Text('${c.progression.toStringAsFixed(0)}%',
+                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: cardColor)),
+                        const SizedBox(height: 4),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(4),
+                          child: LinearProgressIndicator(
+                            value: c.progression / 100,
+                            backgroundColor: YekiColors.textLight.withValues(alpha: 0.2),
+                            valueColor: AlwaysStoppedAnimation<Color>(cardColor),
+                            minHeight: 4,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Icon(Icons.chevron_right_rounded, color: YekiColors.textMedium),
+                ],
+              ),
             ),
           ),
         );
@@ -601,7 +663,7 @@ class _TabCours extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════
-// TAB PROGRAMME
+// TAB PROGRAMME — GLASSMORPHISM
 // ══════════════════════════════════════════════════════════════
 class _TabProgramme extends StatelessWidget {
   final DepartementItem dept;
@@ -611,43 +673,40 @@ class _TabProgramme extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            padding: const EdgeInsets.all(18),
-            decoration: BoxDecoration(
-              color: _white,
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: _borderLight, width: 1),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: _ProgramStatBlock(
-                      value: '${dept.nbCours}',
-                      label: 'Cours',
-                      icon: Icons.book_rounded,
-                      color: accentColor),
-                ),
-                Container(width: 1, height: 50, color: _borderLight),
-                Expanded(
-                  child: _ProgramStatBlock(
-                      value: dept.dureeFormation.isEmpty ? 'Flexible' : dept.dureeFormation,
-                      label: 'Durée',
-                      icon: Icons.timer_rounded,
-                      color: _blue),
-                ),
-                Container(width: 1, height: 50, color: _borderLight),
-                Expanded(
-                  child: _ProgramStatBlock(
-                      value: dept.estCertifiante ? 'Oui' : 'Non',
-                      label: 'Certifiante',
-                      icon: Icons.verified_rounded,
-                      color: dept.estCertifiante ? _gold : _textLight),
-                ),
-              ],
+          _GlassCard(
+            child: Padding(
+              padding: const EdgeInsets.all(18),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: _ProgramStatBlock(
+                        value: '${dept.nbCours}',
+                        label: 'Cours',
+                        icon: Icons.book_rounded,
+                        color: accentColor),
+                  ),
+                  Container(width: 1, height: 50, color: YekiColors.textLight.withValues(alpha: 0.2)),
+                  Expanded(
+                    child: _ProgramStatBlock(
+                        value: dept.dureeFormation.isEmpty ? 'Flexible' : dept.dureeFormation,
+                        label: 'Durée',
+                        icon: Icons.timer_rounded,
+                        color: YekiColors.primary),
+                  ),
+                  Container(width: 1, height: 50, color: YekiColors.textLight.withValues(alpha: 0.2)),
+                  Expanded(
+                    child: _ProgramStatBlock(
+                        value: dept.estCertifiante ? 'Oui' : 'Non',
+                        label: 'Certifiante',
+                        icon: Icons.verified_rounded,
+                        color: dept.estCertifiante ? YekiColors.gold : YekiColors.textLight),
+                  ),
+                ],
+              ),
             ),
           ),
 
@@ -661,46 +720,43 @@ class _TabProgramme extends StatelessWidget {
             const SizedBox(height: 12),
             ...List.generate(dept.cours.length, (i) {
               final c = dept.cours[i];
-              return Container(
+              return _GlassCard(
                 margin: const EdgeInsets.only(bottom: 8),
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: _white,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: _borderLight, width: 1),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 28, height: 28,
-                      decoration: BoxDecoration(
-                        color: accentColor.withOpacity(0.1),
-                        shape: BoxShape.circle,
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 28, height: 28,
+                        decoration: BoxDecoration(
+                          color: accentColor.withValues(alpha: 0.1),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Center(
+                          child: Text('${i + 1}',
+                              style: TextStyle(color: accentColor, fontSize: 12, fontWeight: FontWeight.bold)),
+                        ),
                       ),
-                      child: Center(
-                        child: Text('${i + 1}',
-                            style: TextStyle(color: accentColor, fontSize: 12, fontWeight: FontWeight.bold)),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(c.title,
+                                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: YekiColors.textDark)),
+                            Text('${c.lessons} leçons · ${c.assignments} devoirs',
+                                style: TextStyle(fontSize: 11, color: YekiColors.textMedium)),
+                          ],
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(c.title,
-                              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: _textDark)),
-                          Text('${c.lessons} leçons · ${c.assignments} devoirs',
-                              style: TextStyle(fontSize: 11, color: _textLight)),
-                        ],
-                      ),
-                    ),
-                    if (c.progression == 100)
-                      Icon(Icons.check_circle_rounded, size: 20, color: _green)
-                    else if (c.progression > 0)
-                      Icon(Icons.radio_button_checked_rounded, size: 20, color: accentColor)
-                    else
-                      Icon(Icons.radio_button_unchecked_rounded, size: 20, color: _textLight),
-                  ],
+                      if (c.progression == 100)
+                        Icon(Icons.check_circle_rounded, size: 20, color: YekiColors.success)
+                      else if (c.progression > 0)
+                        Icon(Icons.radio_button_checked_rounded, size: 20, color: accentColor)
+                      else
+                        Icon(Icons.radio_button_unchecked_rounded, size: 20, color: YekiColors.textLight),
+                    ],
+                  ),
                 ),
               );
             }),
@@ -711,17 +767,11 @@ class _TabProgramme extends StatelessWidget {
             _SectionHeader(
                 title: 'Prérequis',
                 icon: Icons.checklist_rounded,
-                color: _orange),
+                color: YekiColors.warning),
             const SizedBox(height: 10),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: _white,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: _borderLight, width: 1),
-              ),
+            _GlassCard(
               child: Text(dept.prerequis,
-                  style: const TextStyle(fontSize: 13, height: 1.6, color: _textMedium)),
+                  style: TextStyle(fontSize: 13, height: 1.6, color: YekiColors.textMedium)),
             ),
           ],
         ],
@@ -731,14 +781,62 @@ class _TabProgramme extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════
-// COMPOSANTS
+// COMPOSANTS GLASSMORPHISM
 // ══════════════════════════════════════════════════════════════
+
+class _GlassCard extends StatelessWidget {
+  final Widget child;
+  final EdgeInsetsGeometry? margin;
+  final EdgeInsetsGeometry? padding;
+
+  const _GlassCard({
+    required this.child,
+    this.margin,
+    this.padding,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: margin,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+          child: Container(
+            padding: padding ?? const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: YekiColors.white.withValues(alpha: 0.6),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: YekiColors.white.withValues(alpha: 0.8),
+                width: 1,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.03),
+                  blurRadius: 20,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: child,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _SectionHeader extends StatelessWidget {
-  final String   title;
+  final String title;
   final IconData icon;
-  final Color    color;
-  const _SectionHeader(
-      {required this.title, required this.icon, required this.color});
+  final Color color;
+  const _SectionHeader({
+    required this.title,
+    required this.icon,
+    required this.color,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -755,7 +853,7 @@ class _SectionHeader extends StatelessWidget {
 
 class _BulletList extends StatelessWidget {
   final String text;
-  final Color  color;
+  final Color color;
   const _BulletList({required this.text, required this.color});
 
   @override
@@ -766,13 +864,7 @@ class _BulletList extends StatelessWidget {
         .where((s) => s.isNotEmpty)
         .toList();
 
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: _white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _borderLight, width: 1),
-      ),
+    return _GlassCard(
       child: Column(
         children: lignes.map((l) {
           return Padding(
@@ -787,7 +879,7 @@ class _BulletList extends StatelessWidget {
                 ),
                 Expanded(
                   child: Text(l,
-                      style: const TextStyle(fontSize: 14, height: 1.5, color: _textMedium)),
+                      style: TextStyle(fontSize: 14, height: 1.5, color: YekiColors.textMedium)),
                 ),
               ],
             ),
@@ -809,12 +901,12 @@ class _PratiqueCard extends StatelessWidget {
     if (dept.dureeFormation.isNotEmpty) {
       items.add(_ItemPratique(
           icon: Icons.schedule_rounded, label: 'Durée',
-          value: dept.dureeFormation, color: _blue));
+          value: dept.dureeFormation, color: YekiColors.primary));
     }
     if (dept.modeFormation.isNotEmpty) {
       items.add(_ItemPratique(
           icon: Icons.devices_rounded, label: 'Mode',
-          value: dept.modeFormationLabel, color: _purple));
+          value: dept.modeFormationLabel, color: YekiColors.purple));
     }
     if (dept.ville.isNotEmpty)
       items.add(_ItemPratique(
@@ -823,21 +915,16 @@ class _PratiqueCard extends StatelessWidget {
     if (dept.domaine.isNotEmpty)
       items.add(_ItemPratique(
           icon: Icons.category_rounded, label: 'Domaine',
-          value: dept.domaine, color: _orange));
+          value: dept.domaine, color: YekiColors.warning));
     items.add(_ItemPratique(
         icon: dept.prix == 0 ? Icons.lock_open_rounded : Icons.lock_rounded,
         label: 'Accès',
         value: dept.prix == 0 ? 'Gratuit' : '${dept.prix} FCFA',
-        color: dept.prix == 0 ? _green : _gold));
+        color: dept.prix == 0 ? YekiColors.success : YekiColors.gold));
 
     if (items.isEmpty) return const SizedBox.shrink();
 
-    return Container(
-      decoration: BoxDecoration(
-        color: _white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _borderLight, width: 1),
-      ),
+    return _GlassCard(
       child: Column(
         children: List.generate(items.length, (i) {
           final item = items[i];
@@ -847,20 +934,20 @@ class _PratiqueCard extends StatelessWidget {
                 leading: Container(
                   width: 40, height: 40,
                   decoration: BoxDecoration(
-                    color: item.color.withOpacity(0.1),
+                    color: item.color.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: item.color.withOpacity(0.2), width: 0.8),
+                    border: Border.all(color: item.color.withValues(alpha: 0.2), width: 0.8),
                   ),
                   child: Icon(item.icon, color: item.color, size: 18),
                 ),
                 title: Text(item.label,
-                    style: TextStyle(fontSize: 11, color: _textLight)),
+                    style: TextStyle(fontSize: 11, color: YekiColors.textMedium)),
                 subtitle: Text(item.value,
-                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: _textDark)),
+                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: YekiColors.textDark)),
                 dense: true,
               ),
               if (i < items.length - 1)
-                Divider(height: 1, indent: 68, color: _borderLight),
+                Divider(height: 1, indent: 68, color: YekiColors.textLight.withValues(alpha: 0.1)),
             ],
           );
         }),
@@ -873,8 +960,12 @@ class _ItemPratique {
   final IconData icon;
   final String label, value;
   final Color color;
-  const _ItemPratique({required this.icon, required this.label,
-    required this.value, required this.color});
+  const _ItemPratique({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.color,
+  });
 }
 
 class _CertifCard extends StatelessWidget {
@@ -883,23 +974,17 @@ class _CertifCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: _white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _gold.withOpacity(0.3), width: 1),
-      ),
+    return _GlassCard(
       child: Row(
         children: [
           Container(
             width: 50, height: 50,
             decoration: BoxDecoration(
-              color: _gold.withOpacity(0.1),
+              color: YekiColors.gold.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: _gold.withOpacity(0.2), width: 0.8),
+              border: Border.all(color: YekiColors.gold.withValues(alpha: 0.2), width: 0.8),
             ),
-            child: const Icon(Icons.card_membership_rounded, color: _gold, size: 24),
+            child: const Icon(Icons.card_membership_rounded, color: YekiColors.gold, size: 24),
           ),
           const SizedBox(width: 14),
           Expanded(
@@ -907,13 +992,13 @@ class _CertifCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text('Certificat délivré',
-                    style: TextStyle(fontSize: 11, color: _textLight, fontWeight: FontWeight.w500)),
+                    style: TextStyle(fontSize: 11, color: YekiColors.textMedium, fontWeight: FontWeight.w500)),
                 Text(dept.certificatDelivre,
-                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: _textDark)),
+                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: YekiColors.textDark)),
               ],
             ),
           ),
-          const Icon(Icons.verified_rounded, color: _gold, size: 24),
+          const Icon(Icons.verified_rounded, color: YekiColors.gold, size: 24),
         ],
       ),
     );
@@ -924,8 +1009,12 @@ class _QuickStat {
   final IconData icon;
   final String label, value;
   final Color color;
-  const _QuickStat({required this.icon, required this.label,
-    required this.value, required this.color});
+  const _QuickStat({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.color,
+  });
 }
 
 class _QuickStatWidget extends StatelessWidget {
@@ -942,7 +1031,7 @@ class _QuickStatWidget extends StatelessWidget {
             style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: stat.color),
             maxLines: 1, overflow: TextOverflow.ellipsis),
         Text(stat.label,
-            style: TextStyle(fontSize: 10, color: _textLight)),
+            style: TextStyle(fontSize: 10, color: YekiColors.textMedium)),
       ],
     );
   }
@@ -952,8 +1041,12 @@ class _ProgramStatBlock extends StatelessWidget {
   final String value, label;
   final IconData icon;
   final Color color;
-  const _ProgramStatBlock({required this.value, required this.label,
-    required this.icon, required this.color});
+  const _ProgramStatBlock({
+    required this.value,
+    required this.label,
+    required this.icon,
+    required this.color,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -966,7 +1059,7 @@ class _ProgramStatBlock extends StatelessWidget {
             style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: color),
             maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center),
         Text(label,
-            style: TextStyle(fontSize: 10, color: _textLight)),
+            style: TextStyle(fontSize: 10, color: YekiColors.textMedium)),
       ],
     );
   }

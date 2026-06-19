@@ -5,6 +5,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:yeki/views/pages/enseignants/gestion_demandes_page.dart';
 import 'package:yeki/widgets/creer_cours_sheet.dart';
 import 'package:yeki/widgets/modifier_cours_sheet.dart';
 import 'package:yeki/widgets/creer_olympiade_sheet.dart';
@@ -13,7 +14,6 @@ import 'package:yeki/core/design/yeki_design.dart';
 import 'package:yeki/core/constants/api_constants.dart';
 
 // Couleurs supplémentaires (non définies dans yeki_design.dart)
-const Color _kPurple = Color(0xFF8B5CF6);
 const Color _kGreen = Color(0xFF10B981);
 const Color _kTealLight = Color(0xFF39A0C2);
 const Color _kTealDark = Color(0xFF1F5F75);
@@ -64,6 +64,18 @@ class _CadreDashboardPageState extends State<CadreDashboardPage>
         });
       }
     } catch (_) {}
+  }
+
+  void _ouvrirGestionDemandes(Map<String, dynamic> dept) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => GestionDemandesPage(
+          departementId: dept['id'] as int,
+          departementNom: dept['nom'] as String? ?? '',
+        ),
+      ),
+    ).then((_) => _charger());
   }
 
   @override
@@ -328,6 +340,8 @@ class _CadreDashboardPageState extends State<CadreDashboardPage>
       return;
     }
 
+    final parcoursType = currentDept['parcours_type']?.toString() ?? 'cursus';
+
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -335,6 +349,7 @@ class _CadreDashboardPageState extends State<CadreDashboardPage>
       builder: (_) => CreerOlympiadeSheet(
         departementId: currentDept['id'] as int,
         departementNom: currentDept['nom'] as String? ?? '',
+        parcoursType: parcoursType,
         onSuccess: () {
           _showSuccess('Olympiade créée ! Ajoutez les questions depuis la section Olympiades.');
           _charger();
@@ -510,7 +525,7 @@ class _CadreDashboardPageState extends State<CadreDashboardPage>
       body: _loading
           ? const Center(child: CircularProgressIndicator(color: kPrimary))
           : NestedScrollView(
-              headerSliverBuilder: (_, __) => [_buildAppBar(), _buildTabBar()],
+              headerSliverBuilder: (_, _) => [_buildAppBar(), _buildTabBar()],
               body: TabBarView(
                 controller: _tabCtrl,
                 children: [_tabCours(), _tabEnseignants(), _tabStats()],
@@ -775,6 +790,13 @@ class _CadreDashboardPageState extends State<CadreDashboardPage>
     final nbApprenants = dept['nb_apprenants'] ?? 0;
     final typeDept = dept['type_departement'] ?? 'cursus';
     final couleur = dept['couleur'] ?? '#2884A0';
+    final bool accesRestreint = dept['acces_restreint'] ?? false;
+    
+    // Récupérer le nombre de demandes en attente
+    int demandesAttente = 0;
+    if (dept['demandes_acces'] != null) {
+      demandesAttente = (dept['demandes_acces'] as List).length;
+    }
     
     Color cardColor;
     try {
@@ -871,17 +893,65 @@ class _CadreDashboardPageState extends State<CadreDashboardPage>
                     spacing: 8,
                     runSpacing: 8,
                     children: [
-                      _infoChip(Icons.people_rounded, '$nbApprenants apprenants', _kPurple),
+                      _infoChip(Icons.people_rounded, '$nbApprenants apprenants', kPurple),
                       if (dept['ville'] != null && dept['ville'].toString().isNotEmpty)
                         _infoChip(Icons.location_on_rounded, dept['ville'], kAccent),
                       if (dept['prix'] != null && dept['prix'] > 0)
                         _infoChip(Icons.attach_money_rounded, '${dept['prix']} FCFA', kGold),
                       if (dept['prix'] == 0)
                         _infoChip(Icons.lock_open_rounded, 'Gratuit', _kGreen),
+                      if (accesRestreint)
+                        _infoChip(Icons.lock_rounded, 'Sur demande', kAccent),
                     ],
                   ),
                   
                   const SizedBox(height: 12),
+                  
+                  // Gestion des demandes d'accès (si accès restreint)
+                  if (accesRestreint) ...[
+                    GestureDetector(
+                      onTap: () => _ouvrirGestionDemandes(dept),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                        decoration: BoxDecoration(
+                          color: kPrimary.withOpacityValue(0.08),
+                          borderRadius: BorderRadius.circular(kRadiusMd),
+                          border: Border.all(color: kPrimary.withOpacityValue(0.2), width: 0.8),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.person_add_alt_1_rounded, 
+                                 color: kPrimary, size: 16),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Demandes d\'accès',
+                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: kPrimary),
+                            ),
+                            if (demandesAttente > 0) ...[
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: kAccent,
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Text(
+                                  '$demandesAttente',
+                                  style: const TextStyle(
+                                    color: kECard,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
                   
                   Row(
                     children: [
@@ -935,8 +1005,8 @@ class _CadreDashboardPageState extends State<CadreDashboardPage>
         return 'Formation Classique';
       default:
         return 'Département';
-      }
     }
+  }
 
   Widget _infoChip(IconData icon, String label, Color color) {
     return Container(
@@ -957,7 +1027,7 @@ class _CadreDashboardPageState extends State<CadreDashboardPage>
     );
   }
 
-  // ─── CARTE COURS (inchangée) ───
+  // ─── CARTE COURS ───
   Widget _buildCoursCard(Map cours) {
     final taux = (cours['taux_completion'] as num? ?? 0).toDouble();
     final nbApp = cours['nb_apprenants'] ?? 0;

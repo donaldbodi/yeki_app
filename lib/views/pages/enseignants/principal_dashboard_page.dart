@@ -285,7 +285,7 @@ class _DashboardPrincipalPageState extends State<DashboardPrincipalPage>
     return Scaffold(
       backgroundColor: YekiColors.backgroundLight,
       body: NestedScrollView(
-        headerSliverBuilder: (_, __) => [
+        headerSliverBuilder: (_, _) => [
           _buildAppBar(),
           _buildTabBar(),
         ],

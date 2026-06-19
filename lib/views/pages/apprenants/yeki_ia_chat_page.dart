@@ -768,7 +768,7 @@ class _YekiIAChatPageState extends State<YekiIAChatPage>
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(12),
                   child: Image.network(msg.imageUrl!, height: 160, width: 220, fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => const SizedBox.shrink()),
+                      errorBuilder: (_, __, _) => const SizedBox.shrink()),
                 ),
               ),
             if (msg.audioUrl != null)

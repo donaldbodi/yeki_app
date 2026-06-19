@@ -1,20 +1,22 @@
 // lib/views/pages/apprenants/devoirs_page.dart
 // ═══════════════════════════════════════════════════════════════════════════
-//  YEKI DEVOIRS — Design Unifié Premium (CORRIGÉ)
+//  YEKI DEVOIRS — GLASSMORPHISM LIGHT EDITION (CORRIGÉ V4)
 // ═══════════════════════════════════════════════════════════════════════════
 
+import 'dart:async';
 import 'dart:convert';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:yeki/widgets/yeki_app_bar.dart';
 import 'package:yeki/services/offline_service.dart';
 import 'package:yeki/services/sync_service.dart';
 import 'package:yeki/views/pages/apprenants/composer_devoir_page.dart';
 import 'package:yeki/views/pages/apprenants/resultat_devoir_page.dart';
-import 'package:yeki/core/theme/app_theme.dart';
+import 'package:yeki/core/theme/yeki_design_system.dart';
 import 'package:yeki/core/constants/api_constants.dart';
 
+// ── Modèle DevoirItem ──────────────────────────────────────────────────
 class DevoirItem {
   final int id;
   final String titre;
@@ -152,6 +154,15 @@ class DevoirItem {
   }
 }
 
+// ── Type de devoir ──────────────────────────────────────────────────────
+class _TypeDevoirTab {
+  final String code;
+  final IconData icon;
+  final Color color;
+  const _TypeDevoirTab(this.code, this.icon, this.color);
+}
+
+// ── Widget Principal ──────────────────────────────────────────────────
 class DevoirsPage extends StatefulWidget {
   final bool estEnseignantPrincipal;
 
@@ -162,10 +173,10 @@ class DevoirsPage extends StatefulWidget {
 }
 
 class _DevoirsPageState extends State<DevoirsPage>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {  // ← CORRECTION: TickerProviderStateMixin
   late TabController _tabCtrl;
   bool _loading = true;
-  final String _error = '';
+  String _error = '';
 
   List<DevoirItem> _tous = [];
   List<DevoirItem> _affiches = [];
@@ -178,9 +189,10 @@ class _DevoirsPageState extends State<DevoirsPage>
 
   final TextEditingController _searchCtrl = TextEditingController();
 
-  final int _unreadNotifications = 0;
-  final bool _isSubscribed = true;
-  String _username = 'Apprenant';
+  // AnimationController et animations
+  late AnimationController _animCtrl;
+  late Animation<double> _fadeAnim;
+  late Animation<Offset> _slideAnim;
 
   final List<_TypeDevoirTab> _types = [
     const _TypeDevoirTab('Tous', Icons.grid_view_rounded, YekiColors.primaryDark),
@@ -210,12 +222,24 @@ class _DevoirsPageState extends State<DevoirsPage>
   @override
   void initState() {
     super.initState();
+    
+    // ✅ AnimationController avec TickerProviderStateMixin
+    _animCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 600),
+    );
+    _fadeAnim = CurvedAnimation(parent: _animCtrl, curve: Curves.easeIn);
+    _slideAnim = Tween<Offset>(
+      begin: const Offset(0, 0.2),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(parent: _animCtrl, curve: Curves.easeOutCubic));
+    
+    // ✅ TabController avec TickerProviderStateMixin
     _tabCtrl = TabController(length: _types.length, vsync: this)
       ..addListener(_onTabChanged);
 
     _initOffline();
     _charger();
-    _loadUserData();
 
     _searchCtrl.addListener(() {
       setState(() => _recherche = _searchCtrl.text);
@@ -241,29 +265,14 @@ class _DevoirsPageState extends State<DevoirsPage>
   void dispose() {
     _tabCtrl.dispose();
     _searchCtrl.dispose();
+    _animCtrl.dispose();
     SyncService().stopAutoSync();
     super.dispose();
   }
 
-  Future<void> _loadUserData() async {
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('token');
-    if (token == null) return;
-
-    try {
-      final response = await http.get(
-        Uri.parse(ApiConstants.profilMe),
-        headers: ApiHeaders.auth(token),
-      );
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        setState(() => _username = data['username'] ?? 'Apprenant');
-      }
-    } catch (_) {}
-  }
-
   Future<String?> _getToken() async {
-    return (await SharedPreferences.getInstance()).getString('token');
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('token');
   }
 
   Future<void> _charger({bool silent = false}) async {
@@ -292,6 +301,7 @@ class _DevoirsPageState extends State<DevoirsPage>
           _tous = devoirs;
           _appliquerFiltres();
         });
+        _animCtrl.forward(from: 0);
 
         await OfflineService.cacheDevoirs('all_devoirs', data);
         OfflineService.isOnline = true;
@@ -351,42 +361,6 @@ class _DevoirsPageState extends State<DevoirsPage>
     await _charger(silent: true);
   }
 
-  Future<void> _deconnecter() async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        backgroundColor: YekiColors.white,
-        title: const Text('Déconnexion',
-            style: TextStyle(fontWeight: FontWeight.w800)),
-        content: const Text('Souhaitez-vous vraiment quitter l\'application ?',
-            style: TextStyle(color: YekiColors.textMedium)),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Annuler', style: TextStyle(color: YekiColors.textMedium))),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-                backgroundColor: YekiColors.error,
-                foregroundColor: YekiColors.white,
-                elevation: 0,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Se déconnecter'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirm == true) {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.clear();
-      if (mounted) {
-        Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
-      }
-    }
-  }
-
   void _ouvrirDevoir(DevoirItem d) {
     Navigator.push(
       context,
@@ -413,84 +387,167 @@ class _DevoirsPageState extends State<DevoirsPage>
     );
   }
 
+  String _typeLabel(String code) {
+    switch (code) {
+      case 'Tous': return 'Tous';
+      case 'cursus': return 'Cursus';
+      case 'concours': return 'Concours';
+      case 'formation_classique': return 'Formation';
+      case 'formation_metier': return 'Métier';
+      case 'olympiade': return 'Olympiade';
+      default: return code;
+    }
+  }
+
+  String _statutLabel(String s) {
+    switch (s) {
+      case 'non_commence': return 'À faire';
+      case 'en_cours': return 'En cours';
+      case 'soumis': return 'Soumis';
+      case 'corrige': return 'Corrigé';
+      case 'en_retard': return 'En retard';
+      default: return s;
+    }
+  }
+
+  IconData _getIconForType(String typeDevoir) {
+    switch (typeDevoir) {
+      case 'cursus':
+        return Icons.school_rounded;
+      case 'concours':
+        return Icons.emoji_events_rounded;
+      case 'formation_classique':
+        return Icons.account_balance_rounded;
+      case 'formation_metier':
+        return Icons.work_rounded;
+      case 'olympiade':
+        return Icons.military_tech_rounded;
+      default:
+        return Icons.assignment_rounded;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final double screenWidth = MediaQuery.of(context).size.width;
     final double padX = screenWidth > 800 ? (screenWidth - 760) / 2 : 18.0;
 
     return Scaffold(
-      backgroundColor: YekiColors.backgroundLight,
-      appBar: YekiHeader(
-        unreadNotifications: _unreadNotifications,
-        isSubscribed: _isSubscribed,
-        userRole: 'Apprenant',
-        username: _username,
-        avatarUrl: null,
-        onLogout: _deconnecter,
-        onSettings: () {},
-        onNotifications: () {},
+      backgroundColor: YekiColors.bgLight,
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: YekiGradients.mainBackground,
+        ),
+        child: Stack(
+          children: [
+            // Sphères décoratives
+            Positioned(
+              top: -30,
+              right: -30,
+              child: Container(
+                width: 180,
+                height: 180,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: YekiColors.primaryLight.withValues(alpha: 0.08),
+                ),
+              ),
+            ),
+            Positioned(
+              bottom: 80,
+              left: -40,
+              child: Container(
+                width: 150,
+                height: 150,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: YekiColors.accent.withValues(alpha: 0.06),
+                ),
+              ),
+            ),
+            Positioned(
+              top: 200,
+              right: -20,
+              child: Container(
+                width: 100,
+                height: 100,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: YekiColors.gold.withValues(alpha: 0.05),
+                ),
+              ),
+            ),
+            SafeArea(
+              child: _loading
+                  ? _buildResponsiveSkeleton(padX)
+                  : _error.isNotEmpty
+                      ? _buildErrorState()
+                      : RefreshIndicator(
+                          onRefresh: _refresh,
+                          color: YekiColors.primaryDark,
+                          backgroundColor: YekiColors.white,
+                          child: _buildContent(padX),
+                        ),
+            ),
+          ],
+        ),
       ),
-      body: _loading
-          ? _buildResponsiveSkeleton(padX)
-          : _error.isNotEmpty
-              ? _buildErrorState()
-              : RefreshIndicator(
-                  onRefresh: _refresh,
-                  color: YekiColors.primaryDark,
-                  backgroundColor: YekiColors.white,
-                  child: CustomScrollView(
-                    physics: const BouncingScrollPhysics(),
-                    slivers: [
-                      SliverToBoxAdapter(
-                        child: Padding(
-                          padding: EdgeInsets.fromLTRB(padX, 20, padX, 8),
-                          child: _buildPageTitle(),
-                        ),
-                      ),
-                      SliverToBoxAdapter(
-                        child: Padding(
-                          padding: EdgeInsets.symmetric(horizontal: padX),
-                          child: _buildStatsSection(),
-                        ),
-                      ),
-                      SliverToBoxAdapter(
-                        child: Padding(
-                          padding: EdgeInsets.fromLTRB(padX, 12, padX, 4),
-                          child: _buildSearchBar(),
-                        ),
-                      ),
-                      SliverToBoxAdapter(
-                        child: Padding(
-                          padding: EdgeInsets.symmetric(horizontal: padX),
-                          child: _buildTabsSection(),
-                        ),
-                      ),
-                      SliverToBoxAdapter(
-                        child: Padding(
-                          padding: EdgeInsets.fromLTRB(padX, 4, padX, 8),
-                          child: _buildFiltersSection(),
-                        ),
-                      ),
-                      SliverToBoxAdapter(
-                        child: Padding(
-                          padding: EdgeInsets.fromLTRB(padX, 8, padX, 12),
-                          child: _buildSectionTitle(),
-                        ),
-                      ),
-                      _affiches.isEmpty
-                          ? const SliverFillRemaining(hasScrollBody: false, child: _EmptyView())
-                          : SliverPadding(
-                              padding: EdgeInsets.fromLTRB(padX, 0, padX, 110),
-                              sliver: SliverList(
-                                delegate: SliverChildBuilderDelegate(
-                                  (ctx, idx) => _buildUnifiedCard(_affiches[idx]),
-                                  childCount: _affiches.length,
-                                ),
-                              ),
-                            ),
-                    ],
+    );
+  }
+
+  // ✅ Extraction du contenu pour éviter les problèmes d'initialisation
+  Widget _buildContent(double padX) {
+    return CustomScrollView(
+      physics: const BouncingScrollPhysics(),
+      slivers: [
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(padX, 20, padX, 8),
+            child: _buildPageTitle(),
+          ),
+        ),
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: EdgeInsets.symmetric(horizontal: padX),
+            child: _buildStatsSection(),
+          ),
+        ),
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(padX, 12, padX, 4),
+            child: _buildSearchBar(),
+          ),
+        ),
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: EdgeInsets.symmetric(horizontal: padX),
+            child: _buildTabsSection(),
+          ),
+        ),
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(padX, 4, padX, 8),
+            child: _buildFiltersSection(),
+          ),
+        ),
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(padX, 8, padX, 12),
+            child: _buildSectionTitle(),
+          ),
+        ),
+        _affiches.isEmpty
+            ? const SliverFillRemaining(hasScrollBody: false, child: _EmptyView())
+            : SliverPadding(
+                padding: EdgeInsets.fromLTRB(padX, 0, padX, 110),
+                sliver: SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                    (ctx, idx) => _buildUnifiedCard(_affiches[idx]),
+                    childCount: _affiches.length,
                   ),
                 ),
+              ),
+      ],
     );
   }
 
@@ -546,53 +603,70 @@ class _DevoirsPageState extends State<DevoirsPage>
 
   Widget _buildStatCard(String label, String value, IconData icon, Color color) {
     return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 14),
-        decoration: BoxDecoration(
-          color: YekiColors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: YekiColors.borderLight, width: 1),
-        ),
-        child: Column(
-          children: [
-            Icon(icon, size: 20, color: color),
-            const SizedBox(height: 6),
-            Text(value,
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: color)),
-            Text(label, style: const TextStyle(fontSize: 11)),
-          ],
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            decoration: BoxDecoration(
+              color: YekiColors.white.withValues(alpha: 0.5),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: YekiColors.white.withValues(alpha: 0.6),
+                width: 1,
+              ),
+            ),
+            child: Column(
+              children: [
+                Icon(icon, size: 20, color: color),
+                const SizedBox(height: 6),
+                Text(value,
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: color)),
+                Text(label, style: TextStyle(fontSize: 11, color: YekiColors.textMedium)),
+              ],
+            ),
+          ),
         ),
       ),
     );
   }
 
   Widget _buildSearchBar() {
-    return Container(
-      decoration: BoxDecoration(
-        color: YekiColors.white,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: YekiColors.borderLight, width: 1.2),
-        boxShadow: YekiShadows.subtle,
-      ),
-      child: TextField(
-        controller: _searchCtrl,
-        style: YekiTextStyles.bodyMedium,
-        decoration: InputDecoration(
-          hintText: 'Rechercher un devoir...',
-          hintStyle: YekiTextStyles.bodySmall,
-          prefixIcon: Icon(Icons.search_rounded, color: YekiColors.primaryLight, size: 22),
-          suffixIcon: _recherche.isNotEmpty
-              ? IconButton(
-                  icon: const Icon(Icons.close_rounded, size: 18),
-                  onPressed: () {
-                    _searchCtrl.clear();
-                    setState(() => _recherche = '');
-                    _appliquerFiltres();
-                  },
-                )
-              : null,
-          border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(vertical: 15, horizontal: 16),
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(24),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+        child: Container(
+          decoration: BoxDecoration(
+            color: YekiColors.white.withValues(alpha: 0.5),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(
+              color: YekiColors.white.withValues(alpha: 0.8),
+              width: 1.2,
+            ),
+          ),
+          child: TextField(
+            controller: _searchCtrl,
+            style: YekiTextStyles.body(context),
+            decoration: InputDecoration(
+              hintText: 'Rechercher un devoir...',
+              hintStyle: YekiTextStyles.body(context).copyWith(color: YekiColors.textMedium),
+              prefixIcon: Icon(Icons.search_rounded, color: YekiColors.primaryLight, size: 22),
+              suffixIcon: _recherche.isNotEmpty
+                  ? IconButton(
+                      icon: const Icon(Icons.close_rounded, size: 18),
+                      onPressed: () {
+                        _searchCtrl.clear();
+                        setState(() => _recherche = '');
+                        _appliquerFiltres();
+                      },
+                    )
+                  : null,
+              border: InputBorder.none,
+              contentPadding: const EdgeInsets.symmetric(vertical: 15, horizontal: 16),
+            ),
+          ),
         ),
       ),
     );
@@ -622,23 +696,27 @@ class _DevoirsPageState extends State<DevoirsPage>
               margin: const EdgeInsets.only(right: 8),
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               decoration: BoxDecoration(
-                color: isSelected ? type.color.withValues(alpha: 0.12) : YekiColors.backgroundAlt,
+                color: isSelected
+                    ? type.color.withValues(alpha: 0.12)
+                    : YekiColors.white.withValues(alpha: 0.3),
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(
-                  color: isSelected ? type.color.withValues(alpha: 0.35) : Colors.transparent,
+                  color: isSelected
+                      ? type.color.withValues(alpha: 0.3)
+                      : YekiColors.white.withValues(alpha: 0.4),
                   width: 1.5,
                 ),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(type.icon, size: 15, color: isSelected ? type.color : YekiColors.textLight),
+                  Icon(type.icon, size: 15, color: isSelected ? type.color : YekiColors.textMedium),
                   const SizedBox(width: 6),
                   Text(_typeLabel(type.code),
                     style: TextStyle(
                       fontSize: 12.5,
                       fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-                      color: isSelected ? type.color : YekiColors.textLight,
+                      color: isSelected ? type.color : YekiColors.textMedium,
                     ),
                   ),
                 ],
@@ -728,24 +806,27 @@ class _DevoirsPageState extends State<DevoirsPage>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
       decoration: BoxDecoration(
-        color: YekiColors.white,
+        color: YekiColors.white.withValues(alpha: 0.4),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: YekiColors.borderLight, width: 1),
+        border: Border.all(
+          color: YekiColors.white.withValues(alpha: 0.6),
+          width: 1,
+        ),
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
           value: value,
-          hint: Text(hint, style: const TextStyle(fontSize: 12)),
+          hint: Text(hint, style: const TextStyle(fontSize: 12, color: YekiColors.textMedium)),
           isDense: true,
           items: items.map((s) => DropdownMenuItem(
             value: s,
             child: Text(
               labelBuilder != null ? labelBuilder(s) : s,
-              style: const TextStyle(fontSize: 12),
+              style: const TextStyle(fontSize: 12, color: YekiColors.textDark),
             ),
           )).toList(),
           onChanged: onChanged,
-          icon: Icon(Icons.keyboard_arrow_down, size: 18),
+          icon: Icon(Icons.keyboard_arrow_down, size: 18, color: YekiColors.textMedium),
         ),
       ),
     );
@@ -766,8 +847,12 @@ class _DevoirsPageState extends State<DevoirsPage>
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
           decoration: BoxDecoration(
-            color: YekiColors.primaryDark.withValues(alpha: 0.12),
+            color: YekiColors.primaryDark.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: YekiColors.primaryDark.withValues(alpha: 0.15),
+              width: 1,
+            ),
           ),
           child: Text(
             "${_affiches.length} Devoirs",
@@ -788,155 +873,171 @@ class _DevoirsPageState extends State<DevoirsPage>
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
-      decoration: BoxDecoration(
-        color: YekiColors.white,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: YekiColors.borderLight, width: 1.0),
-        boxShadow: YekiShadows.subtle,
-      ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(24),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: () {
-              if (d.estCorrige && d.noteApprenant != null) {
-                _voirResultat(d);
-              } else if (!estExpire || d.aSoumis) {
-                _ouvrirDevoir(d);
-              }
-            },
-            child: Padding(
-              padding: const EdgeInsets.all(18),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+          child: Container(
+            decoration: BoxDecoration(
+              color: YekiColors.white.withValues(alpha: 0.6),
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(
+                color: YekiColors.white.withValues(alpha: 0.8),
+                width: 1.0,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.03),
+                  blurRadius: 20,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: () {
+                  if (d.estCorrige && d.noteApprenant != null) {
+                    _voirResultat(d);
+                  } else if (!estExpire || d.aSoumis) {
+                    _ouvrirDevoir(d);
+                  }
+                },
+                borderRadius: BorderRadius.circular(24),
+                child: Padding(
+                  padding: const EdgeInsets.all(18),
+                  child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: d.typeColor.withValues(alpha: 0.08),
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: Icon(_getIconForType(d.typeDevoir), color: d.typeColor, size: 26),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              d.titre,
-                              style: const TextStyle(
-                                fontSize: 16.5,
-                                fontWeight: FontWeight.w900,
-                                height: 1.25,
-                              ),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            const SizedBox(height: 5),
-                            Row(
-                              children: [
-                                _infoChip(d.typeLabel, d.typeColor),
-                                const SizedBox(width: 6),
-                                _infoChip(d.statutLabel, d.statutColor),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  if (d.description.isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    Text(
-                      d.description,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(color: YekiColors.textDark.withValues(alpha: 0.6), height: 1.4, fontSize: 12.5),
-                    ),
-                  ],
-                  const SizedBox(height: 14),
-                  Container(
-                    padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
-                    decoration: BoxDecoration(
-                      color: YekiColors.backgroundLight,
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        _infoIcon(Icons.layers_outlined, '${d.matiere} • ${d.niveau}'),
-                        _infoIcon(Icons.quiz_rounded, '${d.nbQuestions} questions'),
-                        _infoIcon(Icons.timer_rounded, '${d.dureeMinutes} min'),
-                      ],
-                    ),
-                  ),
-                  if (d.estCorrige && d.noteApprenant != null) ...[
-                    const SizedBox(height: 14),
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: YekiColors.success.withValues(alpha: 0.05),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: YekiColors.success.withValues(alpha: 0.15)),
-                      ),
-                      child: Row(
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Icon(Icons.grade_rounded, color: YekiColors.success, size: 18),
-                          const SizedBox(width: 8),
-                          Text(
-                            'Note : ${d.noteApprenant!.toStringAsFixed(1)} / ${d.noteSur.toStringAsFixed(0)}',
-                            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
-                          ),
-                          const Spacer(),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                            decoration: BoxDecoration(color: YekiColors.success, borderRadius: BorderRadius.circular(8)),
-                            child: Text(
-                              '${((d.noteApprenant! / d.noteSur) * 100).toStringAsFixed(0)}%',
-                              style: const TextStyle(color: YekiColors.white, fontSize: 11, fontWeight: FontWeight.w800),
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: d.typeColor.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: Icon(_getIconForType(d.typeDevoir), color: d.typeColor, size: 26),
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  d.titre,
+                                  style: const TextStyle(
+                                    fontSize: 16.5,
+                                    fontWeight: FontWeight.w900,
+                                    height: 1.25,
+                                  ),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                const SizedBox(height: 5),
+                                Row(
+                                  children: [
+                                    _infoChip(d.typeLabel, d.typeColor),
+                                    const SizedBox(width: 6),
+                                    _infoChip(d.statutLabel, d.statutColor),
+                                  ],
+                                ),
+                              ],
                             ),
                           ),
                         ],
                       ),
-                    ),
-                  ],
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Expanded(child: _buildTimerInfo(joursRestants, estExpire)),
-                      const SizedBox(width: 12),
-                      _buildActionButton(d, estExpire),
+                      if (d.description.isNotEmpty) ...[
+                        const SizedBox(height: 12),
+                        Text(
+                          d.description,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: YekiColors.textDark.withValues(alpha: 0.6),
+                            height: 1.4,
+                            fontSize: 12.5,
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 14),
+                      Container(
+                        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                        decoration: BoxDecoration(
+                          color: YekiColors.white.withValues(alpha: 0.3),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: YekiColors.white.withValues(alpha: 0.4),
+                            width: 1,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            _infoIcon(Icons.layers_outlined, '${d.matiere} • ${d.niveau}'),
+                            _infoIcon(Icons.quiz_rounded, '${d.nbQuestions} questions'),
+                            _infoIcon(Icons.timer_rounded, '${d.dureeMinutes} min'),
+                          ],
+                        ),
+                      ),
+                      if (d.estCorrige && d.noteApprenant != null) ...[
+                        const SizedBox(height: 14),
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: YekiColors.success.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: YekiColors.success.withValues(alpha: 0.15),
+                              width: 1,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.grade_rounded, color: YekiColors.success, size: 18),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Note : ${d.noteApprenant!.toStringAsFixed(1)} / ${d.noteSur.toStringAsFixed(0)}',
+                                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+                              ),
+                              const Spacer(),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: [YekiColors.success, YekiColors.success.withValues(alpha: 0.8)],
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                  ),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  '${((d.noteApprenant! / d.noteSur) * 100).toStringAsFixed(0)}%',
+                                  style: const TextStyle(color: YekiColors.white, fontSize: 11, fontWeight: FontWeight.w800),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          Expanded(child: _buildTimerInfo(joursRestants, estExpire)),
+                          const SizedBox(width: 12),
+                          _buildActionButton(d, estExpire),
+                        ],
+                      ),
                     ],
                   ),
-                ],
+                ),
               ),
             ),
           ),
         ),
       ),
     );
-  }
-
-  IconData _getIconForType(String typeDevoir) {
-    switch (typeDevoir) {
-      case 'cursus':
-        return Icons.school_rounded;
-      case 'concours':
-        return Icons.emoji_events_rounded;
-      case 'formation_classique':
-        return Icons.account_balance_rounded;
-      case 'formation_metier':
-        return Icons.work_rounded;
-      case 'olympiade':
-        return Icons.military_tech_rounded;
-      default:
-        return Icons.assignment_rounded;
-    }
   }
 
   Widget _infoChip(String label, Color color) {
@@ -959,12 +1060,12 @@ class _DevoirsPageState extends State<DevoirsPage>
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 13, color: YekiColors.textLight),
+          Icon(icon, size: 13, color: YekiColors.textMedium),
           const SizedBox(width: 5),
           Flexible(
             child: Text(
               text,
-              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: YekiColors.textMedium),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
@@ -1018,7 +1119,11 @@ class _DevoirsPageState extends State<DevoirsPage>
         height: 38,
         padding: const EdgeInsets.symmetric(horizontal: 16),
         decoration: BoxDecoration(
-          color: YekiColors.success,
+          gradient: LinearGradient(
+            colors: [YekiColors.success, YekiColors.success.withValues(alpha: 0.8)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
           borderRadius: BorderRadius.circular(12),
         ),
         child: Material(
@@ -1042,7 +1147,11 @@ class _DevoirsPageState extends State<DevoirsPage>
       height: 38,
       padding: const EdgeInsets.symmetric(horizontal: 16),
       decoration: BoxDecoration(
-        color: d.typeColor,
+        gradient: LinearGradient(
+          colors: [d.typeColor, d.typeColor.withValues(alpha: 0.8)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Material(
@@ -1061,27 +1170,27 @@ class _DevoirsPageState extends State<DevoirsPage>
     );
   }
 
-  String _typeLabel(String code) {
-    switch (code) {
-      case 'Tous': return 'Tous';
-      case 'cursus': return 'Cursus';
-      case 'concours': return 'Concours';
-      case 'formation_classique': return 'Formation';
-      case 'formation_metier': return 'Métier';
-      case 'olympiade': return 'Olympiade';
-      default: return code;
-    }
-  }
-
-  String _statutLabel(String s) {
-    switch (s) {
-      case 'non_commence': return 'À faire';
-      case 'en_cours': return 'En cours';
-      case 'soumis': return 'Soumis';
-      case 'corrige': return 'Corrigé';
-      case 'en_retard': return 'En retard';
-      default: return s;
-    }
+  Widget _buildErrorState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.error_outline_rounded, size: 44, color: YekiColors.error),
+            const SizedBox(height: 12),
+            Text(_error, style: YekiTextStyles.body(context), textAlign: TextAlign.center),
+            const SizedBox(height: 20),
+            YekiButton(
+              label: 'Réessayer',
+              icon: Icons.refresh_rounded,
+              onPressed: () => _charger(),
+              width: 160,
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _buildResponsiveSkeleton(double padding) {
@@ -1115,40 +1224,14 @@ class _DevoirsPageState extends State<DevoirsPage>
   Widget _skeletonWidget({double h = 20, double? w, double r = 12}) => Container(
         height: h,
         width: w,
-        decoration: BoxDecoration(color: YekiColors.borderLight, borderRadius: BorderRadius.circular(r)),
-      );
-
-  Widget _buildErrorState() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.error_outline_rounded, size: 44, color: YekiColors.error),
-            const SizedBox(height: 12),
-            Text(_error, style: YekiTextStyles.bodyMedium, textAlign: TextAlign.center),
-            const SizedBox(height: 20),
-            YekiButton(
-              label: 'Réessayer',
-              icon: Icons.refresh_rounded,
-              onPressed: _charger,
-              width: 160,
-            ),
-          ],
+        decoration: BoxDecoration(
+          color: YekiColors.textLight.withValues(alpha: 0.15),
+          borderRadius: BorderRadius.circular(r),
         ),
-      ),
-    );
-  }
+      );
 }
 
-class _TypeDevoirTab {
-  final String code;
-  final IconData icon;
-  final Color color;
-  const _TypeDevoirTab(this.code, this.icon, this.color);
-}
-
+// ── Widget Empty View ──────────────────────────────────────────────────
 class _EmptyView extends StatelessWidget {
   const _EmptyView();
   @override
@@ -1159,13 +1242,19 @@ class _EmptyView extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.assignment_turned_in_outlined, size: 64, color: YekiColors.borderLight),
+            Icon(Icons.assignment_turned_in_outlined, size: 64, color: YekiColors.textLight.withValues(alpha: 0.3)),
             const SizedBox(height: 16),
-            const Text('Aucun devoir trouvé',
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800), textAlign: TextAlign.center),
+            const Text(
+              'Aucun devoir trouvé',
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
+              textAlign: TextAlign.center,
+            ),
             const SizedBox(height: 6),
-            const Text('Ajustez vos filtres pour voir plus de résultats.',
-                style: TextStyle(fontSize: 12.5, height: 1.35), textAlign: TextAlign.center),
+            const Text(
+              'Ajustez vos filtres pour voir plus de résultats.',
+              style: TextStyle(fontSize: 12.5, height: 1.35),
+              textAlign: TextAlign.center,
+            ),
           ],
         ),
       ),

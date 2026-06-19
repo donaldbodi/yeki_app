@@ -889,7 +889,7 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin {
                 child: ClipRRect(
                   borderRadius: YekiRadius.borderRadiusMd,
                   child: Image.network(q.imageUrl!, height: 160, width: double.infinity, fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(height: 160, color: YekiColors.backgroundLight,
+                    errorBuilder: (_, _, _) => Container(height: 160, color: YekiColors.backgroundLight,
                         child: const Center(child: Icon(Icons.broken_image, size: 40))),
                   ),
                 ),

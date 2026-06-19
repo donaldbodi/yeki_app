@@ -1,6 +1,6 @@
 // lib/views/pages/paiement/paiement_page.dart
 // ═══════════════════════════════════════════════════════════════════════════
-// PAGE DE PAIEMENT UNIFIÉE - CINETPAY UNIQUEMENT (CORRIGÉE)
+// PAGE DE PAIEMENT UNIFIÉE - CINETPAY UNIQUEMENT
 // ═══════════════════════════════════════════════════════════════════════════
 
 import 'dart:convert';
@@ -35,6 +35,9 @@ class PaiementPage extends StatefulWidget {
   final String titre;
   final int montant;
   final int? montantPresentiel;
+  final bool isCursus;
+  final bool isHybride;
+  final bool isFormation;
 
   const PaiementPage({
     super.key,
@@ -44,6 +47,9 @@ class PaiementPage extends StatefulWidget {
     required this.titre,
     required this.montant,
     this.montantPresentiel,
+    this.isCursus = false,
+    this.isHybride = false,
+    this.isFormation = false,
   });
 
   @override
@@ -59,8 +65,19 @@ class _PaiementPageState extends State<PaiementPage> {
   final _cardNameController = TextEditingController();
   bool _isLoading = false;
   bool _genererFacture = true;
+  bool _isAnnuel = false;
 
   int get _montantTotal => widget.montant + (widget.montantPresentiel ?? 0);
+  
+  int get _montantAnnuel {
+    if (widget.isCursus) {
+      return (_montantTotal * 0.85 * 12).round();
+    }
+    if (widget.isHybride) {
+      return (_montantTotal * 0.85 * 12).round();
+    }
+    return (widget.montant * 0.85 * 12).round();
+  }
 
   @override
   void dispose() {
@@ -103,7 +120,7 @@ class _PaiementPageState extends State<PaiementPage> {
     }
   }
 
-  Future<void> _initierPaiement() async {
+  Future<void> _initierPaiement({bool annuel = false}) async {
     if (_selectedMethod != CinetPayMethod.carte) {
       if (_phoneController.text.trim().length < 9) {
         ErrorHandler.showError(context, 'Veuillez entrer un numéro de téléphone valide (9 chiffres)');
@@ -133,12 +150,15 @@ class _PaiementPageState extends State<PaiementPage> {
       return;
     }
 
+    final montantAPayer = annuel ? _montantAnnuel : _montantTotal;
+
     try {
       final body = {
         'type_paiement': _getTypePaiementString(),
-        'montant': _montantTotal,
+        'montant': montantAPayer,
         'payment_method': _getPaymentMethodString(),
         'phone': _selectedMethod != CinetPayMethod.carte ? _phoneController.text.trim() : null,
+        'is_annuel': annuel,
       };
 
       if (widget.departementId != null) {
@@ -167,7 +187,7 @@ class _PaiementPageState extends State<PaiementPage> {
                 paymentUrl: paymentUrl,
                 reference: reference,
                 titre: widget.titre,
-                montant: _montantTotal,
+                montant: montantAPayer,
                 type: widget.type,
                 departementId: widget.departementId,
               ),
@@ -176,7 +196,7 @@ class _PaiementPageState extends State<PaiementPage> {
 
           if (success == true && mounted) {
             if (_genererFacture && widget.type == PaiementType.accesDepartement) {
-              await _genererFacturePDF(reference);
+              await _genererFacturePDF(reference, montantAPayer, annuel);
             }
             if (mounted) {
               Navigator.pop(context, true);
@@ -195,7 +215,7 @@ class _PaiementPageState extends State<PaiementPage> {
     }
   }
 
-  Future<void> _genererFacturePDF(String reference) async {
+  Future<void> _genererFacturePDF(String reference, int montant, bool annuel) async {
     try {
       final token = await _getToken();
       final userResponse = await http.get(
@@ -219,9 +239,10 @@ class _PaiementPageState extends State<PaiementPage> {
         description: widget.titre,
         montantLigne: widget.montant,
         montantPresentiel: widget.montantPresentiel ?? 0,
-        montantTotal: _montantTotal,
+        montantTotal: montant,
         date: DateTime.now(),
-        departementNom: widget.type == PaiementType.accesDepartement ? widget.titre : null,
+        departementNom: widget.type == PaiementType.accesDepartement ? widget.titre : null, 
+        //isAnnuel: annuel,
       );
 
       await FactureService.imprimerFacture(factureFile);
@@ -232,6 +253,9 @@ class _PaiementPageState extends State<PaiementPage> {
 
   @override
   Widget build(BuildContext context) {
+    final showFullOptions = widget.isCursus || (widget.isHybride && widget.montantPresentiel != null);
+    final showAnnuelOption = widget.isCursus || (widget.isHybride && widget.montantPresentiel != null);
+
     return Scaffold(
       backgroundColor: YekiColors.backgroundLight,
       appBar: AppBar(
@@ -246,7 +270,7 @@ class _PaiementPageState extends State<PaiementPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildRecapCard(),
+            _buildRecapCard(showFullOptions, showAnnuelOption),
             const SizedBox(height: 24),
             const Text(
               'Moyen de paiement',
@@ -261,7 +285,7 @@ class _PaiementPageState extends State<PaiementPage> {
               _buildFactureOption(),
             ],
             const SizedBox(height: 32),
-            _buildPayButton(),
+            _buildPayButton(showFullOptions, showAnnuelOption),
             const SizedBox(height: 16),
             _buildSecurityFooter(),
           ],
@@ -270,14 +294,14 @@ class _PaiementPageState extends State<PaiementPage> {
     );
   }
 
-  Widget _buildRecapCard() {
+  Widget _buildRecapCard(bool showFullOptions, bool showAnnuelOption) {
     String typeLabel;
     switch (widget.type) {
       case PaiementType.rechargeWallet:
         typeLabel = 'Recharge portefeuille';
         break;
       case PaiementType.accesDepartement:
-        typeLabel = 'Accès à la formation';
+        typeLabel = widget.isFormation ? 'Accès à la formation' : 'Accès au département';
         break;
       case PaiementType.olympiade:
         typeLabel = 'Inscription olympiade';
@@ -324,29 +348,61 @@ class _PaiementPageState extends State<PaiementPage> {
             ],
           ),
           const Divider(height: 24),
-          if (widget.montantPresentiel != null && widget.montantPresentiel! > 0) ...[
+          if (showFullOptions && widget.montantPresentiel != null && widget.montantPresentiel! > 0) ...[
             _buildPriceRow('Formation en ligne', widget.montant),
             _buildPriceRow('Frais présentiel', widget.montantPresentiel!),
             const Divider(height: 16),
-            _buildPriceRow('Montant total', _montantTotal, isBold: true),
+            _buildPriceRow('Montant mensuel', _montantTotal, isBold: true),
+            if (showAnnuelOption) ...[
+              const SizedBox(height: 4),
+              _buildPriceRow(
+                'Abonnement annuel (Économie 15%)', 
+                _montantAnnuel,
+                isBold: true,
+                isPromo: true,
+              ),
+            ],
+          ] else if (widget.montantPresentiel != null && widget.montantPresentiel! > 0) ...[
+            _buildPriceRow('Montant', widget.montant, isBold: true),
+            const SizedBox(height: 4),
+            _buildPriceRow('+ frais présentiel', widget.montantPresentiel!, isSmall: true),
+            const SizedBox(height: 8),
+            _buildPriceRow('Total', _montantTotal, isBold: true),
           ] else ...[
-            _buildPriceRow('Montant total', _montantTotal, isBold: true),
+            _buildPriceRow('Montant', widget.montant, isBold: true),
           ],
         ],
       ),
     );
   }
 
-  Widget _buildPriceRow(String label, int montant, {bool isBold = false}) {
+  Widget _buildPriceRow(
+    String label, 
+    int montant, {
+    bool isBold = false,
+    bool isPromo = false,
+    bool isSmall = false,
+  }) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.only(bottom: 4),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: TextStyle(fontSize: 14, fontWeight: isBold ? FontWeight.bold : FontWeight.normal)),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: isSmall ? 12 : 14,
+              fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
+              color: isPromo ? YekiColors.success : null,
+            ),
+          ),
           Text(
             '${montant} FCFA',
-            style: TextStyle(fontSize: 16, fontWeight: isBold ? FontWeight.bold : FontWeight.w600, color: isBold ? YekiColors.primaryDark : null),
+            style: TextStyle(
+              fontSize: isSmall ? 13 : 16,
+              fontWeight: isBold ? FontWeight.bold : FontWeight.w600,
+              color: isPromo ? YekiColors.success : (isBold ? YekiColors.primaryDark : null),
+            ),
           ),
         ],
       ),
@@ -594,7 +650,73 @@ class _PaiementPageState extends State<PaiementPage> {
     );
   }
 
-  Widget _buildPayButton() {
+  Widget _buildPayButton(bool showFullOptions, bool showAnnuelOption) {
+    if (showFullOptions && showAnnuelOption && widget.montantPresentiel != null && widget.montantPresentiel! > 0) {
+      return Column(
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: YekiButton(
+                  label: 'Mensuel ${_montantTotal} FCFA',
+                  onPressed: _isLoading ? null : () => _initierPaiement(annuel: false),
+                  isLoading: _isLoading && !_isAnnuel,
+                  backgroundColor: YekiColors.primaryDark,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: YekiButton(
+                  label: 'Annuel ${_montantAnnuel} FCFA',
+                  onPressed: _isLoading ? null : () => _initierPaiement(annuel: true),
+                  isLoading: _isLoading && _isAnnuel,
+                  backgroundColor: YekiColors.success,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Économisez 15% avec l\'abonnement annuel',
+            style: TextStyle(fontSize: 11, color: YekiColors.success),
+          ),
+        ],
+      );
+    }
+    
+    if (showAnnuelOption && widget.montantPresentiel != null && widget.montantPresentiel! > 0) {
+      return Column(
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: YekiButton(
+                  label: 'Mensuel $_montantTotal FCFA',
+                  onPressed: _isLoading ? null : () => _initierPaiement(annuel: false),
+                  isLoading: _isLoading && !_isAnnuel,
+                  backgroundColor: YekiColors.primaryDark,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: YekiButton(
+                  label: 'Annuel ${_montantAnnuel} FCFA',
+                  onPressed: _isLoading ? null : () => _initierPaiement(annuel: true),
+                  isLoading: _isLoading && _isAnnuel,
+                  backgroundColor: YekiColors.success,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Économisez 15% avec l\'abonnement annuel',
+            style: TextStyle(fontSize: 11, color: YekiColors.success),
+          ),
+        ],
+      );
+    }
+
     return YekiButton(
       label: 'Payer ${_montantTotal} FCFA',
       icon: Icons.lock_rounded,

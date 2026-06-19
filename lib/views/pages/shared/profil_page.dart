@@ -187,7 +187,7 @@ class _ProfilPageState extends State<ProfilPage>
                       child: ClipOval(
                         child: avatarUrl != null
                             ? Image.network(avatarUrl, fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) => _avatarFallback())
+                                errorBuilder: (_, _, _) => _avatarFallback())
                             : _avatarFallback(),
                       ),
                     ),

@@ -110,8 +110,10 @@ class NotificationService {
   // ── Callbacks Awesome Notifications ───────────────────────────
   Future<void> _onActionReceived(ReceivedAction action) async {
     debugPrint('Notification action received: ${action.toMap()}');
-    
-    final payload = action.payload;
+
+    final Map<String, String>? payload =
+        _cleanPayload(action.payload);
+
     if (payload != null && payload.isNotEmpty) {
       _naviguerDepuisData(payload);
     }
