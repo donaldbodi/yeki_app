@@ -1284,7 +1284,7 @@ class _DetailLeconPageState extends State<DetailLeconPage>
                     ? _courseColor
                     : lecon.estTerminee
                         ? YekiColors.success.withValues(alpha: 0.08)
-                        : YekiColors.bgLight,
+                        : YekiColors.bgLight, 
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(
                   color: isCurrent
