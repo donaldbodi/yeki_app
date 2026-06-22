@@ -1,9 +1,10 @@
 // lib/services/facture_service.dart
 // ═══════════════════════════════════════════════════════════════════════════
-//  SERVICE DE GÉNÉRATION DE FACTURE PDF
+//  SERVICE DE GÉNÉRATION DE FACTURE PDF - Support Web
 // ═══════════════════════════════════════════════════════════════════════════
 
 import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
@@ -50,6 +51,12 @@ class FactureService {
         ],
       ),
     );
+
+    // ✅ Support Web : utiliser un fichier virtuel
+    if (kIsWeb) {
+      // Sur web, on retourne un File virtuel
+      return File('/tmp/facture_$reference.pdf');
+    }
 
     final output = await getTemporaryDirectory();
     final file = File('${output.path}/facture_$reference.pdf');

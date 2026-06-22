@@ -1,6 +1,7 @@
 // lib/main.dart
 
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -74,10 +75,12 @@ void main() async {
     DeviceOrientation.portraitDown,
   ]);
   
-  // Initialisation des services offline
-  await OfflineService.init();
-  await CacheManager().init();
-  SyncService().startAutoSync();
+  // ✅ Support Web : désactiver les services offline
+  if (!kIsWeb) {
+    await OfflineService.init();
+    await CacheManager().init();
+    SyncService().startAutoSync();
+  }
   
   runApp(const YekiApp());
 }

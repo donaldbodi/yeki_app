@@ -1,7 +1,6 @@
 // lib/views/auth/login_page.dart
 // ═══════════════════════════════════════════════════════════════════════════
-//  YEKI LOGIN PAGE — GLASSMORPHISM LIGHT EDITION
-//  DESIGN ÉLÉGANT & MODERNE AVEC FORMULAIRES RAFFINÉS
+//  YEKI LOGIN PAGE — GLASSMORPHISM LIGHT EDITION (CORRIGÉE)
 // ═══════════════════════════════════════════════════════════════════════════
 
 import 'dart:convert';
@@ -28,6 +27,8 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
   bool _obscurePwd = true;
   String _error = '';
   bool _rememberMe = false;
+
+  bool _isTeacherUnactivated = false;
 
   late AnimationController _animCtrl;
   late Animation<double> _fadeAnim;
@@ -58,12 +59,16 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
 
   Future<void> _login() async {
     if (_identCtrl.text.trim().isEmpty || _pwdCtrl.text.trim().isEmpty) {
-      setState(() => _error = 'Veuillez remplir tous les champs.');
+      setState(() {
+        _error = 'Veuillez remplir tous les champs.';
+        _isTeacherUnactivated = false;
+      });
       return;
     }
     setState(() {
       _loading = true;
       _error = '';
+      _isTeacherUnactivated = false;
     });
 
     try {
@@ -86,7 +91,19 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
           role: data['role'] as String,
         );
       } else {
-        setState(() => _error = (data['detail'] as String?) ?? 'Identifiants incorrects.');
+        final errorDetail = data['detail'] as String? ?? '';
+        final errorType = data['error_type'] as String? ?? '';
+
+        if (errorType == 'account_inactive' || 
+            errorDetail.toLowerCase().contains('en attente de validation') ||
+            errorDetail.toLowerCase().contains('compte non activé')) {
+          setState(() {
+            _isTeacherUnactivated = true;
+            _error = '⚠️ Votre compte enseignant est en attente de validation par l\'administrateur.';
+          });
+        } else {
+          setState(() => _error = errorDetail.isEmpty ? 'Identifiants incorrects.' : errorDetail);
+        }
       }
     } catch (_) {
       setState(() => _error = 'Problème de connexion au serveur.');
@@ -108,7 +125,6 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
         ),
         child: Stack(
           children: [
-            // ── Sphères décoratives élégantes ──────────────────────
             Positioned(
               top: -60,
               right: -60,
@@ -209,7 +225,6 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
     );
   }
 
-  // ─── Logo élégant ───────────────────────────────────────────────────
   Widget _buildLogo() {
     return Container(
       padding: const EdgeInsets.all(18),
@@ -243,7 +258,6 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
     );
   }
 
-  // ─── Titre élégant ──────────────────────────────────────────────────
   Widget _buildTitle() {
     return Column(
       children: [
@@ -290,7 +304,6 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
     );
   }
 
-  // ─── Carte de connexion en verre ──────────────────────────────────
   Widget _buildGlassCard() {
     return ClipRRect(
       borderRadius: BorderRadius.circular(28),
@@ -329,7 +342,6 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
           ),
           child: Column(
             children: [
-              // ── En-tête de la carte ──────────────────────────────
               Row(
                 children: [
                   Expanded(
@@ -372,7 +384,6 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
               ),
               const SizedBox(height: 28),
 
-              // ── Champ Identifiant ─────────────────────────────────
               _buildModernTextField(
                 controller: _identCtrl,
                 label: "Email ou Identifiant",
@@ -381,7 +392,6 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
               ),
               const SizedBox(height: 18),
 
-              // ── Champ Mot de passe ──────────────────────────────
               _buildModernTextField(
                 controller: _pwdCtrl,
                 label: "Mot de passe",
@@ -392,7 +402,6 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
               
               const SizedBox(height: 8),
 
-              // ── Ligne Remember Me + Oublié ──────────────────────
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -420,42 +429,14 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                 ],
               ),
               
-              // ── Message d'erreur ──────────────────────────────────
               if (_error.isNotEmpty)
                 Padding(
                   padding: const EdgeInsets.only(top: 12),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: YekiColors.error.withValues(alpha: 0.06),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: YekiColors.error.withValues(alpha: 0.12),
-                        width: 1.0,
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(Icons.error_outline_rounded, color: YekiColors.error, size: 18),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            _error,
-                            style: TextStyle(
-                              color: YekiColors.error,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+                  child: _buildErrorMessage(),
                 ),
               
               const SizedBox(height: 20),
               
-              // ── Bouton de connexion ──────────────────────────────
               _loading
                   ? Container(
                       height: 56,
@@ -473,7 +454,104 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
     );
   }
 
-  // ─── Champ de texte moderne ────────────────────────────────────────
+  Widget _buildErrorMessage() {
+    if (_isTeacherUnactivated) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: YekiColors.warning.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: YekiColors.warning.withValues(alpha: 0.2),
+            width: 1.0,
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.warning_amber_rounded, color: YekiColors.warning, size: 20),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Compte en attente de validation',
+                    style: TextStyle(
+                      color: YekiColors.warning,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Votre compte enseignant est en cours de validation par l\'administrateur général. '
+              'Vous recevrez un email de confirmation dès que votre compte sera activé.',
+              style: TextStyle(
+                color: YekiColors.textMedium,
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: YekiColors.primary.withValues(alpha: 0.06),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.email_outlined, color: YekiColors.primary, size: 14),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Vérifiez votre boîte email',
+                    style: TextStyle(
+                      color: YekiColors.primary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: YekiColors.error.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: YekiColors.error.withValues(alpha: 0.12),
+          width: 1.0,
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.error_outline_rounded, color: YekiColors.error, size: 18),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              _error,
+              style: TextStyle(
+                color: YekiColors.error,
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildModernTextField({
     required TextEditingController controller,
     required String label,
@@ -563,7 +641,6 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
     );
   }
 
-  // ─── Checkbox Remember Me ──────────────────────────────────────────
   Widget _buildRememberMe() {
     return Row(
       mainAxisSize: MainAxisSize.min,
@@ -599,7 +676,6 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
     );
   }
 
-  // ─── Bouton dégradé moderne ────────────────────────────────────────
   Widget _buildGradientButton() {
     return GestureDetector(
       onTap: _login,
@@ -655,7 +731,6 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
     );
   }
 
-  // ─── Footer d'inscription élégant ──────────────────────────────────
   Widget _buildFooterLink() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),

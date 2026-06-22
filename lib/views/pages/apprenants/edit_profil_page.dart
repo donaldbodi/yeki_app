@@ -1,6 +1,6 @@
-// lib/views/pages/shared/edit_profil_page.dart
+// lib/views/pages/enseignants/edit_profil_page.dart (ou shared/edit_profil_page.dart)
 // ═══════════════════════════════════════════════════════════════════════════
-//  PAGE D'ÉDITION DU PROFIL — CORRIGÉE AVEC DESIGN SYSTEM
+// PAGE D'ÉDITION DU PROFIL — AVEC VILLE ET WHATSAPP
 // ═══════════════════════════════════════════════════════════════════════════
 
 import 'dart:convert';
@@ -30,6 +30,8 @@ class _EditProfilePageState extends State<EditProfilePage> {
   late final TextEditingController _phoneCtrl;
   late final TextEditingController _bioCtrl;
   late final TextEditingController _niveauCtrl;
+  late final TextEditingController _villeCtrl;
+  late final TextEditingController _whatsappCtrl;
 
   String? _cursus;
   Uint8List? _avatarBytes;
@@ -52,6 +54,8 @@ class _EditProfilePageState extends State<EditProfilePage> {
     _phoneCtrl = TextEditingController(text: profil['phone'] ?? '');
     _bioCtrl = TextEditingController(text: profil['bio'] ?? '');
     _niveauCtrl = TextEditingController(text: profil['niveau'] ?? '');
+    _villeCtrl = TextEditingController(text: profil['ville'] ?? '');
+    _whatsappCtrl = TextEditingController(text: profil['whatsapp'] ?? '');
     
     final cursusValue = profil['cursus'] as String?;
     _cursus = (cursusValue?.isNotEmpty == true) ? cursusValue : _cursusOptions.first;
@@ -65,6 +69,8 @@ class _EditProfilePageState extends State<EditProfilePage> {
     _phoneCtrl.dispose();
     _bioCtrl.dispose();
     _niveauCtrl.dispose();
+    _villeCtrl.dispose();
+    _whatsappCtrl.dispose();
     super.dispose();
   }
 
@@ -118,6 +124,8 @@ class _EditProfilePageState extends State<EditProfilePage> {
       request.fields['phone'] = _phoneCtrl.text.trim();
       request.fields['bio'] = _bioCtrl.text.trim();
       request.fields['niveau'] = _niveauCtrl.text.trim();
+      request.fields['ville'] = _villeCtrl.text.trim();
+      request.fields['whatsapp'] = _whatsappCtrl.text.trim();
       
       if (_cursus != null && _cursus!.isNotEmpty) {
         request.fields['cursus'] = _cursus!;
@@ -164,6 +172,11 @@ class _EditProfilePageState extends State<EditProfilePage> {
     }
   }
 
+  bool get _isEnseignant {
+    final userType = widget.profil['user_type']?.toString() ?? '';
+    return userType.contains('enseignant') || userType == 'admin';
+  }
+
   @override
   Widget build(BuildContext context) {
     final currentAvatarUrl = widget.profil['avatar'] as String?;
@@ -208,6 +221,9 @@ class _EditProfilePageState extends State<EditProfilePage> {
             _formSection("Contact", [
               _buildField("Email", _emailCtrl, Icons.email_outlined, type: TextInputType.emailAddress),
               _buildField("Téléphone", _phoneCtrl, Icons.phone_outlined, type: TextInputType.phone),
+              _buildField("Ville", _villeCtrl, Icons.location_on_outlined),
+              if (_isEnseignant)
+                _buildField("WhatsApp", _whatsappCtrl, Icons.chat_bubble_outline, type: TextInputType.phone),
             ]),
 
             const SizedBox(height: 20),

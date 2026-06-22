@@ -1,11 +1,11 @@
 // lib/services/download_manager.dart
 // ═══════════════════════════════════════════════════════════════════════════
-// GESTIONNAIRE DE TÉLÉCHARGEMENT DE FICHIERS
+// GESTIONNAIRE DE TÉLÉCHARGEMENT DE FICHIERS - CORRIGÉ
 // ═══════════════════════════════════════════════════════════════════════════
 
 import 'dart:io';
 import 'dart:async';
-import 'package:flutter/foundation.dart';  // ✅ AJOUTÉ pour VoidCallback
+import 'package:flutter/foundation.dart' show kIsWeb, VoidCallback;
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:open_file/open_file.dart';
@@ -27,6 +27,9 @@ class DownloadManager {
   final Map<String, String> _downloadPaths = {};
 
   Future<String> _getDownloadDirectory() async {
+    if (kIsWeb) {
+      return '/tmp/yeki_downloads';
+    }
     if (Platform.isAndroid) {
       final downloadsDir = await getExternalStorageDirectory();
       if (downloadsDir != null) {
@@ -53,6 +56,7 @@ class DownloadManager {
   }
 
   DownloadStatus getStatus(String fileId) {
+    if (kIsWeb) return DownloadStatus.notDownloaded;
     final path = _downloadPaths[fileId];
     if (path != null && File(path).existsSync()) {
       return DownloadStatus.downloaded;
@@ -64,6 +68,7 @@ class DownloadManager {
   }
 
   Future<bool> isDownloaded(String fileId) async {
+    if (kIsWeb) return false;
     final path = _downloadPaths[fileId];
     if (path != null) {
       return await File(path).exists();
@@ -72,6 +77,7 @@ class DownloadManager {
   }
 
   String? getDownloadedPath(String fileId) {
+    if (kIsWeb) return null;
     final path = _downloadPaths[fileId];
     if (path != null && File(path).existsSync()) {
       return path;
@@ -87,6 +93,12 @@ class DownloadManager {
     VoidCallback? onComplete,
     void Function(String error)? onError,
   }) async {
+    // Support Web : désactiver le téléchargement
+    if (kIsWeb) {
+      onError?.call('Téléchargement non supporté sur le Web');
+      return;
+    }
+    
     if (await isDownloaded(fileId)) {
       onComplete?.call();
       return;
@@ -147,6 +159,7 @@ class DownloadManager {
   }
 
   Future<void> deleteDownloadedFile(String fileId) async {
+    if (kIsWeb) return;
     final path = _downloadPaths[fileId];
     if (path != null) {
       final file = File(path);
@@ -158,6 +171,7 @@ class DownloadManager {
   }
 
   void cancelDownload(String fileId) {
+    if (kIsWeb) return;
     final cancelToken = _cancelTokens[fileId];
     cancelToken?.cancel();
     _cancelTokens.remove(fileId);
@@ -168,6 +182,7 @@ class DownloadManager {
   }
 
   Future<void> openDownloadedFile(String fileId) async {
+    if (kIsWeb) return;
     final path = _downloadPaths[fileId];
     if (path != null && await File(path).exists()) {
       await OpenFile.open(path);

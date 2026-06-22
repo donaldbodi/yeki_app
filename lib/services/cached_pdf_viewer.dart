@@ -1,6 +1,7 @@
 // lib/widgets/cached_pdf_viewer.dart
 
 import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_pdfview/flutter_pdfview.dart';
 import 'package:yeki/services/cache_manager.dart';
@@ -64,6 +65,15 @@ class _CachedPdfViewerState extends State<CachedPdfViewer> {
       _error = null;
     });
     
+    // ✅ Support Web : le PDF est chargé directement depuis l'URL
+    if (kIsWeb) {
+      setState(() {
+        _pdfReady = true;
+        _isLoading = false;
+      });
+      return;
+    }
+    
     if (_pdfPath != null && await File(_pdfPath!).exists()) {
       setState(() {
         _pdfReady = true;
@@ -120,6 +130,8 @@ class _CachedPdfViewerState extends State<CachedPdfViewer> {
   }
 
   Future<void> _deleteDownload() async {
+    if (kIsWeb) return;
+    
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -157,7 +169,6 @@ class _CachedPdfViewerState extends State<CachedPdfViewer> {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        // Barre d'outils PDF
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           decoration: BoxDecoration(
@@ -166,7 +177,6 @@ class _CachedPdfViewerState extends State<CachedPdfViewer> {
           ),
           child: Row(
             children: [
-              // Titre
               Expanded(
                 child: Text(
                   widget.pdfTitle,
@@ -175,41 +185,38 @@ class _CachedPdfViewerState extends State<CachedPdfViewer> {
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
-              
-              // Boutons de contrôle du cache
-              if (_downloadStatus == DownloadStatus.downloaded)
-                _buildActionButton(
-                  icon: Icons.delete_outline,
-                  label: 'Supprimer',
-                  color: Colors.red,
-                  onTap: _deleteDownload,
-                )
-              else if (_downloadStatus == DownloadStatus.downloading)
-                _buildProgressButton()
-              else if (_downloadStatus == DownloadStatus.failed)
-                _buildActionButton(
-                  icon: Icons.error_outline,
-                  label: 'Réessayer',
-                  color: Colors.orange,
-                  onTap: _downloadPdf,
-                )
-              else
-                _buildActionButton(
-                  icon: Icons.download_outlined,
-                  label: 'Télécharger',
-                  color: const Color(0xFF135F74),
-                  onTap: _downloadPdf,
-                ),
+              if (!kIsWeb)
+                if (_downloadStatus == DownloadStatus.downloaded)
+                  _buildActionButton(
+                    icon: Icons.delete_outline,
+                    label: 'Supprimer',
+                    color: Colors.red,
+                    onTap: _deleteDownload,
+                  )
+                else if (_downloadStatus == DownloadStatus.downloading)
+                  _buildProgressButton()
+                else if (_downloadStatus == DownloadStatus.failed)
+                  _buildActionButton(
+                    icon: Icons.error_outline,
+                    label: 'Réessayer',
+                    color: Colors.orange,
+                    onTap: _downloadPdf,
+                  )
+                else
+                  _buildActionButton(
+                    icon: Icons.download_outlined,
+                    label: 'Télécharger',
+                    color: const Color(0xFF135F74),
+                    onTap: _downloadPdf,
+                  ),
             ],
           ),
         ),
         
-        // Visualiseur PDF
         Expanded(
           child: _buildPdfViewer(),
         ),
         
-        // Barre de progression de page
         if (_pdfReady && _pagesCount > 0)
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -271,6 +278,24 @@ class _CachedPdfViewerState extends State<CachedPdfViewer> {
       );
     }
     
+    // ✅ Support Web : afficher un message si pas de PDF
+    if (kIsWeb) {
+      return const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.picture_as_pdf, size: 64, color: Colors.grey),
+            SizedBox(height: 16),
+            Text('Visualisation PDF disponible sur mobile',
+                style: TextStyle(color: Colors.grey)),
+            SizedBox(height: 8),
+            Text('Téléchargez l\'application mobile pour consulter les PDF',
+                style: TextStyle(fontSize: 12, color: Colors.grey)),
+          ],
+        ),
+      );
+    }
+    
     if (_pdfPath == null) {
       return const Center(child: Text('PDF non disponible'));
     }
@@ -313,10 +338,8 @@ class _CachedPdfViewerState extends State<CachedPdfViewer> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
-          // ✅ CORRIGÉ : withValues(alpha: 0.1) au lieu de withValues(0.1)
           color: color.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(8),
-          // ✅ CORRIGÉ : withValues(alpha: 0.3)
           border: Border.all(color: color.withValues(alpha: 0.3)),
         ),
         child: Row(
@@ -335,10 +358,8 @@ class _CachedPdfViewerState extends State<CachedPdfViewer> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        // ✅ CORRIGÉ : withValues(alpha: 0.1)
         color: const Color(0xFF135F74).withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(8),
-        // ✅ CORRIGÉ : withValues(alpha: 0.3)
         border: Border.all(color: const Color(0xFF135F74).withValues(alpha: 0.3)),
       ),
       child: Row(

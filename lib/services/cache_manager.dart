@@ -3,6 +3,7 @@
 import 'dart:io';
 import 'dart:async';
 import 'dart:ui';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:path_provider/path_provider.dart';
 import 'package:http/http.dart' as http;
 import 'package:hive/hive.dart';
@@ -29,6 +30,12 @@ class CacheManager {
   Future<void> init() async {
     if (_initialized) return;
     
+    // ✅ Support Web : utiliser un répertoire virtuel
+    if (kIsWeb) {
+      _initialized = true;
+      return;
+    }
+    
     final dir = await getApplicationDocumentsDirectory();
     Hive.init(dir.path);
     _cacheBox = await Hive.openBox(_cacheBoxName);
@@ -36,6 +43,9 @@ class CacheManager {
   }
   
   Future<String> _getCacheDirectory() async {
+    if (kIsWeb) {
+      return '/tmp/yeki_media';
+    }
     final cacheDir = await getTemporaryDirectory();
     final mediaDir = Directory('${cacheDir.path}/yeki_media');
     if (!await mediaDir.exists()) {
@@ -45,6 +55,7 @@ class CacheManager {
   }
   
   Future<bool> isCached(String fileId) async {
+    if (kIsWeb) return false;
     final info = _cacheBox.get(fileId);
     if (info == null) return false;
     final file = File(info['path']);
@@ -52,6 +63,7 @@ class CacheManager {
   }
   
   DownloadStatus getStatus(String fileId) {
+    if (kIsWeb) return DownloadStatus.notDownloaded;
     final info = _cacheBox.get(fileId);
     if (info == null) return DownloadStatus.notDownloaded;
     if (info['status'] == 'downloading') return DownloadStatus.downloading;
@@ -74,6 +86,12 @@ class CacheManager {
     VoidCallback? onComplete,
     void Function(String error)? onError,
   }) async {
+    // ✅ Support Web : désactiver le téléchargement
+    if (kIsWeb) {
+      onError?.call('Téléchargement non supporté sur le Web');
+      return;
+    }
+    
     if (await isCached(fileId)) {
       onComplete?.call();
       return;
@@ -151,6 +169,7 @@ class CacheManager {
   }
   
   String? getCachedPath(String fileId) {
+    if (kIsWeb) return null;
     final info = _cacheBox.get(fileId);
     if (info != null && info['status'] == 'downloaded') {
       return info['path'];
@@ -159,6 +178,7 @@ class CacheManager {
   }
   
   Future<void> deleteDownloadedFile(String fileId) async {
+    if (kIsWeb) return;
     final info = _cacheBox.get(fileId);
     if (info != null && info['path'] != null) {
       final file = File(info['path']);
@@ -170,6 +190,7 @@ class CacheManager {
   }
   
   void cancelDownload(String fileId) {
+    if (kIsWeb) return;
     final cancelToken = _cancelTokens[fileId];
     cancelToken?.cancel();
     _cancelTokens.remove(fileId);
@@ -183,6 +204,7 @@ class CacheManager {
   }
   
   Future<void> clearAllCache() async {
+    if (kIsWeb) return;
     for (final key in _cacheBox.keys) {
       final info = _cacheBox.get(key);
       if (info != null && info['path'] != null) {
@@ -196,6 +218,7 @@ class CacheManager {
   }
   
   Future<int> getCacheSize() async {
+    if (kIsWeb) return 0;
     int total = 0;
     for (final key in _cacheBox.keys) {
       final info = _cacheBox.get(key);

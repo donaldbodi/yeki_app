@@ -1,6 +1,6 @@
 // lib/views/pages/enseignants/enseignant_admin_dashboard_page.dart
 // ═══════════════════════════════════════════════════════════════════════════
-// ENSEIGNANT ADMIN DASHBOARD — CORRIGÉ
+// ENSEIGNANT ADMIN DASHBOARD — CORRIGÉ AVEC IMPORTATION CORRECTE
 // ═══════════════════════════════════════════════════════════════════════════
 
 import 'dart:convert';
@@ -10,6 +10,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:yeki/core/theme/app_theme.dart';
 import 'package:yeki/core/constants/api_constants.dart';
 import 'package:yeki/utils/error_handler.dart';
+import 'package:yeki/views/pages/enseignants/detail_cours_enseignant.dart';
+import 'package:yeki/views/pages/enseignants/interface_enseignant_page.dart' show RoleEnseignant;
 import 'cadre_dashboard_page.dart' show TabBarDelegate;
 
 class EnseignantAdminDashboardPage extends StatefulWidget {
@@ -27,7 +29,6 @@ class _EnseignantAdminDashboardPageState
   Map<String, dynamic> _stats = {};
   List _departements = [];
   List _cadres = [];
-  List _deptsEnAttente = [];
   List _olympiadesEnAttente = [];
   String _nomEnseignant = '';
   String _nomParcours = '';
@@ -48,7 +49,7 @@ class _EnseignantAdminDashboardPageState
   @override
   void initState() {
     super.initState();
-    _tabCtrl = TabController(length: 4, vsync: this);
+    _tabCtrl = TabController(length: 5, vsync: this);
     _charger();
   }
 
@@ -73,48 +74,51 @@ class _EnseignantAdminDashboardPageState
         Uri.parse(ApiConstants.enseignantAdminDashboard),
         headers: ApiHeaders.auth(token),
       );
-      if (res.statusCode == 200) {
-        final data = jsonDecode(res.body) as Map<String, dynamic>;
-        setState(() {
-          _stats = (data['stats'] as Map<String, dynamic>?) ?? {};
-          _departements = (data['departements'] as List?) ?? [];
-          _cadres = (data['cadres'] as List?) ?? [];
-          _deptsEnAttente = (data['departements_en_attente'] as List?) ?? [];
-          _olympiadesEnAttente = (data['olympiades_en_attente'] as List?) ?? [];
-          _nomEnseignant = data['nom'] ?? '';
-          _idParcours = data['id_parcours'] ?? 0;
-          _nomParcours = data['nom_parcours'] ?? '';
-          _typeParcours = data['type_parcours'] ?? 'cursus';
-          _loading = false;
-        });
-      } else {
-        setState(() => _loading = false);
-        ErrorHandler.showError(context, 'Erreur chargement (${res.statusCode})');
+      if (mounted) {
+        if (res.statusCode == 200) {
+          final data = jsonDecode(res.body) as Map<String, dynamic>;
+          setState(() {
+            _stats = (data['stats'] as Map<String, dynamic>?) ?? {};
+            _departements = (data['departements'] as List?) ?? [];
+            _cadres = (data['cadres'] as List?) ?? [];
+            _olympiadesEnAttente = (data['olympiades_en_attente'] as List?) ?? [];
+            _nomEnseignant = data['nom'] ?? '';
+            _idParcours = data['id_parcours'] ?? 0;
+            _nomParcours = data['nom_parcours'] ?? '';
+            _typeParcours = data['type_parcours'] ?? 'cursus';
+            _loading = false;
+          });
+        } else {
+          setState(() => _loading = false);
+          ErrorHandler.showError(context, 'Erreur chargement (${res.statusCode})');
+        }
       }
     } catch (_) {
-      setState(() => _loading = false);
-      ErrorHandler.showError(context, 'Erreur réseau');
+      if (mounted) {
+        setState(() => _loading = false);
+        ErrorHandler.showError(context, 'Erreur réseau');
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final nbEnAttente = _deptsEnAttente.length + _olympiadesEnAttente.length;
+    final nbEnAttente = _olympiadesEnAttente.length;
 
     return Scaffold(
       backgroundColor: YekiColors.backgroundLight,
       floatingActionButton: _nomParcours.isNotEmpty
           ? FloatingActionButton(
+              onPressed: _creerDepartement,
               backgroundColor: YekiColors.primaryDark,
               elevation: 4,
               child: const Icon(Icons.add_rounded, color: YekiColors.white, size: 28),
-              onPressed: _creerDepartement,
             )
           : null,
       body: _loading
           ? const Center(child: YekiLoader())
           : NestedScrollView(
-              headerSliverBuilder: (_, _) => [_buildAppBar(), _buildTabBar(nbEnAttente)],
+              headerSliverBuilder: (_, __) => [_buildAppBar(), _buildTabBar(nbEnAttente)],
               body: TabBarView(
                 controller: _tabCtrl,
                 children: [
@@ -122,9 +126,204 @@ class _EnseignantAdminDashboardPageState
                   _tabCadres(),
                   _tabEnAttente(),
                   _tabStats(),
+                  _tabTousCours(),
                 ],
               ),
             ),
+    );
+  }
+
+  SliverPersistentHeader _buildTabBar(int nbEnAttente) =>
+      SliverPersistentHeader(
+        pinned: true,
+        delegate: TabBarDelegate(
+          TabBar(
+            controller: _tabCtrl,
+            labelColor: YekiColors.primaryDark,
+            unselectedLabelColor: YekiColors.textLight,
+            indicatorColor: YekiColors.primaryDark,
+            isScrollable: true,
+            tabAlignment: TabAlignment.start,
+            labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+            tabs: [
+              const Tab(text: 'Départements'),
+              const Tab(text: 'Cadres'),
+              Tab(
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  const Text('Olympiades à valider'),
+                  if (nbEnAttente > 0) ...[
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: YekiColors.error,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text('$nbEnAttente',
+                          style: const TextStyle(color: YekiColors.white, fontSize: 10, fontWeight: FontWeight.w800)),
+                    ),
+                  ],
+                ]),
+              ),
+              const Tab(text: 'Statistiques'),
+              const Tab(text: 'Tous les cours'),
+            ],
+          ),
+          backgroundColor: YekiColors.white,
+        ),
+      );
+
+  Widget _tabTousCours() {
+    return FutureBuilder<List>(
+      future: _chargerTousLesCours(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: YekiLoader());
+        }
+        if (snapshot.hasError) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.error_outline_rounded, size: 48, color: YekiColors.error),
+                const SizedBox(height: 16),
+                const Text('Erreur lors du chargement des cours', 
+                    style: TextStyle(fontSize: 16, color: YekiColors.textDark)),
+              ],
+            ),
+          );
+        }
+        final cours = snapshot.data ?? [];
+        if (cours.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: YekiColors.primaryDark.withValues(alpha: 0.08),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: YekiColors.primaryDark.withValues(alpha: 0.2), width: 1),
+                  ),
+                  child: Icon(Icons.book_outlined, size: 48, color: YekiColors.primaryDark),
+                ),
+                const SizedBox(height: 16),
+                const Text('Aucun cours créé dans ce parcours', 
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: YekiColors.textDark)),
+              ],
+            ),
+          );
+        }
+        return RefreshIndicator(
+          onRefresh: _charger,
+          color: YekiColors.primaryDark,
+          child: ListView.builder(
+            padding: const EdgeInsets.all(16),
+            itemCount: cours.length,
+            itemBuilder: (_, i) => _buildCoursCard(cours[i]),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<List> _chargerTousLesCours() async {
+    final token = await _getToken();
+    if (token == null) return [];
+    try {
+      final res = await http.get(
+        Uri.parse('${ApiConstants.baseUrl}/cours/'),
+        headers: ApiHeaders.auth(token),
+      );
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        final cours = data as List;
+        final parcoursId = _idParcours;
+        return cours.where((c) => c['parcours_id'] == parcoursId).toList();
+      }
+      return [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  Widget _buildCoursCard(Map cours) {
+    final colorHex = (cours['color_code'] as String? ?? '#008080').replaceAll('#', '');
+    Color coursColor;
+    try {
+      coursColor = Color(int.parse('FF$colorHex', radix: 16));
+    } catch (_) {
+      coursColor = YekiColors.primaryDark;
+    }
+    
+    // Récupérer le rôle de l'enseignant pour ce cours
+    // Dans le contexte de l'admin enseignant, le rôle est toujours enseignantAdministrateur
+    final RoleEnseignant role = RoleEnseignant.enseignantAdministrateur;
+    final bool estPrincipal = role == RoleEnseignant.enseignantAdministrateur;
+    
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => DetailCoursEnseignantPage(
+              coursId: cours['id'].toString(),
+              titre: cours['titre'] ?? 'Sans titre',
+              estEnseignantPrincipal: estPrincipal,
+              role: role,
+              courseColor: coursColor,
+            ),
+          ),
+        );
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        decoration: BoxDecoration(
+          color: YekiColors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: YekiColors.borderLight, width: 1),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: coursColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: coursColor.withValues(alpha: 0.2), width: 0.8),
+                ),
+                child: Icon(Icons.book, color: coursColor, size: 22),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      cours['titre'] ?? 'Sans titre',
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: YekiColors.textDark),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${cours['niveau'] ?? 'Niveau non spécifié'} · ${cours['nb_apprenants'] ?? 0} apprenants',
+                      style: const TextStyle(fontSize: 12, color: YekiColors.textLight),
+                    ),
+                    if (cours['departement'] != null)
+                      Text(
+                        'Département: ${cours['departement']}',
+                        style: const TextStyle(fontSize: 11, color: YekiColors.textLight),
+                      ),
+                  ],
+                ),
+              ),
+              Icon(Icons.arrow_forward_ios, color: YekiColors.primaryDark, size: 14),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -248,45 +447,6 @@ class _EnseignantAdminDashboardPageState
     );
   }
 
-  SliverPersistentHeader _buildTabBar(int nbEnAttente) =>
-      SliverPersistentHeader(
-        pinned: true,
-        delegate: TabBarDelegate(
-          TabBar(
-            controller: _tabCtrl,
-            labelColor: YekiColors.primaryDark,
-            unselectedLabelColor: YekiColors.textLight,
-            indicatorColor: YekiColors.primaryDark,
-            isScrollable: true,
-            tabAlignment: TabAlignment.start,
-            labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-            tabs: [
-              const Tab(text: 'Départements'),
-              const Tab(text: 'Cadres'),
-              Tab(
-                child: Row(mainAxisSize: MainAxisSize.min, children: [
-                  const Text('En attente'),
-                  if (nbEnAttente > 0) ...[
-                    const SizedBox(width: 6),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: YekiColors.error,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text('$nbEnAttente',
-                          style: const TextStyle(color: YekiColors.white, fontSize: 10, fontWeight: FontWeight.w800)),
-                    ),
-                  ],
-                ]),
-              ),
-              const Tab(text: 'Statistiques'),
-            ],
-          ),
-          backgroundColor: YekiColors.white,
-        ),
-      );
-
   Widget _tabDepartements() => RefreshIndicator(
     onRefresh: _charger,
     color: YekiColors.primaryDark,
@@ -313,14 +473,18 @@ class _EnseignantAdminDashboardPageState
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: YekiColors.warning.withValues(alpha: 0.3)),
         ),
-        child: const Row(children: [
-          Icon(Icons.warning_amber_rounded, color: YekiColors.warning, size: 22),
-          SizedBox(width: 12),
-          Expanded(child: Text(
-            'Aucun parcours ne vous est encore assigné.\nContactez l\'administrateur général.',
-            style: TextStyle(color: YekiColors.warning, fontSize: 13),
-          )),
-        ]),
+        child: const Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: YekiColors.warning, size: 22),
+            SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Aucun parcours ne vous est encore assigné.\nContactez l\'administrateur général.',
+                style: TextStyle(color: YekiColors.warning, fontSize: 13),
+              ),
+            ),
+          ],
+        ),
       );
     }
 
@@ -341,41 +505,57 @@ class _EnseignantAdminDashboardPageState
         borderRadius: BorderRadius.circular(16),
       ),
       padding: const EdgeInsets.all(20),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(color: YekiColors.white.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(12)),
-            child: Icon(typeIcon, color: YekiColors.accent, size: 22),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: YekiColors.white.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(typeIcon, color: YekiColors.accent, size: 22),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Mon parcours', style: TextStyle(color: YekiColors.white.withValues(alpha: 0.7), fontSize: 12)),
+                    Text('Coordonnateur', style: TextStyle(color: YekiColors.white, fontSize: 13, fontWeight: FontWeight.w600)),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: YekiColors.white.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text('${_departements.length} dép.',
+                    style: const TextStyle(color: YekiColors.white, fontSize: 12)),
+              ),
+            ],
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('Mon parcours', style: TextStyle(color: YekiColors.white.withValues(alpha: 0.7), fontSize: 12)),
-              Text('Coordonnateur', style: TextStyle(color: YekiColors.white, fontSize: 13, fontWeight: FontWeight.w600)),
-            ]),
+          const SizedBox(height: 14),
+          Divider(color: YekiColors.white.withValues(alpha: 0.24), height: 1),
+          const SizedBox(height: 14),
+          Text(_nomParcours,
+              style: const TextStyle(color: YekiColors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              _quickStat('${_stats['nb_cours'] ?? 0}', 'cours'),
+              const SizedBox(width: 16),
+              _quickStat('${_stats['nb_apprenants'] ?? 0}', 'inscrits'),
+              const SizedBox(width: 16),
+              _quickStat('${_stats['nb_enseignants'] ?? 0}', 'cadres'),
+            ],
           ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-            decoration: BoxDecoration(color: YekiColors.white.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(20)),
-            child: Text('${_departements.length} dép.',
-                style: const TextStyle(color: YekiColors.white, fontSize: 12)),
-          ),
-        ]),
-        const SizedBox(height: 14),
-        Divider(color: YekiColors.white.withValues(alpha: 0.24), height: 1),
-        const SizedBox(height: 14),
-        Text(_nomParcours,
-            style: const TextStyle(color: YekiColors.white, fontSize: 20, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 8),
-        Row(children: [
-          _quickStat('${_stats['nb_cours'] ?? 0}', 'cours'),
-          const SizedBox(width: 16),
-          _quickStat('${_stats['nb_apprenants'] ?? 0}', 'inscrits'),
-          const SizedBox(width: 16),
-          _quickStat('${_stats['nb_enseignants'] ?? 0}', 'cadres'),
-        ]),
-      ]),
+        ],
+      ),
     );
   }
 
@@ -390,36 +570,37 @@ class _EnseignantAdminDashboardPageState
   Widget _buildVideDepartement() => Center(
     child: Padding(
       padding: const EdgeInsets.symmetric(vertical: 40),
-      child: Column(children: [
-        Container(
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: YekiColors.primaryDark.withValues(alpha: 0.08),
-            shape: BoxShape.circle,
-            border: Border.all(color: YekiColors.primaryDark.withValues(alpha: 0.2), width: 1),
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: YekiColors.primaryDark.withValues(alpha: 0.08),
+              shape: BoxShape.circle,
+              border: Border.all(color: YekiColors.primaryDark.withValues(alpha: 0.2), width: 1),
+            ),
+            child: Icon(_typeDeptOptions.isNotEmpty 
+                ? Icons.domain_rounded 
+                : Icons.school_rounded,
+                size: 48, color: YekiColors.primaryDark),
           ),
-          child: Icon(_typeDeptOptions.isNotEmpty 
-              ? Icons.domain_rounded 
-              : Icons.school_rounded,
-              size: 48, color: YekiColors.primaryDark),
-        ),
-        const SizedBox(height: 16),
-        Text(_typeParcours == 'prepa'
-            ? 'Aucun concours créé'
-            : _typeParcours == 'formation'
-                ? 'Aucune formation créée'
-                : 'Aucun département créé',
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-        const SizedBox(height: 8),
-        Text('Commencez par créer votre premier élément',
-            style: const TextStyle(fontSize: 13)),
-      ]),
+          const SizedBox(height: 16),
+          Text(_typeParcours == 'prepa'
+              ? 'Aucun concours créé'
+              : _typeParcours == 'formation'
+                  ? 'Aucune formation créée'
+                  : 'Aucun département créé',
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 8),
+          Text('Commencez par créer votre premier élément',
+              style: const TextStyle(fontSize: 13)),
+        ],
+      ),
     ),
   );
 
   Widget _buildDeptCard(Map<String, dynamic> dept) {
     final typeDept = dept['type_dept'] as String? ?? 'normal';
-    final estValide = dept['est_valide'] == true;
     final prix = dept['prix'] as int? ?? 0;
     final nbCours = dept['nb_cours'] as int? ?? 0;
     final nbIns = dept['nb_inscrits'] as int? ?? 0;
@@ -427,180 +608,127 @@ class _EnseignantAdminDashboardPageState
     final color = _typeDeptColors[typeDept] ?? YekiColors.primaryDark;
     final icon = _typeDeptIcons[typeDept] ?? Icons.domain_rounded;
     final label = _typeDeptLabels[typeDept] ?? 'Département';
-    final statutValidation = dept['statut_validation'] as String? ?? (estValide ? 'valide' : 'attente');
+    final niveauFormation = dept['niveau_formation'] as String?;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
       decoration: BoxDecoration(
         color: YekiColors.white,
         borderRadius: BorderRadius.circular(16),
-        border: estValide
-            ? Border.all(color: YekiColors.borderLight, width: 1)
-            : Border.all(color: YekiColors.warning.withValues(alpha: 0.5), width: 1.5),
+        border: Border.all(color: YekiColors.borderLight, width: 1),
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
         onTap: () => _voirDetailDepartement(dept),
         child: Padding(
           padding: const EdgeInsets.all(16),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Row(children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: color.withValues(alpha: 0.2), width: 0.8),
-                ),
-                child: Icon(icon, color: color, size: 22),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: color.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: color.withValues(alpha: 0.2), width: 0.8),
+                    ),
+                    child: Icon(icon, color: color, size: 22),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(dept['nom'] ?? '',
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            _miniChip(label, color),
+                            const SizedBox(width: 6),
+                            if (prix > 0)
+                              _miniChip('$prix FCFA', YekiColors.accent)
+                            else
+                              _miniChip('Gratuit', YekiColors.success),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: Icon(cadre == null ? Icons.person_add_outlined : Icons.swap_horiz,
+                        color: color),
+                    tooltip: cadre == null ? 'Nommer un cadre' : 'Changer cadre',
+                    onPressed: () => _changerCadre(dept),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.edit_outlined, color: YekiColors.primaryDark, size: 18),
+                    tooltip: 'Modifier le département',
+                    onPressed: () => _modifierDepartement(dept),
+                  ),
+                ],
               ),
-              const SizedBox(width: 12),
-              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(dept['nom'] ?? '',
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                const SizedBox(height: 4),
-                Row(children: [
-                  _miniChip(label, color),
-                  const SizedBox(width: 6),
-                  if (prix > 0)
-                    _miniChip('$prix FCFA', YekiColors.accent)
-                  else
-                    _miniChip('Gratuit', YekiColors.success),
-                ]),
-              ])),
-              IconButton(
-                icon: Icon(cadre == null ? Icons.person_add_outlined : Icons.swap_horiz,
-                    color: color),
-                tooltip: cadre == null ? 'Nommer un cadre' : 'Changer cadre',
-                onPressed: () => _changerCadre(dept),
-              ),
-              IconButton(
-                icon: const Icon(Icons.edit_outlined, color: YekiColors.primaryDark, size: 18),
-                tooltip: 'Modifier le département',
-                onPressed: () => _modifierDepartement(dept),
-              ),
-            ]),
-            const SizedBox(height: 10),
-            if (cadre != null)
-              Row(children: [
-                CircleAvatar(
-                  radius: 11,
-                  backgroundColor: YekiColors.purple.withValues(alpha: 0.1),
-                  child: Icon(Icons.person, size: 14, color: YekiColors.purple),
-                ),
-                const SizedBox(width: 8),
-                Text('Cadre : ${cadre['nom'] ?? cadre['username'] ?? ''}',
-                    style: const TextStyle(fontSize: 12)),
-              ])
-            else
-              _aucunCadreBadge(),
-            const SizedBox(height: 10),
-            Row(children: [
-              Icon(Icons.book_outlined, size: 13),
-              const SizedBox(width: 4),
-              Text('$nbCours cours', style: const TextStyle(fontSize: 12)),
-              const SizedBox(width: 12),
-              Icon(Icons.people_outlined, size: 13),
-              const SizedBox(width: 4),
-              Text('$nbIns inscrits', style: const TextStyle(fontSize: 12)),
-              const Spacer(),
-              if (statutValidation == 'attente')
-                _buildBoutonsValidation(dept)
-              else if (statutValidation == 'refuse')
-                _buildRefuseBadge(dept)
+              const SizedBox(height: 10),
+              if (cadre != null)
+                Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 11,
+                      backgroundColor: YekiColors.purple.withValues(alpha: 0.1),
+                      child: Icon(Icons.person, size: 14, color: YekiColors.purple),
+                    ),
+                    const SizedBox(width: 8),
+                    Text('Cadre : ${cadre['nom'] ?? cadre['username'] ?? ''}',
+                        style: const TextStyle(fontSize: 12)),
+                  ],
+                )
               else
-                Row(children: [
-                  Icon(Icons.check_circle_rounded, size: 13, color: YekiColors.success),
+                _aucunCadreBadge(),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Icon(Icons.book_outlined, size: 13),
                   const SizedBox(width: 4),
-                  Text('Validé', style: TextStyle(fontSize: 11, color: YekiColors.success, fontWeight: FontWeight.w600)),
-                ]),
-            ]),
-          ]),
+                  Text('$nbCours cours', style: const TextStyle(fontSize: 12)),
+                  const SizedBox(width: 12),
+                  Icon(Icons.people_outlined, size: 13),
+                  const SizedBox(width: 4),
+                  Text('$nbIns inscrits', style: const TextStyle(fontSize: 12)),
+                  const Spacer(),
+                  if (typeDept == 'metier' && niveauFormation != null)
+                    _miniChip('Niv. $niveauFormation', YekiColors.warning),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
-    );
-  }
-
-  Widget _buildBoutonsValidation(Map<String, dynamic> dept) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: YekiColors.warning.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: YekiColors.warning.withValues(alpha: 0.3)),
-      ),
-      child: Row(mainAxisSize: MainAxisSize.min, children: [
-        const Icon(Icons.hourglass_top_rounded, size: 11, color: YekiColors.warning),
-        const SizedBox(width: 4),
-        const Text('À valider', style: TextStyle(fontSize: 10, color: YekiColors.warning, fontWeight: FontWeight.w700)),
-        const SizedBox(width: 6),
-        GestureDetector(
-          onTap: () => _validerDepartement(dept['id'] as int, dept['nom'] ?? ''),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-            decoration: BoxDecoration(color: YekiColors.success, borderRadius: BorderRadius.circular(8)),
-            child: const Text('Valider',
-                style: TextStyle(color: YekiColors.white, fontSize: 9, fontWeight: FontWeight.w800)),
-          ),
-        ),
-        const SizedBox(width: 6),
-        GestureDetector(
-          onTap: () => _showRefusDialogDepartement(dept['id'] as int, dept['nom'] ?? ''),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-            decoration: BoxDecoration(color: YekiColors.error, borderRadius: BorderRadius.circular(8)),
-            child: const Text('Refuser',
-                style: TextStyle(color: YekiColors.white, fontSize: 9, fontWeight: FontWeight.w800)),
-          ),
-        ),
-      ]),
-    );
-  }
-
-  Widget _buildRefuseBadge(Map<String, dynamic> dept) {
-    final motifRefus = dept['motif_refus'] as String? ?? '';
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-          decoration: BoxDecoration(
-            color: YekiColors.error.withValues(alpha: 0.08),
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: YekiColors.error.withValues(alpha: 0.3)),
-          ),
-          child: Row(mainAxisSize: MainAxisSize.min, children: [
-            const Icon(Icons.cancel_rounded, size: 11, color: YekiColors.error),
-            const SizedBox(width: 4),
-            const Text('Refusé', style: TextStyle(fontSize: 10, color: YekiColors.error, fontWeight: FontWeight.w700)),
-          ]),
-        ),
-        if (motifRefus.isNotEmpty) ...[
-          const SizedBox(height: 4),
-          Text('Motif : $motifRefus',
-              style: const TextStyle(fontSize: 10, color: YekiColors.error, fontStyle: FontStyle.italic),
-              maxLines: 1, overflow: TextOverflow.ellipsis),
-        ],
-      ],
     );
   }
 
   Widget _tabCadres() {
     if (_cadres.isEmpty) {
-      return Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-        Container(
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: YekiColors.primaryDark.withValues(alpha: 0.08),
-            shape: BoxShape.circle,
-            border: Border.all(color: YekiColors.primaryDark.withValues(alpha: 0.2), width: 1),
-          ),
-          child: Icon(Icons.person_outline_rounded, size: 48, color: YekiColors.primaryDark),
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: YekiColors.primaryDark.withValues(alpha: 0.08),
+                shape: BoxShape.circle,
+                border: Border.all(color: YekiColors.primaryDark.withValues(alpha: 0.2), width: 1),
+              ),
+              child: Icon(Icons.person_outline_rounded, size: 48, color: YekiColors.primaryDark),
+            ),
+            const SizedBox(height: 16),
+            Text('Aucun enseignant cadre',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+          ],
         ),
-        const SizedBox(height: 16),
-        Text('Aucun enseignant cadre',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-      ]));
+      );
     }
     return RefreshIndicator(
       onRefresh: _charger,
@@ -624,44 +752,56 @@ class _EnseignantAdminDashboardPageState
       ),
       child: Padding(
         padding: const EdgeInsets.all(16),
-        child: Row(children: [
-          CircleAvatar(
-            radius: 26,
-            backgroundColor: YekiColors.purple.withValues(alpha: 0.1),
-            child: Text((cadre['nom'] ?? 'C')[0].toUpperCase(),
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-          ),
-          const SizedBox(width: 14),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(cadre['nom'] ?? cadre['username'] ?? '',
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-            if (dept != null)
-              Text(dept['nom'] ?? '',
-                  style: const TextStyle(fontSize: 12, color: YekiColors.purple)),
-            Text('${cadre['nb_cours'] ?? 0} cours · ${cadre['nb_apprenants'] ?? 0} apprenants',
-                style: const TextStyle(fontSize: 12)),
-          ])),
-        ]),
+        child: Row(
+          children: [
+            CircleAvatar(
+              radius: 26,
+              backgroundColor: YekiColors.purple.withValues(alpha: 0.1),
+              child: Text((cadre['nom'] ?? 'C')[0].toUpperCase(),
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(cadre['nom'] ?? cadre['username'] ?? '',
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                  if (dept != null)
+                    Text(dept['nom'] ?? '',
+                        style: const TextStyle(fontSize: 12, color: YekiColors.purple)),
+                  Text('${cadre['nb_cours'] ?? 0} cours · ${cadre['nb_apprenants'] ?? 0} apprenants',
+                      style: const TextStyle(fontSize: 12)),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
   Widget _tabEnAttente() {
-    final total = _deptsEnAttente.length + _olympiadesEnAttente.length;
+    final total = _olympiadesEnAttente.length;
     if (total == 0) {
-      return Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-        Container(
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: YekiColors.success.withValues(alpha: 0.08),
-            shape: BoxShape.circle,
-            border: Border.all(color: YekiColors.success.withValues(alpha: 0.2), width: 1),
-          ),
-          child: Icon(Icons.check_circle_outline_rounded, size: 48, color: YekiColors.success),
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: YekiColors.success.withValues(alpha: 0.08),
+                shape: BoxShape.circle,
+                border: Border.all(color: YekiColors.success.withValues(alpha: 0.2), width: 1),
+              ),
+              child: Icon(Icons.check_circle_outline_rounded, size: 48, color: YekiColors.success),
+            ),
+            const SizedBox(height: 16),
+            Text('Toutes les olympiades sont validées !', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+          ],
         ),
-        const SizedBox(height: 16),
-        Text('Tout est validé !', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-      ]));
+      );
     }
     return RefreshIndicator(
       onRefresh: _charger,
@@ -669,130 +809,11 @@ class _EnseignantAdminDashboardPageState
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          if (_deptsEnAttente.isNotEmpty) ...[
-            _sectionTitle('Départements à valider', Icons.domain_rounded, YekiColors.warning),
-            ..._deptsEnAttente.map((d) => _buildDeptEnAttenteCard(d as Map<String, dynamic>)),
-            const SizedBox(height: 16),
-          ],
-          if (_olympiadesEnAttente.isNotEmpty) ...[
-            _sectionTitle('Olympiades à valider', Icons.military_tech_rounded, YekiColors.warning),
-            ..._olympiadesEnAttente.map((o) => _buildOlympiadeEnAttenteCard(o as Map<String, dynamic>)),
-          ],
+          _sectionTitle('Olympiades à valider', Icons.military_tech_rounded, YekiColors.warning),
+          ..._olympiadesEnAttente.map((o) => _buildOlympiadeEnAttenteCard(o as Map<String, dynamic>)),
           const SizedBox(height: 80),
         ],
       ),
-    );
-  }
-
-  Widget _buildDeptEnAttenteCard(Map<String, dynamic> dept) {
-    final typeDept = dept['type_dept'] as String? ?? 'normal';
-    final color = _typeDeptColors[typeDept] ?? YekiColors.primaryDark;
-    final icon = _typeDeptIcons[typeDept] ?? Icons.domain_rounded;
-    final label = _typeDeptLabels[typeDept] ?? 'Département';
-    final nom = dept['nom'] ?? '';
-    final cadre = dept['cadre'] as Map?;
-    final statutValidation = dept['statut_validation'] as String? ?? 'attente';
-    final motifRefus = dept['motif_refus'] as String? ?? '';
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: YekiColors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: statutValidation == 'refuse' ? YekiColors.error.withValues(alpha: 0.5) : YekiColors.warning.withValues(alpha: 0.5), width: 1.5),
-      ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Icon(icon, color: color, size: 18),
-          ),
-          const SizedBox(width: 10),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(nom,
-                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis),
-            Text(label, style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w600)),
-          ])),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: statutValidation == 'refuse' ? YekiColors.error.withValues(alpha: 0.1) : YekiColors.warning.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Text(
-              statutValidation == 'refuse' ? 'Refusé' : 'En attente',
-              style: TextStyle(
-                color: statutValidation == 'refuse' ? YekiColors.error : YekiColors.warning,
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-        ]),
-        if (statutValidation == 'refuse' && motifRefus.isNotEmpty) ...[
-          const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: YekiColors.error.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.warning_amber_rounded, color: YekiColors.error, size: 14),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text('Motif : $motifRefus', style: TextStyle(color: YekiColors.error, fontSize: 12)),
-                ),
-              ],
-            ),
-          ),
-        ],
-        if (cadre != null) ...[
-          const SizedBox(height: 8),
-          Text('Cadre : ${cadre['nom'] ?? ''}', style: const TextStyle(fontSize: 12)),
-        ],
-        if (statutValidation == 'attente') ...[
-          const SizedBox(height: 12),
-          Row(children: [
-            Expanded(
-              child: ElevatedButton.icon(
-                onPressed: () => _validerDepartement(dept['id'] as int, nom),
-                icon: const Icon(Icons.check_rounded, size: 16),
-                label: const Text('Valider'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: YekiColors.success,
-                  foregroundColor: YekiColors.white,
-                  elevation: 0,
-                  padding: const EdgeInsets.symmetric(vertical: 10),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                ),
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: () => _showRefusDialogDepartement(dept['id'] as int, nom),
-                icon: const Icon(Icons.close_rounded, size: 16),
-                label: const Text('Refuser'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: YekiColors.error,
-                  side: const BorderSide(color: YekiColors.error),
-                  padding: const EdgeInsets.symmetric(vertical: 10),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                ),
-              ),
-            ),
-          ]),
-        ],
-      ]),
     );
   }
 
@@ -802,6 +823,7 @@ class _EnseignantAdminDashboardPageState
     final statutValidation = olympiade['statut_validation'] as String? ?? 'attente';
     final motifRefus = olympiade['motif_refus'] as String? ?? '';
     final niveauxAccessibles = olympiade['niveaux_accessibles'] as List? ?? [];
+    final prixGlobal = olympiade['prix_global'] as int? ?? 0;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -841,7 +863,7 @@ class _EnseignantAdminDashboardPageState
                       overflow: TextOverflow.ellipsis,
                     ),
                     Text(
-                      'Olympiade gratuite',
+                      'Olympiade gratuite (prix_global: $prixGlobal FCFA)',
                       style: TextStyle(color: YekiColors.accent, fontSize: 11, fontWeight: FontWeight.w600),
                     ),
                     if (niveauxAccessibles.isNotEmpty)
@@ -965,62 +987,69 @@ class _EnseignantAdminDashboardPageState
       _SI('Cours', '${_stats['nb_cours'] ?? 0}', Icons.book, YekiColors.purple),
       _SI('Inscrits', '${_stats['nb_apprenants'] ?? 0}', Icons.people, Colors.teal),
       _SI('Cadres', '${_stats['nb_enseignants'] ?? 0}', Icons.person_outline, YekiColors.warning),
+      _SI('Olympiades attente', '${_stats['nb_olympiades_attente'] ?? 0}', Icons.hourglass_top, YekiColors.error),
     ];
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
-      child: Column(children: [
-        GridView.count(
-          crossAxisCount: 2,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          crossAxisSpacing: 12,
-          mainAxisSpacing: 12,
-          childAspectRatio: 1.5,
-          children: items.map(_buildStatCard).toList(),
-        ),
-        if (_departements.isNotEmpty) ...[
-          const SizedBox(height: 20),
-          Row(children: [
-            Icon(Icons.leaderboard, color: YekiColors.primaryDark, size: 18),
-            const SizedBox(width: 8),
-            const Text('Classement des départements',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-          ]),
-          const SizedBox(height: 12),
-          ..._departements.asMap().entries.map((e) {
-            final i = e.key;
-            final d = e.value;
-            final taux = (d['taux_moyen'] as num? ?? 0).toDouble();
-            return Container(
-              margin: const EdgeInsets.only(bottom: 10),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(
-                color: YekiColors.white,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: YekiColors.borderLight, width: 1),
-              ),
-              child: Row(children: [
-                Container(
-                  width: 28,
-                  height: 28,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: i == 0 ? YekiColors.accent : i == 1 ? YekiColors.borderMedium : YekiColors.warning,
-                    shape: BoxShape.circle,
-                  ),
-                  child: Text('${i + 1}',
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: YekiColors.white)),
+      child: Column(
+        children: [
+          GridView.count(
+            crossAxisCount: 2,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            crossAxisSpacing: 12,
+            mainAxisSpacing: 12,
+            childAspectRatio: 1.5,
+            children: items.map(_buildStatCard).toList(),
+          ),
+          if (_departements.isNotEmpty) ...[
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                Icon(Icons.leaderboard, color: YekiColors.primaryDark, size: 18),
+                const SizedBox(width: 8),
+                const Text('Classement des départements',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+              ],
+            ),
+            const SizedBox(height: 12),
+            ..._departements.asMap().entries.map((e) {
+              final i = e.key;
+              final d = e.value;
+              final taux = (d['taux_moyen'] as num? ?? 0).toDouble();
+              return Container(
+                margin: const EdgeInsets.only(bottom: 10),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: YekiColors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: YekiColors.borderLight, width: 1),
                 ),
-                const SizedBox(width: 12),
-                Expanded(child: Text(d['nom'] ?? '',
-                    style: const TextStyle(fontWeight: FontWeight.w600))),
-                Text('${taux.toStringAsFixed(0)}%',
-                    style: const TextStyle(fontWeight: FontWeight.bold, color: YekiColors.primaryDark)),
-              ]),
-            );
-          }),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 28,
+                      height: 28,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: i == 0 ? YekiColors.accent : i == 1 ? YekiColors.borderMedium : YekiColors.warning,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Text('${i + 1}',
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: YekiColors.white)),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(child: Text(d['nom'] ?? '',
+                        style: const TextStyle(fontWeight: FontWeight.w600))),
+                    Text('${taux.toStringAsFixed(0)}%',
+                        style: const TextStyle(fontWeight: FontWeight.bold, color: YekiColors.primaryDark)),
+                  ],
+                ),
+              );
+            }),
+          ],
         ],
-      ]),
+      ),
     );
   }
 
@@ -1045,11 +1074,14 @@ class _EnseignantAdminDashboardPageState
           child: Icon(item.icon, color: item.color, size: 22),
         ),
         const SizedBox(height: 12),
-        Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(item.value,
-              style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: item.color)),
-          Text(item.label, style: const TextStyle(fontSize: 12)),
-        ]),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(item.value,
+                style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: item.color)),
+            Text(item.label, style: const TextStyle(fontSize: 12)),
+          ],
+        ),
       ],
     ),
   );
@@ -1063,7 +1095,6 @@ class _EnseignantAdminDashboardPageState
     final descCtrl = TextEditingController(text: dept['description'] ?? '');
     final prixCtrl = TextEditingController(text: (dept['prix'] ?? 0).toString());
     final prixPresentielCtrl = TextEditingController(text: (dept['prix_presentiel'] ?? 0).toString());
-    final couleurCtrl = TextEditingController(text: dept['couleur'] ?? '#2884A0');
     
     List<String> niveauxSelectionnes = [];
     if (dept['niveaux_accessibles'] != null) {
@@ -1075,11 +1106,11 @@ class _EnseignantAdminDashboardPageState
       }
     }
     
-    bool estPrepa = dept['est_prepa_concours'] ?? false;
     bool estFormationMetier = dept['est_formation_metier'] ?? false;
     bool estFormationClassique = dept['est_formation_classique'] ?? false;
     bool accesRestreint = dept['acces_restreint'] ?? false;
     String mode = dept['mode'] ?? 'hybride';
+    String niveauFormation = dept['niveau_formation'] ?? 'debutant';
     
     final nomConcoursCtrl = TextEditingController(text: dept['nom_concours'] ?? '');
     final organismeCtrl = TextEditingController(text: dept['organisme_concours'] ?? '');
@@ -1099,12 +1130,41 @@ class _EnseignantAdminDashboardPageState
     bool isLoading = false;
     List<String> niveauxDisponibles = [];
     bool niveauxCharges = false;
+
+    Future<void> chargerNiveaux() async {
+      if (niveauxCharges) return;
+      final token = await _getToken();
+      if (token == null) return;
+      try {
+        final res = await http.get(
+          Uri.parse(ApiConstants.niveaux),
+          headers: ApiHeaders.auth(token),
+        );
+        if (mounted) {
+          if (res.statusCode == 200) {
+            final data = jsonDecode(res.body);
+            niveauxDisponibles = List<String>.from(data);
+            niveauxCharges = true;
+          } else {
+            niveauxDisponibles = [];
+            niveauxCharges = true;
+          }
+        }
+      } catch (_) {
+        if (mounted) {
+          niveauxDisponibles = [];
+          niveauxCharges = true;
+        }
+      }
+    }
     
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (ctx) {
+        // Charger les niveaux au démarrage
+        chargerNiveaux();
         return StatefulBuilder(
           builder: (ctx, setS) => Container(
             decoration: const BoxDecoration(
@@ -1139,8 +1199,6 @@ class _EnseignantAdminDashboardPageState
                   _field(prixCtrl, 'Prix (FCFA)', Icons.attach_money_rounded, '0 = gratuit'),
                   const SizedBox(height: 16),
                   _field(prixPresentielCtrl, 'Prix présentiel (FCFA)', Icons.attach_money_rounded, '0 = absent'),
-                  const SizedBox(height: 16),
-                  _field(couleurCtrl, 'Couleur', Icons.palette_rounded, '#2884A0'),
                   const SizedBox(height: 16),
                   
                   _buildNiveauxSelector(ctx, setS, niveauxSelectionnes, niveauxDisponibles, niveauxCharges),
@@ -1196,6 +1254,32 @@ class _EnseignantAdminDashboardPageState
                       ],
                     ),
                     const SizedBox(height: 16),
+                    if (estFormationMetier) ...[
+                      const Text('Niveau de la formation', style: TextStyle(fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        children: ['debutant', 'intermediaire', 'avance'].map((n) {
+                          final labels = {
+                            'debutant': 'Débutant',
+                            'intermediaire': 'Intermédiaire',
+                            'avance': 'Avancé',
+                          };
+                          final sel = niveauFormation == n;
+                          return ChoiceChip(
+                            label: Text(labels[n]!),
+                            selected: sel,
+                            selectedColor: YekiColors.primaryDark.withValues(alpha: 0.15),
+                            labelStyle: TextStyle(
+                              color: sel ? YekiColors.primaryDark : YekiColors.textLight,
+                              fontWeight: sel ? FontWeight.bold : FontWeight.normal,
+                            ),
+                            onSelected: (_) => setS(() => niveauFormation = n),
+                          );
+                        }).toList(),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
                     _field(dureeCtrl, 'Durée', Icons.schedule_rounded, 'Ex: 6 mois, 200 heures…'),
                     const SizedBox(height: 16),
                     _field(domaineCtrl, 'Domaine', Icons.category_rounded, 'Ex: Informatique, Finance…'),
@@ -1252,7 +1336,6 @@ class _EnseignantAdminDashboardPageState
                           'description': descCtrl.text.trim(),
                           'prix': int.tryParse(prixCtrl.text.trim()) ?? 0,
                           'prix_presentiel': int.tryParse(prixPresentielCtrl.text.trim()) ?? 0,
-                          'couleur': couleurCtrl.text.trim(),
                           'niveaux_accessibles': niveauxSelectionnes,
                           'acces_restreint': accesRestreint,
                           'mode': mode,
@@ -1261,8 +1344,8 @@ class _EnseignantAdminDashboardPageState
                         if (_typeParcours == 'prepa') {
                           body['nom_concours'] = nomConcoursCtrl.text.trim();
                           body['organisme_concours'] = organismeCtrl.text.trim();
-                          body['date_limite_inscription'] = dateLimiteCtrl.text.trim().isNotEmpty ? dateLimiteCtrl.text.trim() : null;
-                          body['date_examen'] = dateExamenCtrl.text.trim().isNotEmpty ? dateExamenCtrl.text.trim() : null;
+                          if(dateLimiteCtrl.text.trim().isNotEmpty) body['date_limite_inscription'] = dateLimiteCtrl.text.trim();
+                          if(dateExamenCtrl.text.trim().isNotEmpty) body['date_examen'] = dateExamenCtrl.text.trim();
                           body['arrete_ministeriel'] = arreteCtrl.text.trim();
                           body['places_disponibles'] = int.tryParse(placesCtrl.text.trim()) ?? 0;
                           body['debouches'] = debouchesCtrl.text.trim();
@@ -1271,6 +1354,9 @@ class _EnseignantAdminDashboardPageState
                         if (_typeParcours == 'formation') {
                           body['est_formation_metier'] = estFormationMetier;
                           body['est_formation_classique'] = estFormationClassique;
+                          if (estFormationMetier) {
+                            body['niveau_formation'] = niveauFormation;
+                          }
                           body['duree_formation'] = dureeCtrl.text.trim();
                           body['mode'] = mode;
                           body['domaine'] = domaineCtrl.text.trim();
@@ -1288,17 +1374,24 @@ class _EnseignantAdminDashboardPageState
                         
                         setS(() => isLoading = false);
                         
-                        if (res.statusCode == 200) {
+                        if (mounted && res.statusCode == 200) {
                           if (ctx.mounted) Navigator.pop(ctx);
-                          ErrorHandler.showSuccess(context, '✅ Département modifié !');
+                          if (mounted) ErrorHandler.showSuccess(context, '✅ Département modifié !');
                           _charger();
                         } else {
-                          final err = jsonDecode(res.body);
-                          ErrorHandler.showError(context, err['detail'] ?? 'Erreur ${res.statusCode}');
+                          // Afficher les erreurs détaillées
+                          if (mounted) {
+                            final err = jsonDecode(res.body);
+                            if (err is Map && err.containsKey('detail')) {
+                              ErrorHandler.showError(context, err['detail'] as String);
+                            } else {
+                              ErrorHandler.showError(context, 'Erreur de validation');
+                            }
+                          }
                         }
-                      } catch (_) {
+                      } catch (e) {
                         setS(() => isLoading = false);
-                        ErrorHandler.showError(context, 'Erreur réseau');
+                        if (mounted) ErrorHandler.showError(context, 'Erreur réseau: $e');
                       }
                     },
                     isLoading: isLoading,
@@ -1335,7 +1428,11 @@ class _EnseignantAdminDashboardPageState
             child: DropdownButton<String>(
               value: null,
               isExpanded: true,
-              hint: const Text('Ajouter un niveau...'),
+              hint: charges 
+                  ? (disponibles.isNotEmpty 
+                      ? const Text('Ajouter un niveau...') 
+                      : const Text('Aucun niveau disponible pour l\'instant'))
+                  : const Text('Chargement des niveaux...'),
               items: disponibles.where((n) => !selected.contains(n)).map((n) {
                 return DropdownMenuItem<String>(
                   value: n,
@@ -1376,44 +1473,19 @@ class _EnseignantAdminDashboardPageState
             )).toList(),
           ),
         ],
+        if (selected.isEmpty) ...[
+          const SizedBox(height: 4),
+          Text(
+            'Aucun niveau sélectionné → accessible à tous les niveaux',
+            style: TextStyle(fontSize: 11, color: YekiColors.textMedium, fontStyle: FontStyle.italic),
+          ),
+        ],
       ],
     );
   }
 
-  Widget _typeChip(String label, IconData icon, bool selected, VoidCallback onTap) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        decoration: BoxDecoration(
-          color: selected ? YekiColors.primaryDark.withValues(alpha: 0.08) : YekiColors.backgroundLight,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: selected ? YekiColors.primaryDark : YekiColors.borderLight,
-            width: selected ? 2 : 1,
-          ),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 18, color: selected ? YekiColors.primaryDark : YekiColors.textLight),
-            const SizedBox(width: 6),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: selected ? FontWeight.bold : FontWeight.normal,
-                color: selected ? YekiColors.primaryDark : YekiColors.textLight,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   // ═══════════════════════════════════════════════════════════════════════
-  // FIN MODIFICATION D'UN DÉPARTEMENT
+  // CRÉATION D'UN DÉPARTEMENT
   // ═══════════════════════════════════════════════════════════════════════
 
   void _creerDepartement() {
@@ -1421,16 +1493,15 @@ class _EnseignantAdminDashboardPageState
     final descCtrl = TextEditingController();
     final prixCtrl = TextEditingController(text: '0');
     final prixPresentielCtrl = TextEditingController(text: '0');
-    String typeDeptSel = _typeDeptOptions.first;
-    String? niveauSelectionne;
     List<String> niveauxDisponibles = [];
     List<String> niveauxSelectionnes = [];
     bool isLoading = false;
-    bool _niveauxCharges = false;
+    bool niveauxCharges = false;
     bool accesRestreint = false;
     String mode = 'hybride';
     bool estFormationMetier = false;
     bool estFormationClassique = false;
+    String niveauFormation = 'debutant';
     
     // Contrôleurs pour champs spécifiques
     final nomConcoursCtrl = TextEditingController();
@@ -1449,8 +1520,8 @@ class _EnseignantAdminDashboardPageState
     final villeCtrl = TextEditingController();
     bool estCertifiante = false;
 
-    Future<void> _chargerNiveaux() async {
-      if (_niveauxCharges) return;
+    Future<void> chargerNiveaux() async {
+      if (niveauxCharges) return;
       final token = await _getToken();
       if (token == null) return;
       try {
@@ -1458,12 +1529,22 @@ class _EnseignantAdminDashboardPageState
           Uri.parse(ApiConstants.niveaux),
           headers: ApiHeaders.auth(token),
         );
-        if (res.statusCode == 200) {
-          final data = jsonDecode(res.body);
-          niveauxDisponibles = List<String>.from(data);
-          _niveauxCharges = true;
+        if (mounted) {
+          if (res.statusCode == 200) {
+            final data = jsonDecode(res.body);
+            niveauxDisponibles = List<String>.from(data);
+            niveauxCharges = true;
+          } else {
+            niveauxDisponibles = [];
+            niveauxCharges = true;
+          }
         }
-      } catch (_) {}
+      } catch (_) {
+        if (mounted) {
+          niveauxDisponibles = [];
+          niveauxCharges = true;
+        }
+      }
     }
 
     showModalBottomSheet(
@@ -1471,7 +1552,8 @@ class _EnseignantAdminDashboardPageState
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (ctx) {
-        _chargerNiveaux();
+        // Charger les niveaux au démarrage
+        chargerNiveaux();
         return StatefulBuilder(
           builder: (ctx, setS) => Container(
             decoration: const BoxDecoration(
@@ -1512,7 +1594,7 @@ class _EnseignantAdminDashboardPageState
                   _field(prixPresentielCtrl, 'Prix présentiel (FCFA)', Icons.attach_money_rounded, '0 = absent'),
                   const SizedBox(height: 16),
                   
-                  _buildNiveauxSelector(ctx, setS, niveauxSelectionnes, niveauxDisponibles, _niveauxCharges),
+                  _buildNiveauxSelector(ctx, setS, niveauxSelectionnes, niveauxDisponibles, niveauxCharges),
                   const SizedBox(height: 16),
                   
                   SwitchListTile(
@@ -1565,6 +1647,32 @@ class _EnseignantAdminDashboardPageState
                       ],
                     ),
                     const SizedBox(height: 16),
+                    if (estFormationMetier) ...[
+                      const Text('Niveau de la formation', style: TextStyle(fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        children: ['debutant', 'intermediaire', 'avance'].map((n) {
+                          final labels = {
+                            'debutant': 'Débutant',
+                            'intermediaire': 'Intermédiaire',
+                            'avance': 'Avancé',
+                          };
+                          final sel = niveauFormation == n;
+                          return ChoiceChip(
+                            label: Text(labels[n]!),
+                            selected: sel,
+                            selectedColor: YekiColors.primaryDark.withValues(alpha: 0.15),
+                            labelStyle: TextStyle(
+                              color: sel ? YekiColors.primaryDark : YekiColors.textLight,
+                              fontWeight: sel ? FontWeight.bold : FontWeight.normal,
+                            ),
+                            onSelected: (_) => setS(() => niveauFormation = n),
+                          );
+                        }).toList(),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
                     _field(dureeCtrl, 'Durée', Icons.schedule_rounded, 'Ex: 6 mois, 200 heures…'),
                     const SizedBox(height: 16),
                     _field(domaineCtrl, 'Domaine', Icons.category_rounded, 'Ex: Informatique, Finance…'),
@@ -1608,30 +1716,6 @@ class _EnseignantAdminDashboardPageState
                   ],
                   
                   const SizedBox(height: 24),
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: YekiColors.warning.withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: YekiColors.warning.withValues(alpha: 0.2), width: 1),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(Icons.info_outline_rounded, size: 16, color: YekiColors.warning),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            _typeParcours == 'prepa' || _typeParcours == 'formation'
-                                ? 'Si le prix est 0, le département sera gratuit. Les apprenants y auront accès sans paiement.'
-                                : 'Les apprenants paieront le prix indiqué pour accéder au département.',
-                            style: TextStyle(fontSize: 11, color: YekiColors.warning),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  
-                  const SizedBox(height: 24),
                   YekiButton(
                     label: 'Créer',
                     onPressed: isLoading ? null : () async {
@@ -1655,7 +1739,6 @@ class _EnseignantAdminDashboardPageState
                           'description': descCtrl.text.trim(),
                           'prix': prix,
                           'prix_presentiel': prixPresentiel,
-                          'couleur': '#2884A0',
                           'niveaux_accessibles': niveauxSelectionnes,
                           'acces_restreint': accesRestreint,
                           'mode': mode,
@@ -1675,6 +1758,9 @@ class _EnseignantAdminDashboardPageState
                         if (_typeParcours == 'formation') {
                           body['est_formation_metier'] = estFormationMetier;
                           body['est_formation_classique'] = estFormationClassique;
+                          if (estFormationMetier) {
+                            body['niveau_formation'] = niveauFormation;
+                          }
                           body['duree_formation'] = dureeCtrl.text.trim();
                           body['mode'] = mode;
                           body['domaine'] = domaineCtrl.text.trim();
@@ -1691,21 +1777,23 @@ class _EnseignantAdminDashboardPageState
                           body: jsonEncode(body),
                         );
                         setS(() => isLoading = false);
-                        if (res.statusCode == 201) {
-                          if (ctx.mounted) Navigator.pop(ctx);
-                          if (prix == 0) {
-                            ErrorHandler.showSuccess(context, '✅ Département gratuit créé avec succès !');
-                          } else {
+                        if (mounted) {
+                          if (res.statusCode == 201) {
+                            if (ctx.mounted) Navigator.pop(ctx);
                             ErrorHandler.showSuccess(context, '✅ Département créé avec succès !');
+                            _charger();
+                          } else {
+                            final err = jsonDecode(res.body);
+                            if (err is Map && err.containsKey('detail')) {
+                              ErrorHandler.showError(context, err['detail'] as String);
+                            } else {
+                              ErrorHandler.showError(context, 'Erreur ${res.statusCode}');
+                            }
                           }
-                          _charger();
-                        } else {
-                          final err = jsonDecode(res.body);
-                          ErrorHandler.showError(context, err['detail'] ?? 'Erreur ${res.statusCode}');
                         }
                       } catch (_) {
                         setS(() => isLoading = false);
-                        ErrorHandler.showError(context, 'Erreur réseau');
+                        if (mounted) ErrorHandler.showError(context, 'Erreur réseau');
                       }
                     },
                     isLoading: isLoading,
@@ -1719,92 +1807,9 @@ class _EnseignantAdminDashboardPageState
     );
   }
 
-  Future<void> _validerDepartement(int id, String nom) async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        backgroundColor: YekiColors.white,
-        title: const Text('Valider le département', style: TextStyle(fontWeight: FontWeight.bold)),
-        content: Text('Confirmer la validation de "$nom" ?\nIl sera visible pour les apprenants.', style: const TextStyle()),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Annuler', style: TextStyle(color: YekiColors.textMedium))),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: YekiColors.success, foregroundColor: YekiColors.white),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Valider'),
-          ),
-        ],
-      ),
-    );
-    if (confirm != true) return;
-    final token = await _getToken();
-    final res = await http.post(
-      Uri.parse('${ApiConstants.baseUrl}/admin/departements/$id/valider/'),
-      headers: ApiHeaders.auth(token),
-    );
-    if (res.statusCode == 200) {
-      ErrorHandler.showSuccess(context, '✅ Département "$nom" validé !');
-      _charger();
-    } else {
-      ErrorHandler.showError(context, 'Erreur');
-    }
-  }
-
-  Future<void> _showRefusDialogDepartement(int id, String nom) async {
-    final motifCtrl = TextEditingController();
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        backgroundColor: YekiColors.white,
-        title: const Text('Refuser le département', style: TextStyle(fontWeight: FontWeight.bold)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text('Refuser "$nom" ?', style: const TextStyle()),
-            const SizedBox(height: 12),
-            TextField(
-              controller: motifCtrl,
-              maxLines: 3,
-              decoration: const InputDecoration(
-                hintText: 'Motif du refus (optionnel)...',
-                border: OutlineInputBorder(),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Annuler', style: TextStyle(color: YekiColors.textMedium))),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: YekiColors.error, foregroundColor: YekiColors.white),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Refuser'),
-          ),
-        ],
-      ),
-    );
-    if (confirm == true) {
-      await _refuserDepartement(id, nom, motifCtrl.text.trim());
-    }
-  }
-
-  Future<void> _refuserDepartement(int id, String nom, String motif) async {
-    final token = await _getToken();
-    final res = await http.post(
-      Uri.parse('${ApiConstants.baseUrl}/admin/departements/$id/refuser/'),
-      headers: ApiHeaders.auth(token),
-      body: jsonEncode({'motif': motif}),
-    );
-    if (res.statusCode == 200) {
-      ErrorHandler.showSuccess(context, 'Département "$nom" refusé.');
-      _charger();
-    } else {
-      ErrorHandler.showError(context, 'Erreur');
-    }
-  }
+  // ═══════════════════════════════════════════════════════════════════════
+  // VALIDATION OLYMPIADE
+  // ═══════════════════════════════════════════════════════════════════════
 
   Future<void> _validerOlympiade(int id, String nom) async {
     final confirm = await showDialog<bool>(
@@ -1815,8 +1820,10 @@ class _EnseignantAdminDashboardPageState
         title: const Text('Valider l\'olympiade', style: TextStyle(fontWeight: FontWeight.bold)),
         content: Text('Confirmer la validation de "$nom" ?\nElle sera visible pour les apprenants.', style: const TextStyle()),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Annuler', style: TextStyle(color: YekiColors.textMedium))),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Annuler', style: TextStyle(color: YekiColors.textMedium)),
+          ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: YekiColors.success, foregroundColor: YekiColors.white),
             onPressed: () => Navigator.pop(ctx, true),
@@ -1827,16 +1834,24 @@ class _EnseignantAdminDashboardPageState
     );
     if (confirm != true) return;
     final token = await _getToken();
-    final res = await http.post(
-      Uri.parse('${ApiConstants.baseUrl}/admin/olympiades/$id/valider/'),
-      headers: ApiHeaders.auth(token),
-      body: jsonEncode({}),
-    );
-    if (res.statusCode == 200) {
-      ErrorHandler.showSuccess(context, '✅ Olympiade "$nom" validée !');
-      _charger();
-    } else {
-      ErrorHandler.showError(context, 'Erreur');
+    if (token == null) return;
+    try {
+      final res = await http.post(
+        Uri.parse('${ApiConstants.baseUrl}/admin/olympiades/$id/valider/'),
+        headers: ApiHeaders.auth(token),
+        body: jsonEncode({}),
+      );
+      if (mounted) {
+        if (res.statusCode == 200) {
+          ErrorHandler.showSuccess(context, '✅ Olympiade "$nom" validée !');
+          _enregistrerHistorique('Validation olympiade', 'Olympiade "$nom" validée avec succès.');
+          _charger();
+        } else {
+          ErrorHandler.showError(context, 'Erreur lors de la validation');
+        }
+      }
+    } catch (_) {
+      if (mounted) ErrorHandler.showError(context, 'Erreur réseau');
     }
   }
 
@@ -1864,8 +1879,10 @@ class _EnseignantAdminDashboardPageState
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Annuler', style: TextStyle(color: YekiColors.textMedium))),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Annuler', style: TextStyle(color: YekiColors.textMedium)),
+          ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: YekiColors.error, foregroundColor: YekiColors.white),
             onPressed: () => Navigator.pop(ctx, true),
@@ -1881,18 +1898,50 @@ class _EnseignantAdminDashboardPageState
 
   Future<void> _refuserOlympiade(int id, String nom, String motif) async {
     final token = await _getToken();
-    final res = await http.post(
-      Uri.parse('${ApiConstants.baseUrl}/admin/olympiades/$id/refuser/'),
-      headers: ApiHeaders.auth(token),
-      body: jsonEncode({'motif': motif}),
-    );
-    if (res.statusCode == 200) {
-      ErrorHandler.showSuccess(context, 'Olympiade "$nom" refusée.');
-      _charger();
-    } else {
-      ErrorHandler.showError(context, 'Erreur');
+    if (token == null) return;
+    try {
+      final res = await http.post(
+        Uri.parse('${ApiConstants.baseUrl}/admin/olympiades/$id/refuser/'),
+        headers: ApiHeaders.auth(token),
+        body: jsonEncode({'motif': motif}),
+      );
+      if (mounted) {
+        if (res.statusCode == 200) {
+          ErrorHandler.showSuccess(context, 'Olympiade "$nom" refusée.');
+          _enregistrerHistorique('Refus olympiade', 'Olympiade "$nom" refusée. Motif: $motif');
+          _charger();
+        } else {
+          ErrorHandler.showError(context, 'Erreur lors du refus');
+        }
+      }
+    } catch (_) {
+      if (mounted) ErrorHandler.showError(context, 'Erreur réseau');
     }
   }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // ENREGISTRER DANS L'HISTORIQUE
+  // ═══════════════════════════════════════════════════════════════════════
+
+  void _enregistrerHistorique(String action, String description) {
+    // Cette méthode enregistre l'activité dans l'historique
+    // Pour l'instant, on affiche un snackbar de confirmation
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('📝 $action: $description', style: const TextStyle(color: Colors.white)),
+          backgroundColor: YekiColors.primaryDark,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+    // TODO: Implémenter l'appel à l'API pour enregistrer dans l'historique
+    // Exemple: http.post(Uri.parse('${ApiConstants.baseUrl}/historique/'), ...)
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // CHANGER CADRE
+  // ═══════════════════════════════════════════════════════════════════════
 
   void _changerCadre(Map dept) async {
     final token = await _getToken();
@@ -1906,11 +1955,11 @@ class _EnseignantAdminDashboardPageState
       if (res.statusCode == 200) {
         cadresDisp = jsonDecode(res.body);
       } else {
-        ErrorHandler.showError(context, 'Impossible de charger les cadres');
+        if (mounted) ErrorHandler.showError(context, 'Impossible de charger les cadres');
         return;
       }
     } catch (_) {
-      ErrorHandler.showError(context, 'Erreur réseau');
+      if (mounted) ErrorHandler.showError(context, 'Erreur réseau');
       return;
     }
 
@@ -1933,57 +1982,67 @@ class _EnseignantAdminDashboardPageState
             top: 16,
             bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
           ),
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            _sheetHandle(),
-            const SizedBox(height: 20),
-            Text(dept['cadre'] == null ? 'Nommer un cadre' : 'Changer le cadre',
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 6),
-            Text('Département : ${dept['nom'] ?? ''}', style: const TextStyle(fontSize: 13)),
-            const SizedBox(height: 20),
-            ConstrainedBox(
-              constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.4),
-              child: cadresDisp.isEmpty
-                  ? const Center(
-                      child: Padding(
-                        padding: EdgeInsets.all(20),
-                        child: Text('Aucun enseignant cadre disponible.',
-                            textAlign: TextAlign.center),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _sheetHandle(),
+              const SizedBox(height: 20),
+              Text(dept['cadre'] == null ? 'Nommer un cadre' : 'Changer le cadre',
+                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 6),
+              Text('Département : ${dept['nom'] ?? ''}', style: const TextStyle(fontSize: 13)),
+              const SizedBox(height: 20),
+              ConstrainedBox(
+                constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.4),
+                child: cadresDisp.isEmpty
+                    ? const Center(
+                        child: Padding(
+                          padding: EdgeInsets.all(20),
+                          child: Text('Aucun enseignant cadre disponible.',
+                              textAlign: TextAlign.center),
+                        ),
+                      )
+                    : ListView(
+                        shrinkWrap: true,
+                        children: cadresDisp.map<Widget>((e) => RadioListTile<int>(
+                          value: e['id'] as int,
+                          groupValue: selected,
+                          activeColor: YekiColors.primaryDark,
+                          title: Text(e['nom'] ?? e['username'] ?? ''),
+                          subtitle: Text(e['email'] ?? ''),
+                          onChanged: (v) => setS(() => selected = v),
+                        )).toList(),
                       ),
-                    )
-                  : ListView(
-                      shrinkWrap: true,
-                      children: cadresDisp.map<Widget>((e) => RadioListTile<int>(
-                        value: e['id'] as int,
-                        groupValue: selected,
-                        activeColor: YekiColors.primaryDark,
-                        title: Text(e['nom'] ?? e['username'] ?? ''),
-                        subtitle: Text(e['email'] ?? ''),
-                        onChanged: (v) => setS(() => selected = v),
-                      )).toList(),
-                    ),
-            ),
-            const SizedBox(height: 20),
-            YekiButton(
-              label: 'Confirmer',
-              onPressed: selected == null ? null : () async {
-                if (ctx.mounted) Navigator.pop(ctx);
-                final t2 = await _getToken();
-                if (t2 == null) return;
-                final res = await http.patch(
-                  Uri.parse('${ApiConstants.baseUrl}/departements/${dept['id']}/changer-cadre/'),
-                  headers: ApiHeaders.auth(t2),
-                  body: jsonEncode({'cadre_id': selected}),
-                );
-                if (res.statusCode == 200) {
-                  ErrorHandler.showSuccess(context, 'Cadre modifié !');
-                  _charger();
-                } else {
-                  ErrorHandler.showError(context, 'Erreur');
-                }
-              },
-            ),
-          ]),
+              ),
+              const SizedBox(height: 20),
+              YekiButton(
+                label: 'Confirmer',
+                onPressed: selected == null ? null : () async {
+                  if (ctx.mounted) Navigator.pop(ctx);
+                  final t2 = await _getToken();
+                  if (t2 == null) return;
+                  try {
+                    final res = await http.patch(
+                      Uri.parse('${ApiConstants.baseUrl}/departements/${dept['id']}/changer-cadre/'),
+                      headers: ApiHeaders.auth(t2),
+                      body: jsonEncode({'cadre_id': selected}),
+                    );
+                    if (mounted) {
+                      if (res.statusCode == 200) {
+                        ErrorHandler.showSuccess(context, 'Cadre modifié !');
+                        _enregistrerHistorique('Changement cadre', 'Cadre modifié pour le département ${dept['nom']}');
+                        _charger();
+                      } else {
+                        ErrorHandler.showError(context, 'Erreur lors du changement de cadre');
+                      }
+                    }
+                  } catch (_) {
+                    if (mounted) ErrorHandler.showError(context, 'Erreur réseau');
+                  }
+                },
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -1997,6 +2056,10 @@ class _EnseignantAdminDashboardPageState
       builder: (_) => _DetailDeptSheet(dept: dept),
     );
   }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // HELPERS
+  // ═══════════════════════════════════════════════════════════════════════
 
   Widget _sheetHandle() => Center(
     child: Container(
@@ -2051,21 +2114,58 @@ class _EnseignantAdminDashboardPageState
       color: YekiColors.warning.withValues(alpha: 0.1),
       borderRadius: BorderRadius.circular(8),
     ),
-    child: const Row(mainAxisSize: MainAxisSize.min, children: [
-      Icon(Icons.warning_outlined, size: 13, color: YekiColors.warning),
-      SizedBox(width: 5),
-      Text('Aucun cadre nommé', style: TextStyle(fontSize: 11, color: YekiColors.warning)),
-    ]),
+    child: const Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(Icons.warning_outlined, size: 13, color: YekiColors.warning),
+        SizedBox(width: 5),
+        Text('Aucun cadre nommé', style: TextStyle(fontSize: 11, color: YekiColors.warning)),
+      ],
+    ),
   );
 
   Widget _sectionTitle(String title, IconData icon, Color color) => Padding(
     padding: const EdgeInsets.only(bottom: 10),
-    child: Row(children: [
-      Icon(icon, color: color, size: 18),
-      const SizedBox(width: 8),
-      Text(title, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-    ]),
+    child: Row(
+      children: [
+        Icon(icon, color: color, size: 18),
+        const SizedBox(width: 8),
+        Text(title, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+      ],
+    ),
   );
+
+  Widget _typeChip(String label, IconData icon, bool selected, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          color: selected ? YekiColors.primaryDark.withValues(alpha: 0.08) : YekiColors.backgroundLight,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: selected ? YekiColors.primaryDark : YekiColors.borderLight,
+            width: selected ? 2 : 1,
+          ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 18, color: selected ? YekiColors.primaryDark : YekiColors.textLight),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+                color: selected ? YekiColors.primaryDark : YekiColors.textLight,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 const Map<String, Color> _typeDeptColors = {
@@ -2089,6 +2189,9 @@ const Map<String, String> _typeDeptLabels = {
   'concours': 'Prépa Concours',
 };
 
+// ═══════════════════════════════════════════════════════════════════════
+// DETAIL DEPARTEMENT (avec cours groupés par niveau)
+// ═══════════════════════════════════════════════════════════════════════
 class _DetailDeptSheet extends StatefulWidget {
   final Map dept;
   const _DetailDeptSheet({required this.dept});
@@ -2140,7 +2243,6 @@ class _DetailDeptSheetState extends State<_DetailDeptSheet> {
     final dept = widget.dept;
     final typeDept = dept['type_dept'] as String? ?? 'normal';
     final prix = dept['prix'] as int? ?? 0;
-    final estValide = dept['est_valide'] == true;
     final color = _typeDeptColors[typeDept] ?? YekiColors.primaryDark;
 
     return Container(
@@ -2149,144 +2251,198 @@ class _DetailDeptSheetState extends State<_DetailDeptSheet> {
         color: YekiColors.white.withValues(alpha: 0.7),
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      child: Column(children: [
-        const SizedBox(height: 12),
-        Center(
-          child: Container(
-            width: 40,
-            height: 4,
-            decoration: BoxDecoration(color: YekiColors.borderLight, borderRadius: BorderRadius.circular(8)),
-          ),
-        ),
-        const SizedBox(height: 20),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: Row(children: [
-            Expanded(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(dept['nom'] ?? '', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                Text(dept['parcours'] ?? '', style: const TextStyle(fontSize: 13)),
-              ]),
+      child: Column(
+        children: [
+          const SizedBox(height: 12),
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(color: YekiColors.borderLight, borderRadius: BorderRadius.circular(8)),
             ),
-            Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-              if (prix > 0)
-                Text('$prix FCFA', style: const TextStyle(fontWeight: FontWeight.w700))
-              else
-                Text(estValide ? 'Gratuit ✓' : 'À valider',
-                    style: TextStyle(color: estValide ? YekiColors.success : YekiColors.warning, fontWeight: FontWeight.w600, fontSize: 12)),
-            ]),
-          ]),
-        ),
-        const Divider(height: 20, color: YekiColors.borderLight),
-        Expanded(
-          child: _loading
-              ? const Center(child: YekiLoader())
-              : DefaultTabController(
-                  length: 2,
-                  child: Column(children: [
-                    TabBar(
-                      tabs: const [Tab(text: 'Cours'), Tab(text: 'Inscrits')],
-                      labelColor: YekiColors.primaryDark,
-                      unselectedLabelColor: YekiColors.textLight,
-                      indicatorColor: YekiColors.primaryDark,
-                    ),
-                    Expanded(
-                      child: TabBarView(children: [
-                        _cours.isEmpty
-                            ? const Center(child: Text('Aucun cours', style: TextStyle()))
-                            : ListView.builder(
-                                padding: const EdgeInsets.all(16),
-                                itemCount: _cours.length,
-                                itemBuilder: (_, i) {
-                                  final c = _cours[i];
-                                  return Container(
-                                    margin: const EdgeInsets.only(bottom: 8),
-                                    padding: const EdgeInsets.all(12),
-                                    decoration: BoxDecoration(
-                                      color: YekiColors.backgroundLight,
-                                      borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(color: YekiColors.borderLight, width: 1),
-                                    ),
-                                    child: Row(children: [
-                                      Container(
-                                        padding: const EdgeInsets.all(8),
-                                        decoration: BoxDecoration(
-                                          color: color.withValues(alpha: 0.1),
-                                          borderRadius: BorderRadius.circular(8),
-                                        ),
-                                        child: Icon(Icons.book, color: color, size: 18),
-                                      ),
-                                      const SizedBox(width: 12),
-                                      Expanded(
-                                        child: Column(crossAxisAlignment: CrossAxisAlignment.start,
-                                            children: [
-                                              Text(c['titre'] ?? '',
-                                                  style: const TextStyle(fontWeight: FontWeight.w600)),
-                                              Text('${c['nb_apprenants'] ?? 0} apprenants',
-                                                  style: const TextStyle(fontSize: 12)),
-                                            ]),
-                                      ),
-                                    ]),
-                                  );
-                                },
-                              ),
-                        _inscrits.isEmpty
-                            ? const Center(child: Text('Aucun inscrit', style: TextStyle()))
-                            : ListView.builder(
-                                padding: const EdgeInsets.all(16),
-                                itemCount: _inscrits.length,
-                                itemBuilder: (_, i) {
-                                  final ins = _inscrits[i];
-                                  final statut = ins['statut'] as String? ?? '';
-                                  final statusColor = statut == 'accepte'
-                                      ? YekiColors.success
-                                      : statut == 'en_attente'
-                                          ? YekiColors.warning
-                                          : YekiColors.error;
-                                  return Container(
-                                    margin: const EdgeInsets.only(bottom: 8),
-                                    padding: const EdgeInsets.all(12),
-                                    decoration: BoxDecoration(
-                                      color: YekiColors.backgroundLight,
-                                      borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(color: YekiColors.borderLight, width: 1),
-                                    ),
-                                    child: Row(children: [
-                                      CircleAvatar(
-                                        backgroundColor: color.withValues(alpha: 0.1),
-                                        child: Text(
-                                            (ins['nom'] ?? ins['username'] ?? '?')[0].toUpperCase(),
-                                            style: TextStyle(color: color)),
-                                      ),
-                                      const SizedBox(width: 12),
-                                      Expanded(
-                                        child: Column(crossAxisAlignment: CrossAxisAlignment.start,
-                                            children: [
-                                              Text(ins['nom'] ?? ins['username'] ?? '',
-                                                  style: const TextStyle(fontWeight: FontWeight.w600)),
-                                              Text(ins['inscrit_le']?.toString().substring(0, 10) ?? '',
-                                                  style: const TextStyle(fontSize: 12)),
-                                            ]),
-                                      ),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                        decoration: BoxDecoration(
-                                          color: statusColor.withValues(alpha: 0.1),
-                                          borderRadius: BorderRadius.circular(8),
-                                        ),
-                                        child: Text(statut,
-                                            style: TextStyle(color: statusColor, fontSize: 11, fontWeight: FontWeight.w700)),
-                                      ),
-                                    ]),
-                                  );
-                                },
-                              ),
-                      ]),
-                    ),
-                  ]),
+          ),
+          const SizedBox(height: 20),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(dept['nom'] ?? '', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                      Text(dept['parcours'] ?? '', style: const TextStyle(fontSize: 13)),
+                    ],
+                  ),
                 ),
-        ),
-      ]),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    if (prix > 0)
+                      Text('$prix FCFA', style: const TextStyle(fontWeight: FontWeight.w700))
+                    else
+                      Text('Gratuit', style: TextStyle(color: YekiColors.success, fontWeight: FontWeight.w600, fontSize: 12)),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 20, color: YekiColors.borderLight),
+          Expanded(
+            child: _loading
+                ? const Center(child: YekiLoader())
+                : DefaultTabController(
+                    length: 2,
+                    child: Column(
+                      children: [
+                        TabBar(
+                          tabs: const [Tab(text: 'Cours par niveau'), Tab(text: 'Inscrits')],
+                          labelColor: YekiColors.primaryDark,
+                          unselectedLabelColor: YekiColors.textLight,
+                          indicatorColor: YekiColors.primaryDark,
+                        ),
+                        Expanded(
+                          child: TabBarView(
+                            children: [
+                              _cours.isEmpty
+                                  ? const Center(child: Text('Aucun cours', style: TextStyle()))
+                                  : _buildCoursParNiveau(),
+                              _inscrits.isEmpty
+                                  ? const Center(child: Text('Aucun inscrit', style: TextStyle()))
+                                  : ListView.builder(
+                                      padding: const EdgeInsets.all(16),
+                                      itemCount: _inscrits.length,
+                                      itemBuilder: (_, i) {
+                                        final ins = _inscrits[i];
+                                        return Container(
+                                          margin: const EdgeInsets.only(bottom: 8),
+                                          padding: const EdgeInsets.all(12),
+                                          decoration: BoxDecoration(
+                                            color: YekiColors.backgroundLight,
+                                            borderRadius: BorderRadius.circular(12),
+                                            border: Border.all(color: YekiColors.borderLight, width: 1),
+                                          ),
+                                          child: Row(
+                                            children: [
+                                              CircleAvatar(
+                                                backgroundColor: color.withValues(alpha: 0.1),
+                                                child: Text(
+                                                    (ins['nom'] ?? ins['username'] ?? '?')[0].toUpperCase(),
+                                                    style: TextStyle(color: color)),
+                                              ),
+                                              const SizedBox(width: 12),
+                                              Expanded(
+                                                child: Column(
+                                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                                  children: [
+                                                    Text(ins['nom'] ?? ins['username'] ?? '',
+                                                        style: const TextStyle(fontWeight: FontWeight.w600)),
+                                                    Text(ins['inscrit_le']?.toString().substring(0, 10) ?? '',
+                                                        style: const TextStyle(fontSize: 12)),
+                                                  ],
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        );
+                                      },
+                                    ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCoursParNiveau() {
+    // Grouper les cours par niveau
+    final Map<String, List> grouped = {};
+    for (final c in _cours) {
+      final niveau = c['niveau'] ?? 'Non spécifié';
+      if (!grouped.containsKey(niveau)) {
+        grouped[niveau] = [];
+      }
+      grouped[niveau]!.add(c);
+    }
+
+    // Trier les niveaux
+    final sortedNiveaux = grouped.keys.toList()..sort();
+
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: sortedNiveaux.length,
+      itemBuilder: (_, i) {
+        final niveau = sortedNiveaux[i];
+        final coursNiveau = grouped[niveau]!;
+        final typeDept = widget.dept['type_dept'] as String? ?? 'normal';
+        final color = _typeDeptColors[typeDept] ?? YekiColors.primaryDark;
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8, top: 8),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  'Niveau: $niveau (${coursNiveau.length} cours)',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                    color: color,
+                  ),
+                ),
+              ),
+            ),
+            ...coursNiveau.map((c) => Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: YekiColors.backgroundLight,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: YekiColors.borderLight, width: 1),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: color.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(Icons.book, color: color, size: 18),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(c['titre'] ?? '',
+                            style: const TextStyle(fontWeight: FontWeight.w600)),
+                        Text('${c['nb_apprenants'] ?? 0} apprenants',
+                            style: const TextStyle(fontSize: 12)),
+                        if (c['nb_lecons'] != null && c['nb_devoirs'] != null)
+                          Text('${c['nb_lecons']} leçons · ${c['nb_devoirs']} devoirs',
+                              style: const TextStyle(fontSize: 11)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            )),
+            const SizedBox(height: 8),
+          ],
+        );
+      },
     );
   }
 }

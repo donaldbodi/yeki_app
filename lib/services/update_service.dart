@@ -1,9 +1,10 @@
 // lib/services/update_service.dart
-// Version corrigée pour awesome_notifications 0.11.0
+// Version corrigée pour awesome_notifications 0.11.0 - Support Web
 
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_downloader/flutter_downloader.dart';
 import 'package:http/http.dart' as http;
@@ -15,7 +16,6 @@ import 'package:crypto/crypto.dart';
 import 'package:awesome_notifications/awesome_notifications.dart';
 
 class UpdateService {
-  // ✅ CORRIGÉ : lowerCamelCase pour les constantes
   static const String apiUrl = "https://yeki.pythonanywhere.com/api/latest-version/";
   static const String prefLastCheck = 'last_update_check';
   static const String prefPendingDownload = 'pending_download';
@@ -25,6 +25,9 @@ class UpdateService {
   //  INITIALISATION
   // ─────────────────────────────────────────────────────────────
   static Future<void> initialize() async {
+    // ✅ Support Web : désactiver les fonctionnalités non supportées
+    if (kIsWeb) return;
+    
     await FlutterDownloader.initialize(
       debug: true,
       ignoreSsl: false,
@@ -126,6 +129,12 @@ class UpdateService {
   //  TÉLÉCHARGEMENT
   // ─────────────────────────────────────────────────────────────
   static Future<bool> downloadUpdate(UpdateInfo info) async {
+    // ✅ Support Web : désactiver le téléchargement
+    if (kIsWeb) {
+      debugPrint("Téléchargement non supporté sur le Web");
+      return false;
+    }
+    
     if (!await _requestPermissions()) {
       debugPrint("Permissions refusées");
       return false;
@@ -206,6 +215,7 @@ class UpdateService {
   //  INSTALLATION
   // ─────────────────────────────────────────────────────────────
   static Future<bool> installUpdate(String apkPath) async {
+    if (kIsWeb) return false;
     if (Platform.isAndroid) {
       if (!await Permission.requestInstallPackages.isGranted) {
         final result = await Permission.requestInstallPackages.request();
@@ -236,6 +246,7 @@ class UpdateService {
   //  NOTIFICATIONS
   // ─────────────────────────────────────────────────────────────
   static Future<void> _showDownloadStartedNotification(UpdateInfo info) async {
+    if (kIsWeb) return;
     await AwesomeNotifications().createNotification(
       content: NotificationContent(
         id: Random().nextInt(9999),
@@ -251,6 +262,7 @@ class UpdateService {
   }
   
   static Future<void> _showDownloadCompleteNotification(String path, UpdateInfo info) async {
+    if (kIsWeb) return;
     await AwesomeNotifications().createNotification(
       content: NotificationContent(
         id: Random().nextInt(9999),
@@ -273,6 +285,7 @@ class UpdateService {
   }
   
   static Future<void> _showDownloadFailedNotification() async {
+    if (kIsWeb) return;
     await AwesomeNotifications().createNotification(
       content: NotificationContent(
         id: Random().nextInt(9999),
@@ -288,6 +301,7 @@ class UpdateService {
   }
   
   static Future<void> _showCorruptedNotification(UpdateInfo info) async {
+    if (kIsWeb) return;
     await AwesomeNotifications().createNotification(
       content: NotificationContent(
         id: Random().nextInt(9999),
@@ -306,6 +320,7 @@ class UpdateService {
   //  PERMISSIONS
   // ─────────────────────────────────────────────────────────────
   static Future<bool> _requestPermissions() async {
+    if (kIsWeb) return true;
     if (Platform.isAndroid) {
       final permissions = [
         Permission.storage,
@@ -333,12 +348,14 @@ class UpdateService {
   //  UTILITAIRES
   // ─────────────────────────────────────────────────────────────
   static String _getPlatform() {
+    if (kIsWeb) return 'web';
     if (Platform.isAndroid) return 'android';
     if (Platform.isIOS) return 'ios';
     return 'desktop';
   }
   
   static Future<Directory> _getDownloadDirectory() async {
+    if (kIsWeb) return Directory('/tmp');
     if (Platform.isAndroid) {
       final downloadDir = await getExternalStorageDirectory();
       if (downloadDir != null) {
@@ -421,7 +438,6 @@ class UpdateService {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                // ✅ CORRIGÉ : withValues(alpha: 0.08)
                 color: const Color(0xFF135F74).withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(12),
               ),
@@ -480,7 +496,6 @@ class UpdateService {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                // ✅ CORRIGÉ : withValues(alpha: 0.08)
                 color: const Color(0xFF135F74).withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(12),
               ),

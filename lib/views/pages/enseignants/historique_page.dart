@@ -1,6 +1,6 @@
 // lib/views/pages/enseignants/historique_page.dart
 // ═══════════════════════════════════════════════════════════════════════════
-// PAGE HISTORIQUE ENSEIGNANT — CORRIGÉE
+// PAGE HISTORIQUE ENSEIGNANT — STYLE TIMELINE VERTICALE
 // ═══════════════════════════════════════════════════════════════════════════
 
 import 'dart:convert';
@@ -12,35 +12,35 @@ import 'package:yeki/core/theme/app_theme.dart';
 import 'package:yeki/core/constants/api_constants.dart';
 
 const Map<String, Map<String, dynamic>> _actionMeta = {
-  'course_created':    {'icon': Icons.add_circle_outline,    'color': Color(0xFF2E7D32), 'cat': 'cours'},
-  'course_modified':   {'icon': Icons.edit_outlined,          'color': Color(0xFF1565C0), 'cat': 'cours'},
-  'course_deleted':    {'icon': Icons.delete_outline,         'color': Color(0xFFC62828), 'cat': 'cours'},
-  'teacher_assigned':  {'icon': Icons.person_add_outlined,    'color': Color(0xFFE65100), 'cat': 'enseignants'},
-  'teacher_changed':   {'icon': Icons.swap_horiz,             'color': Color(0xFFE65100), 'cat': 'enseignants'},
-  'secondary_added':   {'icon': Icons.group_add_outlined,     'color': Color(0xFF00838F), 'cat': 'enseignants'},
-  'secondary_removed': {'icon': Icons.group_remove_outlined,  'color': Color(0xFFAD1457), 'cat': 'enseignants'},
-  'module_created':    {'icon': Icons.folder_outlined,        'color': Color(0xFF6A1B9A), 'cat': 'modules'},
-  'module_modified':   {'icon': Icons.folder_open_outlined,   'color': Color(0xFF4527A0), 'cat': 'modules'},
-  'module_deleted':    {'icon': Icons.folder_delete_outlined, 'color': Color(0xFFC62828), 'cat': 'modules'},
-  'lesson_created':    {'icon': Icons.article_outlined,       'color': Color(0xFF00695C), 'cat': 'lecons'},
-  'lesson_modified':   {'icon': Icons.edit_note_outlined,     'color': Color(0xFF00695C), 'cat': 'lecons'},
-  'lesson_deleted':    {'icon': Icons.delete_sweep_outlined,  'color': Color(0xFFC62828), 'cat': 'lecons'},
-  'homework_created':  {'icon': Icons.assignment_outlined,    'color': Color(0xFF558B2F), 'cat': 'devoirs'},
-  'homework_modified': {'icon': Icons.assignment_late_outlined,'color': Color(0xFF558B2F), 'cat': 'devoirs'},
-  'homework_graded':   {'icon': Icons.grading_outlined,       'color': Color(0xFF558B2F), 'cat': 'devoirs'},
-  'exercise_created':  {'icon': Icons.quiz_outlined,          'color': Color(0xFF283593), 'cat': 'exercices'},
-  'question_added':    {'icon': Icons.help_outline,           'color': Color(0xFF283593), 'cat': 'exercices'},
-  'olympiad_created':  {'icon': Icons.emoji_events_outlined,  'color': Color(0xFFBF360C), 'cat': 'olympiades'},
-  'olympiad_closed':   {'icon': Icons.event_busy_outlined,    'color': Color(0xFFBF360C), 'cat': 'olympiades'},
-  'ranking_computed':  {'icon': Icons.leaderboard_outlined,   'color': Color(0xFFBF360C), 'cat': 'olympiades'},
-  'department_created':{'icon': Icons.domain_add_outlined,    'color': Color(0xFF00695C), 'cat': 'departements'},
-  'cadre_assigned':    {'icon': Icons.supervisor_account_outlined, 'color': Color(0xFF006064), 'cat': 'departements'},
-  'submission_graded': {'icon': Icons.done_all,               'color': Color(0xFF2E7D32), 'cat': 'corrections'},
+  'course_created':    {'icon': Icons.add_circle_outlined,    'color': Color(0xFF2E7D32), 'cat': 'cours', 'label': 'Cours créé'},
+  'course_modified':   {'icon': Icons.edit_outlined,          'color': Color(0xFF1565C0), 'cat': 'cours', 'label': 'Cours modifié'},
+  'course_deleted':    {'icon': Icons.delete_outline,         'color': Color(0xFFC62828), 'cat': 'cours', 'label': 'Cours supprimé'},
+  'teacher_assigned':  {'icon': Icons.person_add_outlined,    'color': Color(0xFFE65100), 'cat': 'enseignants', 'label': 'Enseignant assigné'},
+  'teacher_changed':   {'icon': Icons.swap_horiz,             'color': Color(0xFFE65100), 'cat': 'enseignants', 'label': 'Enseignant changé'},
+  'secondary_added':   {'icon': Icons.group_add_outlined,     'color': Color(0xFF00838F), 'cat': 'enseignants', 'label': 'Assistant ajouté'},
+  'secondary_removed': {'icon': Icons.group_remove_outlined,  'color': Color(0xFFAD1457), 'cat': 'enseignants', 'label': 'Assistant retiré'},
+  'module_created':    {'icon': Icons.folder_outlined,        'color': Color(0xFF6A1B9A), 'cat': 'modules', 'label': 'Module créé'},
+  'module_modified':   {'icon': Icons.folder_open_outlined,   'color': Color(0xFF4527A0), 'cat': 'modules', 'label': 'Module modifié'},
+  'module_deleted':    {'icon': Icons.folder_delete_outlined, 'color': Color(0xFFC62828), 'cat': 'modules', 'label': 'Module supprimé'},
+  'lesson_created':    {'icon': Icons.article_outlined,       'color': Color(0xFF00695C), 'cat': 'lecons', 'label': 'Leçon créée'},
+  'lesson_modified':   {'icon': Icons.edit_note_outlined,     'color': Color(0xFF00695C), 'cat': 'lecons', 'label': 'Leçon modifiée'},
+  'lesson_deleted':    {'icon': Icons.delete_sweep_outlined,  'color': Color(0xFFC62828), 'cat': 'lecons', 'label': 'Leçon supprimée'},
+  'homework_created':  {'icon': Icons.assignment_outlined,    'color': Color(0xFF558B2F), 'cat': 'devoirs', 'label': 'Devoir créé'},
+  'homework_modified': {'icon': Icons.assignment_late_outlined,'color': Color(0xFF558B2F), 'cat': 'devoirs', 'label': 'Devoir modifié'},
+  'homework_graded':   {'icon': Icons.grading_outlined,       'color': Color(0xFF558B2F), 'cat': 'devoirs', 'label': 'Devoir corrigé'},
+  'exercise_created':  {'icon': Icons.quiz_outlined,          'color': Color(0xFF283593), 'cat': 'exercices', 'label': 'Exercice créé'},
+  'question_added':    {'icon': Icons.help_outline,           'color': Color(0xFF283593), 'cat': 'exercices', 'label': 'Question ajoutée'},
+  'olympiad_created':  {'icon': Icons.emoji_events_outlined,  'color': Color(0xFFBF360C), 'cat': 'olympiades', 'label': 'Olympiade créée'},
+  'olympiad_closed':   {'icon': Icons.event_busy_outlined,    'color': Color(0xFFBF360C), 'cat': 'olympiades', 'label': 'Olympiade fermée'},
+  'ranking_computed':  {'icon': Icons.leaderboard_outlined,   'color': Color(0xFFBF360C), 'cat': 'olympiades', 'label': 'Classement calculé'},
+  'department_created':{'icon': Icons.domain_add_outlined,    'color': Color(0xFF00695C), 'cat': 'departements', 'label': 'Département créé'},
+  'cadre_assigned':    {'icon': Icons.supervisor_account_outlined, 'color': Color(0xFF006064), 'cat': 'departements', 'label': 'Cadre assigné'},
+  'submission_graded': {'icon': Icons.done_all,               'color': Color(0xFF2E7D32), 'cat': 'corrections', 'label': 'Soumission corrigée'},
 };
 
 Map<String, dynamic> _getMeta(String action) =>
     _actionMeta[action] ??
-    {'icon': Icons.history, 'color': YekiColors.textLight, 'cat': 'autre'};
+    {'icon': Icons.history, 'color': YekiColors.textLight, 'cat': 'autre', 'label': action};
 
 const List<_HFilter> _filters = [
   _HFilter(key: '',             label: 'Tout',         icon: Icons.apps),
@@ -136,7 +136,7 @@ class _HistoriquePageState extends State<HistoriquePage>
         params['depuis'] = DateFormat('yyyy-MM-dd').format(depuis);
       }
 
-      params['limit'] = '150';
+      params['limit'] = '200';
 
       final uri = Uri.parse(ApiConstants.historique).replace(queryParameters: params);
       final res = await http.get(uri, headers: headers);
@@ -513,7 +513,7 @@ class _HistoriquePageState extends State<HistoriquePage>
               const SizedBox(height: 16),
             for (final entry in grouped.entries) ...[
               _buildDateHeader(entry.key),
-              ...entry.value.map((a) => _buildActiviteCard(a)),
+              ...entry.value.map((a) => _buildTimelineItem(a, entry.value.indexOf(a), entry.value.length)),
             ],
           ],
         ),
@@ -624,9 +624,9 @@ class _HistoriquePageState extends State<HistoriquePage>
         ),
       );
 
-  Widget _buildActiviteCard(Map<String, dynamic> activite) {
+  Widget _buildTimelineItem(Map<String, dynamic> activite, int index, int total) {
     final action = activite['action']?.toString() ?? '';
-    final label = activite['action_label']?.toString() ?? action;
+    final label = activite['action_label']?.toString() ?? _getMeta(action)['label'] ?? action;
     final description = activite['description']?.toString() ?? '';
     final ts = activite['timestamp']?.toString();
     final data = (activite['data'] as Map<String, dynamic>?) ?? {};
@@ -634,86 +634,143 @@ class _HistoriquePageState extends State<HistoriquePage>
     final color = meta['color'] as Color;
     final icon = meta['icon'] as IconData;
 
+    //final bool isFirst = index == 0;
+    final bool isLast = index == total - 1;
+
     return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      decoration: BoxDecoration(
-        color: YekiColors.white,
-        borderRadius: YekiRadius.borderRadiusLg,
-        border: Border.all(color: YekiColors.borderLight),
-        boxShadow: YekiShadows.subtle,
-      ),
-      child: Theme(
-        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-        child: ExpansionTile(
-          tilePadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-          childrenPadding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
-          leading: Container(
+      margin: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ── Barre verticale ────────────────────────────────────
+          SizedBox(
             width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.12),
-              borderRadius: YekiRadius.borderRadiusSm,
-            ),
-            child: Icon(icon, color: color, size: 20),
-          ),
-          title: Text(
-            label,
-            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-          ),
-          subtitle: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (description.isNotEmpty)
-                Text(
-                  description,
-                  style: const TextStyle(fontSize: 11),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              const SizedBox(height: 2),
-              Text(
-                _formatTime(ts),
-                style: TextStyle(fontSize: 10, color: color.withValues(alpha: 0.8), fontWeight: FontWeight.w500),
-              ),
-            ],
-          ),
-          children: data.isEmpty
-              ? [
-                  Padding(
-                    padding: const EdgeInsets.only(top: 4),
-                    child: Text(
-                      description.isEmpty ? 'Aucun détail disponible.' : description,
-                      style: const TextStyle(fontSize: 12),
-                    ),
+            child: Column(
+              children: [
+                // Point
+                Container(
+                  width: 14,
+                  height: 14,
+                  decoration: BoxDecoration(
+                    color: color,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: YekiColors.white, width: 2),
+                    boxShadow: [
+                      BoxShadow(
+                        color: color.withValues(alpha: 0.3),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
                   ),
-                ]
-              : [
-                  const Divider(height: 16),
-                  ...data.entries.map(
-                    (e) => Padding(
-                      padding: const EdgeInsets.only(bottom: 6),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          SizedBox(
-                            width: 110,
-                            child: Text(
-                              _formatKey(e.key),
-                              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+                ),
+                // Ligne verticale
+                Expanded(
+                  child: Container(
+                    width: 2,
+                    color: isLast ? Colors.transparent : color.withValues(alpha: 0.2),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // ── Contenu ────────────────────────────────────────────
+          Expanded(
+            child: Container(
+              margin: const EdgeInsets.only(left: 8, bottom: 16),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: YekiColors.white,
+                borderRadius: YekiRadius.borderRadiusLg,
+                border: Border.all(color: YekiColors.borderLight, width: 1),
+                boxShadow: YekiShadows.subtle,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: color.withValues(alpha: 0.12),
+                          borderRadius: YekiRadius.borderRadiusSm,
+                        ),
+                        child: Icon(icon, color: color, size: 18),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              label,
+                              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
                             ),
-                          ),
-                          Expanded(
-                            child: Text(
-                              e.value?.toString() ?? '—',
-                              style: const TextStyle(fontSize: 11),
+                            if (description.isNotEmpty) ...[
+                              const SizedBox(height: 4),
+                              Text(
+                                description,
+                                style: const TextStyle(fontSize: 12, color: YekiColors.textMedium),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                            const SizedBox(height: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: color.withValues(alpha: 0.08),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                _formatTime(ts),
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w500,
+                                  color: color.withValues(alpha: 0.8),
+                                ),
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (data.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    const Divider(height: 1, color: YekiColors.borderLight),
+                    const SizedBox(height: 8),
+                    ...data.entries.map(
+                      (e) => Padding(
+                        padding: const EdgeInsets.only(bottom: 4),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            SizedBox(
+                              width: 100,
+                              child: Text(
+                                _formatKey(e.key),
+                                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: YekiColors.textMedium),
+                              ),
+                            ),
+                            Expanded(
+                              child: Text(
+                                e.value?.toString() ?? '—',
+                                style: const TextStyle(fontSize: 11),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
+                  ],
                 ],
-        ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

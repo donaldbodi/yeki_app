@@ -1,8 +1,9 @@
 // lib/services/offline_service.dart
-// Version avec méthodes statiques
+// Version avec méthodes statiques - Support Web
 
 import 'dart:async';
 import 'dart:convert';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:hive/hive.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -106,6 +107,13 @@ class OfflineService {
   static Future<void> init() async {
     if (_initialized) return;
     
+    // ✅ Support Web : désactiver le stockage local
+    if (kIsWeb) {
+      _initialized = true;
+      _isOnline = true;
+      return;
+    }
+    
     final dir = await getApplicationDocumentsDirectory();
     Hive.init(dir.path);
     
@@ -133,7 +141,6 @@ class OfflineService {
   }
 
   static String? getDownloadedFilePath(String fileId) {
-    // Cette méthode était appelée mais inexistante
     final downloadManager = DownloadManager();
     return downloadManager.getDownloadedPath(fileId);
   }
@@ -150,7 +157,9 @@ class OfflineService {
   
   static void setOnline(bool online) {
     _isOnline = online;
-    _settingsCache.put('is_online', online);
+    if (!kIsWeb) {
+      _settingsCache.put('is_online', online);
+    }
     _notifyConnectionListeners(online);
     if (online) {
       _syncPendingActions();
@@ -158,6 +167,7 @@ class OfflineService {
   }
   
   static void _startAutoSync() {
+    if (kIsWeb) return;
     _syncTimer?.cancel();
     _syncTimer = Timer.periodic(const Duration(minutes: 5), (_) {
       if (_isOnline) {
@@ -169,6 +179,7 @@ class OfflineService {
   // ============ GESTION DU CACHE ============
   
   static Future<void> cacheDevoirs(String key, List<dynamic> devoirs) async {
+    if (kIsWeb) return;
     final cached = CachedDevoir(
       id: key.hashCode,
       data: {'key': key, 'devoirs': devoirs},
@@ -178,6 +189,7 @@ class OfflineService {
   }
   
   static List<dynamic>? getCachedDevoirs(String key) {
+    if (kIsWeb) return null;
     final cached = _devoirsCache.get(key);
     if (cached != null) {
       return cached.data['devoirs'] as List<dynamic>?;
@@ -186,6 +198,7 @@ class OfflineService {
   }
   
   static Future<void> cacheQuestion(int questionId, Map<String, dynamic> question) async {
+    if (kIsWeb) return;
     final cached = CachedQuestion(
       id: questionId,
       data: question,
@@ -195,11 +208,13 @@ class OfflineService {
   }
   
   static Map<String, dynamic>? getCachedQuestion(int questionId) {
+    if (kIsWeb) return null;
     final cached = _questionsCache.get(questionId.toString());
     return cached?.data;
   }
   
   static Future<void> cacheQuestionsList(String key, List<dynamic> questions) async {
+    if (kIsWeb) return;
     await _questionsCache.put(key, CachedQuestion(
       id: key.hashCode,
       data: {'questions': questions},
@@ -208,6 +223,7 @@ class OfflineService {
   }
   
   static List<dynamic>? getCachedQuestionsList(String key) {
+    if (kIsWeb) return null;
     final cached = _questionsCache.get(key);
     if (cached != null && cached.data['questions'] != null) {
       return cached.data['questions'] as List<dynamic>?;
@@ -222,6 +238,7 @@ class OfflineService {
     required Map<String, dynamic> data,
     required String method,
   }) async {
+    if (kIsWeb) return;
     final action = PendingAction(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       endpoint: endpoint,
@@ -238,7 +255,7 @@ class OfflineService {
   }
   
   static Future<void> _syncPendingActions() async {
-    if (_isSyncing || _pendingActions.isEmpty) return;
+    if (kIsWeb || _isSyncing || _pendingActions.isEmpty) return;
     
     _isSyncing = true;
     final token = await _getToken();
@@ -325,6 +342,7 @@ class OfflineService {
   // ============ GESTION DES BROUILLONS ============
   
   static Future<void> saveDevoirDraft(int devoirId, Map<int, String> reponses) async {
+    if (kIsWeb) return;
     await _settingsCache.put('draft_$devoirId', {
       'reponses': reponses.map((k, v) => MapEntry(k.toString(), v)),
       'updatedAt': DateTime.now().toIso8601String(),
@@ -332,6 +350,7 @@ class OfflineService {
   }
   
   static Map<int, String>? getDevoirDraft(int devoirId) {
+    if (kIsWeb) return null;
     final draft = _settingsCache.get('draft_$devoirId');
     if (draft != null) {
       final reponses = Map<int, String>.from(
@@ -343,12 +362,14 @@ class OfflineService {
   }
   
   static Future<void> clearDevoirDraft(int devoirId) async {
+    if (kIsWeb) return;
     await _settingsCache.delete('draft_$devoirId');
   }
   
   // ============ NETTOYAGE ============
   
   static Future<void> clearOldCache({int olderThanDays = 30}) async {
+    if (kIsWeb) return;
     final cutoff = DateTime.now().subtract(Duration(days: olderThanDays));
     
     for (final key in _devoirsCache.keys) {
@@ -367,12 +388,14 @@ class OfflineService {
   }
   
   static Future<void> clearAllCache() async {
+    if (kIsWeb) return;
     await _devoirsCache.clear();
     await _questionsCache.clear();
     await _settingsCache.clear();
   }
   
   static Future<int> getCacheSize() async {
+    if (kIsWeb) return 0;
     int total = 0;
     total += _devoirsCache.length * 1024;
     total += _questionsCache.length * 512;
@@ -381,7 +404,9 @@ class OfflineService {
   
   static void dispose() {
     _syncTimer?.cancel();
-    Hive.close();
+    if (!kIsWeb) {
+      Hive.close();
+    }
   }
 }
 

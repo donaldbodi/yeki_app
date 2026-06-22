@@ -1,5 +1,5 @@
 // lib/views/pages/enseignants/admin_general_page.dart
-// Admin Général - Dashboard avec gestion des parcours et départements
+// Admin Général - Dashboard avec gestion des parcours, départements et enseignants
 
 import 'dart:convert';
 import 'package:flutter/material.dart';
@@ -7,6 +7,9 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:yeki/core/design/yeki_design.dart';
 import 'package:yeki/core/constants/api_constants.dart';
+import 'package:yeki/views/pages/enseignants/detail_cours_enseignant.dart';
+import 'package:yeki/views/pages/enseignants/interface_enseignant_page.dart' show RoleEnseignant;
+import 'package:intl/intl.dart';
 
 class AdminGeneralPage extends StatefulWidget {
   const AdminGeneralPage({super.key});
@@ -28,10 +31,22 @@ class _AdminGeneralPageState extends State<AdminGeneralPage>
   String _nomEnseignant = '';
   late TabController _tabCtrl;
 
+  // Nouveaux champs pour la gestion des enseignants
+  List _enseignants = [];
+  bool _loadingEnseignants = false;
+
+  // Champs pour la recherche
+  String _searchQuery = '';
+  String _filterUserType = '';
+  String _filterStatus = '';
+  int? _filterParcours;
+  int? _filterDepartement;
+  int? _filterCours;
+
   @override
   void initState() {
     super.initState();
-    _tabCtrl = TabController(length: 3, vsync: this);
+    _tabCtrl = TabController(length: 5, vsync: this);
     _charger();
   }
 
@@ -82,6 +97,7 @@ class _AdminGeneralPageState extends State<AdminGeneralPage>
               _departements = data['departements'] ?? [];
               _topEnseignants = data['top_enseignants'] ?? [];
               _nomEnseignant = data['nom'] ?? '';
+              _enseignants = data['enseignants'] ?? [];
               _loading = false;
               _hasError = false;
             });
@@ -94,14 +110,12 @@ class _AdminGeneralPageState extends State<AdminGeneralPage>
             });
           }
         } else if (res.statusCode == 403) {
-          // Accès refusé - l'utilisateur n'est pas admin
           setState(() {
             _loading = false;
             _hasError = true;
             _errorMessage = 'Accès refusé. Vous devez être administrateur général pour accéder à cette page.';
           });
         } else if (res.statusCode == 500) {
-          // Erreur serveur
           String detail = '';
           try {
             final errorData = jsonDecode(res.body);
@@ -116,7 +130,6 @@ class _AdminGeneralPageState extends State<AdminGeneralPage>
             _errorDetail = detail;
           });
         } else {
-          // Autres erreurs
           setState(() {
             _loading = false;
             _hasError = true;
@@ -137,6 +150,211 @@ class _AdminGeneralPageState extends State<AdminGeneralPage>
     }
   }
 
+  // ─── Recherche d'enseignants ──────────────────────────────────────
+  Future<void> _rechercherEnseignants() async {
+    setState(() => _loadingEnseignants = true);
+
+    final token = await _getToken();
+    if (token == null) {
+      setState(() => _loadingEnseignants = false);
+      _showError('Vous devez être connecté');
+      return;
+    }
+
+    final params = <String, String>{};
+    if (_searchQuery.isNotEmpty) params['q'] = _searchQuery;
+    if (_filterUserType.isNotEmpty) params['user_type'] = _filterUserType;
+    if (_filterStatus.isNotEmpty) params['is_active'] = _filterStatus;
+    if (_filterParcours != null) params['parcours_id'] = _filterParcours.toString();
+    if (_filterDepartement != null) params['departement_id'] = _filterDepartement.toString();
+    if (_filterCours != null) params['cours_id'] = _filterCours.toString();
+
+    final uri = Uri.parse('${ApiConstants.baseUrl}/admin-general/enseignants/search/')
+        .replace(queryParameters: params);
+
+    try {
+      final res = await http.get(uri, headers: ApiHeaders.auth(token));
+      if (mounted) {
+        if (res.statusCode == 200) {
+          final data = jsonDecode(res.body);
+          setState(() {
+            _enseignants = data['results'] ?? [];
+            _loadingEnseignants = false;
+          });
+        } else {
+          setState(() => _loadingEnseignants = false);
+          _showError('Erreur lors de la recherche (${res.statusCode})');
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _loadingEnseignants = false);
+        _showError('Erreur réseau');
+      }
+    }
+  }
+
+  // ─── Modifier un enseignant ──────────────────────────────────────
+  Future<void> _modifierEnseignant(Map enseignant) async {
+    final token = await _getToken();
+    if (token == null) {
+      _showError('Vous devez être connecté');
+      return;
+    }
+
+    String currentType = enseignant['user_type'] ?? 'enseignant';
+    bool currentActive = enseignant['is_active'] ?? false;
+    String selectedType = currentType;
+    bool selectedActive = currentActive;
+    bool isLoading = false;
+
+    final types = [
+      {'code': 'enseignant', 'label': 'Enseignant'},
+      {'code': 'enseignant_principal', 'label': 'Enseignant Principal'},
+      {'code': 'enseignant_cadre', 'label': 'Enseignant Cadre'},
+      {'code': 'enseignant_admin', 'label': 'Enseignant Administrateur'},
+    ];
+
+    await showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setS) => Container(
+          decoration: BoxDecoration(
+            color: kECard,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(kRadiusLg)),
+          ),
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40, height: 4,
+                  decoration: BoxDecoration(color: kEBorder, borderRadius: BorderRadius.circular(10)),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                'Modifier ${enseignant['nom']}',
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: kEDark),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Email: ${enseignant['email']}',
+                style: const TextStyle(fontSize: 12, color: kEMuted),
+              ),
+              const SizedBox(height: 20),
+              // Type
+              const Text('Type d\'enseignant', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: kEDark)),
+              const SizedBox(height: 8),
+              ...types.map((t) {
+                final isSelected = t['code'] == selectedType;
+                return RadioListTile<String>(
+                  value: t['code'] as String,
+                  groupValue: selectedType,
+                  onChanged: (value) => setS(() => selectedType = value!),
+                  activeColor: kPrimary,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 0),
+                  title: Text(
+                    t['label'] as String,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: isSelected ? kPrimary : kEDark,
+                    ),
+                  ),
+                );
+              }),
+              const SizedBox(height: 16),
+              // État
+              SwitchListTile(
+                value: selectedActive,
+                onChanged: (v) => setS(() => selectedActive = v),
+                title: const Text('Compte actif', style: TextStyle(fontWeight: FontWeight.w600)),
+                subtitle: Text(
+                  selectedActive ? 'L\'enseignant peut se connecter' : 'L\'enseignant ne peut pas se connecter',
+                  style: const TextStyle(fontSize: 12, color: kEMuted),
+                ),
+                activeColor: kPrimary,
+              ),
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: kPrimary,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(kRadiusMd)),
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    elevation: 0,
+                  ),
+                  onPressed: (selectedType == currentType && selectedActive == currentActive) || isLoading
+                      ? null
+                      : () async {
+                          setS(() => isLoading = true);
+                          await _envoyerModificationEnseignant(
+                            enseignant['id'] as int,
+                            selectedType,
+                            selectedActive,
+                          );
+                          setS(() => isLoading = false);
+                          if (ctx.mounted) Navigator.pop(ctx);
+                        },
+                  child: isLoading
+                      ? const SizedBox(
+                          width: 22, height: 22,
+                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                        )
+                      : const Text('Enregistrer',
+                          style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _envoyerModificationEnseignant(int profileId, String newType, bool newActive) async {
+    final token = await _getToken();
+    if (token == null) {
+      _showError('Vous devez être connecté');
+      return;
+    }
+
+    try {
+      final res = await http.patch(
+        Uri.parse('${ApiConstants.baseUrl}/admin-general/enseignants/$profileId/modifier/'),
+        headers: ApiHeaders.auth(token),
+        body: jsonEncode({
+          'user_type': newType,
+          'is_active': newActive,
+        }),
+      );
+
+      if (mounted) {
+        if (res.statusCode == 200) {
+          _showSuccess('Enseignant modifié avec succès !');
+          _rechercherEnseignants();
+          _charger();
+        } else {
+          try {
+            final err = jsonDecode(res.body);
+            _showError(err['detail'] ?? 'Erreur ${res.statusCode}');
+          } catch (_) {
+            _showError('Erreur ${res.statusCode}');
+          }
+        }
+      }
+    } catch (_) {
+      _showError('Erreur réseau');
+    }
+  }
+
+  // ─── Créer un parcours ────────────────────────────────────────────
   void _creerParcours() {
     final nomCtrl = TextEditingController();
     final descCtrl = TextEditingController();
@@ -206,7 +424,7 @@ class _AdminGeneralPageState extends State<AdminGeneralPage>
                             Container(
                               padding: const EdgeInsets.all(6),
                               decoration: BoxDecoration(
-                                color: (type['color'] as Color).withOpacity(0.1),
+                                color: (type['color'] as Color).withValues(alpha: 0.1),
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               child: Icon(type['icon'], size: 18, color: type['color']),
@@ -214,7 +432,7 @@ class _AdminGeneralPageState extends State<AdminGeneralPage>
                             const SizedBox(width: 12),
                             Expanded(
                               child: Text(type['label'],
-                                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: kEDark)),
+                                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: kEDark)),
                             ),
                           ],
                         ),
@@ -290,6 +508,167 @@ class _AdminGeneralPageState extends State<AdminGeneralPage>
     );
   }
 
+  // ─── Modifier un parcours ──────────────────────────────────────────
+  Future<void> _modifierParcours(Map parcours) async {
+    final token = await _getToken();
+    if (token == null) {
+      _showError('Vous devez être connecté');
+      return;
+    }
+
+    final nomCtrl = TextEditingController(text: parcours['nom'] ?? '');
+    final descCtrl = TextEditingController(text: parcours['description'] ?? '');
+    String selectedType = parcours['type_parcours'] ?? 'autre';
+    bool isLoading = false;
+
+    final List<Map<String, dynamic>> typesParcours = [
+      {'code': 'cursus', 'label': 'Cursus scolaire / universitaire', 'icon': Icons.school_rounded, 'color': Colors.indigo},
+      {'code': 'prepa', 'label': 'Prépa Concours', 'icon': Icons.emoji_events_rounded, 'color': kGold},
+      {'code': 'formation', 'label': 'Formations professionnelles', 'icon': Icons.work_rounded, 'color': kAccent},
+      {'code': 'autre', 'label': 'Autre', 'icon': Icons.category_rounded, 'color': Colors.grey},
+    ];
+
+    await showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setS) => Container(
+          decoration: BoxDecoration(
+            color: kECard,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(kRadiusLg)),
+          ),
+          padding: EdgeInsets.only(
+            left: 24, right: 24, top: 16,
+            bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _sheetHandle(),
+                const SizedBox(height: 20),
+                Text('Modifier le parcours',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: kEDark)),
+                const SizedBox(height: 6),
+                const Text(
+                  'Seul le nom, la description et le type peuvent être modifiés.',
+                  style: TextStyle(fontSize: 12, color: kEMuted),
+                ),
+                const SizedBox(height: 24),
+                _field(nomCtrl, 'Nom du parcours *', Icons.route, 'Ex: Licence Informatique'),
+                const SizedBox(height: 16),
+                _field(descCtrl, 'Description', Icons.description_outlined,
+                    'Objectifs et contenu du parcours', maxLines: 3),
+                const SizedBox(height: 20),
+                const Text('Type de parcours *',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: kEDark)),
+                const SizedBox(height: 12),
+                Container(
+                  decoration: BoxDecoration(
+                    color: kEBg,
+                    borderRadius: BorderRadius.circular(kRadiusMd),
+                    border: Border.all(color: kEBorder, width: 1),
+                  ),
+                  child: Column(
+                    children: typesParcours.map((type) {
+                      return RadioListTile<String>(
+                        value: type['code'],
+                        groupValue: selectedType,
+                        onChanged: (value) => setS(() => selectedType = value!),
+                        activeColor: type['color'],
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                        title: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(6),
+                              decoration: BoxDecoration(
+                                color: (type['color'] as Color).withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Icon(type['icon'], size: 18, color: type['color']),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(type['label'],
+                                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: kEDark)),
+                            ),
+                          ],
+                        ),
+                        controlAffinity: ListTileControlAffinity.trailing,
+                      );
+                    }).toList(),
+                  ),
+                ),
+                const SizedBox(height: 28),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: kPrimary,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(kRadiusMd)),
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      elevation: 0,
+                    ),
+                    onPressed: isLoading ? null : () async {
+                      if (nomCtrl.text.trim().isEmpty) {
+                        _showError('Le nom est obligatoire');
+                        return;
+                      }
+                      setS(() => isLoading = true);
+                      final token2 = await _getToken();
+                      if (token2 == null) {
+                        setS(() => isLoading = false);
+                        _showError('Vous devez être connecté');
+                        return;
+                      }
+                      try {
+                        final res = await http.patch(
+                          Uri.parse('${ApiConstants.baseUrl}/parcours/${parcours['id']}/modifier/'),
+                          headers: ApiHeaders.auth(token2),
+                          body: jsonEncode({
+                            'nom': nomCtrl.text.trim(),
+                            'description': descCtrl.text.trim(),
+                            'type_parcours': selectedType,
+                          }),
+                        );
+                        setS(() => isLoading = false);
+                        if (res.statusCode == 200) {
+                          if (ctx.mounted) Navigator.pop(ctx);
+                          _showSuccess('Parcours modifié avec succès !');
+                          _charger();
+                        } else {
+                          try {
+                            final err = jsonDecode(res.body);
+                            _showError(err['detail'] ?? 'Erreur ${res.statusCode}');
+                          } catch (_) {
+                            _showError('Erreur ${res.statusCode}');
+                          }
+                        }
+                      } catch (_) {
+                        setS(() => isLoading = false);
+                        _showError('Erreur réseau');
+                      }
+                    },
+                    child: isLoading
+                        ? const SizedBox(
+                            width: 22, height: 22,
+                            child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                          )
+                        : const Text('Enregistrer les modifications',
+                            style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ─── Changer admin de parcours ────────────────────────────────────
   void _changerAdmin(Map parcours) async {
     final token = await _getToken();
     if (token == null) {
@@ -426,6 +805,24 @@ class _AdminGeneralPageState extends State<AdminGeneralPage>
     );
   }
 
+  // ─── Charger tous les cours ──────────────────────────────────────
+  Future<List> _chargerTousLesCours() async {
+    final token = await _getToken();
+    if (token == null) return [];
+    try {
+      final res = await http.get(
+        Uri.parse('${ApiConstants.baseUrl}/cours/'),
+        headers: ApiHeaders.auth(token),
+      );
+      if (res.statusCode == 200) {
+        return jsonDecode(res.body);
+      }
+      return [];
+    } catch (_) {
+      return [];
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -437,7 +834,7 @@ class _AdminGeneralPageState extends State<AdminGeneralPage>
                 children: [
                   const CircularProgressIndicator(color: kPrimary),
                   const SizedBox(height: 16),
-                  const Text('Chargement du tableau de bord...', 
+                  const Text('Chargement du tableau de bord...',
                       style: TextStyle(color: kEMuted, fontSize: 14)),
                 ],
               ),
@@ -452,7 +849,7 @@ class _AdminGeneralPageState extends State<AdminGeneralPage>
                         Icon(Icons.error_outline_rounded, size: 72, color: kAccent),
                         const SizedBox(height: 20),
                         Text(
-                          _errorMessage, 
+                          _errorMessage,
                           style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: kEDark),
                           textAlign: TextAlign.center,
                         ),
@@ -513,80 +910,71 @@ class _AdminGeneralPageState extends State<AdminGeneralPage>
                   ],
                   body: TabBarView(
                     controller: _tabCtrl,
-                    children: [_tabParcours(), _tabDepartements(), _tabGlobal()],
+                    children: [
+                      _tabParcours(),
+                      _tabDepartements(),
+                      _tabGlobal(),
+                      _tabEnseignants(),
+                      _tabTousCours(),
+                    ],
                   ),
                 ),
       floatingActionButton: !_loading && !_hasError ? _buildPremiumFAB() : null,
     );
   }
 
+  // ─── En-tête ──────────────────────────────────────────────────────
   Widget _buildSliverHeader() {
-    return SliverAppBar(
-      expandedHeight: 220,
-      pinned: true,
-      stretch: true,
-      backgroundColor: kPrimary,
-      flexibleSpace: FlexibleSpaceBar(
-        stretchModes: const [StretchMode.zoomBackground, StretchMode.fadeTitle],
-        background: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [kPrimary, kPrimary.withOpacity(0.85)],
-            ),
+    return SliverToBoxAdapter(
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(24, 20, 24, 16),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [kPrimary, kPrimary.withValues(alpha: 0.85)],
           ),
-          child: SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(24, 40, 24, 24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.end,
+        ),
+        child: SafeArea(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                decoration: BoxDecoration(
+                  color: kGold.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(kRadiusLg),
+                ),
+                child: const Text("ADMINISTRATION",
+                    style: TextStyle(color: kGold, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 1)),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                _nomEnseignant.isEmpty ? 'Admin Général' : _nomEnseignant,
+                style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: -0.5),
+              ),
+              const SizedBox(height: 8),
+              Row(
                 children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-                    decoration: BoxDecoration(
-                      color: kGold.withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(kRadiusLg),
-                    ),
-                    child: const Text("ADMINISTRATION",
-                        style: TextStyle(color: kGold, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 1)),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    _nomEnseignant.isEmpty ? 'Admin Général' : _nomEnseignant,
-                    style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: -0.5),
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      _buildBadge('Admin Général', Colors.white.withOpacity(0.15)),
-                      const SizedBox(width: 8),
-                      _buildBadge('Vue complète', kGold.withOpacity(0.3)),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
-                  Row(
-                    children: [
-                      _buildMiniStat('${_stats['nb_parcours'] ?? 0}', 'Parcours'),
-                      const SizedBox(width: 24),
-                      _buildMiniStat('${_stats['nb_departements'] ?? 0}', 'Départements'),
-                      const SizedBox(width: 24),
-                      _buildMiniStat('${_stats['nb_apprenants'] ?? 0}', 'Apprenants'),
-                    ],
-                  ),
+                  _buildBadge('Admin Général', Colors.white.withValues(alpha: 0.15)),
+                  const SizedBox(width: 8),
+                  _buildBadge('Vue complète', kGold.withValues(alpha: 0.3)),
                 ],
               ),
-            ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  _buildMiniStat('${_stats['nb_parcours'] ?? 0}', 'Parcours'),
+                  const SizedBox(width: 24),
+                  _buildMiniStat('${_stats['nb_departements'] ?? 0}', 'Départements'),
+                  const SizedBox(width: 24),
+                  _buildMiniStat('${_stats['nb_apprenants'] ?? 0}', 'Apprenants'),
+                ],
+              ),
+            ],
           ),
         ),
       ),
-      actions: [
-        IconButton(
-          icon: const Icon(Icons.refresh_rounded, color: Colors.white),
-          onPressed: _charger,
-        ),
-      ],
     );
   }
 
@@ -605,6 +993,8 @@ class _AdminGeneralPageState extends State<AdminGeneralPage>
             Tab(text: 'Parcours'),
             Tab(text: 'Départements'),
             Tab(text: 'Vue globale'),
+            Tab(text: 'Enseignants'),
+            Tab(text: 'Tous les cours'),
           ],
         ),
       ),
@@ -652,9 +1042,9 @@ class _AdminGeneralPageState extends State<AdminGeneralPage>
             Container(
               padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
-                color: kPrimary.withOpacity(0.08),
+                color: kPrimary.withValues(alpha: 0.08),
                 shape: BoxShape.circle,
-                border: Border.all(color: kPrimary.withOpacity(0.2), width: 1),
+                border: Border.all(color: kPrimary.withValues(alpha: 0.2), width: 1),
               ),
               child: Icon(Icons.route_outlined, size: 48, color: kPrimary),
             ),
@@ -700,9 +1090,9 @@ class _AdminGeneralPageState extends State<AdminGeneralPage>
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: kPrimary.withOpacity(0.1),
+                    color: kPrimary.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(kRadiusMd),
-                    border: Border.all(color: kPrimary.withOpacity(0.2), width: 0.8),
+                    border: Border.all(color: kPrimary.withValues(alpha: 0.2), width: 0.8),
                   ),
                   child: const Icon(Icons.route, color: kPrimary, size: 22),
                 ),
@@ -719,6 +1109,12 @@ class _AdminGeneralPageState extends State<AdminGeneralPage>
                     ],
                   ),
                 ),
+                // Boutons d'action
+                IconButton(
+                  icon: const Icon(Icons.edit_outlined, color: kPrimary),
+                  tooltip: 'Modifier le parcours',
+                  onPressed: () => _modifierParcours(p),
+                ),
                 IconButton(
                   icon: Icon(
                     admin == null ? Icons.person_add_outlined : Icons.swap_horiz,
@@ -734,9 +1130,9 @@ class _AdminGeneralPageState extends State<AdminGeneralPage>
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 decoration: BoxDecoration(
-                  color: kPrimary.withOpacity(0.05),
+                  color: kPrimary.withValues(alpha: 0.05),
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: kPrimary.withOpacity(0.15), width: 0.8),
+                  border: Border.all(color: kPrimary.withValues(alpha: 0.15), width: 0.8),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
@@ -754,9 +1150,9 @@ class _AdminGeneralPageState extends State<AdminGeneralPage>
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 decoration: BoxDecoration(
-                  color: kAccent.withOpacity(0.08),
+                  color: kAccent.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: kAccent.withOpacity(0.2), width: 0.8),
+                  border: Border.all(color: kAccent.withValues(alpha: 0.2), width: 0.8),
                 ),
                 child: const Row(
                   mainAxisSize: MainAxisSize.min,
@@ -803,9 +1199,9 @@ class _AdminGeneralPageState extends State<AdminGeneralPage>
             Container(
               padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
-                color: kPrimary.withOpacity(0.08),
+                color: kPrimary.withValues(alpha: 0.08),
                 shape: BoxShape.circle,
-                border: Border.all(color: kPrimary.withOpacity(0.2), width: 1),
+                border: Border.all(color: kPrimary.withValues(alpha: 0.2), width: 1),
               ),
               child: Icon(Icons.domain_outlined, size: 48, color: kPrimary),
             ),
@@ -824,6 +1220,11 @@ class _AdminGeneralPageState extends State<AdminGeneralPage>
         itemBuilder: (_, i) {
           final d = _departements[i];
           final taux = (d['taux_moyen'] as num? ?? 0).toDouble();
+          final cadre = d['cadre'];
+          final parcours = d['parcours'] ?? '';
+          final nbCours = d['nb_cours'] ?? 0;
+          final nbApprenants = d['nb_apprenants'] ?? 0;
+          
           return Container(
             margin: const EdgeInsets.only(bottom: 12),
             padding: const EdgeInsets.all(16),
@@ -837,9 +1238,9 @@ class _AdminGeneralPageState extends State<AdminGeneralPage>
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: kPrimary.withOpacity(0.1),
+                    color: kPrimary.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(kRadiusSm),
-                    border: Border.all(color: kPrimary.withOpacity(0.2), width: 0.8),
+                    border: Border.all(color: kPrimary.withValues(alpha: 0.2), width: 0.8),
                   ),
                   child: const Icon(Icons.domain, color: kPrimary, size: 18),
                 ),
@@ -851,9 +1252,15 @@ class _AdminGeneralPageState extends State<AdminGeneralPage>
                       Text(d['nom'] ?? '',
                           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: kEDark)),
                       Text(
-                        '${d['nb_cours'] ?? 0} cours · ${d['nb_apprenants'] ?? 0} apprenants',
+                        '$nbCours cours · $nbApprenants apprenants',
                         style: const TextStyle(fontSize: 12, color: kEMuted),
                       ),
+                      if (parcours.isNotEmpty)
+                        Text('Parcours: $parcours',
+                            style: const TextStyle(fontSize: 11, color: kEMuted)),
+                      if (cadre != null)
+                        Text('Cadre: ${cadre['nom'] ?? ''}',
+                            style: const TextStyle(fontSize: 11, color: kPrimary)),
                     ],
                   ),
                 ),
@@ -953,6 +1360,411 @@ class _AdminGeneralPageState extends State<AdminGeneralPage>
     );
   }
 
+  // ─── TAB 4 : Enseignants ──────────────────────────────────────────
+  Widget _tabEnseignants() {
+    return Column(
+      children: [
+        // Barre de recherche et filtres
+        Container(
+          padding: const EdgeInsets.all(16),
+          color: kECard,
+          child: Column(
+            children: [
+              TextField(
+                decoration: InputDecoration(
+                  hintText: 'Rechercher un enseignant...',
+                  prefixIcon: const Icon(Icons.search, color: kPrimary),
+                  filled: true,
+                  fillColor: kEBg,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(kRadiusMd),
+                    borderSide: BorderSide.none,
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(kRadiusMd),
+                    borderSide: BorderSide(color: kEBorder, width: 1),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(kRadiusMd),
+                    borderSide: const BorderSide(color: kPrimary, width: 1.5),
+                  ),
+                  suffixIcon: IconButton(
+                    icon: const Icon(Icons.clear, color: kEMuted),
+                    onPressed: () {
+                      setState(() => _searchQuery = '');
+                      _rechercherEnseignants();
+                    },
+                  ),
+                ),
+                onChanged: (value) => setState(() => _searchQuery = value),
+                onSubmitted: (_) => _rechercherEnseignants(),
+              ),
+              const SizedBox(height: 8),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    // Filtre par type
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      decoration: BoxDecoration(
+                        color: kEBg,
+                        borderRadius: BorderRadius.circular(kRadiusMd),
+                        border: Border.all(color: kEBorder, width: 1),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: _filterUserType.isEmpty ? null : _filterUserType,
+                          hint: const Text('Type', style: TextStyle(fontSize: 13)),
+                          items: [
+                            const DropdownMenuItem(value: '', child: Text('Tous', style: TextStyle(fontSize: 13))),
+                            const DropdownMenuItem(value: 'enseignant', child: Text('Enseignant', style: TextStyle(fontSize: 13))),
+                            const DropdownMenuItem(value: 'enseignant_principal', child: Text('Enseignant Principal', style: TextStyle(fontSize: 13))),
+                            const DropdownMenuItem(value: 'enseignant_cadre', child: Text('Enseignant Cadre', style: TextStyle(fontSize: 13))),
+                            const DropdownMenuItem(value: 'enseignant_admin', child: Text('Enseignant Admin', style: TextStyle(fontSize: 13))),
+                          ],
+                          onChanged: (value) {
+                            setState(() => _filterUserType = value ?? '');
+                            _rechercherEnseignants();
+                          },
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    // Filtre par état
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      decoration: BoxDecoration(
+                        color: kEBg,
+                        borderRadius: BorderRadius.circular(kRadiusMd),
+                        border: Border.all(color: kEBorder, width: 1),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: _filterStatus.isEmpty ? null : _filterStatus,
+                          hint: const Text('État', style: TextStyle(fontSize: 13)),
+                          items: [
+                            const DropdownMenuItem(value: '', child: Text('Tous', style: TextStyle(fontSize: 13))),
+                            const DropdownMenuItem(value: 'true', child: Text('Autorisé', style: TextStyle(fontSize: 13))),
+                            const DropdownMenuItem(value: 'false', child: Text('Non autorisé', style: TextStyle(fontSize: 13))),
+                          ],
+                          onChanged: (value) {
+                            setState(() => _filterStatus = value ?? '');
+                            _rechercherEnseignants();
+                          },
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    // Bouton de recherche
+                    ElevatedButton.icon(
+                      onPressed: _rechercherEnseignants,
+                      icon: const Icon(Icons.search, size: 16),
+                      label: const Text('Rechercher'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: kPrimary,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(kRadiusMd)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        // Liste des enseignants
+        Expanded(
+          child: _loadingEnseignants
+              ? const Center(child: CircularProgressIndicator(color: kPrimary))
+              : _enseignants.isEmpty
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(24),
+                            decoration: BoxDecoration(
+                              color: kPrimary.withValues(alpha: 0.08),
+                              shape: BoxShape.circle,
+                              border: Border.all(color: kPrimary.withValues(alpha: 0.2), width: 1),
+                            ),
+                            child: Icon(Icons.person_outline, size: 48, color: kPrimary),
+                          ),
+                          const SizedBox(height: 16),
+                          const Text('Aucun enseignant trouvé',
+                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: kEDark)),
+                          const SizedBox(height: 8),
+                          const Text('Essayez d\'ajuster vos filtres de recherche',
+                              style: TextStyle(fontSize: 13, color: kEMuted)),
+                        ],
+                      ),
+                    )
+                  : ListView.builder(
+                      padding: const EdgeInsets.all(16),
+                      itemCount: _enseignants.length,
+                      itemBuilder: (_, i) => _buildEnseignantCard(_enseignants[i]),
+                    ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildEnseignantCard(Map e) {
+    final isActive = e['is_active'] ?? false;
+    final userType = e['user_type'] ?? 'enseignant';
+    final typeLabel = {
+      'enseignant': 'Enseignant',
+      'enseignant_principal': 'Enseignant Principal',
+      'enseignant_cadre': 'Enseignant Cadre',
+      'enseignant_admin': 'Enseignant Administrateur',
+    }[userType] ?? userType;
+    final avatarUrl = e['avatar'];
+    final dateJoined = e['date_joined'] != null 
+        ? DateTime.parse(e['date_joined']).toLocal()
+        : null;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: kECard,
+        borderRadius: BorderRadius.circular(kRadiusMd),
+        border: Border.all(color: isActive ? kPrimary.withValues(alpha: 0.3) : kAccent.withValues(alpha: 0.3), width: 1.5),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                // Avatar
+                CircleAvatar(
+                  radius: 26,
+                  backgroundColor: kPrimary.withValues(alpha: 0.1),
+                  backgroundImage: avatarUrl != null ? NetworkImage(avatarUrl) : null,
+                  child: avatarUrl == null
+                      ? Text(
+                          (e['nom'] ?? e['username'] ?? '?')[0].toUpperCase(),
+                          style: const TextStyle(color: kPrimary, fontWeight: FontWeight.bold, fontSize: 18),
+                        )
+                      : null,
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        e['nom'] ?? e['username'] ?? 'Inconnu',
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: kEDark),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        e['email'] ?? '',
+                        style: const TextStyle(fontSize: 12, color: kEMuted),
+                      ),
+                      const SizedBox(height: 2),
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: kPrimary.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              typeLabel,
+                              style: TextStyle(fontSize: 10, color: kPrimary, fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: isActive ? kGreen.withValues(alpha: 0.1) : kAccent.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              isActive ? '✓ Autorisé' : '✗ Non autorisé',
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: isActive ? kGreen : kAccent,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                // Boutons d'action
+                IconButton(
+                  icon: const Icon(Icons.edit_outlined, color: kPrimary),
+                  tooltip: 'Modifier le profil',
+                  onPressed: () => _modifierEnseignant(e),
+                ),
+              ],
+            ),
+            if (dateJoined != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Inscrit le ${DateFormat('dd/MM/yyyy').format(dateJoined)}',
+                style: const TextStyle(fontSize: 11, color: kEMuted),
+              ),
+            ],
+            if (e['bio'] != null && e['bio'].toString().isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text(
+                e['bio'],
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 12, color: kEMuted),
+              ),
+            ],
+            if (e['phone'] != null && e['phone'].toString().isNotEmpty) ...[
+              const SizedBox(height: 2),
+              Text('📞 ${e['phone']}', style: const TextStyle(fontSize: 11, color: kEMuted)),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ─── TAB 5 : Tous les cours ───────────────────────────────────────
+  Widget _tabTousCours() {
+    return FutureBuilder<List>(
+      future: _chargerTousLesCours(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator(color: kPrimary));
+        }
+        if (snapshot.hasError) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.error_outline_rounded, size: 48, color: kAccent),
+                const SizedBox(height: 16),
+                const Text('Erreur lors du chargement des cours', style: TextStyle(fontSize: 16, color: kEDark)),
+              ],
+            ),
+          );
+        }
+        final cours = snapshot.data ?? [];
+        if (cours.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: kPrimary.withValues(alpha: 0.08),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: kPrimary.withValues(alpha: 0.2), width: 1),
+                  ),
+                  child: Icon(Icons.book_outlined, size: 48, color: kPrimary),
+                ),
+                const SizedBox(height: 16),
+                const Text('Aucun cours créé', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: kEDark)),
+              ],
+            ),
+          );
+        }
+        return RefreshIndicator(
+          onRefresh: _charger,
+          color: kPrimary,
+          child: ListView.builder(
+            padding: const EdgeInsets.all(16),
+            itemCount: cours.length,
+            itemBuilder: (_, i) => _buildCoursCard(cours[i]),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildCoursCard(Map cours) {
+    final colorHex = (cours['color_code'] as String? ?? '#008080').replaceAll('#', '');
+    Color coursColor;
+    try {
+      coursColor = Color(int.parse('FF$colorHex', radix: 16));
+    } catch (_) {
+      coursColor = kPrimary;
+    }
+    
+    // Pour l'admin général, utiliser le rôle adminGeneral
+    final RoleEnseignant role = RoleEnseignant.administrateurGeneral;
+    
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => DetailCoursEnseignantPage(
+              coursId: cours['id'].toString(),
+              titre: cours['titre'] ?? 'Sans titre',
+              estEnseignantPrincipal: false,
+              role: role,
+              courseColor: coursColor,
+            ),
+          ),
+        );
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        decoration: BoxDecoration(
+          color: kECard,
+          borderRadius: BorderRadius.circular(kRadiusMd),
+          border: Border.all(color: kEBorder, width: 1),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: coursColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(kRadiusSm),
+                  border: Border.all(color: coursColor.withValues(alpha: 0.2), width: 0.8),
+                ),
+                child: Icon(Icons.book, color: coursColor, size: 20),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      cours['titre'] ?? 'Sans titre',
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: kEDark),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${cours['niveau'] ?? 'Niveau non spécifié'} · ${cours['nb_apprenants'] ?? 0} apprenants',
+                      style: const TextStyle(fontSize: 12, color: kEMuted),
+                    ),
+                    if (cours['departement'] != null)
+                      Text(
+                        'Département: ${cours['departement']}',
+                        style: const TextStyle(fontSize: 11, color: kEMuted),
+                      ),
+                  ],
+                ),
+              ),
+              Icon(Icons.arrow_forward_ios, color: kPrimary, size: 14),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildGCard(_GS item) {
     return Container(
       decoration: BoxDecoration(
@@ -968,9 +1780,9 @@ class _AdminGeneralPageState extends State<AdminGeneralPage>
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: item.color.withOpacity(0.1),
+              color: item.color.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(kRadiusMd),
-              border: Border.all(color: item.color.withOpacity(0.2), width: 0.8),
+              border: Border.all(color: item.color.withValues(alpha: 0.2), width: 0.8),
             ),
             child: Icon(item.icon, color: item.color, size: 22),
           ),
