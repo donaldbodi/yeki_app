@@ -9,8 +9,9 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:yeki/core/constants/api_constants.dart';
 
-const String kBaseUrl = 'https://yeki.pythonanywhere.com/api';
+const String kBaseUrl = ApiConstants.baseUrl;
 
 // ================================================================
 // MODÈLE COURS ITEM (pour les formations)

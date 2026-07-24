@@ -1,18 +1,21 @@
 // lib/views/pages/apprenants/lecons_cours.dart
-// ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════
 //  YEKI LEÇONS — Design Unifié Premium
-// ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════
 
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:yeki/views/pages/apprenants/detail_lecon_page.dart';
+import 'package:yeki/core/router/route_names.dart';
 import 'package:yeki/views/pages/enseignants/interface_enseignant_page.dart';
+//import 'package:yeki/core/theme/app_theme.dart';
+import 'package:yeki/core/constants/api_constants.dart';
 
-const String _baseUrl = 'https://yeki.pythonanywhere.com/api';
+const String _baseUrl = ApiConstants.baseUrl;
 
 // Palette unifiée
 const Color brandPrimary = Color(0xFF2884A0);
@@ -33,6 +36,16 @@ class LeconsCoursPage extends StatefulWidget {
   final RoleEnseignant? role;
   final TabController tabController;
   final void Function(int questionId)? onNaviguerForum;
+
+  /// Bascule le parent (`CoursDetailTabs` ou `DetailCoursEnseignantPage`)
+  /// vers son propre onglet Exercices, avec le filtre demandé — remplace
+  /// un ancien `Navigator.push` vers `CoursDetailTabs` (P3.3) qui, côté
+  /// enseignant, poussait par erreur l'écran apprenant plein écran par-
+  /// dessus l'écran enseignant. Même patron que [onNaviguerForum] : géré
+  /// en interne par le parent (bascule de `TabController`), jamais une
+  /// navigation vers une autre route.
+  final void Function({int? moduleId, int? leconId})? onNaviguerExercices;
+
   final bool isPremium;
   final Color courseColor;
 
@@ -43,6 +56,7 @@ class LeconsCoursPage extends StatefulWidget {
     this.role,
     required this.tabController,
     this.onNaviguerForum,
+    this.onNaviguerExercices,
     this.isPremium = false,
     required this.courseColor,
   });
@@ -67,7 +81,6 @@ class _LeconsCoursPageState extends State<LeconsCoursPage>
   void initState() {
     super.initState();
 
-    // ✅ CORRECTION : Initialisation immédiate avec late final
     _animCtrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 450),
@@ -76,10 +89,8 @@ class _LeconsCoursPageState extends State<LeconsCoursPage>
       parent: _animCtrl,
       curve: Curves.easeOutCubic,
     );
-    // ✅ CORRECTION : Définir la valeur initiale à 1.0
     _animCtrl.value = 1.0;
 
-    // ✅ CORRECTION : Différer le chargement après le premier rendu
     WidgetsBinding.instance.addPostFrameCallback((_) {
       fetchLecons();
     });
@@ -122,7 +133,6 @@ class _LeconsCoursPageState extends State<LeconsCoursPage>
             modules = jsonDecode(res.body) as List;
             loading = false;
           });
-          // ✅ CORRECTION : Redémarrer l'animation depuis 0
           _animCtrl.forward(from: 0.0);
         }
       } else {
@@ -331,17 +341,21 @@ class _LeconsCoursPageState extends State<LeconsCoursPage>
     final coursId = int.tryParse(widget.coursId) ?? 0;
     if (coursId == 0) return;
 
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => DetailLeconPage(
-          leconId: leconId,
-          coursId: coursId,
-          coursTitre: widget.coursTitre,
-          coursColor: widget.courseColor.value,
-        ),
-      ),
+    context.pushNamed(
+      AppRoute.leconDetail,
+      pathParameters: {
+        'leconId': leconId.toString(),
+        'coursId': coursId.toString(),
+      },
+      queryParameters: {
+        'coursTitre': widget.coursTitre,
+        'coursColor': widget.courseColor.value.toString(),
+      },
     );
+  }
+
+  void _naviguerVersExercices({int? moduleId, int? leconId}) {
+    widget.onNaviguerExercices?.call(moduleId: moduleId, leconId: leconId);
   }
 
   @override
@@ -610,6 +624,12 @@ class _LeconsCoursPageState extends State<LeconsCoursPage>
                         _showModuleDialog(existingModule: module),
                   ),
                   _iconBtn(
+                    icon: Icons.assignment_outlined,
+                    color: widget.courseColor,
+                    onTap: () => _naviguerVersExercices(moduleId: moduleId),
+                    tooltip: 'Voir les exercices du module',
+                  ),
+                  _iconBtn(
                     icon: Icons.add_circle_outline,
                     color: widget.courseColor,
                     onTap: () => _showLeconDialog(
@@ -758,6 +778,8 @@ class _LeconsCoursPageState extends State<LeconsCoursPage>
                     _deleteLecon(leconId);
                   } else if (val == 'open') {
                     _ouvrirLecon(lecon);
+                  } else if (val == 'exercices') {
+                    _naviguerVersExercices(leconId: leconId);
                   }
                 },
                 itemBuilder: (_) => [
@@ -768,6 +790,17 @@ class _LeconsCoursPageState extends State<LeconsCoursPage>
                           size: 16, color: brandPrimary),
                       SizedBox(width: 8),
                       Text('Ouvrir',
+                          style:
+                              TextStyle(fontSize: 13, color: _textDark)),
+                    ]),
+                  ),
+                  PopupMenuItem(
+                    value: 'exercices',
+                    child: Row(children: [
+                      Icon(Icons.assignment_outlined,
+                          size: 16, color: widget.courseColor),
+                      const SizedBox(width: 8),
+                      const Text('Exercices',
                           style:
                               TextStyle(fontSize: 13, color: _textDark)),
                     ]),
@@ -1085,6 +1118,7 @@ class _LeconsCoursPageState extends State<LeconsCoursPage>
                     final result = await FilePicker.platform.pickFiles(
                       type: FileType.custom,
                       allowedExtensions: ['pdf'],
+                      withData: true,
                     );
                     if (result != null) {
                       setS(() {
@@ -1111,6 +1145,7 @@ class _LeconsCoursPageState extends State<LeconsCoursPage>
                         'mkv',
                         'webm'
                       ],
+                      withData: true,
                     );
                     if (result != null) {
                       setS(() {
@@ -1196,17 +1231,21 @@ class _LeconsCoursPageState extends State<LeconsCoursPage>
     required IconData icon,
     required Color color,
     required VoidCallback onTap,
+    String tooltip = '',
   }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 32,
-        height: 32,
-        decoration: BoxDecoration(
-          color: color.withOpacity(0.08),
-          borderRadius: BorderRadius.circular(8),
+    return Tooltip(
+      message: tooltip,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          width: 32,
+          height: 32,
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.08),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(icon, size: 16, color: color),
         ),
-        child: Icon(icon, size: 16, color: color),
       ),
     );
   }

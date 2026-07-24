@@ -5,11 +5,11 @@
 
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:yeki/widgets/creer_cours_sheet.dart';
-import 'package:yeki/views/pages/enseignants/interface_enseignant_page.dart';
-import 'package:yeki/views/pages/enseignants/detail_cours_enseignant.dart';
+import 'package:yeki/core/router/route_names.dart';
 import 'package:yeki/core/theme/app_theme.dart';
 import 'package:yeki/core/constants/api_constants.dart';
 import 'package:yeki/utils/error_handler.dart';
@@ -364,17 +364,14 @@ class _DetailDepartementPageState extends State<DetailDepartementPage>
       child: InkWell(
         borderRadius: YekiRadius.borderRadiusLg,
         onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => DetailCoursEnseignantPage(
-                coursId: cours['id'].toString(),
-                titre: cours['titre'] ?? '',
-                estEnseignantPrincipal: true,
-                role: RoleEnseignant.enseignantPrincipal,
-                courseColor: coursColor,
-              ),
-            ),
+          context.pushNamed(
+            AppRoute.coursDetailEnseignant,
+            pathParameters: {'coursId': cours['id'].toString()},
+            queryParameters: {
+              'titre': (cours['titre'] ?? '') as String,
+              'estEnseignantPrincipal': 'true',
+              'courseColor': coursColor.value.toString(),
+            },
           );
         },
         child: Padding(

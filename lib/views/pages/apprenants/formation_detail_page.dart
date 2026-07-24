@@ -6,9 +6,10 @@
 import 'dart:convert';
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:yeki/views/pages/apprenants/cours_detail_page.dart';
+import 'package:yeki/core/router/route_names.dart';
 import 'package:yeki/views/pages/apprenants/formations_models.dart';
 import 'package:yeki/core/theme/yeki_design_system.dart';
 
@@ -454,14 +455,14 @@ class _FormationDetailPageState extends State<FormationDetailPage>
           YekiButton(
             label: dept.progressionMoyenne > 0 ? 'Continuer' : 'Commencer',
             onPressed: dept.cours.isNotEmpty
-                ? () => Navigator.push(context,
-                      MaterialPageRoute(
-                        builder: (_) => CoursDetailTabs(
-                          coursId: dept.cours.first.id.toString(),
-                          titre: dept.cours.first.title,
-                          coursColor: c.value,
-                        ),
-                      ))
+                ? () => context.pushNamed(
+                      AppRoute.coursDetail,
+                      pathParameters: {'coursId': dept.cours.first.id.toString()},
+                      queryParameters: {
+                        'titre': dept.cours.first.title,
+                        'coursColor': c.value.toString(),
+                      },
+                    )
                 : () {},
             width: 120,
           ),
@@ -581,13 +582,14 @@ class _TabCours extends StatelessWidget {
         return _GlassCard(
           margin: const EdgeInsets.only(bottom: 12),
           child: GestureDetector(
-            onTap: () => Navigator.push(ctx,
-                MaterialPageRoute(
-                    builder: (_) => CoursDetailTabs(
-                      coursId: c.id.toString(),
-                      titre: c.title,
-                      coursColor: cardColor.value,
-                    ))),
+            onTap: () => ctx.pushNamed(
+                  AppRoute.coursDetail,
+                  pathParameters: {'coursId': c.id.toString()},
+                  queryParameters: {
+                    'titre': c.title,
+                    'coursColor': cardColor.value.toString(),
+                  },
+                ),
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Row(
@@ -787,12 +789,10 @@ class _TabProgramme extends StatelessWidget {
 class _GlassCard extends StatelessWidget {
   final Widget child;
   final EdgeInsetsGeometry? margin;
-  final EdgeInsetsGeometry? padding;
 
   const _GlassCard({
     required this.child,
     this.margin,
-    this.padding,
   });
 
   @override
@@ -804,7 +804,7 @@ class _GlassCard extends StatelessWidget {
         child: BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
           child: Container(
-            padding: padding ?? const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: YekiColors.white.withValues(alpha: 0.6),
               borderRadius: BorderRadius.circular(16),

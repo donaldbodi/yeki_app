@@ -5,8 +5,9 @@ import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:path_provider/path_provider.dart';
-import 'package:http/http.dart' as http;
+import 'package:dio/dio.dart' as dio;
 import 'package:hive/hive.dart';
+import 'package:yeki/core/network/api_client.dart';
 
 enum DownloadStatus {
   notDownloaded,
@@ -25,7 +26,7 @@ class CacheManager {
   bool _initialized = false;
   
   final Map<String, StreamController<double>> _progressControllers = {};
-  final Map<String, CancelToken> _cancelTokens = {};
+  final Map<String, dio.CancelToken> _cancelTokens = {};
   
   Future<void> init() async {
     if (_initialized) return;
@@ -97,9 +98,9 @@ class CacheManager {
       return;
     }
     
-    final cancelToken = CancelToken();
+    final cancelToken = dio.CancelToken();
     _cancelTokens[fileId] = cancelToken;
-    
+
     await _cacheBox.put(fileId, {
       'status': 'downloading',
       'url': url,
@@ -107,55 +108,64 @@ class CacheManager {
       'fileType': fileType,
       'startedAt': DateTime.now().toIso8601String(),
     });
-    
+
     final controller = _progressControllers[fileId];
-    
+    IOSink? sink;
+    File? file;
+
     try {
       final cacheDir = await _getCacheDirectory();
       final filePath = '$cacheDir/${_sanitizeFileName(fileName)}';
-      final file = File(filePath);
-      
-      final request = http.Request('GET', Uri.parse(url));
-      final response = await request.send();
-      
-      if (response.statusCode == 200) {
-        final totalBytes = response.contentLength;
-        var receivedBytes = 0;
-        final sink = file.openWrite();
-        
-        await for (final chunk in response.stream) {
-          if (cancelToken.isCancelled) {
-            await sink.close();
-            await file.delete();
-            return;
-          }
-          
-          sink.add(chunk);
-          receivedBytes += chunk.length;
-          if (totalBytes != null) {
-            final progress = receivedBytes / totalBytes;
-            controller?.add(progress);
-          }
+      file = File(filePath);
+
+      final response = await ApiClient().downloadStream(
+        url,
+        cancelToken: cancelToken,
+      );
+
+      final totalBytes = response.data?.contentLength;
+      var receivedBytes = 0;
+      sink = file.openWrite();
+
+      await for (final chunk in response.data!.stream) {
+        sink.add(chunk);
+        receivedBytes += chunk.length;
+        if (totalBytes != null && totalBytes > 0) {
+          controller?.add(receivedBytes / totalBytes);
         }
-        await sink.close();
-        
-        await _cacheBox.put(fileId, {
-          'status': 'downloaded',
-          'path': filePath,
-          'size': await file.length(),
-          'downloadedAt': DateTime.now().toIso8601String(),
-          'url': url,
-          'fileName': fileName,
-          'fileType': fileType,
-        });
-        
-        controller?.close();
-        _progressControllers.remove(fileId);
-        _cancelTokens.remove(fileId);
-        onComplete?.call();
-      } else {
-        throw Exception('HTTP ${response.statusCode}');
       }
+      await sink.close();
+
+      await _cacheBox.put(fileId, {
+        'status': 'downloaded',
+        'path': filePath,
+        'size': await file.length(),
+        'downloadedAt': DateTime.now().toIso8601String(),
+        'url': url,
+        'fileName': fileName,
+        'fileType': fileType,
+      });
+
+      controller?.close();
+      _progressControllers.remove(fileId);
+      _cancelTokens.remove(fileId);
+      onComplete?.call();
+    } on dio.DioException catch (e) {
+      if (e.type == dio.DioExceptionType.cancel) {
+        // Annulation demandée par l'utilisateur (cancelDownload) : on
+        // nettoie silencieusement, sans marquer 'failed'.
+        await sink?.close();
+        if (file != null && await file.exists()) await file.delete();
+        return;
+      }
+      await _cacheBox.put(fileId, {
+        'status': 'failed',
+        'error': e.toString(),
+        'url': url,
+        'fileName': fileName,
+        'fileType': fileType,
+      });
+      onError?.call(e.toString());
     } catch (e) {
       await _cacheBox.put(fileId, {
         'status': 'failed',
@@ -232,10 +242,4 @@ class CacheManager {
   String _sanitizeFileName(String fileName) {
     return fileName.replaceAll(RegExp(r'[^a-zA-Z0-9.-]'), '_');
   }
-}
-
-class CancelToken {
-  bool _isCancelled = false;
-  void cancel() => _isCancelled = true;
-  bool get isCancelled => _isCancelled;
 }

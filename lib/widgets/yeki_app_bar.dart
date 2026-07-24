@@ -3,16 +3,28 @@
 //  YEKI HEADER — GLASSMORPHISM EDITION
 //  AVEC BOUTON RÉPÉTITEURS INTÉGRÉ
 // ═══════════════════════════════════════════════════════════════
+// DÉPRÉCIÉ (P4.3) : ce fichier exporte un header d'accueil SPÉCIALISÉ
+// (wallet, notifications, menu profil), pas un app bar de navigation
+// générique. Le remplaçant générique (titre/retour/actions/recherche/
+// rétrécissement) est lib/core/design/components/containers/yk_app_bar.dart
+// (YkAppBar). Conservé actif : seul importeur, cursus_page.dart, non migré
+// dans ce ticket (Phase 4 — aucun écran métier touché).
 
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'dart:ui';
 import 'package:yeki/core/theme/yeki_design_system.dart';
 import 'package:yeki/core/constants/api_constants.dart';
-import 'package:yeki/views/pages/apprenants/repetiteurs_page.dart';
+import 'package:yeki/core/router/route_names.dart';
 
+@Deprecated(
+  'Remplacé par lib/core/design/components/containers/yk_app_bar.dart '
+  '(YkAppBar) — voir P4.3. Ne pas utiliser dans du nouveau code ; '
+  'migration écran par écran.',
+)
 class YekiHeader extends StatefulWidget implements PreferredSizeWidget {
   final int unreadNotifications;
   final bool isSubscribed;
@@ -139,7 +151,7 @@ class _YekiHeaderState extends State<YekiHeader> {
                 
                 // ── Solde ────────────────────────────────────────────
                 GestureDetector(
-                  onTap: widget.onWallet ?? () => Navigator.pushNamed(context, '/wallet'),
+                  onTap: widget.onWallet ?? () => context.pushNamed(AppRoute.wallet),
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                     decoration: BoxDecoration(
@@ -185,7 +197,7 @@ class _YekiHeaderState extends State<YekiHeader> {
                   username: widget.username,
                   avatarUrl: widget.avatarUrl,
                   onSettings: widget.onSettings,
-                  onWallet: widget.onWallet ?? () => Navigator.pushNamed(context, '/wallet'),
+                  onWallet: widget.onWallet ?? () => context.pushNamed(AppRoute.wallet),
                   onLogout: widget.onLogout,
                 ),
               ],
@@ -267,14 +279,11 @@ class _HeaderProfileMenu extends StatelessWidget {
       shadowColor: Colors.black.withValues(alpha: 0.1),
       onSelected: (val) {
         if (val == 'profile') {
-          Navigator.pushNamed(context, '/profile');
+          context.pushNamed(AppRoute.profile);
         } else if (val == 'wallet') {
           onWallet();
         } else if (val == 'repetiteurs') {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const RepetiteursPage()),
-          );
+          context.pushNamed(AppRoute.repetiteurs);
         } else if (val == 'settings') {
           onSettings();
         } else if (val == 'logout') {

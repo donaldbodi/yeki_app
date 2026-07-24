@@ -2,9 +2,11 @@
 
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:yeki/views/pages/apprenants/cours_detail_page.dart';
+import 'package:yeki/core/constants/api_constants.dart';
+import 'package:yeki/core/router/route_names.dart';
 import 'package:yeki/views/pages/apprenants/forum_page.dart';
 
 // Palette harmonisée
@@ -23,7 +25,7 @@ const Color _blue = Color(0xFF3B82F6);
 const Color _purple = Color(0xFFA855F7);
 const Color _orange = Color(0xFFF97316);
 
-const String _basePreocc = 'https://yeki.pythonanywhere.com/api';
+const String _basePreocc = ApiConstants.baseUrl;
 
 const Map<String, Color> _srcColP = {
   'lecon': _blue,
@@ -192,18 +194,16 @@ class _PreoccupationSheetState extends State<_PreoccupationSheet> {
             widget.onNaviguerForum!(newId);
           }
         } else if (widget.coursId != null && widget.coursTitre != null) {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => CoursDetailTabs(
-                coursId: widget.coursId!.toString(),
-                titre: widget.coursTitre!,
-                coursColor: widget.coursColor ?? brandBackground.value,
-                isPremium: true,
-                initialTab: widget.forumTabIndex,
-                scrollToQuestionId: newId,
-              ),
-            ),
+          context.pushNamed(
+            AppRoute.coursDetail,
+            pathParameters: {'coursId': widget.coursId!.toString()},
+            queryParameters: {
+              'titre': widget.coursTitre!,
+              'coursColor': (widget.coursColor ?? brandBackground.value).toString(),
+              'isPremium': 'true',
+              'tab': widget.forumTabIndex.toString(),
+              if (newId != null) 'scrollToQuestionId': newId.toString(),
+            },
           );
         } else {
           Navigator.push(

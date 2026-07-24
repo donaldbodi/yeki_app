@@ -1,0 +1,10 @@
+analyze_info=2588
+analyze_warning=1
+boxdecoration_dur=613
+couleurs_dur=269
+dart_io=13
+http_direct=97
+imports_anciens_themes=57
+navigator_push=5
+setstate_features=0
+textstyle_dur=927

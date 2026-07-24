@@ -7,12 +7,11 @@
 import 'dart:convert';
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:yeki/views/auth/login_page.dart';
-import 'package:yeki/views/pages/apprenants/cours_detail_page.dart';
-import 'package:yeki/views/pages/shared/notifications_page.dart';
-import 'package:yeki/views/pages/shared/profil_page.dart';
+import 'package:yeki/core/router/auth_state.dart';
+import 'package:yeki/core/router/route_names.dart';
 import 'package:yeki/widgets/yeki_app_bar.dart';
 import 'package:yeki/core/theme/yeki_design_system.dart';
 import 'package:yeki/core/constants/api_constants.dart';
@@ -177,15 +176,7 @@ class _CursusPageState extends State<CursusPage> with SingleTickerProviderStateM
         final headers = await _headers();
         await http.post(Uri.parse(ApiConstants.logout), headers: headers);
       } catch (_) {}
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.clear();
-      if (mounted) {
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(builder: (_) => const LoginPage()),
-          (route) => false,
-        );
-      }
+      await authState.logout();
     }
   }
 
@@ -267,8 +258,8 @@ class _CursusPageState extends State<CursusPage> with SingleTickerProviderStateM
                   userRole: 'Apprenant',
                   username: _loadingProfil ? 'Chargement...' : _nomApprenant,
                   avatarUrl: _avatarUrl,
-                  onNotifications: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationsPage())),
-                  onSettings: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfilPage())),
+                  onNotifications: () => context.pushNamed(AppRoute.notifications),
+                  onSettings: () => context.pushNamed(AppRoute.profile),
                   onLogout: _deconnecter,
                 ),
                 Expanded(
@@ -421,12 +412,15 @@ class _CursusPageState extends State<CursusPage> with SingleTickerProviderStateM
                                   borderRadius: BorderRadius.circular(24),
                                   onTap: () {
                                     if (item['cours_id'] != null) {
-                                      Navigator.push(context, MaterialPageRoute(builder: (_) => CoursDetailTabs(
-                                        coursId: item['cours_id'].toString(),
-                                        titre: item['cours_titre']?.toString() ?? '',
-                                        coursColor: accentColor.value,
-                                        isPremium: true,
-                                      )));
+                                      context.pushNamed(
+                                        AppRoute.coursDetail,
+                                        pathParameters: {'coursId': item['cours_id'].toString()},
+                                        queryParameters: {
+                                          'titre': item['cours_titre']?.toString() ?? '',
+                                          'coursColor': accentColor.value.toString(),
+                                          'isPremium': 'true',
+                                        },
+                                      );
                                     }
                                   },
                                   child: Padding(
@@ -575,12 +569,15 @@ class _CursusPageState extends State<CursusPage> with SingleTickerProviderStateM
               borderRadius: BorderRadius.circular(24),
               child: InkWell(
                 borderRadius: BorderRadius.circular(24),
-                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => CoursDetailTabs(
-                  coursId: cours['id'].toString(),
-                  titre: titre,
-                  coursColor: themeColor.value,
-                  isPremium: true,
-                ))),
+                onTap: () => context.pushNamed(
+                  AppRoute.coursDetail,
+                  pathParameters: {'coursId': cours['id'].toString()},
+                  queryParameters: {
+                    'titre': titre,
+                    'coursColor': themeColor.value.toString(),
+                    'isPremium': 'true',
+                  },
+                ),
                 child: Padding(
                   padding: const EdgeInsets.all(18),
                   child: Column(

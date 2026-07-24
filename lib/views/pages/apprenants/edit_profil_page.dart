@@ -14,10 +14,13 @@ import 'package:yeki/core/theme/app_theme.dart';
 import 'package:yeki/core/constants/api_constants.dart';
 import 'package:yeki/utils/error_handler.dart';
 
+/// Édition du profil de l'utilisateur CONNECTÉ — toujours « mon propre
+/// profil », jamais celui d'un tiers : autonome, fetch son propre profil
+/// via `/profil/me/` plutôt que de le recevoir en paramètre (P3.3,
+/// nécessaire pour une route déclarative go_router sans état
+/// pré-chargé transmis par le site d'appel).
 class EditProfilePage extends StatefulWidget {
-  final Map<String, dynamic> profil;
-  
-  const EditProfilePage({super.key, required this.profil});
+  const EditProfilePage({super.key});
 
   @override
   State<EditProfilePage> createState() => _EditProfilePageState();
@@ -37,6 +40,8 @@ class _EditProfilePageState extends State<EditProfilePage> {
   Uint8List? _avatarBytes;
   String? _avatarName;
   bool _saving = false;
+  bool _loadingProfil = true;
+  Map<String, dynamic> _profil = {};
 
   final List<String> _cursusOptions = [
     'Secondaire - Francophone',
@@ -47,18 +52,52 @@ class _EditProfilePageState extends State<EditProfilePage> {
   @override
   void initState() {
     super.initState();
-    final profil = widget.profil;
-    _firstNameCtrl = TextEditingController(text: profil['first_name'] ?? '');
-    _lastNameCtrl = TextEditingController(text: profil['last_name'] ?? '');
-    _emailCtrl = TextEditingController(text: profil['email'] ?? '');
-    _phoneCtrl = TextEditingController(text: profil['phone'] ?? '');
-    _bioCtrl = TextEditingController(text: profil['bio'] ?? '');
-    _niveauCtrl = TextEditingController(text: profil['niveau'] ?? '');
-    _villeCtrl = TextEditingController(text: profil['ville'] ?? '');
-    _whatsappCtrl = TextEditingController(text: profil['whatsapp'] ?? '');
-    
-    final cursusValue = profil['cursus'] as String?;
-    _cursus = (cursusValue?.isNotEmpty == true) ? cursusValue : _cursusOptions.first;
+    _firstNameCtrl = TextEditingController();
+    _lastNameCtrl = TextEditingController();
+    _emailCtrl = TextEditingController();
+    _phoneCtrl = TextEditingController();
+    _bioCtrl = TextEditingController();
+    _niveauCtrl = TextEditingController();
+    _villeCtrl = TextEditingController();
+    _whatsappCtrl = TextEditingController();
+    _cursus = _cursusOptions.first;
+    _fetchProfil();
+  }
+
+  Future<void> _fetchProfil() async {
+    final token = await _getToken();
+    if (token == null) {
+      if (mounted) setState(() => _loadingProfil = false);
+      return;
+    }
+    try {
+      final res = await http.get(
+        Uri.parse(ApiConstants.profilMe),
+        headers: {'Authorization': 'Token $token'},
+      );
+      if (res.statusCode == 200) {
+        final profil = jsonDecode(res.body) as Map<String, dynamic>;
+        if (!mounted) return;
+        setState(() {
+          _profil = profil;
+          _firstNameCtrl.text = profil['first_name'] ?? '';
+          _lastNameCtrl.text = profil['last_name'] ?? '';
+          _emailCtrl.text = profil['email'] ?? '';
+          _phoneCtrl.text = profil['phone'] ?? '';
+          _bioCtrl.text = profil['bio'] ?? '';
+          _niveauCtrl.text = profil['niveau'] ?? '';
+          _villeCtrl.text = profil['ville'] ?? '';
+          _whatsappCtrl.text = profil['whatsapp'] ?? '';
+          final cursusValue = profil['cursus'] as String?;
+          _cursus = (cursusValue?.isNotEmpty == true) ? cursusValue : _cursusOptions.first;
+          _loadingProfil = false;
+        });
+      } else if (mounted) {
+        setState(() => _loadingProfil = false);
+      }
+    } catch (e) {
+      if (mounted) setState(() => _loadingProfil = false);
+    }
   }
 
   @override
@@ -173,13 +212,20 @@ class _EditProfilePageState extends State<EditProfilePage> {
   }
 
   bool get _isEnseignant {
-    final userType = widget.profil['user_type']?.toString() ?? '';
+    final userType = _profil['user_type']?.toString() ?? '';
     return userType.contains('enseignant') || userType == 'admin';
   }
 
   @override
   Widget build(BuildContext context) {
-    final currentAvatarUrl = widget.profil['avatar'] as String?;
+    if (_loadingProfil) {
+      return const Scaffold(
+        backgroundColor: YekiColors.backgroundLight,
+        body: Center(child: CircularProgressIndicator(color: YekiColors.primaryDark)),
+      );
+    }
+
+    final currentAvatarUrl = _profil['avatar'] as String?;
 
     return Scaffold(
       backgroundColor: YekiColors.backgroundLight,

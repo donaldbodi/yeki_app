@@ -43,3 +43,12 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Firebase — identifiants par plateforme, jamais versionnés (P3.6).
+# lib/firebase_options.dart N'EST PAS ignoré : identifiants client
+# publics générés par `flutterfire configure`, destinés à être versionnés.
+android/app/google-services.json
+ios/Runner/GoogleService-Info.plist
+macos/Runner/GoogleService-Info.plist
+**/firebase-service-account*.json
+.firebase/

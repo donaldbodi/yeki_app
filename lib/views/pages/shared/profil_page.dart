@@ -1,15 +1,15 @@
 // lib/views/pages/shared/profil_page.dart
 // ═══════════════════════════════════════════════════════════════════════════
-// PAGE PROFIL — AVEC VILLE ET WHATSAPP POUR ENSEIGNANT
+// PAGE PROFIL — AVEC VILLE, WHATSAPP ET CLASSEMENT
 // ═══════════════════════════════════════════════════════════════════════════
 
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:yeki/views/pages/apprenants/edit_profil_page.dart';
-import 'package:yeki/views/pages/apprenants/settings_page.dart';
+import 'package:yeki/core/router/route_names.dart';
 import 'package:yeki/core/theme/app_theme.dart';
 import 'package:yeki/core/constants/api_constants.dart';
 
@@ -25,6 +25,7 @@ class _ProfilPageState extends State<ProfilPage>
   bool _loading = true;
   Map<String, dynamic> _profil = {};
   Map<String, dynamic> _stats = {};
+  Map<String, dynamic> _classement = {};
   String _userType = '';
 
   late AnimationController _animCtrl;
@@ -60,9 +61,12 @@ class _ProfilPageState extends State<ProfilPage>
     setState(() => _loading = true);
     try {
       final headers = await _headers();
-      final [resProfil, resStats] = await Future.wait([
+      
+      // Charger profil et stats
+      final [resProfil, resStats, resClassement] = await Future.wait([
         http.get(Uri.parse(ApiConstants.profilMe), headers: headers),
         http.get(Uri.parse(ApiConstants.profilStats), headers: headers),
+        http.get(Uri.parse(ApiConstants.monScore), headers: headers),
       ]);
 
       if (!mounted) return;
@@ -78,6 +82,12 @@ class _ProfilPageState extends State<ProfilPage>
       if (resStats.statusCode == 200) {
         setState(() {
           _stats = jsonDecode(resStats.body) as Map<String, dynamic>;
+        });
+      }
+
+      if (resClassement.statusCode == 200) {
+        setState(() {
+          _classement = jsonDecode(resClassement.body) as Map<String, dynamic>;
         });
       }
 
@@ -288,7 +298,7 @@ class _ProfilPageState extends State<ProfilPage>
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
         decoration: BoxDecoration(
           color: YekiColors.white.withValues(alpha: 0.15),
-          borderRadius: YekiRadius.borderRadiusPill,
+          borderRadius: BorderRadius.circular(20),
           border: Border.all(color: YekiColors.white),
         ),
         child: Row(
@@ -327,6 +337,10 @@ class _ProfilPageState extends State<ProfilPage>
             _buildSectionEnseignant()
           else
             _buildSectionApprenant(),
+          const SizedBox(height: 16),
+          // Classement pour les apprenants
+          if (!_isEnseignant && _classement.isNotEmpty)
+            _buildClassement(),
           const SizedBox(height: 16),
           if ((_profil['bio']?.toString() ?? '').isNotEmpty) _buildBio(),
           const SizedBox(height: 24),
@@ -396,7 +410,7 @@ class _ProfilPageState extends State<ProfilPage>
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
           color: YekiColors.white,
-          borderRadius: YekiRadius.borderRadiusXl,
+          borderRadius: BorderRadius.circular(20),
           boxShadow: YekiShadows.medium,
         ),
         child: Row(
@@ -413,7 +427,7 @@ class _ProfilPageState extends State<ProfilPage>
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
               color: item.color.withValues(alpha: 0.1),
-              borderRadius: YekiRadius.borderRadiusMd,
+              borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(item.icon, color: item.color, size: 20),
           ),
@@ -431,6 +445,133 @@ class _ProfilPageState extends State<ProfilPage>
         ],
       );
 
+  // ─── CLASSEMENT ──────────────────────────────────────────────────────
+  Widget _buildClassement() {
+    final score = _classement['score'] as num? ?? 0;
+    final rang = _classement['rang'] as int?;
+    final total = _classement['total_apprenants'] as int? ?? 0;
+    final progression = _classement['progression'] as num? ?? 0;
+    final scores = _classement['scores_categorie'] as Map<String, dynamic>? ?? {};
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _sectionTitle('Classement', Icons.leaderboard_rounded),
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: YekiColors.white,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: YekiShadows.medium,
+            ),
+            child: Column(
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Score total',
+                            style: TextStyle(fontSize: 12, color: YekiColors.textLight)),
+                        Text('${score.toStringAsFixed(0)} pts',
+                            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900)),
+                      ],
+                    ),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        const Text('Rang',
+                            style: TextStyle(fontSize: 12, color: YekiColors.textLight)),
+                        Text(
+                          rang != null ? '#$rang / $total' : 'Non classé',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w900,
+                            color: rang != null && rang <= 3 ? YekiColors.gold : YekiColors.primaryDark,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                if (progression != 0) ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: progression > 0
+                          ? YekiColors.success.withValues(alpha: 0.1)
+                          : YekiColors.error.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          progression > 0
+                              ? Icons.arrow_upward_rounded
+                              : Icons.arrow_downward_rounded,
+                          size: 16,
+                          color: progression > 0 ? YekiColors.success : YekiColors.error,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          '${progression.abs().toStringAsFixed(0)}%',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: progression > 0 ? YekiColors.success : YekiColors.error,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+                if (scores.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  const Divider(color: YekiColors.borderLight),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: scores.entries.map((e) {
+                      return Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: YekiColors.primaryDark.withValues(alpha: 0.05),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: YekiColors.primaryDark.withValues(alpha: 0.1)),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              e.key.toString().replaceAll('_', ' '),
+                              style: const TextStyle(fontSize: 10, color: YekiColors.textMedium),
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              '${e.value.toStringAsFixed(0)} pts',
+                              style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700),
+                            ),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   // ─── INFORMATIONS PERSONNELLES ────────────────────────────────────────
   Widget _buildInfosPerso() {
     final rows = <_InfoRow>[];
@@ -442,12 +583,10 @@ class _ProfilPageState extends State<ProfilPage>
       rows.add(_InfoRow(Icons.email_rounded, 'Email', _profil['email'].toString()));
     }
 
-    // Ville – pour tous les utilisateurs
     if ((_profil['ville']?.toString() ?? '').isNotEmpty) {
       rows.add(_InfoRow(Icons.location_on_rounded, 'Ville', _profil['ville'].toString()));
     }
 
-    // WhatsApp – uniquement pour les enseignants
     if (_isEnseignant && (_profil['whatsapp']?.toString() ?? '').isNotEmpty) {
       rows.add(_InfoRow(Icons.chat_bubble_rounded, 'WhatsApp', _profil['whatsapp'].toString()));
     }
@@ -479,7 +618,7 @@ class _ProfilPageState extends State<ProfilPage>
           Container(
             decoration: BoxDecoration(
               color: YekiColors.white,
-              borderRadius: YekiRadius.borderRadiusLg,
+              borderRadius: BorderRadius.circular(16),
               boxShadow: YekiShadows.subtle,
             ),
             child: Column(
@@ -508,7 +647,7 @@ class _ProfilPageState extends State<ProfilPage>
             padding: const EdgeInsets.all(7),
             decoration: BoxDecoration(
               color: YekiColors.primaryDark.withValues(alpha: 0.08),
-              borderRadius: YekiRadius.borderRadiusSm,
+              borderRadius: BorderRadius.circular(8),
             ),
             child: Icon(row.icon, size: 15, color: YekiColors.primaryDark),
           ),
@@ -604,7 +743,7 @@ class _ProfilPageState extends State<ProfilPage>
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.07),
-        borderRadius: YekiRadius.borderRadiusLg,
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: color.withValues(alpha: 0.15)),
       ),
       child: Row(
@@ -613,7 +752,7 @@ class _ProfilPageState extends State<ProfilPage>
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
               color: color.withValues(alpha: 0.15),
-              borderRadius: YekiRadius.borderRadiusSm,
+              borderRadius: BorderRadius.circular(8),
             ),
             child: Icon(icon, color: color, size: 18),
           ),
@@ -646,7 +785,7 @@ class _ProfilPageState extends State<ProfilPage>
             padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
               color: YekiColors.white,
-              borderRadius: YekiRadius.borderRadiusLg,
+              borderRadius: BorderRadius.circular(16),
               boxShadow: YekiShadows.subtle,
             ),
             child: Text(
@@ -671,23 +810,17 @@ class _ProfilPageState extends State<ProfilPage>
             label: 'Modifier mon profil',
             icon: Icons.edit_rounded,
             backgroundColor: color,
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => EditProfilePage(profil: _profil),
-              ),
-            ).then((_) => _charger()),
+            onPressed: () => context
+                .pushNamed(AppRoute.profileEdit)
+                .then((_) => _charger()),
           ),
           const SizedBox(height: 12),
           GestureDetector(
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const SettingsPage()),
-            ),
+            onTap: () => context.pushNamed(AppRoute.settings),
             child: Container(
               decoration: BoxDecoration(
                 color: YekiColors.white,
-                borderRadius: YekiRadius.borderRadiusLg,
+                borderRadius: BorderRadius.circular(16),
                 border: Border.all(color: color.withValues(alpha: 0.25)),
                 boxShadow: YekiShadows.subtle,
               ),
@@ -723,7 +856,7 @@ class _ProfilPageState extends State<ProfilPage>
             padding: const EdgeInsets.all(6),
             decoration: BoxDecoration(
               color: YekiColors.primaryDark.withValues(alpha: 0.1),
-              borderRadius: YekiRadius.borderRadiusSm,
+              borderRadius: BorderRadius.circular(8),
             ),
             child: Icon(icon, size: 14, color: YekiColors.primaryDark),
           ),

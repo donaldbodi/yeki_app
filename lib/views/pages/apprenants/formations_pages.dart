@@ -6,10 +6,11 @@
 import 'dart:convert';
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:yeki/views/pages/apprenants/formations_models.dart';
-import 'package:yeki/views/pages/apprenants/formation_detail_page.dart';
+import 'package:yeki/core/router/route_names.dart';
 import 'package:yeki/core/theme/yeki_design_system.dart';
 import 'package:yeki/core/constants/api_constants.dart';
 import 'package:yeki/utils/error_handler.dart';
@@ -887,14 +888,10 @@ class _FormationsPageState extends State<FormationsPage>
         if (res.statusCode == 200) {
           final data = jsonDecode(res.body);
           if (data['acces'] == true) {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => FormationDetailPage(
-                  formationId: dept.id,
-                  deptPrecharge: dept,
-                ),
-              ),
+            context.pushNamed(
+              AppRoute.formationDetail,
+              pathParameters: {'formationId': dept.id.toString()},
+              extra: dept,
             ).then((_) => _charger());
           } else if (data['statut'] == 'en_attente') {
             _showMessage('Votre demande d\'accès est en attente de traitement.', type: 'warning');
@@ -910,14 +907,10 @@ class _FormationsPageState extends State<FormationsPage>
         ErrorHandler.showError(context, 'Erreur réseau');
       }
     } else {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => FormationDetailPage(
-            formationId: dept.id,
-            deptPrecharge: dept,
-          ),
-        ),
+      context.pushNamed(
+        AppRoute.formationDetail,
+        pathParameters: {'formationId': dept.id.toString()},
+        extra: dept,
       ).then((_) => _charger());
     }
   }

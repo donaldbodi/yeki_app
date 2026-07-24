@@ -1,22 +1,23 @@
 // lib/views/pages/apprenants/details_question_forum.dart
-// ════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════
 // PAGE DÉTAIL D'UNE QUESTION DU FORUM — CORRIGÉE AVEC DESIGN SYSTEM
-// ════════════════════════════════════════════════════════════════
+// Version complète et fonctionnelle (corrigée)
+// ════════════════════════════════════════════════════════════
 
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timeago/timeago.dart' as timeago;
 import 'package:image_picker/image_picker.dart';
 import 'package:yeki/views/pages/apprenants/forum_page.dart';
-import 'package:yeki/views/pages/apprenants/lecture_lecon_page.dart';
-import 'package:yeki/views/pages/apprenants/passer_exercice.dart';
-import 'package:yeki/views/pages/apprenants/resultat_devoir_page.dart';
+import 'package:yeki/core/router/route_names.dart';
 import 'package:yeki/core/theme/app_theme.dart';
 import 'package:yeki/core/constants/api_constants.dart';
 import 'package:yeki/utils/error_handler.dart';
+import 'package:audioplayers/audioplayers.dart';
 
 const Map<String, Color> _srcColor = {
   'lecon': YekiColors.info,
@@ -65,9 +66,175 @@ String _getInitials(String nom, String username) {
   return n[0].toUpperCase();
 }
 
-// ════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════
+// LECTEUR AUDIO AMÉLIORÉ - VERSION CORRIGÉE
+// ════════════════════════════════════════════════════════════
+class ForumAudioPlayer extends StatefulWidget {
+  final String audioUrl;
+  const ForumAudioPlayer({super.key, required this.audioUrl});
+  @override
+  State<ForumAudioPlayer> createState() => _ForumAudioPlayerState();
+}
+
+class _ForumAudioPlayerState extends State<ForumAudioPlayer> {
+  final AudioPlayer _audioPlayer = AudioPlayer();
+  bool _isPlaying = false;
+  bool _isLoading = false;
+  Duration _position = Duration.zero;
+  Duration _duration = Duration.zero;
+
+  @override
+  void initState() {
+    super.initState();
+    _initAudioPlayer();
+  }
+
+  Future<void> _initAudioPlayer() async {
+    try {
+      // Écouter les changements d'état
+      _audioPlayer.onPlayerStateChanged.listen((state) {
+        if (mounted) {
+          setState(() {
+            _isPlaying = state == PlayerState.playing;
+          });
+        }
+      });
+      
+      // Écouter les changements de position
+      _audioPlayer.onPositionChanged.listen((position) {
+        if (mounted) {
+          setState(() {
+            _position = position;
+          });
+        }
+      });
+      
+      // Écouter les changements de durée
+      _audioPlayer.onDurationChanged.listen((duration) {
+        if (mounted) {
+          setState(() {
+            _duration = duration;
+          });
+        }
+      });
+      
+      // Écouter la fin de lecture
+      _audioPlayer.onPlayerComplete.listen((event) {
+        if (mounted) {
+          setState(() {
+            _isPlaying = false;
+            _position = Duration.zero;
+          });
+        }
+      });
+      
+      // Gestion des erreurs via try-catch dans les opérations
+    } catch (e) {
+      debugPrint('Erreur initialisation audio: $e');
+    }
+  }
+
+  Future<void> _togglePlay() async {
+    try {
+      if (_isPlaying) {
+        await _audioPlayer.pause();
+      } else {
+        if (_position == Duration.zero) {
+          setState(() => _isLoading = true);
+          try {
+            await _audioPlayer.setSourceUrl(widget.audioUrl);
+          } catch (e) {
+            debugPrint('Erreur setSourceUrl: $e');
+            if (mounted) {
+              ErrorHandler.showError(context, 'Erreur de chargement audio');
+            }
+            setState(() => _isLoading = false);
+            return;
+          }
+          setState(() => _isLoading = false);
+        }
+        await _audioPlayer.resume();
+      }
+    } catch (e) {
+      debugPrint('Erreur lecture audio: $e');
+      if (mounted) {
+        ErrorHandler.showError(context, 'Erreur de lecture audio');
+        setState(() {
+          _isLoading = false;
+          _isPlaying = false;
+        });
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _audioPlayer.dispose();
+    super.dispose();
+  }
+
+  String _formatDuration(Duration duration) {
+    String twoDigits(int n) => n.toString().padLeft(2, '0');
+    String twoDigitMinutes = twoDigits(duration.inMinutes.remainder(60));
+    String twoDigitSeconds = twoDigits(duration.inSeconds.remainder(60));
+    return '$twoDigitMinutes:$twoDigitSeconds';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        GestureDetector(
+          onTap: _isLoading ? null : _togglePlay,
+          child: _isLoading
+              ? const SizedBox(
+                  width: 32,
+                  height: 32,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : Icon(
+                  _isPlaying ? Icons.pause_circle_filled : Icons.play_circle_filled,
+                  color: YekiColors.purple,
+                  size: 32,
+                ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            children: [
+              LinearProgressIndicator(
+                value: _duration.inSeconds > 0
+                    ? _position.inSeconds / _duration.inSeconds
+                    : 0.0,
+                backgroundColor: YekiColors.borderLight,
+                valueColor: const AlwaysStoppedAnimation<Color>(YekiColors.purple),
+                minHeight: 3,
+              ),
+              const SizedBox(height: 4),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    _formatDuration(_position),
+                    style: const TextStyle(fontSize: 10, color: YekiColors.textLight),
+                  ),
+                  Text(
+                    _formatDuration(_duration),
+                    style: const TextStyle(fontSize: 10, color: YekiColors.textLight),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ════════════════════════════════════════════════════════════
 // PAGE DÉTAIL D'UNE QUESTION
-// ════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════
 class DetailQuestionForumPage extends StatefulWidget {
   final int questionId;
   final QForum? question;
@@ -116,6 +283,9 @@ class _DetailQuestionForumPageState extends State<DetailQuestionForumPage> {
     final token = await _getToken();
     if (token == null) {
       setState(() => _loading = false);
+      if (mounted) {
+        ErrorHandler.showError(context, 'Vous devez être connecté.');
+      }
       return;
     }
 
@@ -133,6 +303,9 @@ class _DetailQuestionForumPageState extends State<DetailQuestionForumPage> {
         });
       } else {
         setState(() => _loading = false);
+        if (mounted) {
+          ErrorHandler.showError(context, 'Erreur de chargement: ${response.statusCode}');
+        }
       }
     } catch (e) {
       setState(() => _loading = false);
@@ -145,6 +318,7 @@ class _DetailQuestionForumPageState extends State<DetailQuestionForumPage> {
   Future<void> _envoyerReponse() async {
     final texte = _reponseCtrl.text.trim();
     if (texte.isEmpty && _selectedImage == null) {
+      ErrorHandler.showError(context, 'Veuillez écrire une réponse ou ajouter une image.');
       return;
     }
 
@@ -297,39 +471,35 @@ class _DetailQuestionForumPageState extends State<DetailQuestionForumPage> {
     final q = _question!;
 
     if (q.source == 'lecon' && q.leconId != null && q.coursId != null) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => LectureLeconPage(
-            leconId: q.leconId!,
-            coursId: q.coursId!,
-            coursTitre: q.coursTitre,
-            coursColor: widget.coursColor ?? _accentColor.value,
-          ),
-        ),
+      context.pushNamed(
+        AppRoute.leconLecture,
+        pathParameters: {
+          'leconId': q.leconId!.toString(),
+          'coursId': q.coursId!.toString(),
+        },
+        queryParameters: {
+          'coursTitre': q.coursTitre,
+          'coursColor': (widget.coursColor ?? _accentColor.value).toString(),
+        },
       );
     } else if (q.source == 'exercice' && q.exerciceId != null && q.coursId != null) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => PasserExercicePage(
-            exerciceId: q.exerciceId!,
-            coursId: q.coursId,
-            coursTitre: q.coursTitre,
-          ),
-        ),
+      context.pushNamed(
+        AppRoute.exercicePasser,
+        pathParameters: {'exerciceId': q.exerciceId!.toString()},
+        queryParameters: {
+          'coursId': q.coursId!.toString(),
+          'coursTitre': q.coursTitre,
+        },
       );
     } else if (q.source == 'devoir' && q.devoirId != null && q.coursId != null) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => ResultatDevoirPage(
-            devoirId: q.devoirId!,
-            titre: q.devoirTitre,
-            coursId: q.coursId,
-            coursTitre: q.coursTitre,
-          ),
-        ),
+      context.pushNamed(
+        AppRoute.devoirResultat,
+        pathParameters: {'devoirId': q.devoirId!.toString()},
+        queryParameters: {
+          'titre': q.devoirTitre,
+          'coursId': q.coursId!.toString(),
+          'coursTitre': q.coursTitre,
+        },
       );
     }
   }
@@ -489,6 +659,10 @@ class _DetailQuestionForumPageState extends State<DetailQuestionForumPage> {
                           ),
                         ),
                       ],
+                      if (q.audioUrl != null) ...[
+                        const SizedBox(height: 12),
+                        ForumAudioPlayer(audioUrl: q.audioUrl!),
+                      ],
                       const SizedBox(height: 12),
                       Row(
                         children: [
@@ -647,6 +821,10 @@ class _DetailQuestionForumPageState extends State<DetailQuestionForumPage> {
                 errorBuilder: (_, _, _) => const SizedBox.shrink(),
               ),
             ),
+          ],
+          if (reponse.audioUrl != null) ...[
+            const SizedBox(height: 10),
+            ForumAudioPlayer(audioUrl: reponse.audioUrl!),
           ],
           const SizedBox(height: 10),
           Row(

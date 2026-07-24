@@ -1,15 +1,711 @@
 // lib/views/pages/enseignants/admin_general_page.dart
-// Admin Général - Dashboard avec gestion des parcours, départements et enseignants
+// ═══════════════════════════════════════════════════════════════════════════
+//  ADMIN GÉNÉRAL — Dashboard complet avec design system
+//  Version CORRIGÉE avec navigation par niveau
+//  Toutes les erreurs Dart résolues
+// ═══════════════════════════════════════════════════════════════════════════
 
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:yeki/core/design/yeki_design.dart';
-import 'package:yeki/core/constants/api_constants.dart';
-import 'package:yeki/views/pages/enseignants/detail_cours_enseignant.dart';
-import 'package:yeki/views/pages/enseignants/interface_enseignant_page.dart' show RoleEnseignant;
 import 'package:intl/intl.dart';
+import 'package:yeki/core/theme/yeki_design_system.dart';
+import 'package:yeki/core/theme/yeki_design_extension.dart';
+import 'package:yeki/core/constants/api_constants.dart';
+import 'package:yeki/core/router/route_names.dart';
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PAGE DE DÉTAIL PARCOURS — Affiche les départements du parcours
+// ═══════════════════════════════════════════════════════════════════════════
+
+class ParcoursDetailPage extends StatefulWidget {
+  final int parcoursId;
+  final String parcoursNom;
+  final String parcoursType;
+
+  const ParcoursDetailPage({
+    super.key,
+    required this.parcoursId,
+    required this.parcoursNom,
+    required this.parcoursType,
+  });
+
+  @override
+  State<ParcoursDetailPage> createState() => _ParcoursDetailPageState();
+}
+
+class _ParcoursDetailPageState extends State<ParcoursDetailPage> {
+  bool _loading = true;
+  List<Map<String, dynamic>> _departements = [];
+  Map<String, dynamic> _stats = {};
+
+  Future<String?> _getToken() async {
+    final p = await SharedPreferences.getInstance();
+    return p.getString('token');
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _charger();
+  }
+
+  Future<void> _charger() async {
+    if (!mounted) return;
+    setState(() => _loading = true);
+    final token = await _getToken();
+    if (token == null) {
+      if (mounted) setState(() => _loading = false);
+      return;
+    }
+
+    try {
+      final res = await http.get(
+        Uri.parse('${ApiConstants.baseUrl}/parcours/${widget.parcoursId}/departements/'),
+        headers: ApiHeaders.auth(token),
+      );
+
+      if (res.statusCode == 200 && mounted) {
+        final data = jsonDecode(res.body);
+        setState(() {
+          _departements = List<Map<String, dynamic>>.from(data);
+          _stats = {
+            'nb_departements': _departements.length,
+            // CORRECTION: utiliser fold<double> puis convertir en int
+            'nb_cours': _departements.fold<double>(0, (sum, d) => sum + ((d['nb_cours'] ?? 0) as num).toDouble()).toInt(),
+            'nb_apprenants': _departements.fold<double>(0, (sum, d) => sum + ((d['nb_apprenants'] ?? 0) as num).toDouble()).toInt(),
+          };
+          _loading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  void _ouvrirDetailDepartement(Map<String, dynamic> dept) {
+    context.pushNamed(
+      AppRoute.adminDepartementDetail,
+      pathParameters: {'departementId': dept['id'].toString()},
+      queryParameters: {
+        'departementNom': dept['nom']?.toString() ?? '',
+        'parcoursNom': widget.parcoursNom,
+      },
+      extra: dept,
+    );
+  }
+
+  Color _getDeptColor(Map<String, dynamic> dept) {
+    final couleur = dept['couleur'] ?? '#2884A0';
+    try {
+      return Color(int.parse('FF${couleur.replaceAll('#', '')}', radix: 16));
+    } catch (_) {
+      return YekiColors.primary;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: YekiColors.bgLight,
+      appBar: AppBar(
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              widget.parcoursNom,
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: YekiColors.textDark),
+            ),
+            Text(
+              '${_stats['nb_departements']} départements',
+              style: const TextStyle(fontSize: 12, color: YekiColors.textMedium),
+            ),
+          ],
+        ),
+        backgroundColor: YekiColors.white,
+        elevation: 0,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh, color: YekiColors.primary),
+            onPressed: _charger,
+          ),
+        ],
+      ),
+      body: _loading
+          ? const Center(child: YekiLoader())
+          : RefreshIndicator(
+              onRefresh: _charger,
+              color: YekiColors.primary,
+              child: _departements.isEmpty
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(24),
+                            decoration: BoxDecoration(
+                              color: YekiColors.primary.withValues(alpha: 0.08),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.domain_outlined, size: 48, color: YekiColors.primary),
+                          ),
+                          const SizedBox(height: 16),
+                          const Text(
+                            'Aucun département',
+                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: YekiColors.textDark),
+                          ),
+                        ],
+                      ),
+                    )
+                  : ListView.builder(
+                      padding: const EdgeInsets.all(16),
+                      itemCount: _departements.length,
+                      itemBuilder: (_, i) => _buildDepartementCard(_departements[i]),
+                    ),
+            ),
+    );
+  }
+
+  Widget _buildDepartementCard(Map<String, dynamic> dept) {
+    final color = _getDeptColor(dept);
+    final taux = (dept['taux_moyen'] as num?)?.toDouble() ?? 0.0;
+    final nbCours = dept['nb_cours'] ?? 0;
+    final nbApp = dept['nb_apprenants'] ?? 0;
+    final typeDept = dept['type_departement'] ?? 'cursus';
+
+    return GestureDetector(
+      onTap: () => _ouvrirDetailDepartement(dept),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 16),
+        decoration: BoxDecoration(
+          color: YekiColors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: YekiColors.borderLight, width: 1),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // En-tête
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.05),
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: color.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: color.withValues(alpha: 0.2), width: 0.8),
+                    ),
+                    child: Icon(
+                      _getTypeIcon(typeDept),
+                      color: color,
+                      size: 22,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          dept['nom'] ?? 'Département',
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: YekiColors.textDark),
+                        ),
+                        Text(
+                          _getTypeLabel(typeDept),
+                          style: TextStyle(fontSize: 11, color: color, fontWeight: FontWeight.w600),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: color.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      '$nbCours cours',
+                      style: TextStyle(fontSize: 11, color: color, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // Contenu
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (dept['description'] != null && dept['description'].toString().isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: Text(
+                        dept['description'],
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 13, color: YekiColors.textMedium, height: 1.4),
+                      ),
+                    ),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      _infoChip(Icons.people_rounded, '$nbApp apprenants', YekiColors.purple),
+                      _infoChip(Icons.book_rounded, '$nbCours cours', YekiColors.primary),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: LinearProgressIndicator(
+                            value: taux / 100,
+                            backgroundColor: YekiColors.borderLight,
+                            color: color,
+                            minHeight: 6,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Text(
+                        '${taux.toStringAsFixed(0)}%',
+                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: color),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  IconData _getTypeIcon(String type) {
+    switch (type) {
+      case 'prepa_concours':
+        return Icons.emoji_events_rounded;
+      case 'formation_metier':
+        return Icons.work_rounded;
+      case 'formation_classique':
+        return Icons.account_balance_rounded;
+      default:
+        return Icons.domain_rounded;
+    }
+  }
+
+  String _getTypeLabel(String type) {
+    switch (type) {
+      case 'prepa_concours':
+        return 'Prépa Concours';
+      case 'formation_metier':
+        return 'Formation Métier';
+      case 'formation_classique':
+        return 'Formation Classique';
+      default:
+        return 'Département';
+    }
+  }
+
+  Widget _infoChip(IconData icon, String label, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.15), width: 0.5),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 11, color: color),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(fontSize: 11, color: color, fontWeight: FontWeight.w500),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PAGE DE DÉTAIL DÉPARTEMENT — Affiche les cours du département
+// ═══════════════════════════════════════════════════════════════════════════
+
+class DepartementDetailPage extends StatefulWidget {
+  final int departementId;
+  final String departementNom;
+  final String parcoursNom;
+  final Map<String, dynamic>? departementData;
+
+  const DepartementDetailPage({
+    super.key,
+    required this.departementId,
+    required this.departementNom,
+    required this.parcoursNom,
+    this.departementData,
+  });
+
+  @override
+  State<DepartementDetailPage> createState() => _DepartementDetailPageState();
+}
+
+class _DepartementDetailPageState extends State<DepartementDetailPage> {
+  bool _loading = true;
+  List<Map<String, dynamic>> _cours = [];
+  Map<String, dynamic> _stats = {};
+
+  Future<String?> _getToken() async {
+    final p = await SharedPreferences.getInstance();
+    return p.getString('token');
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _charger();
+  }
+
+  Future<void> _charger() async {
+    if (!mounted) return;
+    setState(() => _loading = true);
+    final token = await _getToken();
+    if (token == null) {
+      if (mounted) setState(() => _loading = false);
+      return;
+    }
+
+    try {
+      final res = await http.get(
+        Uri.parse('${ApiConstants.baseUrl}/departements/${widget.departementId}/cours/'),
+        headers: ApiHeaders.auth(token),
+      );
+
+      if (res.statusCode == 200 && mounted) {
+        final data = jsonDecode(res.body);
+        setState(() {
+          _cours = List<Map<String, dynamic>>.from(data);
+          // CORRECTION: utiliser fold<double> puis convertir en int
+          _stats = {
+            'nb_cours': _cours.length,
+            'nb_apprenants': _cours.fold<double>(0, (sum, c) => sum + ((c['nb_apprenants'] ?? 0) as num).toDouble()).toInt(),
+            // CORRECTION: utiliser isNotEmpty au lieu de length > 0
+            'taux_moyen': _cours.isEmpty ? 0.0 : _cours.fold<double>(0, (sum, c) => sum + ((c['taux_completion'] ?? 0) as num).toDouble()) / _cours.length,
+          };
+          _loading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  void _ouvrirDetailCours(Map<String, dynamic> cours) {
+    final colorHex = (cours['color_code'] as String? ?? '#008080').replaceAll('#', '');
+    Color coursColor;
+    try {
+      coursColor = Color(int.parse('FF$colorHex', radix: 16));
+    } catch (_) {
+      coursColor = YekiColors.primary;
+    }
+
+    context.pushNamed(
+      AppRoute.coursDetailEnseignant,
+      pathParameters: {'coursId': cours['id'].toString()},
+      queryParameters: {
+        'titre': (cours['titre'] ?? 'Sans titre') as String,
+        'estEnseignantPrincipal': 'false',
+        'courseColor': coursColor.value.toString(),
+      },
+    );
+  }
+
+  Color _getCoursColor(Map<String, dynamic> cours) {
+    final hex = (cours['color_code'] as String? ?? '#008080').replaceAll('#', '');
+    try {
+      return Color(int.parse('FF$hex', radix: 16));
+    } catch (_) {
+      return YekiColors.primary;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // CORRECTION: variable isMobile supprimée car non utilisée
+
+    return Scaffold(
+      backgroundColor: YekiColors.bgLight,
+      appBar: AppBar(
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              widget.departementNom,
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: YekiColors.textDark),
+            ),
+            Text(
+              '${widget.parcoursNom} · ${_stats['nb_cours']} cours',
+              style: const TextStyle(fontSize: 12, color: YekiColors.textMedium),
+            ),
+          ],
+        ),
+        backgroundColor: YekiColors.white,
+        elevation: 0,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh, color: YekiColors.primary),
+            onPressed: _charger,
+          ),
+        ],
+      ),
+      body: _loading
+          ? const Center(child: YekiLoader())
+          : RefreshIndicator(
+              onRefresh: _charger,
+              color: YekiColors.primary,
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  children: [
+                    // Statistiques
+                    _buildStatsCard(),
+                    const SizedBox(height: 16),
+
+                    // Liste des cours
+                    if (_cours.isEmpty)
+                      Center(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 40),
+                          child: Column(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(24),
+                                decoration: BoxDecoration(
+                                  color: YekiColors.primary.withValues(alpha: 0.08),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(Icons.book_outlined, size: 48, color: YekiColors.primary),
+                              ),
+                              const SizedBox(height: 16),
+                              const Text(
+                                'Aucun cours dans ce département',
+                                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: YekiColors.textDark),
+                              ),
+                            ],
+                          ),
+                        ),
+                      )
+                    else
+                      ..._cours.map((c) => _buildCoursCard(c)),
+                  ],
+                ),
+              ),
+            ),
+    );
+  }
+
+  Widget _buildStatsCard() {
+    final tauxMoyen = _stats['taux_moyen'] ?? 0.0;
+    final nbCours = _stats['nb_cours'] ?? 0;
+    final nbApprenants = _stats['nb_apprenants'] ?? 0;
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [YekiColors.primary, YekiColors.primaryDark],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Statistiques du département',
+            style: TextStyle(color: YekiColors.white, fontSize: 14, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(child: _statItem('$nbCours', 'Cours', Icons.book_rounded)),
+              const SizedBox(width: 8),
+              Expanded(child: _statItem('$nbApprenants', 'Apprenants', Icons.people_rounded)),
+              const SizedBox(width: 8),
+              Expanded(child: _statItem('${tauxMoyen.toStringAsFixed(0)}%', 'Taux', Icons.bar_chart_rounded)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _statItem(String value, String label, IconData icon) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(icon, color: YekiColors.white.withValues(alpha: 0.7), size: 14),
+            const SizedBox(width: 4),
+            Text(
+              value,
+              style: const TextStyle(color: YekiColors.white, fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+        Text(
+          label,
+          style: TextStyle(color: YekiColors.white.withValues(alpha: 0.7), fontSize: 11),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCoursCard(Map<String, dynamic> cours) {
+    final color = _getCoursColor(cours);
+    final taux = (cours['taux_completion'] as num?)?.toDouble() ?? 0.0;
+    final nbApp = cours['nb_apprenants'] ?? 0;
+    final nbLecons = cours['nb_lecons'] ?? 0;
+    final nbDevoirs = cours['nb_devoirs'] ?? 0;
+
+    return GestureDetector(
+      onTap: () => _ouvrirDetailCours(cours),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        decoration: BoxDecoration(
+          color: YekiColors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: YekiColors.borderLight, width: 1),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.03),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: color.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(Icons.book, color: color, size: 22),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          cours['titre'] ?? 'Sans titre',
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: YekiColors.textDark),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        Text(
+                          '${cours['niveau'] ?? 'Niveau non spécifié'}',
+                          style: const TextStyle(fontSize: 12, color: YekiColors.textMedium),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(Icons.arrow_forward_ios, color: color, size: 14),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 4,
+                children: [
+                  _chip(Icons.people_rounded, '$nbApp apprenants', YekiColors.success),
+                  _chip(Icons.article_rounded, '$nbLecons leçons', YekiColors.info),
+                  _chip(Icons.assignment_rounded, '$nbDevoirs devoirs', YekiColors.warning),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: LinearProgressIndicator(
+                        value: taux / 100,
+                        backgroundColor: YekiColors.borderLight,
+                        color: color,
+                        minHeight: 6,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Text(
+                    '${taux.toStringAsFixed(0)}%',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: color),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _chip(IconData icon, String text, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 12, color: color),
+          const SizedBox(width: 4),
+          Text(
+            text,
+            style: TextStyle(fontSize: 11, color: color, fontWeight: FontWeight.w500),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ADMIN GÉNÉRAL — Dashboard principal
+// ═══════════════════════════════════════════════════════════════════════════
 
 class AdminGeneralPage extends StatefulWidget {
   const AdminGeneralPage({super.key});
@@ -28,14 +724,14 @@ class _AdminGeneralPageState extends State<AdminGeneralPage>
   List _parcours = [];
   List _departements = [];
   List _topEnseignants = [];
-  String _nomEnseignant = '';
+  // CORRECTION: champ _nomEnseignant supprimé car non utilisé
   late TabController _tabCtrl;
 
-  // Nouveaux champs pour la gestion des enseignants
+  // Gestion des enseignants
   List _enseignants = [];
   bool _loadingEnseignants = false;
 
-  // Champs pour la recherche
+  // Filtres de recherche
   String _searchQuery = '';
   String _filterUserType = '';
   String _filterStatus = '';
@@ -43,15 +739,20 @@ class _AdminGeneralPageState extends State<AdminGeneralPage>
   int? _filterDepartement;
   int? _filterCours;
 
+  // État pour éviter les appels setState après dispose
+  bool _mounted = true;
+
   @override
   void initState() {
     super.initState();
+    _mounted = true;
     _tabCtrl = TabController(length: 5, vsync: this);
     _charger();
   }
 
   @override
   void dispose() {
+    _mounted = false;
     _tabCtrl.dispose();
     super.dispose();
   }
@@ -61,7 +762,9 @@ class _AdminGeneralPageState extends State<AdminGeneralPage>
     return p.getString('token');
   }
 
+  // ─── Chargement initial ────────────────────────────────────────────────
   Future<void> _charger() async {
+    if (!_mounted) return;
     setState(() {
       _loading = true;
       _hasError = false;
@@ -71,7 +774,7 @@ class _AdminGeneralPageState extends State<AdminGeneralPage>
     
     final token = await _getToken();
     if (token == null) {
-      if (mounted) {
+      if (_mounted) {
         setState(() {
           _loading = false;
           _hasError = true;
@@ -83,63 +786,62 @@ class _AdminGeneralPageState extends State<AdminGeneralPage>
     
     try {
       final res = await http.get(
-        Uri.parse('${ApiConstants.baseUrl}/admin-general/dashboard/'),
+        Uri.parse(ApiConstants.adminGeneralDashboard),
         headers: ApiHeaders.auth(token),
       );
       
-      if (mounted) {
-        if (res.statusCode == 200) {
-          try {
-            final data = jsonDecode(res.body);
-            setState(() {
-              _stats = data['stats'] ?? {};
-              _parcours = data['parcours'] ?? [];
-              _departements = data['departements'] ?? [];
-              _topEnseignants = data['top_enseignants'] ?? [];
-              _nomEnseignant = data['nom'] ?? '';
-              _enseignants = data['enseignants'] ?? [];
-              _loading = false;
-              _hasError = false;
-            });
-          } catch (e) {
-            setState(() {
-              _loading = false;
-              _hasError = true;
-              _errorMessage = 'Erreur de parsing des données';
-              _errorDetail = e.toString();
-            });
-          }
-        } else if (res.statusCode == 403) {
+      if (!_mounted) return;
+      
+      if (res.statusCode == 200) {
+        try {
+          final data = jsonDecode(res.body);
           setState(() {
+            _stats = data['stats'] ?? {};
+            _parcours = data['parcours'] ?? [];
+            _departements = data['departements'] ?? [];
+            _topEnseignants = data['top_enseignants'] ?? [];
+            _enseignants = data['enseignants'] ?? [];
             _loading = false;
-            _hasError = true;
-            _errorMessage = 'Accès refusé. Vous devez être administrateur général pour accéder à cette page.';
+            _hasError = false;
           });
-        } else if (res.statusCode == 500) {
-          String detail = '';
-          try {
-            final errorData = jsonDecode(res.body);
-            detail = errorData['detail'] ?? 'Erreur interne du serveur';
-          } catch (_) {
-            detail = 'Erreur interne du serveur (500)';
-          }
+        } catch (e) {
           setState(() {
             _loading = false;
             _hasError = true;
-            _errorMessage = 'Erreur serveur';
-            _errorDetail = detail;
-          });
-        } else {
-          setState(() {
-            _loading = false;
-            _hasError = true;
-            _errorMessage = 'Erreur lors du chargement';
-            _errorDetail = 'Code: ${res.statusCode} - ${res.reasonPhrase}';
+            _errorMessage = 'Erreur de parsing des données';
+            _errorDetail = e.toString();
           });
         }
+      } else if (res.statusCode == 403) {
+        setState(() {
+          _loading = false;
+          _hasError = true;
+          _errorMessage = 'Accès refusé. Vous devez être administrateur général pour accéder à cette page.';
+        });
+      } else if (res.statusCode == 500) {
+        String detail = '';
+        try {
+          final errorData = jsonDecode(res.body);
+          detail = errorData['detail'] ?? 'Erreur interne du serveur';
+        } catch (_) {
+          detail = 'Erreur interne du serveur (500)';
+        }
+        setState(() {
+          _loading = false;
+          _hasError = true;
+          _errorMessage = 'Erreur serveur';
+          _errorDetail = detail;
+        });
+      } else {
+        setState(() {
+          _loading = false;
+          _hasError = true;
+          _errorMessage = 'Erreur lors du chargement';
+          _errorDetail = 'Code: ${res.statusCode} - ${res.reasonPhrase}';
+        });
       }
     } catch (e) {
-      if (mounted) {
+      if (_mounted) {
         setState(() {
           _loading = false;
           _hasError = true;
@@ -150,12 +852,14 @@ class _AdminGeneralPageState extends State<AdminGeneralPage>
     }
   }
 
-  // ─── Recherche d'enseignants ──────────────────────────────────────
+  // ─── Recherche d'enseignants ──────────────────────────────────────────
   Future<void> _rechercherEnseignants() async {
+    if (!_mounted) return;
     setState(() => _loadingEnseignants = true);
 
     final token = await _getToken();
     if (token == null) {
+      if (!_mounted) return;
       setState(() => _loadingEnseignants = false);
       _showError('Vous devez être connecté');
       return;
@@ -169,32 +873,31 @@ class _AdminGeneralPageState extends State<AdminGeneralPage>
     if (_filterDepartement != null) params['departement_id'] = _filterDepartement.toString();
     if (_filterCours != null) params['cours_id'] = _filterCours.toString();
 
-    final uri = Uri.parse('${ApiConstants.baseUrl}/admin-general/enseignants/search/')
+    final uri = Uri.parse(ApiConstants.adminGeneralSearchEnseignants)
         .replace(queryParameters: params);
 
     try {
       final res = await http.get(uri, headers: ApiHeaders.auth(token));
-      if (mounted) {
-        if (res.statusCode == 200) {
-          final data = jsonDecode(res.body);
-          setState(() {
-            _enseignants = data['results'] ?? [];
-            _loadingEnseignants = false;
-          });
-        } else {
-          setState(() => _loadingEnseignants = false);
-          _showError('Erreur lors de la recherche (${res.statusCode})');
-        }
+      if (!_mounted) return;
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        setState(() {
+          _enseignants = data['results'] ?? [];
+          _loadingEnseignants = false;
+        });
+      } else {
+        setState(() => _loadingEnseignants = false);
+        _showError('Erreur lors de la recherche (${res.statusCode})');
       }
     } catch (e) {
-      if (mounted) {
+      if (_mounted) {
         setState(() => _loadingEnseignants = false);
         _showError('Erreur réseau');
       }
     }
   }
 
-  // ─── Modifier un enseignant ──────────────────────────────────────
+  // ─── Modifier un enseignant ──────────────────────────────────────────
   Future<void> _modifierEnseignant(Map enseignant) async {
     final token = await _getToken();
     if (token == null) {
@@ -206,7 +909,6 @@ class _AdminGeneralPageState extends State<AdminGeneralPage>
     bool currentActive = enseignant['is_active'] ?? false;
     String selectedType = currentType;
     bool selectedActive = currentActive;
-    bool isLoading = false;
 
     final types = [
       {'code': 'enseignant', 'label': 'Enseignant'},
@@ -222,8 +924,8 @@ class _AdminGeneralPageState extends State<AdminGeneralPage>
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setS) => Container(
           decoration: BoxDecoration(
-            color: kECard,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(kRadiusLg)),
+            color: YekiColors.white,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(YekiRadius.lg)),
           ),
           padding: const EdgeInsets.all(24),
           child: Column(
@@ -233,22 +935,21 @@ class _AdminGeneralPageState extends State<AdminGeneralPage>
               Center(
                 child: Container(
                   width: 40, height: 4,
-                  decoration: BoxDecoration(color: kEBorder, borderRadius: BorderRadius.circular(10)),
+                  decoration: BoxDecoration(color: YekiColors.borderLight, borderRadius: BorderRadius.circular(10)),
                 ),
               ),
               const SizedBox(height: 20),
               Text(
                 'Modifier ${enseignant['nom']}',
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: kEDark),
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: YekiColors.textDark),
               ),
               const SizedBox(height: 8),
               Text(
                 'Email: ${enseignant['email']}',
-                style: const TextStyle(fontSize: 12, color: kEMuted),
+                style: const TextStyle(fontSize: 12, color: YekiColors.textMedium),
               ),
               const SizedBox(height: 20),
-              // Type
-              const Text('Type d\'enseignant', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: kEDark)),
+              const Text('Type d\'enseignant', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: YekiColors.textDark)),
               const SizedBox(height: 8),
               ...types.map((t) {
                 final isSelected = t['code'] == selectedType;
@@ -256,59 +957,49 @@ class _AdminGeneralPageState extends State<AdminGeneralPage>
                   value: t['code'] as String,
                   groupValue: selectedType,
                   onChanged: (value) => setS(() => selectedType = value!),
-                  activeColor: kPrimary,
+                  activeColor: YekiColors.primary,
                   contentPadding: const EdgeInsets.symmetric(horizontal: 0),
                   title: Text(
                     t['label'] as String,
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w500,
-                      color: isSelected ? kPrimary : kEDark,
+                      color: isSelected ? YekiColors.primary : YekiColors.textDark,
                     ),
                   ),
                 );
               }),
               const SizedBox(height: 16),
-              // État
               SwitchListTile(
                 value: selectedActive,
                 onChanged: (v) => setS(() => selectedActive = v),
                 title: const Text('Compte actif', style: TextStyle(fontWeight: FontWeight.w600)),
                 subtitle: Text(
                   selectedActive ? 'L\'enseignant peut se connecter' : 'L\'enseignant ne peut pas se connecter',
-                  style: const TextStyle(fontSize: 12, color: kEMuted),
+                  style: const TextStyle(fontSize: 12, color: YekiColors.textMedium),
                 ),
-                activeColor: kPrimary,
+                activeColor: YekiColors.primary,
               ),
               const SizedBox(height: 20),
               SizedBox(
                 width: double.infinity,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: kPrimary,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(kRadiusMd)),
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    elevation: 0,
-                  ),
-                  onPressed: (selectedType == currentType && selectedActive == currentActive) || isLoading
-                      ? null
-                      : () async {
-                          setS(() => isLoading = true);
-                          await _envoyerModificationEnseignant(
-                            enseignant['id'] as int,
-                            selectedType,
-                            selectedActive,
-                          );
-                          setS(() => isLoading = false);
-                          if (ctx.mounted) Navigator.pop(ctx);
-                        },
-                  child: isLoading
-                      ? const SizedBox(
-                          width: 22, height: 22,
-                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                        )
-                      : const Text('Enregistrer',
-                          style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                child: YekiButton(
+                  label: 'Enregistrer',
+                  onPressed: () {
+                    if (selectedType == currentType &&
+                        selectedActive == currentActive) {
+                      return;
+                    }
+
+                    _envoyerModificationEnseignant(
+                      enseignant['id'] as int,
+                      selectedType,
+                      selectedActive,
+                    );
+
+                    Navigator.pop(ctx);
+                  },
+                  color: YekiColors.primary,
                 ),
               ),
             ],
@@ -327,7 +1018,7 @@ class _AdminGeneralPageState extends State<AdminGeneralPage>
 
     try {
       final res = await http.patch(
-        Uri.parse('${ApiConstants.baseUrl}/admin-general/enseignants/$profileId/modifier/'),
+        Uri.parse(ApiConstants.adminGeneralModifierEnseignant(profileId)),
         headers: ApiHeaders.auth(token),
         body: jsonEncode({
           'user_type': newType,
@@ -335,7 +1026,7 @@ class _AdminGeneralPageState extends State<AdminGeneralPage>
         }),
       );
 
-      if (mounted) {
+      if (_mounted) {
         if (res.statusCode == 200) {
           _showSuccess('Enseignant modifié avec succès !');
           _rechercherEnseignants();
@@ -354,18 +1045,17 @@ class _AdminGeneralPageState extends State<AdminGeneralPage>
     }
   }
 
-  // ─── Créer un parcours ────────────────────────────────────────────
+  // ─── Créer un parcours ────────────────────────────────────────────────
   void _creerParcours() {
     final nomCtrl = TextEditingController();
     final descCtrl = TextEditingController();
     String selectedType = 'cursus';
-    bool isLoading = false;
 
     final List<Map<String, dynamic>> typesParcours = [
-      {'code': 'cursus', 'label': 'Cursus scolaire / universitaire', 'icon': Icons.school_rounded, 'color': Colors.indigo},
-      {'code': 'prepa', 'label': 'Prépa Concours', 'icon': Icons.emoji_events_rounded, 'color': kGold},
-      {'code': 'formation', 'label': 'Formations professionnelles', 'icon': Icons.work_rounded, 'color': kAccent},
-      {'code': 'autre', 'label': 'Autre', 'icon': Icons.category_rounded, 'color': Colors.grey},
+      {'code': 'cursus', 'label': 'Cursus scolaire / universitaire', 'icon': Icons.school_rounded, 'color': YekiColors.primary},
+      {'code': 'prepa', 'label': 'Prépa Concours', 'icon': Icons.emoji_events_rounded, 'color': YekiColors.gold},
+      {'code': 'formation', 'label': 'Formations professionnelles', 'icon': Icons.work_rounded, 'color': YekiColors.accent},
+      {'code': 'autre', 'label': 'Autre', 'icon': Icons.category_rounded, 'color': YekiColors.textMedium},
     ];
 
     showModalBottomSheet(
@@ -375,8 +1065,8 @@ class _AdminGeneralPageState extends State<AdminGeneralPage>
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setS) => Container(
           decoration: BoxDecoration(
-            color: kECard,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(kRadiusLg)),
+            color: YekiColors.white,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(YekiRadius.lg)),
           ),
           padding: EdgeInsets.only(
             left: 24, right: 24, top: 16,
@@ -390,11 +1080,11 @@ class _AdminGeneralPageState extends State<AdminGeneralPage>
                 _sheetHandle(),
                 const SizedBox(height: 20),
                 const Text('Créer un parcours',
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: kEDark)),
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: YekiColors.textDark)),
                 const SizedBox(height: 6),
                 const Text(
                   'Un enseignant administrateur pourra être nommé à la tête du parcours.',
-                  style: TextStyle(fontSize: 12, color: kEMuted),
+                  style: TextStyle(fontSize: 12, color: YekiColors.textMedium),
                 ),
                 const SizedBox(height: 24),
                 _field(nomCtrl, 'Nom du parcours *', Icons.route, 'Ex: Licence Informatique'),
@@ -403,13 +1093,13 @@ class _AdminGeneralPageState extends State<AdminGeneralPage>
                     'Objectifs et contenu du parcours', maxLines: 3),
                 const SizedBox(height: 20),
                 const Text('Type de parcours *',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: kEDark)),
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: YekiColors.textDark)),
                 const SizedBox(height: 12),
                 Container(
                   decoration: BoxDecoration(
-                    color: kEBg,
-                    borderRadius: BorderRadius.circular(kRadiusMd),
-                    border: Border.all(color: kEBorder, width: 1),
+                    color: YekiColors.bgLight,
+                    borderRadius: BorderRadius.circular(YekiRadius.md),
+                    border: Border.all(color: YekiColors.borderLight, width: 1),
                   ),
                   child: Column(
                     children: typesParcours.map((type) {
@@ -432,7 +1122,7 @@ class _AdminGeneralPageState extends State<AdminGeneralPage>
                             const SizedBox(width: 12),
                             Expanded(
                               child: Text(type['label'],
-                                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: kEDark)),
+                                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: YekiColors.textDark)),
                             ),
                           ],
                         ),
@@ -444,60 +1134,16 @@ class _AdminGeneralPageState extends State<AdminGeneralPage>
                 const SizedBox(height: 28),
                 SizedBox(
                   width: double.infinity,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: kPrimary,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(kRadiusMd)),
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      elevation: 0,
-                    ),
-                    onPressed: isLoading ? null : () async {
+                  child: YekiButton(
+                    label: 'Créer le parcours',
+                    onPressed: () {
                       if (nomCtrl.text.trim().isEmpty) {
                         _showError('Le nom est obligatoire');
                         return;
                       }
-                      setS(() => isLoading = true);
-                      final token = await _getToken();
-                      if (token == null) {
-                        setS(() => isLoading = false);
-                        _showError('Vous devez être connecté');
-                        return;
-                      }
-                      try {
-                        final res = await http.post(
-                          Uri.parse('${ApiConstants.baseUrl}/parcours/creer/'),
-                          headers: ApiHeaders.auth(token),
-                          body: jsonEncode({
-                            'nom': nomCtrl.text.trim(),
-                            'description': descCtrl.text.trim(),
-                            'type_parcours': selectedType,
-                          }),
-                        );
-                        setS(() => isLoading = false);
-                        if (res.statusCode == 201) {
-                          if (ctx.mounted) Navigator.pop(ctx);
-                          _showSuccess('Parcours créé avec succès !');
-                          _charger();
-                        } else {
-                          try {
-                            final err = jsonDecode(res.body);
-                            _showError(err['detail'] ?? 'Erreur ${res.statusCode}');
-                          } catch (_) {
-                            _showError('Erreur ${res.statusCode}');
-                          }
-                        }
-                      } catch (_) {
-                        setS(() => isLoading = false);
-                        _showError('Erreur réseau');
-                      }
+                      _creerParcoursAsync(nomCtrl, descCtrl, selectedType, ctx);
                     },
-                    child: isLoading
-                        ? const SizedBox(
-                            width: 22, height: 22,
-                            child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                          )
-                        : const Text('Créer le parcours',
-                            style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                    color: YekiColors.primary,
                   ),
                 ),
               ],
@@ -508,35 +1154,62 @@ class _AdminGeneralPageState extends State<AdminGeneralPage>
     );
   }
 
-  // ─── Modifier un parcours ──────────────────────────────────────────
-  Future<void> _modifierParcours(Map parcours) async {
+  void _creerParcoursAsync(TextEditingController nomCtrl, 
+      TextEditingController descCtrl, String selectedType, BuildContext ctx) async {
     final token = await _getToken();
     if (token == null) {
       _showError('Vous devez être connecté');
       return;
     }
+    try {
+      final res = await http.post(
+        Uri.parse(ApiConstants.parcoursCreer),
+        headers: ApiHeaders.auth(token),
+        body: jsonEncode({
+          'nom': nomCtrl.text.trim(),
+          'description': descCtrl.text.trim(),
+          'type_parcours': selectedType,
+        }),
+      );
+      if (res.statusCode == 201) {
+        if (ctx.mounted) Navigator.pop(ctx);
+        _showSuccess('Parcours créé avec succès !');
+        _charger();
+      } else {
+        try {
+          final err = jsonDecode(res.body);
+          _showError(err['detail'] ?? 'Erreur ${res.statusCode}');
+        } catch (_) {
+          _showError('Erreur ${res.statusCode}');
+        }
+      }
+    } catch (_) {
+      _showError('Erreur réseau');
+    }
+  }
 
+  // ─── Modifier un parcours ──────────────────────────────────────────────
+  void _modifierParcours(Map parcours) {
     final nomCtrl = TextEditingController(text: parcours['nom'] ?? '');
     final descCtrl = TextEditingController(text: parcours['description'] ?? '');
     String selectedType = parcours['type_parcours'] ?? 'autre';
-    bool isLoading = false;
 
     final List<Map<String, dynamic>> typesParcours = [
-      {'code': 'cursus', 'label': 'Cursus scolaire / universitaire', 'icon': Icons.school_rounded, 'color': Colors.indigo},
-      {'code': 'prepa', 'label': 'Prépa Concours', 'icon': Icons.emoji_events_rounded, 'color': kGold},
-      {'code': 'formation', 'label': 'Formations professionnelles', 'icon': Icons.work_rounded, 'color': kAccent},
-      {'code': 'autre', 'label': 'Autre', 'icon': Icons.category_rounded, 'color': Colors.grey},
+      {'code': 'cursus', 'label': 'Cursus scolaire / universitaire', 'icon': Icons.school_rounded, 'color': YekiColors.primary},
+      {'code': 'prepa', 'label': 'Prépa Concours', 'icon': Icons.emoji_events_rounded, 'color': YekiColors.gold},
+      {'code': 'formation', 'label': 'Formations professionnelles', 'icon': Icons.work_rounded, 'color': YekiColors.accent},
+      {'code': 'autre', 'label': 'Autre', 'icon': Icons.category_rounded, 'color': YekiColors.textMedium},
     ];
 
-    await showModalBottomSheet(
+    showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setS) => Container(
           decoration: BoxDecoration(
-            color: kECard,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(kRadiusLg)),
+            color: YekiColors.white,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(YekiRadius.lg)),
           ),
           padding: EdgeInsets.only(
             left: 24, right: 24, top: 16,
@@ -550,11 +1223,11 @@ class _AdminGeneralPageState extends State<AdminGeneralPage>
                 _sheetHandle(),
                 const SizedBox(height: 20),
                 Text('Modifier le parcours',
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: kEDark)),
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: YekiColors.textDark)),
                 const SizedBox(height: 6),
                 const Text(
                   'Seul le nom, la description et le type peuvent être modifiés.',
-                  style: TextStyle(fontSize: 12, color: kEMuted),
+                  style: TextStyle(fontSize: 12, color: YekiColors.textMedium),
                 ),
                 const SizedBox(height: 24),
                 _field(nomCtrl, 'Nom du parcours *', Icons.route, 'Ex: Licence Informatique'),
@@ -563,13 +1236,13 @@ class _AdminGeneralPageState extends State<AdminGeneralPage>
                     'Objectifs et contenu du parcours', maxLines: 3),
                 const SizedBox(height: 20),
                 const Text('Type de parcours *',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: kEDark)),
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: YekiColors.textDark)),
                 const SizedBox(height: 12),
                 Container(
                   decoration: BoxDecoration(
-                    color: kEBg,
-                    borderRadius: BorderRadius.circular(kRadiusMd),
-                    border: Border.all(color: kEBorder, width: 1),
+                    color: YekiColors.bgLight,
+                    borderRadius: BorderRadius.circular(YekiRadius.md),
+                    border: Border.all(color: YekiColors.borderLight, width: 1),
                   ),
                   child: Column(
                     children: typesParcours.map((type) {
@@ -592,7 +1265,7 @@ class _AdminGeneralPageState extends State<AdminGeneralPage>
                             const SizedBox(width: 12),
                             Expanded(
                               child: Text(type['label'],
-                                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: kEDark)),
+                                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: YekiColors.textDark)),
                             ),
                           ],
                         ),
@@ -604,60 +1277,16 @@ class _AdminGeneralPageState extends State<AdminGeneralPage>
                 const SizedBox(height: 28),
                 SizedBox(
                   width: double.infinity,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: kPrimary,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(kRadiusMd)),
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      elevation: 0,
-                    ),
-                    onPressed: isLoading ? null : () async {
+                  child: YekiButton(
+                    label: 'Enregistrer les modifications',
+                    onPressed: () {
                       if (nomCtrl.text.trim().isEmpty) {
                         _showError('Le nom est obligatoire');
                         return;
                       }
-                      setS(() => isLoading = true);
-                      final token2 = await _getToken();
-                      if (token2 == null) {
-                        setS(() => isLoading = false);
-                        _showError('Vous devez être connecté');
-                        return;
-                      }
-                      try {
-                        final res = await http.patch(
-                          Uri.parse('${ApiConstants.baseUrl}/parcours/${parcours['id']}/modifier/'),
-                          headers: ApiHeaders.auth(token2),
-                          body: jsonEncode({
-                            'nom': nomCtrl.text.trim(),
-                            'description': descCtrl.text.trim(),
-                            'type_parcours': selectedType,
-                          }),
-                        );
-                        setS(() => isLoading = false);
-                        if (res.statusCode == 200) {
-                          if (ctx.mounted) Navigator.pop(ctx);
-                          _showSuccess('Parcours modifié avec succès !');
-                          _charger();
-                        } else {
-                          try {
-                            final err = jsonDecode(res.body);
-                            _showError(err['detail'] ?? 'Erreur ${res.statusCode}');
-                          } catch (_) {
-                            _showError('Erreur ${res.statusCode}');
-                          }
-                        }
-                      } catch (_) {
-                        setS(() => isLoading = false);
-                        _showError('Erreur réseau');
-                      }
+                      _modifierParcoursAsync(parcours, nomCtrl, descCtrl, selectedType, ctx);
                     },
-                    child: isLoading
-                        ? const SizedBox(
-                            width: 22, height: 22,
-                            child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                          )
-                        : const Text('Enregistrer les modifications',
-                            style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                    color: YekiColors.primary,
                   ),
                 ),
               ],
@@ -668,7 +1297,41 @@ class _AdminGeneralPageState extends State<AdminGeneralPage>
     );
   }
 
-  // ─── Changer admin de parcours ────────────────────────────────────
+  void _modifierParcoursAsync(Map parcours, TextEditingController nomCtrl,
+      TextEditingController descCtrl, String selectedType, BuildContext ctx) async {
+    final token = await _getToken();
+    if (token == null) {
+      _showError('Vous devez être connecté');
+      return;
+    }
+    try {
+      final res = await http.patch(
+        Uri.parse(ApiConstants.parcoursModifier(parcours['id'])),
+        headers: ApiHeaders.auth(token),
+        body: jsonEncode({
+          'nom': nomCtrl.text.trim(),
+          'description': descCtrl.text.trim(),
+          'type_parcours': selectedType,
+        }),
+      );
+      if (res.statusCode == 200) {
+        if (ctx.mounted) Navigator.pop(ctx);
+        _showSuccess('Parcours modifié avec succès !');
+        _charger();
+      } else {
+        try {
+          final err = jsonDecode(res.body);
+          _showError(err['detail'] ?? 'Erreur ${res.statusCode}');
+        } catch (_) {
+          _showError('Erreur ${res.statusCode}');
+        }
+      }
+    } catch (_) {
+      _showError('Erreur réseau');
+    }
+  }
+
+  // ─── Changer admin de parcours ────────────────────────────────────────
   void _changerAdmin(Map parcours) async {
     final token = await _getToken();
     if (token == null) {
@@ -693,9 +1356,13 @@ class _AdminGeneralPageState extends State<AdminGeneralPage>
       return;
     }
 
-    if (!mounted) return;
+    if (!_mounted) return;
 
     int? selected = parcours['enseignant_admin']?['id'] as int?;
+    if (selected == null) {
+      _showError('Aucun enseignant administrateur sélectionné');
+      return;
+    }
 
     showModalBottomSheet(
       context: context,
@@ -704,8 +1371,8 @@ class _AdminGeneralPageState extends State<AdminGeneralPage>
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setS) => Container(
           decoration: BoxDecoration(
-            color: kECard,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(kRadiusLg)),
+            color: YekiColors.white,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(YekiRadius.lg)),
           ),
           padding: EdgeInsets.only(
             left: 24, right: 24, top: 16,
@@ -720,12 +1387,12 @@ class _AdminGeneralPageState extends State<AdminGeneralPage>
                 parcours['enseignant_admin'] == null
                     ? 'Nommer un enseignant administrateur'
                     : 'Changer l\'enseignant administrateur',
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: kEDark),
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: YekiColors.textDark),
               ),
               const SizedBox(height: 6),
               Text(
                 'Parcours : ${parcours['nom'] ?? ''}',
-                style: const TextStyle(fontSize: 13, color: kEMuted),
+                style: const TextStyle(fontSize: 13, color: YekiColors.textMedium),
               ),
               const SizedBox(height: 20),
               ConstrainedBox(
@@ -738,7 +1405,7 @@ class _AdminGeneralPageState extends State<AdminGeneralPage>
                             'Aucun enseignant administrateur disponible.\n'
                             'Vérifiez qu\'il existe des comptes avec le rôle "enseignant_admin" actifs.',
                             textAlign: TextAlign.center,
-                            style: TextStyle(color: kEMuted),
+                            style: TextStyle(color: YekiColors.textMedium),
                           ),
                         ),
                       )
@@ -747,11 +1414,11 @@ class _AdminGeneralPageState extends State<AdminGeneralPage>
                         children: enseignants.map<Widget>((e) => RadioListTile<int>(
                           value: e['id'] as int,
                           groupValue: selected,
-                          activeColor: kPrimary,
+                          activeColor: YekiColors.primary,
                           title: Text(e['nom'] ?? e['username'] ?? '',
-                              style: const TextStyle(color: kEDark)),
+                              style: const TextStyle(color: YekiColors.textDark)),
                           subtitle: Text(e['email'] ?? '',
-                              style: const TextStyle(color: kEMuted)),
+                              style: const TextStyle(color: YekiColors.textMedium)),
                           onChanged: (v) => setS(() => selected = v),
                         )).toList(),
                       ),
@@ -759,43 +1426,13 @@ class _AdminGeneralPageState extends State<AdminGeneralPage>
               const SizedBox(height: 20),
               SizedBox(
                 width: double.infinity,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: kPrimary,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(kRadiusMd)),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    elevation: 0,
-                  ),
-                  onPressed: selected == null ? null : () async {
+                child: YekiButton(
+                  label: 'Confirmer',
+                  onPressed: () {
                     if (ctx.mounted) Navigator.pop(ctx);
-                    final token2 = await _getToken();
-                    if (token2 == null) {
-                      _showError('Vous devez être connecté');
-                      return;
-                    }
-                    try {
-                      final res = await http.patch(
-                        Uri.parse('${ApiConstants.baseUrl}/parcours/${parcours['id']}/nommer-admin/'),
-                        headers: ApiHeaders.auth(token2),
-                        body: jsonEncode({'enseignant_admin_id': selected}),
-                      );
-                      if (res.statusCode == 200) {
-                        _showSuccess('Enseignant administrateur mis à jour !');
-                        _charger();
-                      } else {
-                        try {
-                          final err = jsonDecode(res.body);
-                          _showError(err['detail'] ?? 'Erreur ${res.statusCode}');
-                        } catch (_) {
-                          _showError('Erreur ${res.statusCode}');
-                        }
-                      }
-                    } catch (_) {
-                      _showError('Erreur réseau');
-                    }
+                    _changerAdminAsync(parcours['id'], selected!);
                   },
-                  child: const Text('Confirmer',
-                      style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                  color: YekiColors.primary,
                 ),
               ),
             ],
@@ -805,7 +1442,35 @@ class _AdminGeneralPageState extends State<AdminGeneralPage>
     );
   }
 
-  // ─── Charger tous les cours ──────────────────────────────────────
+  void _changerAdminAsync(int parcoursId, int selected) async {
+    final token = await _getToken();
+    if (token == null) {
+      _showError('Vous devez être connecté');
+      return;
+    }
+    try {
+      final res = await http.patch(
+        Uri.parse(ApiConstants.parcoursNommerAdmin(parcoursId)),
+        headers: ApiHeaders.auth(token),
+        body: jsonEncode({'enseignant_admin_id': selected}),
+      );
+      if (res.statusCode == 200) {
+        _showSuccess('Enseignant administrateur mis à jour !');
+        _charger();
+      } else {
+        try {
+          final err = jsonDecode(res.body);
+          _showError(err['detail'] ?? 'Erreur ${res.statusCode}');
+        } catch (_) {
+          _showError('Erreur ${res.statusCode}');
+        }
+      }
+    } catch (_) {
+      _showError('Erreur réseau');
+    }
+  }
+
+  // ─── Charger tous les cours ──────────────────────────────────────────────
   Future<List> _chargerTousLesCours() async {
     final token = await _getToken();
     if (token == null) return [];
@@ -823,89 +1488,27 @@ class _AdminGeneralPageState extends State<AdminGeneralPage>
     }
   }
 
+  // ─── Build ──────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: kEBg,
+      backgroundColor: YekiColors.bgLight,
       body: _loading
           ? Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const CircularProgressIndicator(color: kPrimary),
+                  const YekiLoader(size: 40),
                   const SizedBox(height: 16),
                   const Text('Chargement du tableau de bord...',
-                      style: TextStyle(color: kEMuted, fontSize: 14)),
+                      style: TextStyle(color: YekiColors.textMedium, fontSize: 14)),
                 ],
               ),
             )
           : _hasError
-              ? Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.error_outline_rounded, size: 72, color: kAccent),
-                        const SizedBox(height: 20),
-                        Text(
-                          _errorMessage,
-                          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: kEDark),
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: 12),
-                        if (_errorDetail.isNotEmpty)
-                          Container(
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: kEBg,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: kEBorder, width: 1),
-                            ),
-                            child: Text(
-                              _errorDetail,
-                              style: TextStyle(fontSize: 14, color: kEMuted),
-                              textAlign: TextAlign.center,
-                            ),
-                          ),
-                        const SizedBox(height: 24),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            ElevatedButton(
-                              onPressed: _charger,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: kPrimary,
-                                foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(kRadiusMd),
-                                ),
-                              ),
-                              child: const Text('Réessayer'),
-                            ),
-                            const SizedBox(width: 16),
-                            ElevatedButton(
-                              onPressed: () => Navigator.pop(context),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.grey,
-                                foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(kRadiusMd),
-                                ),
-                              ),
-                              child: const Text('Retour'),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                )
+              ? _buildErrorState()
               : NestedScrollView(
                   headerSliverBuilder: (context, innerBoxIsScrolled) => [
-                    _buildSliverHeader(),
                     _buildSliverTabBar(),
                   ],
                   body: TabBarView(
@@ -923,56 +1526,54 @@ class _AdminGeneralPageState extends State<AdminGeneralPage>
     );
   }
 
-  // ─── En-tête ──────────────────────────────────────────────────────
-  Widget _buildSliverHeader() {
-    return SliverToBoxAdapter(
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(24, 20, 24, 16),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [kPrimary, kPrimary.withValues(alpha: 0.85)],
-          ),
-        ),
-        child: SafeArea(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+  Widget _buildErrorState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.error_outline_rounded, size: 72, color: YekiColors.accent),
+            const SizedBox(height: 20),
+            Text(
+              _errorMessage,
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: YekiColors.textDark),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 12),
+            if (_errorDetail.isNotEmpty)
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: kGold.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(kRadiusLg),
+                  color: YekiColors.bgLight,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: YekiColors.borderLight, width: 1),
                 ),
-                child: const Text("ADMINISTRATION",
-                    style: TextStyle(color: kGold, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 1)),
+                child: Text(
+                  _errorDetail,
+                  style: const TextStyle(fontSize: 14, color: YekiColors.textMedium),
+                  textAlign: TextAlign.center,
+                ),
               ),
-              const SizedBox(height: 12),
-              Text(
-                _nomEnseignant.isEmpty ? 'Admin Général' : _nomEnseignant,
-                style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: -0.5),
-              ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  _buildBadge('Admin Général', Colors.white.withValues(alpha: 0.15)),
-                  const SizedBox(width: 8),
-                  _buildBadge('Vue complète', kGold.withValues(alpha: 0.3)),
-                ],
-              ),
-              const SizedBox(height: 20),
-              Row(
-                children: [
-                  _buildMiniStat('${_stats['nb_parcours'] ?? 0}', 'Parcours'),
-                  const SizedBox(width: 24),
-                  _buildMiniStat('${_stats['nb_departements'] ?? 0}', 'Départements'),
-                  const SizedBox(width: 24),
-                  _buildMiniStat('${_stats['nb_apprenants'] ?? 0}', 'Apprenants'),
-                ],
-              ),
-            ],
-          ),
+            const SizedBox(height: 24),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                YekiButton(
+                  label: 'Réessayer',
+                  onPressed: _charger,
+                  width: 160,
+                ),
+                const SizedBox(width: 16),
+                YekiButton(
+                  label: 'Retour',
+                  onPressed: () => Navigator.pop(context),
+                  color: YekiColors.textMedium,
+                  width: 160,
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );
@@ -984,9 +1585,9 @@ class _AdminGeneralPageState extends State<AdminGeneralPage>
       delegate: _StickyTabBarDelegate(
         TabBar(
           controller: _tabCtrl,
-          labelColor: kPrimary,
-          unselectedLabelColor: kEMuted,
-          indicatorColor: kPrimary,
+          labelColor: YekiColors.primary,
+          unselectedLabelColor: YekiColors.textMedium,
+          indicatorColor: YekiColors.primary,
           indicatorWeight: 3,
           labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
           tabs: const [
@@ -1006,33 +1607,14 @@ class _AdminGeneralPageState extends State<AdminGeneralPage>
       margin: const EdgeInsets.only(bottom: 20),
       child: FloatingActionButton(
         onPressed: _creerParcours,
-        backgroundColor: kPrimary,
+        backgroundColor: YekiColors.primary,
         elevation: 4,
-        child: const Icon(Icons.add_rounded, color: Colors.white, size: 28),
+        child: const Icon(Icons.add_rounded, color: YekiColors.white, size: 28),
       ),
     );
   }
 
-  Widget _buildBadge(String text, Color bg) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(kRadiusLg)),
-      child: Text(text, style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600)),
-    );
-  }
-
-  Widget _buildMiniStat(String value, String label) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(value,
-            style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
-        Text(label, style: const TextStyle(color: Colors.white70, fontSize: 11)),
-      ],
-    );
-  }
-
-  // ─── TAB 1 : Parcours ────────────────────────────────────────────
+  // ─── TAB 1 : Parcours ──────────────────────────────────────────────────
   Widget _tabParcours() {
     if (_parcours.isEmpty) {
       return Center(
@@ -1042,23 +1624,23 @@ class _AdminGeneralPageState extends State<AdminGeneralPage>
             Container(
               padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
-                color: kPrimary.withValues(alpha: 0.08),
+                color: YekiColors.primary.withValues(alpha: 0.08),
                 shape: BoxShape.circle,
-                border: Border.all(color: kPrimary.withValues(alpha: 0.2), width: 1),
+                border: Border.all(color: YekiColors.primary.withValues(alpha: 0.2), width: 1),
               ),
-              child: Icon(Icons.route_outlined, size: 48, color: kPrimary),
+              child: const Icon(Icons.route_outlined, size: 48, color: YekiColors.primary),
             ),
             const SizedBox(height: 16),
-            const Text('Aucun parcours créé', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: kEDark)),
+            const Text('Aucun parcours créé', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: YekiColors.textDark)),
             const SizedBox(height: 8),
-            const Text('Commencez par créer votre premier parcours', style: TextStyle(fontSize: 13, color: kEMuted)),
+            const Text('Commencez par créer votre premier parcours', style: TextStyle(fontSize: 13, color: YekiColors.textMedium)),
           ],
         ),
       );
     }
     return RefreshIndicator(
       onRefresh: _charger,
-      color: kPrimary,
+      color: YekiColors.primary,
       child: ListView.builder(
         padding: const EdgeInsets.all(16),
         itemCount: _parcours.length,
@@ -1073,15 +1655,18 @@ class _AdminGeneralPageState extends State<AdminGeneralPage>
     final admin = p['enseignant_admin'];
     final taux = (p['taux_moyen'] as num? ?? 0).toDouble();
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      decoration: BoxDecoration(
-        color: kECard,
-        borderRadius: BorderRadius.circular(kRadiusLg),
-        border: Border.all(color: kEBorder, width: 1),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
+    return GestureDetector(
+      onTap: () {
+        context.pushNamed(
+          AppRoute.adminParcoursDetail,
+          pathParameters: {'parcoursId': p['id'].toString()},
+          queryParameters: {
+            'parcoursNom': p['nom']?.toString() ?? '',
+            'parcoursType': p['type_parcours']?.toString() ?? '',
+          },
+        );
+      },
+      child: YekiCard(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -1090,11 +1675,11 @@ class _AdminGeneralPageState extends State<AdminGeneralPage>
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: kPrimary.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(kRadiusMd),
-                    border: Border.all(color: kPrimary.withValues(alpha: 0.2), width: 0.8),
+                    color: YekiColors.primary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(YekiRadius.md),
+                    border: Border.all(color: YekiColors.primary.withValues(alpha: 0.2), width: 0.8),
                   ),
-                  child: const Icon(Icons.route, color: kPrimary, size: 22),
+                  child: const Icon(Icons.route, color: YekiColors.primary, size: 22),
                 ),
                 const SizedBox(width: 14),
                 Expanded(
@@ -1102,23 +1687,22 @@ class _AdminGeneralPageState extends State<AdminGeneralPage>
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(p['nom'] ?? '',
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: kEDark)),
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: YekiColors.textDark)),
                       const SizedBox(height: 4),
                       Text('$nbDepts départements · $nbApp apprenants',
-                          style: const TextStyle(fontSize: 12, color: kEMuted)),
+                          style: const TextStyle(fontSize: 12, color: YekiColors.textMedium)),
                     ],
                   ),
                 ),
-                // Boutons d'action
                 IconButton(
-                  icon: const Icon(Icons.edit_outlined, color: kPrimary),
+                  icon: const Icon(Icons.edit_outlined, color: YekiColors.primary),
                   tooltip: 'Modifier le parcours',
                   onPressed: () => _modifierParcours(p),
                 ),
                 IconButton(
                   icon: Icon(
                     admin == null ? Icons.person_add_outlined : Icons.swap_horiz,
-                    color: kPrimary,
+                    color: YekiColors.primary,
                   ),
                   tooltip: admin == null ? 'Nommer un admin' : 'Changer l\'admin',
                   onPressed: () => _changerAdmin(p),
@@ -1130,18 +1714,18 @@ class _AdminGeneralPageState extends State<AdminGeneralPage>
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 decoration: BoxDecoration(
-                  color: kPrimary.withValues(alpha: 0.05),
+                  color: YekiColors.primary.withValues(alpha: 0.05),
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: kPrimary.withValues(alpha: 0.15), width: 0.8),
+                  border: Border.all(color: YekiColors.primary.withValues(alpha: 0.15), width: 0.8),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.admin_panel_settings, size: 14, color: kPrimary),
+                    const Icon(Icons.admin_panel_settings, size: 14, color: YekiColors.primary),
                     const SizedBox(width: 8),
                     Text(
                       'Admin : ${admin['nom'] ?? admin['username'] ?? ''}',
-                      style: const TextStyle(fontSize: 12, color: kPrimary, fontWeight: FontWeight.w600),
+                      style: const TextStyle(fontSize: 12, color: YekiColors.primary, fontWeight: FontWeight.w600),
                     ),
                   ],
                 ),
@@ -1150,17 +1734,17 @@ class _AdminGeneralPageState extends State<AdminGeneralPage>
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 decoration: BoxDecoration(
-                  color: kAccent.withValues(alpha: 0.08),
+                  color: YekiColors.accent.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: kAccent.withValues(alpha: 0.2), width: 0.8),
+                  border: Border.all(color: YekiColors.accent.withValues(alpha: 0.2), width: 0.8),
                 ),
                 child: const Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.warning_outlined, size: 14, color: kAccent),
+                    Icon(Icons.warning_outlined, size: 14, color: YekiColors.accent),
                     SizedBox(width: 8),
                     Text('Aucun administrateur nommé',
-                        style: TextStyle(fontSize: 12, color: kAccent, fontWeight: FontWeight.w600)),
+                        style: TextStyle(fontSize: 12, color: YekiColors.accent, fontWeight: FontWeight.w600)),
                   ],
                 ),
               ),
@@ -1172,15 +1756,15 @@ class _AdminGeneralPageState extends State<AdminGeneralPage>
                     borderRadius: BorderRadius.circular(8),
                     child: LinearProgressIndicator(
                       value: taux / 100,
-                      backgroundColor: kEBorder,
-                      color: kPrimary,
+                      backgroundColor: YekiColors.borderLight,
+                      color: YekiColors.primary,
                       minHeight: 6,
                     ),
                   ),
                 ),
                 const SizedBox(width: 12),
                 Text('${taux.toStringAsFixed(0)}%',
-                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: kPrimary)),
+                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: YekiColors.primary)),
               ],
             ),
           ],
@@ -1189,7 +1773,7 @@ class _AdminGeneralPageState extends State<AdminGeneralPage>
     );
   }
 
-  // ─── TAB 2 : Départements ────────────────────────────────────────
+  // ─── TAB 2 : Départements ──────────────────────────────────────────────
   Widget _tabDepartements() {
     if (_departements.isEmpty) {
       return Center(
@@ -1199,74 +1783,80 @@ class _AdminGeneralPageState extends State<AdminGeneralPage>
             Container(
               padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
-                color: kPrimary.withValues(alpha: 0.08),
+                color: YekiColors.primary.withValues(alpha: 0.08),
                 shape: BoxShape.circle,
-                border: Border.all(color: kPrimary.withValues(alpha: 0.2), width: 1),
+                border: Border.all(color: YekiColors.primary.withValues(alpha: 0.2), width: 1),
               ),
-              child: Icon(Icons.domain_outlined, size: 48, color: kPrimary),
+              child: const Icon(Icons.domain_outlined, size: 48, color: YekiColors.primary),
             ),
             const SizedBox(height: 16),
-            const Text('Aucun département', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: kEDark)),
+            const Text('Aucun département', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: YekiColors.textDark)),
           ],
         ),
       );
     }
     return RefreshIndicator(
       onRefresh: _charger,
-      color: kPrimary,
+      color: YekiColors.primary,
       child: ListView.builder(
         padding: const EdgeInsets.all(16),
         itemCount: _departements.length,
         itemBuilder: (_, i) {
           final d = _departements[i];
-          final taux = (d['taux_moyen'] as num? ?? 0).toDouble();
+          //final taux = (d['taux_moyen'] as num? ?? 0).toDouble();
           final cadre = d['cadre'];
           final parcours = d['parcours'] ?? '';
           final nbCours = d['nb_cours'] ?? 0;
           final nbApprenants = d['nb_apprenants'] ?? 0;
           
-          return Container(
-            margin: const EdgeInsets.only(bottom: 12),
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: kECard,
-              borderRadius: BorderRadius.circular(kRadiusMd),
-              border: Border.all(color: kEBorder, width: 1),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: kPrimary.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(kRadiusSm),
-                    border: Border.all(color: kPrimary.withValues(alpha: 0.2), width: 0.8),
+          return GestureDetector(
+            onTap: () {
+              context.pushNamed(
+                AppRoute.adminDepartementDetail,
+                pathParameters: {'departementId': d['id'].toString()},
+                queryParameters: {
+                  'departementNom': d['nom']?.toString() ?? '',
+                  'parcoursNom': parcours.toString(),
+                },
+                extra: d,
+              );
+            },
+            child: YekiCard(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: YekiColors.primary.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(YekiRadius.sm),
+                      border: Border.all(color: YekiColors.primary.withValues(alpha: 0.2), width: 0.8),
+                    ),
+                    child: const Icon(Icons.domain, color: YekiColors.primary, size: 18),
                   ),
-                  child: const Icon(Icons.domain, color: kPrimary, size: 18),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(d['nom'] ?? '',
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: kEDark)),
-                      Text(
-                        '$nbCours cours · $nbApprenants apprenants',
-                        style: const TextStyle(fontSize: 12, color: kEMuted),
-                      ),
-                      if (parcours.isNotEmpty)
-                        Text('Parcours: $parcours',
-                            style: const TextStyle(fontSize: 11, color: kEMuted)),
-                      if (cadre != null)
-                        Text('Cadre: ${cadre['nom'] ?? ''}',
-                            style: const TextStyle(fontSize: 11, color: kPrimary)),
-                    ],
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(d['nom'] ?? '',
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: YekiColors.textDark)),
+                        Text(
+                          '$nbCours cours · $nbApprenants apprenants',
+                          style: const TextStyle(fontSize: 12, color: YekiColors.textMedium),
+                        ),
+                        if (parcours.isNotEmpty)
+                          Text('Parcours: $parcours',
+                              style: const TextStyle(fontSize: 11, color: YekiColors.textMedium)),
+                        if (cadre != null)
+                          Text('Cadre: ${cadre['nom'] ?? ''}',
+                              style: const TextStyle(fontSize: 11, color: YekiColors.primary)),
+                      ],
+                    ),
                   ),
-                ),
-                Text('${taux.toStringAsFixed(0)}%',
-                    style: const TextStyle(fontWeight: FontWeight.bold, color: kPrimary, fontSize: 16)),
-              ],
+                  Icon(Icons.arrow_forward_ios, color: YekiColors.primary, size: 14),
+                ],
+              ),
             ),
           );
         },
@@ -1274,15 +1864,15 @@ class _AdminGeneralPageState extends State<AdminGeneralPage>
     );
   }
 
-  // ─── TAB 3 : Vue globale ─────────────────────────────────────────
+  // ─── TAB 3 : Vue globale ──────────────────────────────────────────────
   Widget _tabGlobal() {
     final cards = [
-      _GS('Parcours', '${_stats['nb_parcours'] ?? 0}', Icons.route, kPrimary),
-      _GS('Départements', '${_stats['nb_departements'] ?? 0}', Icons.domain, kTealDark),
-      _GS('Cours', '${_stats['nb_cours'] ?? 0}', Icons.book, kPurple),
-      _GS('Apprenants', '${_stats['nb_apprenants'] ?? 0}', Icons.people, kGold),
-      _GS('Enseignants', '${_stats['nb_enseignants'] ?? 0}', Icons.person_outline, kAccent),
-      _GS('Leçons', '${_stats['nb_lecons'] ?? 0}', Icons.play_lesson, kTealLight),
+      _GS('Parcours', '${_stats['nb_parcours'] ?? 0}', Icons.route, YekiColors.primary),
+      _GS('Départements', '${_stats['nb_departements'] ?? 0}', Icons.domain, YekiColors.primaryDark),
+      _GS('Cours', '${_stats['nb_cours'] ?? 0}', Icons.book, YekiColors.purple),
+      _GS('Apprenants', '${_stats['nb_apprenants'] ?? 0}', Icons.people, YekiColors.gold),
+      _GS('Enseignants', '${_stats['nb_enseignants'] ?? 0}', Icons.person_outline, YekiColors.accent),
+      _GS('Leçons', '${_stats['nb_lecons'] ?? 0}', Icons.play_lesson, YekiColors.primaryLight),
     ];
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
@@ -1299,97 +1889,93 @@ class _AdminGeneralPageState extends State<AdminGeneralPage>
           ),
           if (_topEnseignants.isNotEmpty) ...[
             const SizedBox(height: 24),
-            const Row(
-              children: [
-                Icon(Icons.emoji_events, color: kGold, size: 20),
-                SizedBox(width: 8),
-                Text('Top enseignants',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: kEDark)),
-              ],
+            YekiSection(
+              title: 'Top enseignants',
+              icon: Icons.emoji_events,
+              iconColor: YekiColors.gold,
+              children: _topEnseignants.asMap().entries.map((e) {
+                final i = e.key;
+                final t = e.value;
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 10),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  decoration: BoxDecoration(
+                    color: YekiColors.white,
+                    borderRadius: BorderRadius.circular(YekiRadius.md),
+                    border: Border.all(color: YekiColors.borderLight, width: 1),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 32,
+                        height: 32,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: i == 0
+                              ? YekiColors.gold
+                              : i == 1
+                                  ? YekiColors.textMedium
+                                  : YekiColors.accent,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Text('${i + 1}',
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: YekiColors.white)),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(t['nom'] ?? '',
+                                style: const TextStyle(fontWeight: FontWeight.w600, color: YekiColors.textDark)),
+                            Text(t['role'] ?? '',
+                                style: const TextStyle(fontSize: 11, color: YekiColors.textMedium)),
+                          ],
+                        ),
+                      ),
+                      Text('${(t['score'] as num? ?? 0).toStringAsFixed(1)}/20',
+                          style: const TextStyle(fontWeight: FontWeight.bold, color: YekiColors.primary)),
+                    ],
+                  ),
+                );
+              }).toList(),
             ),
-            const SizedBox(height: 12),
-            ..._topEnseignants.asMap().entries.map((e) {
-              final i = e.key;
-              final t = e.value;
-              return Container(
-                margin: const EdgeInsets.only(bottom: 10),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                decoration: BoxDecoration(
-                  color: kECard,
-                  borderRadius: BorderRadius.circular(kRadiusMd),
-                  border: Border.all(color: kEBorder, width: 1),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 32,
-                      height: 32,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: i == 0
-                            ? kGold
-                            : i == 1
-                                ? kEMuted
-                                : kAccent,
-                        shape: BoxShape.circle,
-                      ),
-                      child: Text('${i + 1}',
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.white)),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(t['nom'] ?? '',
-                              style: const TextStyle(fontWeight: FontWeight.w600, color: kEDark)),
-                          Text(t['role'] ?? '',
-                              style: const TextStyle(fontSize: 11, color: kEMuted)),
-                        ],
-                      ),
-                    ),
-                    Text('${(t['score'] as num? ?? 0).toStringAsFixed(1)}/20',
-                        style: const TextStyle(fontWeight: FontWeight.bold, color: kPrimary)),
-                  ],
-                ),
-              );
-            }),
           ],
         ],
       ),
     );
   }
 
-  // ─── TAB 4 : Enseignants ──────────────────────────────────────────
+  // ─── TAB 4 : Enseignants ──────────────────────────────────────────────
   Widget _tabEnseignants() {
     return Column(
       children: [
         // Barre de recherche et filtres
         Container(
           padding: const EdgeInsets.all(16),
-          color: kECard,
+          color: YekiColors.white,
           child: Column(
             children: [
               TextField(
                 decoration: InputDecoration(
                   hintText: 'Rechercher un enseignant...',
-                  prefixIcon: const Icon(Icons.search, color: kPrimary),
+                  prefixIcon: const Icon(Icons.search, color: YekiColors.primary),
                   filled: true,
-                  fillColor: kEBg,
+                  fillColor: YekiColors.bgLight,
                   border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(kRadiusMd),
+                    borderRadius: BorderRadius.circular(YekiRadius.md),
                     borderSide: BorderSide.none,
                   ),
                   enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(kRadiusMd),
-                    borderSide: BorderSide(color: kEBorder, width: 1),
+                    borderRadius: BorderRadius.circular(YekiRadius.md),
+                    borderSide: BorderSide(color: YekiColors.borderLight, width: 1),
                   ),
                   focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(kRadiusMd),
-                    borderSide: const BorderSide(color: kPrimary, width: 1.5),
+                    borderRadius: BorderRadius.circular(YekiRadius.md),
+                    borderSide: const BorderSide(color: YekiColors.primary, width: 1.5),
                   ),
                   suffixIcon: IconButton(
-                    icon: const Icon(Icons.clear, color: kEMuted),
+                    icon: const Icon(Icons.clear, color: YekiColors.textMedium),
                     onPressed: () {
                       setState(() => _searchQuery = '');
                       _rechercherEnseignants();
@@ -1408,9 +1994,9 @@ class _AdminGeneralPageState extends State<AdminGeneralPage>
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8),
                       decoration: BoxDecoration(
-                        color: kEBg,
-                        borderRadius: BorderRadius.circular(kRadiusMd),
-                        border: Border.all(color: kEBorder, width: 1),
+                        color: YekiColors.bgLight,
+                        borderRadius: BorderRadius.circular(YekiRadius.md),
+                        border: Border.all(color: YekiColors.borderLight, width: 1),
                       ),
                       child: DropdownButtonHideUnderline(
                         child: DropdownButton<String>(
@@ -1435,9 +2021,9 @@ class _AdminGeneralPageState extends State<AdminGeneralPage>
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8),
                       decoration: BoxDecoration(
-                        color: kEBg,
-                        borderRadius: BorderRadius.circular(kRadiusMd),
-                        border: Border.all(color: kEBorder, width: 1),
+                        color: YekiColors.bgLight,
+                        borderRadius: BorderRadius.circular(YekiRadius.md),
+                        border: Border.all(color: YekiColors.borderLight, width: 1),
                       ),
                       child: DropdownButtonHideUnderline(
                         child: DropdownButton<String>(
@@ -1457,16 +2043,11 @@ class _AdminGeneralPageState extends State<AdminGeneralPage>
                     ),
                     const SizedBox(width: 8),
                     // Bouton de recherche
-                    ElevatedButton.icon(
+                    YekiButton(
+                      label: 'Rechercher',
+                      icon: Icons.search,
                       onPressed: _rechercherEnseignants,
-                      icon: const Icon(Icons.search, size: 16),
-                      label: const Text('Rechercher'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: kPrimary,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(kRadiusMd)),
-                      ),
+                      width: 140,
                     ),
                   ],
                 ),
@@ -1477,7 +2058,7 @@ class _AdminGeneralPageState extends State<AdminGeneralPage>
         // Liste des enseignants
         Expanded(
           child: _loadingEnseignants
-              ? const Center(child: CircularProgressIndicator(color: kPrimary))
+              ? const Center(child: YekiLoader())
               : _enseignants.isEmpty
                   ? Center(
                       child: Column(
@@ -1486,18 +2067,18 @@ class _AdminGeneralPageState extends State<AdminGeneralPage>
                           Container(
                             padding: const EdgeInsets.all(24),
                             decoration: BoxDecoration(
-                              color: kPrimary.withValues(alpha: 0.08),
+                              color: YekiColors.primary.withValues(alpha: 0.08),
                               shape: BoxShape.circle,
-                              border: Border.all(color: kPrimary.withValues(alpha: 0.2), width: 1),
+                              border: Border.all(color: YekiColors.primary.withValues(alpha: 0.2), width: 1),
                             ),
-                            child: Icon(Icons.person_outline, size: 48, color: kPrimary),
+                            child: const Icon(Icons.person_outline, size: 48, color: YekiColors.primary),
                           ),
                           const SizedBox(height: 16),
                           const Text('Aucun enseignant trouvé',
-                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: kEDark)),
+                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: YekiColors.textDark)),
                           const SizedBox(height: 8),
                           const Text('Essayez d\'ajuster vos filtres de recherche',
-                              style: TextStyle(fontSize: 13, color: kEMuted)),
+                              style: TextStyle(fontSize: 13, color: YekiColors.textMedium)),
                         ],
                       ),
                     )
@@ -1514,142 +2095,101 @@ class _AdminGeneralPageState extends State<AdminGeneralPage>
   Widget _buildEnseignantCard(Map e) {
     final isActive = e['is_active'] ?? false;
     final userType = e['user_type'] ?? 'enseignant';
-    final typeLabel = {
-      'enseignant': 'Enseignant',
-      'enseignant_principal': 'Enseignant Principal',
-      'enseignant_cadre': 'Enseignant Cadre',
-      'enseignant_admin': 'Enseignant Administrateur',
-    }[userType] ?? userType;
     final avatarUrl = e['avatar'];
     final dateJoined = e['date_joined'] != null 
         ? DateTime.parse(e['date_joined']).toLocal()
         : null;
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: kECard,
-        borderRadius: BorderRadius.circular(kRadiusMd),
-        border: Border.all(color: isActive ? kPrimary.withValues(alpha: 0.3) : kAccent.withValues(alpha: 0.3), width: 1.5),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                // Avatar
-                CircleAvatar(
-                  radius: 26,
-                  backgroundColor: kPrimary.withValues(alpha: 0.1),
-                  backgroundImage: avatarUrl != null ? NetworkImage(avatarUrl) : null,
-                  child: avatarUrl == null
-                      ? Text(
-                          (e['nom'] ?? e['username'] ?? '?')[0].toUpperCase(),
-                          style: const TextStyle(color: kPrimary, fontWeight: FontWeight.bold, fontSize: 18),
-                        )
-                      : null,
+    return YekiCard(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              // Avatar
+              YekiAvatar(
+                imageUrl: avatarUrl,
+                initials: (e['nom'] ?? e['username'] ?? '?')[0].toUpperCase(),
+                backgroundColor: YekiColors.primary.withValues(alpha: 0.1),
+                radius: 26,
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      e['nom'] ?? e['username'] ?? 'Inconnu',
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: YekiColors.textDark),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      e['email'] ?? '',
+                      style: const TextStyle(fontSize: 12, color: YekiColors.textMedium),
+                    ),
+                    const SizedBox(height: 2),
+                    Row(
+                      children: [
+                        YekiRoleBadge(role: userType),
+                        const SizedBox(width: 6),
+                        YekiStatusIndicator(
+                          label: isActive ? 'Autorisé' : 'Non autorisé',
+                          color: isActive ? YekiColors.success : YekiColors.error,
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        e['nom'] ?? e['username'] ?? 'Inconnu',
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: kEDark),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        e['email'] ?? '',
-                        style: const TextStyle(fontSize: 12, color: kEMuted),
-                      ),
-                      const SizedBox(height: 2),
-                      Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: kPrimary.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(
-                              typeLabel,
-                              style: TextStyle(fontSize: 10, color: kPrimary, fontWeight: FontWeight.w600),
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: isActive ? kGreen.withValues(alpha: 0.1) : kAccent.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(
-                              isActive ? '✓ Autorisé' : '✗ Non autorisé',
-                              style: TextStyle(
-                                fontSize: 10,
-                                color: isActive ? kGreen : kAccent,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                // Boutons d'action
-                IconButton(
-                  icon: const Icon(Icons.edit_outlined, color: kPrimary),
-                  tooltip: 'Modifier le profil',
-                  onPressed: () => _modifierEnseignant(e),
-                ),
-              ],
+              ),
+              IconButton(
+                icon: const Icon(Icons.edit_outlined, color: YekiColors.primary),
+                tooltip: 'Modifier le profil',
+                onPressed: () => _modifierEnseignant(e),
+              ),
+            ],
+          ),
+          if (dateJoined != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              'Inscrit le ${DateFormat('dd/MM/yyyy').format(dateJoined)}',
+              style: const TextStyle(fontSize: 11, color: YekiColors.textMedium),
             ),
-            if (dateJoined != null) ...[
-              const SizedBox(height: 8),
-              Text(
-                'Inscrit le ${DateFormat('dd/MM/yyyy').format(dateJoined)}',
-                style: const TextStyle(fontSize: 11, color: kEMuted),
-              ),
-            ],
-            if (e['bio'] != null && e['bio'].toString().isNotEmpty) ...[
-              const SizedBox(height: 4),
-              Text(
-                e['bio'],
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 12, color: kEMuted),
-              ),
-            ],
-            if (e['phone'] != null && e['phone'].toString().isNotEmpty) ...[
-              const SizedBox(height: 2),
-              Text('📞 ${e['phone']}', style: const TextStyle(fontSize: 11, color: kEMuted)),
-            ],
           ],
-        ),
+          if (e['bio'] != null && e['bio'].toString().isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              e['bio'],
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 12, color: YekiColors.textMedium),
+            ),
+          ],
+          if (e['phone'] != null && e['phone'].toString().isNotEmpty) ...[
+            const SizedBox(height: 2),
+            Text('📞 ${e['phone']}', style: const TextStyle(fontSize: 11, color: YekiColors.textMedium)),
+          ],
+        ],
       ),
     );
   }
 
-  // ─── TAB 5 : Tous les cours ───────────────────────────────────────
+  // ─── TAB 5 : Tous les cours ────────────────────────────────────────────
   Widget _tabTousCours() {
     return FutureBuilder<List>(
       future: _chargerTousLesCours(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator(color: kPrimary));
+          return const Center(child: YekiLoader(size: 40));
         }
         if (snapshot.hasError) {
           return Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.error_outline_rounded, size: 48, color: kAccent),
+                Icon(Icons.error_outline_rounded, size: 48, color: YekiColors.accent),
                 const SizedBox(height: 16),
-                const Text('Erreur lors du chargement des cours', style: TextStyle(fontSize: 16, color: kEDark)),
+                const Text('Erreur lors du chargement des cours', style: TextStyle(fontSize: 16, color: YekiColors.textDark)),
               ],
             ),
           );
@@ -1663,21 +2203,21 @@ class _AdminGeneralPageState extends State<AdminGeneralPage>
                 Container(
                   padding: const EdgeInsets.all(24),
                   decoration: BoxDecoration(
-                    color: kPrimary.withValues(alpha: 0.08),
+                    color: YekiColors.primary.withValues(alpha: 0.08),
                     shape: BoxShape.circle,
-                    border: Border.all(color: kPrimary.withValues(alpha: 0.2), width: 1),
+                    border: Border.all(color: YekiColors.primary.withValues(alpha: 0.2), width: 1),
                   ),
-                  child: Icon(Icons.book_outlined, size: 48, color: kPrimary),
+                  child: const Icon(Icons.book_outlined, size: 48, color: YekiColors.primary),
                 ),
                 const SizedBox(height: 16),
-                const Text('Aucun cours créé', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: kEDark)),
+                const Text('Aucun cours créé', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: YekiColors.textDark)),
               ],
             ),
           );
         }
         return RefreshIndicator(
           onRefresh: _charger,
-          color: kPrimary,
+          color: YekiColors.primary,
           child: ListView.builder(
             padding: const EdgeInsets.all(16),
             itemCount: cours.length,
@@ -1694,72 +2234,58 @@ class _AdminGeneralPageState extends State<AdminGeneralPage>
     try {
       coursColor = Color(int.parse('FF$colorHex', radix: 16));
     } catch (_) {
-      coursColor = kPrimary;
+      coursColor = YekiColors.primary;
     }
-    
-    // Pour l'admin général, utiliser le rôle adminGeneral
-    final RoleEnseignant role = RoleEnseignant.administrateurGeneral;
     
     return GestureDetector(
       onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => DetailCoursEnseignantPage(
-              coursId: cours['id'].toString(),
-              titre: cours['titre'] ?? 'Sans titre',
-              estEnseignantPrincipal: false,
-              role: role,
-              courseColor: coursColor,
-            ),
-          ),
+        context.pushNamed(
+          AppRoute.coursDetailEnseignant,
+          pathParameters: {'coursId': cours['id'].toString()},
+          queryParameters: {
+            'titre': (cours['titre'] ?? 'Sans titre') as String,
+            'estEnseignantPrincipal': 'false',
+            'courseColor': coursColor.value.toString(),
+          },
         );
       },
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        decoration: BoxDecoration(
-          color: kECard,
-          borderRadius: BorderRadius.circular(kRadiusMd),
-          border: Border.all(color: kEBorder, width: 1),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: coursColor.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(kRadiusSm),
-                  border: Border.all(color: coursColor.withValues(alpha: 0.2), width: 0.8),
-                ),
-                child: Icon(Icons.book, color: coursColor, size: 20),
+      child: YekiCard(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: coursColor.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(YekiRadius.sm),
+                border: Border.all(color: coursColor.withValues(alpha: 0.2), width: 0.8),
               ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
+              child: Icon(Icons.book, color: coursColor, size: 20),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    cours['titre'] ?? 'Sans titre',
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: YekiColors.textDark),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '${cours['niveau'] ?? 'Niveau non spécifié'} · ${cours['nb_apprenants'] ?? 0} apprenants',
+                    style: const TextStyle(fontSize: 12, color: YekiColors.textMedium),
+                  ),
+                  if (cours['departement'] != null)
                     Text(
-                      cours['titre'] ?? 'Sans titre',
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: kEDark),
+                      'Département: ${cours['departement']}',
+                      style: const TextStyle(fontSize: 11, color: YekiColors.textMedium),
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      '${cours['niveau'] ?? 'Niveau non spécifié'} · ${cours['nb_apprenants'] ?? 0} apprenants',
-                      style: const TextStyle(fontSize: 12, color: kEMuted),
-                    ),
-                    if (cours['departement'] != null)
-                      Text(
-                        'Département: ${cours['departement']}',
-                        style: const TextStyle(fontSize: 11, color: kEMuted),
-                      ),
-                  ],
-                ),
+                ],
               ),
-              Icon(Icons.arrow_forward_ios, color: kPrimary, size: 14),
-            ],
-          ),
+            ),
+            Icon(Icons.arrow_forward_ios, color: YekiColors.primary, size: 14),
+          ],
         ),
       ),
     );
@@ -1768,9 +2294,9 @@ class _AdminGeneralPageState extends State<AdminGeneralPage>
   Widget _buildGCard(_GS item) {
     return Container(
       decoration: BoxDecoration(
-        color: kECard,
-        borderRadius: BorderRadius.circular(kRadiusLg),
-        border: Border.all(color: kEBorder, width: 1),
+        color: YekiColors.white,
+        borderRadius: BorderRadius.circular(YekiRadius.lg),
+        border: Border.all(color: YekiColors.borderLight, width: 1),
       ),
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -1781,7 +2307,7 @@ class _AdminGeneralPageState extends State<AdminGeneralPage>
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
               color: item.color.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(kRadiusMd),
+              borderRadius: BorderRadius.circular(YekiRadius.md),
               border: Border.all(color: item.color.withValues(alpha: 0.2), width: 0.8),
             ),
             child: Icon(item.icon, color: item.color, size: 22),
@@ -1793,7 +2319,7 @@ class _AdminGeneralPageState extends State<AdminGeneralPage>
               Text(item.value,
                   style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: item.color)),
               Text(item.label,
-                  style: const TextStyle(fontSize: 12, color: kEMuted)),
+                  style: const TextStyle(fontSize: 12, color: YekiColors.textMedium)),
             ],
           ),
         ],
@@ -1801,11 +2327,11 @@ class _AdminGeneralPageState extends State<AdminGeneralPage>
     );
   }
 
-  // ─── Helpers ─────────────────────────────────────────────────────
+  // ─── Helpers ─────────────────────────────────────────────────────────────
   Widget _sheetHandle() => Center(
     child: Container(
       width: 40, height: 4,
-      decoration: BoxDecoration(color: kEBorder, borderRadius: BorderRadius.circular(10)),
+      decoration: BoxDecoration(color: YekiColors.borderLight, borderRadius: BorderRadius.circular(10)),
     ),
   );
 
@@ -1814,53 +2340,53 @@ class _AdminGeneralPageState extends State<AdminGeneralPage>
     return TextField(
       controller: ctrl,
       maxLines: maxLines,
-      style: const TextStyle(color: kEDark, fontSize: 14),
+      style: const TextStyle(color: YekiColors.textDark, fontSize: 14),
       decoration: InputDecoration(
         labelText: label,
         hintText: hint,
-        hintStyle: const TextStyle(color: kEMuted, fontSize: 13),
-        labelStyle: const TextStyle(color: kEMuted, fontSize: 13),
-        prefixIcon: Icon(icon, color: kPrimary, size: 20),
+        hintStyle: const TextStyle(color: YekiColors.textMedium, fontSize: 13),
+        labelStyle: const TextStyle(color: YekiColors.textMedium, fontSize: 13),
+        prefixIcon: Icon(icon, color: YekiColors.primary, size: 20),
         filled: true,
-        fillColor: kEBg,
+        fillColor: YekiColors.bgLight,
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(kRadiusMd),
+          borderRadius: BorderRadius.circular(YekiRadius.md),
           borderSide: BorderSide.none,
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(kRadiusMd),
-          borderSide: BorderSide(color: kEBorder, width: 1),
+          borderRadius: BorderRadius.circular(YekiRadius.md),
+          borderSide: BorderSide(color: YekiColors.borderLight, width: 1),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(kRadiusMd),
-          borderSide: const BorderSide(color: kPrimary, width: 1.5),
+          borderRadius: BorderRadius.circular(YekiRadius.md),
+          borderSide: const BorderSide(color: YekiColors.primary, width: 1.5),
         ),
       ),
     );
   }
 
   void _showError(String msg) {
-    if (!mounted) return;
+    if (!_mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(msg, style: const TextStyle(color: Colors.white)),
-        backgroundColor: kAccent,
+        content: Text(msg, style: const TextStyle(color: YekiColors.white)),
+        backgroundColor: YekiColors.error,
         behavior: SnackBarBehavior.floating,
         margin: const EdgeInsets.all(16),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(kRadiusMd)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(YekiRadius.md)),
       ),
     );
   }
 
   void _showSuccess(String msg) {
-    if (!mounted) return;
+    if (!_mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(msg, style: const TextStyle(color: Colors.white)),
-        backgroundColor: kGreen,
+        content: Text(msg, style: const TextStyle(color: YekiColors.white)),
+        backgroundColor: YekiColors.success,
         behavior: SnackBarBehavior.floating,
         margin: const EdgeInsets.all(16),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(kRadiusMd)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(YekiRadius.md)),
       ),
     );
   }
@@ -1885,7 +2411,7 @@ class _StickyTabBarDelegate extends SliverPersistentHeaderDelegate {
   @override
   Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
     return Container(
-      color: kECard,
+      color: YekiColors.white,
       child: tabBar,
     );
   }

@@ -768,7 +768,7 @@ class _YekiIAChatPageState extends State<YekiIAChatPage>
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(12),
                   child: Image.network(msg.imageUrl!, height: 160, width: 220, fit: BoxFit.cover,
-                      errorBuilder: (_, __, _) => const SizedBox.shrink()),
+                      errorBuilder: (_, _, _) => const SizedBox.shrink()),
                 ),
               ),
             if (msg.audioUrl != null)
@@ -902,7 +902,7 @@ class _YekiIAChatPageState extends State<YekiIAChatPage>
   Widget _buildDots() {
     return AnimatedBuilder(
       animation: _typingCtrl,
-      builder: (_, __) {
+      builder: (_, _) {
         final v = _typingCtrl.value;
         return Row(
           mainAxisSize: MainAxisSize.min,

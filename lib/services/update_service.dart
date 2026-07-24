@@ -1,365 +1,349 @@
 // lib/services/update_service.dart
-// Version corrigée pour awesome_notifications 0.11.0 - Support Web
 
 import 'dart:convert';
 import 'dart:io';
-import 'dart:math';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
-import 'package:flutter_downloader/flutter_downloader.dart';
 import 'package:http/http.dart' as http;
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:open_file/open_file.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:crypto/crypto.dart';
-import 'package:awesome_notifications/awesome_notifications.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:yeki/core/constants/api_constants.dart';
 
+/// Modèle d'information de mise à jour
+class UpdateInfo {
+  final int latestVersion;
+  final int currentVersion;
+  final String versionName;
+  final String downloadUrl;
+  final String changelog;
+  final bool forceUpdate;
+  final bool isUpdateAvailable;
+  final int fileSize;
+  final String releaseDate;
+  final bool isNoUpdate;
+
+  UpdateInfo({
+    required this.latestVersion,
+    required this.currentVersion,
+    required this.versionName,
+    required this.downloadUrl,
+    required this.changelog,
+    required this.forceUpdate,
+    this.isUpdateAvailable = true,
+    this.fileSize = 0,
+    this.releaseDate = '',
+    this.isNoUpdate = false,
+  });
+
+  factory UpdateInfo.noUpdate(int currentVersion) {
+    return UpdateInfo(
+      latestVersion: currentVersion,
+      currentVersion: currentVersion,
+      versionName: 'v1.0.0',
+      downloadUrl: '',
+      changelog: '',
+      forceUpdate: false,
+      isUpdateAvailable: false,
+      isNoUpdate: true,
+    );
+  }
+
+  factory UpdateInfo.fromJson(Map<String, dynamic> json, int currentVersion) {
+    return UpdateInfo(
+      latestVersion: json['version_code'] as int? ?? 1,
+      currentVersion: currentVersion,
+      versionName: json['version_name'] as String? ?? 'v1.0.0',
+      downloadUrl: json['download_url'] as String? ?? '',
+      changelog: json['changelog'] as String? ?? '',
+      forceUpdate: json['force_update'] as bool? ?? false,
+      isUpdateAvailable: json['is_update_available'] as bool? ?? false,
+      fileSize: json['file_size'] as int? ?? 0,
+      releaseDate: json['release_date'] as String? ?? '',
+    );
+  }
+}
+
+/// Résultat du nouveau mécanisme de vérification obligatoire (P5.1bis,
+/// `/api/app/version/`) — volontairement minimal : le contrat de réponse
+/// réel et l'écran de blocage complet arrivent en P12.1.
+class MandatoryVersionInfo {
+  final String message;
+
+  const MandatoryVersionInfo({required this.message});
+}
+
+/// Service de mise à jour
 class UpdateService {
-  static const String apiUrl = "https://yeki.pythonanywhere.com/api/latest-version/";
-  static const String prefLastCheck = 'last_update_check';
-  static const String prefPendingDownload = 'pending_download';
+  static const String baseUrl = ApiConstants.baseUrl;
   static const String prefSkipVersion = 'skip_version';
-  
-  // ─────────────────────────────────────────────────────────────
-  //  INITIALISATION
-  // ─────────────────────────────────────────────────────────────
+  static const String prefLastCheck = 'last_update_check';
+
+  static final FirebaseStorage _storage = FirebaseStorage.instance;
+
+  /// ✅ Initialisation du service (requise pour Firebase)
   static Future<void> initialize() async {
-    // ✅ Support Web : désactiver les fonctionnalités non supportées
-    if (kIsWeb) return;
-    
-    await FlutterDownloader.initialize(
-      debug: true,
-      ignoreSsl: false,
-    );
-    
-    await _initializeAwesomeNotifications();
-    await _requestPermissions();
+    // Vérifier que Firebase Storage est disponible
+    try {
+      await _storage.ref('').listAll().timeout(const Duration(seconds: 5));
+      debugPrint('✅ UpdateService initialisé avec succès');
+    } catch (e) {
+      debugPrint('⚠️ UpdateService: Firebase Storage non disponible: $e');
+      // L'initialisation ne doit pas bloquer l'application
+    }
   }
-  
-  static Future<void> _initializeAwesomeNotifications() async {
-    await AwesomeNotifications().initialize(
-      null,
-      [
-        NotificationChannel(
-          channelKey: 'update_channel',
-          channelName: 'Mises à jour',
-          channelDescription: 'Notifications de mise à jour',
-          defaultColor: const Color(0xFF135F74),
-          ledColor: Colors.white,
-          importance: NotificationImportance.Default,
-          playSound: true,
-          enableVibration: true,
-        ),
-        NotificationChannel(
-          channelKey: 'download_channel',
-          channelName: 'Téléchargements',
-          channelDescription: 'Téléchargements terminés',
-          defaultColor: const Color(0xFF10B981),
-          ledColor: Colors.white,
-          importance: NotificationImportance.High,
-          playSound: true,
-          enableVibration: true,
-        ),
-      ],
-    );
-    
-    await AwesomeNotifications().requestPermissionToSendNotifications();
+
+  /// Vérifie si une mise à jour est disponible
+  static Future<UpdateInfo?> checkForUpdate({
+    bool showNoUpdate = false,
+    bool forceCheck = false,
+  }) async {
+    try {
+      // Récupérer la version actuelle
+      final packageInfo = await PackageInfo.fromPlatform();
+      final currentVersion = int.tryParse(packageInfo.buildNumber) ?? 1;
+      final platform = _getPlatform();
+
+      // Vérifier le cache (une fois par heure)
+      if (!forceCheck) {
+        final prefs = await SharedPreferences.getInstance();
+        final lastCheck = prefs.getInt(prefLastCheck) ?? 0;
+        final now = DateTime.now().millisecondsSinceEpoch;
+        if (!showNoUpdate && (now - lastCheck) < 3600000) {
+          return null;
+        }
+        await prefs.setInt(prefLastCheck, now);
+      }
+
+      // Vérifier la version ignorée
+      final prefs = await SharedPreferences.getInstance();
+      final skippedVersion = prefs.getString(prefSkipVersion);
+
+      // Appeler l'API Django
+      final response = await http.get(
+        Uri.parse('$baseUrl/latest-version/?platform=$platform'),
+      ).timeout(const Duration(seconds: 15));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final updateInfo = UpdateInfo.fromJson(data, currentVersion);
+
+        // Vérifier si l'utilisateur a ignoré cette version
+        if (!updateInfo.forceUpdate && skippedVersion == updateInfo.versionName) {
+          return null;
+        }
+
+        if (updateInfo.isUpdateAvailable || showNoUpdate) {
+          return updateInfo;
+        }
+      }
+    } catch (e) {
+      debugPrint('Erreur vérification mise à jour: $e');
+    }
+    return null;
   }
-  
-  // ─────────────────────────────────────────────────────────────
-  //  VÉRIFICATION PRINCIPALE
-  // ─────────────────────────────────────────────────────────────
-  static Future<UpdateInfo?> checkForUpdate({bool showNoUpdate = false}) async {
+
+  /// Vérifie si une mise à jour OBLIGATOIRE est requise, via le nouveau
+  /// mécanisme `/api/app/version/` (P5.1bis) — coexiste temporairement
+  /// avec [checkForUpdate] (`/latest-version/`, fonctionnel dès
+  /// aujourd'hui) : l'endpoint et l'écran de blocage réels arrivent en
+  /// P12.1, cet appel est posé maintenant et sera câblé/réconcilié à ce
+  /// moment-là.
+  ///
+  /// Tant que l'endpoint n'existe pas côté Django, cet appel échoue
+  /// (404) — capturé ici, jamais remonté : une panne réseau/serveur ne
+  /// doit JAMAIS bloquer l'utilisateur au splash.
+  static Future<MandatoryVersionInfo?> checkMandatoryVersion() async {
+    try {
+      final packageInfo = await PackageInfo.fromPlatform();
+      final response = await http
+          .get(
+            Uri.parse(
+              '${ApiConstants.appVersion}?plateforme=$currentPlatform&build=${packageInfo.buildNumber}',
+            ),
+          )
+          .timeout(const Duration(seconds: 5));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        if (data['obligatoire'] == true) {
+          return MandatoryVersionInfo(
+            message: data['message'] as String? ?? 'Une mise à jour est requise pour continuer.',
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('Vérification version obligatoire (endpoint P12.1) : $e');
+    }
+    return null;
+  }
+
+  /// Vérifie rapidement si une mise à jour est disponible
+  static Future<bool> isUpdateAvailable() async {
     try {
       final packageInfo = await PackageInfo.fromPlatform();
       final currentVersion = int.tryParse(packageInfo.buildNumber) ?? 1;
       final platform = _getPlatform();
-      
-      final prefs = await SharedPreferences.getInstance();
-      final lastCheck = prefs.getInt(prefLastCheck) ?? 0;
-      final now = DateTime.now().millisecondsSinceEpoch;
-      final skippedVersion = prefs.getString(prefSkipVersion);
-      
-      if (!showNoUpdate && (now - lastCheck) < 3600000) {
-        return null;
-      }
-      
-      await prefs.setInt(prefLastCheck, now);
-      
+
       final response = await http.get(
-        Uri.parse("$apiUrl?platform=$platform"),
-      ).timeout(const Duration(seconds: 15));
-      
+        Uri.parse('$baseUrl/check-update/?platform=$platform&current_version=$currentVersion'),
+      ).timeout(const Duration(seconds: 10));
+
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        final latestVersion = data['version_code'] as int;
-        final downloadUrl = data['download_url'] as String;
-        final changelog = data['changelog'] as String;
-        final forceUpdate = data['force_update'] as bool? ?? false;
-        final versionName = data['version_name'] as String? ?? 'v1.0.0';
-        final minVersion = data['min_version'] as int? ?? 1;
-        
-        if (!forceUpdate && skippedVersion == versionName) {
-          return null;
-        }
-        
-        final isForceUpdate = forceUpdate || (currentVersion < minVersion);
-        
-        if (latestVersion > currentVersion) {
-          return UpdateInfo(
-            latestVersion: latestVersion,
-            currentVersion: currentVersion,
-            versionName: versionName,
-            downloadUrl: downloadUrl,
-            changelog: changelog,
-            forceUpdate: isForceUpdate,
-          );
-        } else if (showNoUpdate) {
-          return UpdateInfo.noUpdate(currentVersion);
-        }
+        return data['update_available'] as bool? ?? false;
       }
     } catch (e) {
-      debugPrint("Erreur vérification mise à jour: $e");
+      debugPrint('Erreur vérification mise à jour rapide: $e');
     }
-    return null;
+    return false;
   }
-  
-  // ─────────────────────────────────────────────────────────────
-  //  TÉLÉCHARGEMENT
-  // ─────────────────────────────────────────────────────────────
-  static Future<bool> downloadUpdate(UpdateInfo info) async {
-    // ✅ Support Web : désactiver le téléchargement
+
+  /// Télécharge et installe la mise à jour
+  static Future<bool> downloadAndInstallUpdate(UpdateInfo info) async {
     if (kIsWeb) {
-      debugPrint("Téléchargement non supporté sur le Web");
+      debugPrint('Mise à jour non supportée sur le Web');
       return false;
     }
-    
-    if (!await _requestPermissions()) {
-      debugPrint("Permissions refusées");
-      return false;
+
+    // Vérifier les permissions
+    if (Platform.isAndroid) {
+      final storageStatus = await Permission.storage.request();
+      if (!storageStatus.isGranted) {
+        return false;
+      }
     }
-    
+
     try {
       final directory = await _getDownloadDirectory();
-      final fileName = _getFileName(info.downloadUrl);
+      final fileName = 'yeki_${info.versionName.replaceAll('v', '')}.apk';
       final savePath = '${directory.path}/$fileName';
-      
+
+      // Supprimer l'ancien fichier s'il existe
       final existingFile = File(savePath);
       if (await existingFile.exists()) {
         await existingFile.delete();
       }
-      
-      final taskId = await FlutterDownloader.enqueue(
-        url: info.downloadUrl,
-        savedDir: directory.path,
-        fileName: fileName,
-        showNotification: true,
-        openFileFromNotification: true,
-      );
-      
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(prefPendingDownload, taskId!);
-      await prefs.setString('pending_version', info.versionName);
-      await prefs.setString('pending_path', savePath);
-      
-      FlutterDownloader.registerCallback((id, status, progress) {
-        if (id == taskId) {
-          _onDownloadProgress(id, status as DownloadTaskStatus, progress, savePath, info);
+
+      // Télécharger depuis Firebase Storage ou URL directe
+      bool downloadSuccess = false;
+
+      // Méthode 1: URL directe (si disponible)
+      if (info.downloadUrl.isNotEmpty) {
+        try {
+          downloadSuccess = await _downloadFromUrl(info.downloadUrl, savePath);
+        } catch (e) {
+          debugPrint('Erreur téléchargement URL directe: $e');
+          downloadSuccess = false;
         }
-      });
-      
-      await _showDownloadStartedNotification(info);
-      
+      }
+
+      // Méthode 2: Firebase Storage
+      if (!downloadSuccess) {
+        try {
+          downloadSuccess = await _downloadFromFirebaseStorage(info, savePath);
+        } catch (e) {
+          debugPrint('Erreur téléchargement Firebase Storage: $e');
+          downloadSuccess = false;
+        }
+      }
+
+      if (!downloadSuccess) {
+        return false;
+      }
+
+      // Ouvrir l'APK pour installation
+      await OpenFile.open(savePath);
+
+      // Sauvegarder pour installation différée
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('downloaded_apk_path', savePath);
+      await prefs.setString('downloaded_version', info.versionName);
+
       return true;
     } catch (e) {
-      debugPrint("Erreur téléchargement: $e");
+      debugPrint('Erreur téléchargement: $e');
       return false;
     }
   }
-  
-  static void _onDownloadProgress(String taskId, DownloadTaskStatus status, int progress, String savePath, UpdateInfo info) {
-    if (status == DownloadTaskStatus.complete) {
-      _onDownloadComplete(savePath, info);
-    } else if (status == DownloadTaskStatus.failed) {
-      _onDownloadFailed();
+
+  /// Télécharger depuis URL directe
+  static Future<bool> _downloadFromUrl(String url, String savePath) async {
+    try {
+      final response = await http.get(Uri.parse(url));
+      if (response.statusCode == 200) {
+        final file = File(savePath);
+        await file.writeAsBytes(response.bodyBytes);
+        return await file.exists();
+      }
+      return false;
+    } catch (e) {
+      debugPrint('Erreur _downloadFromUrl: $e');
+      return false;
     }
   }
-  
-  static Future<void> _onDownloadComplete(String savePath, UpdateInfo info) async {
-    final file = File(savePath);
-    if (!await file.exists()) return;
-    
-    final hash = await _calculateFileHash(file);
-    final expectedHash = await _getExpectedHash(info.downloadUrl);
-    if (expectedHash.isNotEmpty && hash != expectedHash) {
-      debugPrint("Hash mismatch - fichier corrompu");
-      await file.delete();
-      await _showCorruptedNotification(info);
+
+  /// Télécharger depuis Firebase Storage
+  static Future<bool> _downloadFromFirebaseStorage(UpdateInfo info, String savePath) async {
+    try {
+      final ref = _storage.refFromURL(info.downloadUrl);
+      
+      // Télécharger avec progression
+      final file = File(savePath);
+      await ref.writeToFile(file);
+      
+      return await file.exists();
+    } catch (e) {
+      debugPrint('Erreur _downloadFromFirebaseStorage: $e');
+      return false;
+    }
+  }
+
+  /// Télécharger avec progression (pour UI)
+  static Stream<double> downloadWithProgress(UpdateInfo info) async* {
+    if (info.downloadUrl.isEmpty) {
+      yield 0.0;
       return;
     }
-    
-    await _showDownloadCompleteNotification(savePath, info);
-    
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('downloaded_apk_path', savePath);
-    await prefs.setString('downloaded_version', info.versionName);
-  }
-  
-  static void _onDownloadFailed() {
-    debugPrint("Téléchargement échoué");
-    _showDownloadFailedNotification();
-  }
-  
-  // ─────────────────────────────────────────────────────────────
-  //  INSTALLATION
-  // ─────────────────────────────────────────────────────────────
-  static Future<bool> installUpdate(String apkPath) async {
-    if (kIsWeb) return false;
-    if (Platform.isAndroid) {
-      if (!await Permission.requestInstallPackages.isGranted) {
-        final result = await Permission.requestInstallPackages.request();
-        if (!result.isGranted) {
-          return false;
-        }
+
+    try {
+      final ref = _storage.refFromURL(info.downloadUrl);
+      final directory = await _getDownloadDirectory();
+      final fileName = 'yeki_${info.versionName.replaceAll('v', '')}.apk';
+      final savePath = '${directory.path}/$fileName';
+
+      // Supprimer l'ancien fichier
+      final existingFile = File(savePath);
+      if (await existingFile.exists()) {
+        await existingFile.delete();
+      }
+
+      final file = File(savePath);
+      
+      // Téléchargement avec progression
+      final task = ref.writeToFile(file);
+      
+      // Écouter la progression
+      await for (final snapshot in task.snapshotEvents) {
+        final progress = snapshot.bytesTransferred / snapshot.totalBytes;
+        yield progress;
       }
       
-      final file = File(apkPath);
-      if (!await file.exists()) return false;
-      
-      return true;
-    } else if (Platform.isIOS) {
-      return false;
+      yield 1.0;
+    } catch (e) {
+      debugPrint('Erreur téléchargement progression: $e');
+      yield 0.0;
     }
-    return false;
   }
-  
-  // ─────────────────────────────────────────────────────────────
-  //  IGNORER UNE VERSION
-  // ─────────────────────────────────────────────────────────────
-  static Future<void> skipVersion(String versionName) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(prefSkipVersion, versionName);
-  }
-  
-  // ─────────────────────────────────────────────────────────────
-  //  NOTIFICATIONS
-  // ─────────────────────────────────────────────────────────────
-  static Future<void> _showDownloadStartedNotification(UpdateInfo info) async {
-    if (kIsWeb) return;
-    await AwesomeNotifications().createNotification(
-      content: NotificationContent(
-        id: Random().nextInt(9999),
-        channelKey: 'download_channel',
-        title: 'Téléchargement en cours',
-        body: 'Téléchargement de Yéki ${info.versionName}...',
-        notificationLayout: NotificationLayout.Default,
-        displayOnBackground: true,
-        displayOnForeground: true,
-        color: const Color(0xFF135F74),
-      ),
-    );
-  }
-  
-  static Future<void> _showDownloadCompleteNotification(String path, UpdateInfo info) async {
-    if (kIsWeb) return;
-    await AwesomeNotifications().createNotification(
-      content: NotificationContent(
-        id: Random().nextInt(9999),
-        channelKey: 'download_channel',
-        title: 'Téléchargement terminé ✅',
-        body: 'Yéki ${info.versionName} est prêt à être installé',
-        notificationLayout: NotificationLayout.Default,
-        displayOnBackground: true,
-        displayOnForeground: true,
-        color: const Color(0xFF10B981),
-      ),
-      actionButtons: [
-        NotificationActionButton(
-          key: 'INSTALL',
-          label: 'Installer maintenant',
-          autoDismissible: true,
-        ),
-      ],
-    );
-  }
-  
-  static Future<void> _showDownloadFailedNotification() async {
-    if (kIsWeb) return;
-    await AwesomeNotifications().createNotification(
-      content: NotificationContent(
-        id: Random().nextInt(9999),
-        channelKey: 'download_channel',
-        title: 'Téléchargement échoué ❌',
-        body: 'Une erreur est survenue lors du téléchargement. Veuillez réessayer.',
-        notificationLayout: NotificationLayout.Default,
-        displayOnBackground: true,
-        displayOnForeground: true,
-        color: const Color(0xFFEF4444),
-      ),
-    );
-  }
-  
-  static Future<void> _showCorruptedNotification(UpdateInfo info) async {
-    if (kIsWeb) return;
-    await AwesomeNotifications().createNotification(
-      content: NotificationContent(
-        id: Random().nextInt(9999),
-        channelKey: 'download_channel',
-        title: 'Fichier corrompu ⚠️',
-        body: 'Le fichier téléchargé est corrompu. Veuillez réessayer.',
-        notificationLayout: NotificationLayout.Default,
-        displayOnBackground: true,
-        displayOnForeground: true,
-        color: const Color(0xFFF97316),
-      ),
-    );
-  }
-  
-  // ─────────────────────────────────────────────────────────────
-  //  PERMISSIONS
-  // ─────────────────────────────────────────────────────────────
-  static Future<bool> _requestPermissions() async {
-    if (kIsWeb) return true;
-    if (Platform.isAndroid) {
-      final permissions = [
-        Permission.storage,
-        Permission.notification,
-      ];
-      
-      if (await Permission.requestInstallPackages.status.isDenied) {
-        permissions.add(Permission.requestInstallPackages);
-      }
-      
-      final statuses = await permissions.request();
-      
-      final allGranted = statuses.values.every((status) => status.isGranted);
-      
-      if (!allGranted) {
-        final again = await permissions.request();
-        return again.values.every((status) => status.isGranted);
-      }
-      return true;
-    }
-    return true;
-  }
-  
-  // ─────────────────────────────────────────────────────────────
-  //  UTILITAIRES
-  // ─────────────────────────────────────────────────────────────
-  static String _getPlatform() {
-    if (kIsWeb) return 'web';
-    if (Platform.isAndroid) return 'android';
-    if (Platform.isIOS) return 'ios';
-    return 'desktop';
-  }
-  
+
   static Future<Directory> _getDownloadDirectory() async {
-    if (kIsWeb) return Directory('/tmp');
     if (Platform.isAndroid) {
-      final downloadDir = await getExternalStorageDirectory();
-      if (downloadDir != null) {
-        final yekiDir = Directory('${downloadDir.path}/Yeki');
+      final downloadsDir = await getExternalStorageDirectory();
+      if (downloadsDir != null) {
+        final yekiDir = Directory('${downloadsDir.path}/Yeki');
         if (!await yekiDir.exists()) {
           await yekiDir.create(recursive: true);
         }
@@ -368,54 +352,43 @@ class UpdateService {
     }
     return await getApplicationDocumentsDirectory();
   }
-  
-  static String _getFileName(String url) {
-    final uri = Uri.parse(url);
-    final segments = uri.pathSegments;
-    final fileName = segments.isNotEmpty ? segments.last : 'yeki_update.apk';
-    return fileName.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
+
+  static String _getPlatform() {
+    if (kIsWeb) return 'web';
+    if (Platform.isAndroid) return 'android';
+    if (Platform.isIOS) return 'ios';
+    return 'web';
   }
-  
-  static Future<String> _calculateFileHash(File file) async {
-    try {
-      final bytes = await file.readAsBytes();
-      final digest = sha256.convert(bytes);
-      return digest.toString();
-    } catch (e) {
-      return '';
-    }
+
+  /// Détection de plateforme déjà utilisée par [checkForUpdate] — exposée
+  /// pour réutilisation (ex. [checkMandatoryVersion]) sans dupliquer la
+  /// logique (règle 1).
+  static String get currentPlatform => _getPlatform();
+
+  /// Ignorer cette version
+  static Future<void> skipVersion(String versionName) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(prefSkipVersion, versionName);
   }
-  
-  static Future<String> _getExpectedHash(String url) async {
-    try {
-      final response = await http.get(Uri.parse("$url.sha256"));
-      if (response.statusCode == 200) {
-        return response.body.trim();
-      }
-    } catch (_) {}
-    return '';
-  }
-  
+
   // ─────────────────────────────────────────────────────────────
-  //  AFFICHAGE DIALOGUE
+  //  AFFICHAGE DIALOGUES
   // ─────────────────────────────────────────────────────────────
-  static Future<void> showUpdateDialog(BuildContext context, UpdateInfo info, {bool isManual = false}) async {
-    if (info.isNoUpdate && isManual) {
+
+  /// Affiche le dialogue de mise à jour
+  static Future<void> showUpdateDialog(BuildContext context, UpdateInfo info) async {
+    if (info.isNoUpdate) {
       _showNoUpdateSnackbar(context);
       return;
     }
-    
-    if (info.isNoUpdate) return;
-    
-    final isForce = info.forceUpdate;
-    
-    if (isForce) {
+
+    if (info.forceUpdate) {
       await _showForceUpdateDialog(context, info);
     } else {
       await _showOptionalUpdateDialog(context, info);
     }
   }
-  
+
   static Future<void> _showForceUpdateDialog(BuildContext context, UpdateInfo info) async {
     return showDialog(
       context: context,
@@ -433,7 +406,10 @@ class UpdateService {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Une nouvelle version (${info.versionName}) est disponible.'),
+            Text(
+              'Une nouvelle version (${info.versionName}) est disponible.',
+              style: const TextStyle(fontSize: 14),
+            ),
             const SizedBox(height: 12),
             Container(
               padding: const EdgeInsets.all(12),
@@ -444,9 +420,22 @@ class UpdateService {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('📋 Nouveautés :', style: TextStyle(fontWeight: FontWeight.bold)),
+                  const Text(
+                    '📋 Nouveautés :',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
                   const SizedBox(height: 5),
-                  Text(info.changelog),
+                  Text(
+                    info.changelog,
+                    style: const TextStyle(fontSize: 13),
+                  ),
+                  if (info.fileSize > 0) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      '📦 Taille: ${(info.fileSize / 1024 / 1024).toStringAsFixed(1)} MB',
+                      style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -456,15 +445,19 @@ class UpdateService {
           ElevatedButton(
             onPressed: () async {
               Navigator.pop(ctx);
-              final success = await downloadUpdate(info);
-              if (success && context.mounted) {
-                _showDownloadStartedSnackbar(context);
-              } else if (context.mounted) {
-                _showErrorSnackbar(context);
+              final success = await downloadAndInstallUpdate(info);
+              if (!success && context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('❌ Erreur lors du téléchargement'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
               }
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF135F74),
+              foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
             child: const Text('Télécharger maintenant'),
@@ -473,7 +466,7 @@ class UpdateService {
       ),
     );
   }
-  
+
   static Future<void> _showOptionalUpdateDialog(BuildContext context, UpdateInfo info) async {
     final result = await showDialog<bool>(
       context: context,
@@ -491,7 +484,10 @@ class UpdateService {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Version ${info.versionName} disponible.'),
+            Text(
+              'Version ${info.versionName} disponible.',
+              style: const TextStyle(fontSize: 14),
+            ),
             const SizedBox(height: 12),
             Container(
               padding: const EdgeInsets.all(12),
@@ -502,9 +498,15 @@ class UpdateService {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('📋 Nouveautés :', style: TextStyle(fontWeight: FontWeight.bold)),
+                  const Text(
+                    '📋 Nouveautés :',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
                   const SizedBox(height: 5),
-                  Text(info.changelog),
+                  Text(
+                    info.changelog,
+                    style: const TextStyle(fontSize: 13),
+                  ),
                 ],
               ),
             ),
@@ -526,26 +528,27 @@ class UpdateService {
             onPressed: () => Navigator.pop(ctx, true),
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF135F74),
+              foregroundColor: Colors.white,
             ),
             child: const Text('Mettre à jour'),
           ),
         ],
       ),
     );
-    
+
     if (result == true) {
-      final success = await downloadUpdate(info);
-      if (success && context.mounted) {
-        _showDownloadStartedSnackbar(context);
-      } else if (context.mounted) {
-        _showErrorSnackbar(context);
+      final success = await downloadAndInstallUpdate(info);
+      if (!success && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('❌ Erreur lors du téléchargement'),
+            backgroundColor: Colors.red,
+          ),
+        );
       }
     }
   }
-  
-  // ─────────────────────────────────────────────────────────────
-  //  SNACKBARS
-  // ─────────────────────────────────────────────────────────────
+
   static void _showNoUpdateSnackbar(BuildContext context) {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
@@ -556,57 +559,4 @@ class UpdateService {
       ),
     );
   }
-  
-  static void _showDownloadStartedSnackbar(BuildContext context) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('📥 Téléchargement en arrière-plan...'),
-        backgroundColor: Color(0xFF135F74),
-        behavior: SnackBarBehavior.floating,
-        duration: Duration(seconds: 3),
-      ),
-    );
-  }
-  
-  static void _showErrorSnackbar(BuildContext context) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('❌ Erreur lors du téléchargement'),
-        backgroundColor: Color(0xFFEF4444),
-        behavior: SnackBarBehavior.floating,
-        duration: Duration(seconds: 3),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────
-//  MODÈLE UpdateInfo
-// ─────────────────────────────────────────────────────────────
-class UpdateInfo {
-  final int latestVersion;
-  final int currentVersion;
-  final String versionName;
-  final String downloadUrl;
-  final String changelog;
-  final bool forceUpdate;
-  final bool isNoUpdate;
-  
-  UpdateInfo({
-    required this.latestVersion,
-    required this.currentVersion,
-    required this.versionName,
-    required this.downloadUrl,
-    required this.changelog,
-    required this.forceUpdate,
-    this.isNoUpdate = false,
-  });
-  
-  UpdateInfo.noUpdate(this.currentVersion)
-      : latestVersion = currentVersion,
-        versionName = '',
-        downloadUrl = '',
-        changelog = '',
-        forceUpdate = false,
-        isNoUpdate = true;
 }

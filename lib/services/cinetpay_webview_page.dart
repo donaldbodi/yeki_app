@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:yeki/core/constants/api_constants.dart';
 
 class CinetPayWebViewPage extends StatefulWidget {
   final num amount;
@@ -39,7 +40,7 @@ class _CinetPayWebViewPageState extends State<CinetPayWebViewPage> {
 
     try {
       final response = await http.post(
-        Uri.parse('https://yeki.pythonanywhere.com/api/paiements/cinetpay/initier/'),
+        Uri.parse('${ApiConstants.baseUrl}/paiements/cinetpay/initier/'),
         headers: {
           'Authorization': 'Token $token',
           'Content-Type': 'application/json',
@@ -113,7 +114,7 @@ class _CinetPayWebViewPageState extends State<CinetPayWebViewPage> {
 
     try {
       final response = await http.get(
-        Uri.parse('https://yeki.pythonanywhere.com/api/wallet/solde/'),
+        Uri.parse('${ApiConstants.baseUrl}/wallet/solde/'),
         headers: {'Authorization': 'Token $token'},
       );
 

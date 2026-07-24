@@ -6,11 +6,13 @@
 import 'dart:convert';
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:yeki/core/theme/yeki_design_system.dart';
 import 'package:yeki/core/constants/api_constants.dart';
-import 'package:yeki/views/pages/apprenants/paiement_page.dart';
+import 'package:yeki/core/router/route_names.dart';
+import 'package:yeki/views/pages/apprenants/paiement_page.dart' show PaiementType;
 
 const List<int> _rechargeAmounts = [1000, 2000, 5000, 10000, 20000, 50000];
 
@@ -71,15 +73,13 @@ class _WalletPageState extends State<WalletPage> {
   }
 
   Future<void> _recharger(int montant) async {
-    final success = await Navigator.push<bool>(
-      context,
-      MaterialPageRoute(
-        builder: (_) => PaiementPage(
-          type: PaiementType.rechargeWallet,
-          titre: 'Recharge portefeuille',
-          montant: montant,
-        ),
-      ),
+    final success = await context.pushNamed<bool>(
+      AppRoute.paiement,
+      queryParameters: {
+        'type': PaiementType.rechargeWallet.name,
+        'titre': 'Recharge portefeuille',
+        'montant': montant.toString(),
+      },
     );
 
     if (success == true && mounted) {

@@ -15,6 +15,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:yeki/core/theme/app_theme.dart';
 import 'package:yeki/core/constants/api_constants.dart';
 import 'package:yeki/utils/error_handler.dart';
+import 'package:yeki/core/design/components/inputs/yk_color_picker.dart';
 
 // ── Listes de référence ──────────────────────────────────────────
 
@@ -49,21 +50,6 @@ const List<Map<String, dynamic>> _icones = [
   {'name': 'medical_services', 'icon': Icons.medical_services, 'label': 'Médecine'},
 ];
 
-// Palette de couleurs prédéfinies
-const List<Color> _couleurs = [
-  Color(0xFF008080), // teal défaut
-  Color(0xFF6A1B9A), // violet
-  Color(0xFF1565C0), // bleu
-  Color(0xFF00897B), // vert menthe
-  Color(0xFFE65100), // orange
-  Color(0xFFC62828), // rouge
-  Color(0xFF4527A0), // indigo
-  Color(0xFF00695C), // vert foncé
-  Color(0xFF283593), // bleu marine
-  Color(0xFF6D4C41), // brun
-  Color(0xFF37474F), // gris ardoise
-  Color(0xFF558B2F), // vert olive
-];
 
 // ── Widget principal ─────────────────────────────────────────────
 
@@ -379,57 +365,13 @@ class _CreerCoursSheetState extends State<CreerCoursSheet> {
   }
 
   // ── Couleur picker ───────────────────────────────────────────────
+  // Migré vers YkColorPicker (P4.7) : alimenté exclusivement par
+  // YkCourseColors.palette, plus de grille de couleurs en dur ici.
   Widget _buildColorPicker() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Container(
-              width: 28, height: 28,
-              decoration: BoxDecoration(
-                color: _hexToColor(_colorCode),
-                shape: BoxShape.circle,
-                border: Border.all(color: YekiColors.borderLight),
-              ),
-            ),
-            const SizedBox(width: 10),
-            Text(
-              'Couleur : $_colorCode',
-              style: TextStyle(fontSize: 13, color: YekiColors.textLight),
-            ),
-          ],
-        ),
-        const SizedBox(height: 10),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: _couleurs.map((c) {
-            final hex = '#${c.value.toRadixString(16).substring(2).toUpperCase()}';
-            final selected = _colorCode.toUpperCase() == hex;
-            return GestureDetector(
-              onTap: () => setState(() => _colorCode = hex),
-              child: Container(
-                width: 36, height: 36,
-                decoration: BoxDecoration(
-                  color: c,
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: selected ? YekiColors.textDark : Colors.transparent,
-                    width: selected ? 2.5 : 0,
-                  ),
-                  boxShadow: selected
-                      ? [BoxShadow(color: c.withValues(alpha: 0.5), blurRadius: 6)]
-                      : null,
-                ),
-                child: selected
-                    ? const Icon(Icons.check, color: YekiColors.white, size: 18)
-                    : null,
-              ),
-            );
-          }).toList(),
-        ),
-      ],
+    return YkColorPicker(
+      label: 'Couleur',
+      selectedHex: _colorCode,
+      onChanged: (hex) => setState(() => _colorCode = hex),
     );
   }
 

@@ -7,14 +7,15 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:yeki/services/offline_service.dart';
 import 'package:yeki/services/sync_service.dart';
-import 'package:yeki/views/pages/apprenants/composer_devoir_page.dart';
-import 'package:yeki/views/pages/apprenants/resultat_devoir_page.dart';
+import 'package:yeki/core/router/route_names.dart';
 import 'package:yeki/core/theme/yeki_design_system.dart';
 import 'package:yeki/core/constants/api_constants.dart';
+import 'package:yeki/repositories/formation_repository.dart';
 
 // ── Modèle DevoirItem ──────────────────────────────────────────────────
 class DevoirItem {
@@ -191,8 +192,6 @@ class _DevoirsPageState extends State<DevoirsPage>
 
   // AnimationController et animations
   late AnimationController _animCtrl;
-  late Animation<double> _fadeAnim;
-  late Animation<Offset> _slideAnim;
 
   final List<_TypeDevoirTab> _types = [
     const _TypeDevoirTab('Tous', Icons.grid_view_rounded, YekiColors.primaryDark),
@@ -209,11 +208,9 @@ class _DevoirsPageState extends State<DevoirsPage>
     'Autre',
   ];
 
-  final List<String> _niveaux = [
-    'Terminale', '1ère', '2nde', '3ème',
-    'Licence 1', 'Licence 2', 'Licence 3', 'Master 1', 'Master 2',
-    'Autre',
-  ];
+  // Chargé depuis FormationRepository (fonction canonique unique, P5.4) —
+  // plus jamais en dur, voir docs/ecarts/register.md.
+  List<String> _niveaux = [];
 
   final List<String> _statuts = [
     'Tous', 'non_commence', 'en_cours', 'soumis', 'corrige', 'en_retard',
@@ -228,18 +225,13 @@ class _DevoirsPageState extends State<DevoirsPage>
       vsync: this,
       duration: const Duration(milliseconds: 600),
     );
-    _fadeAnim = CurvedAnimation(parent: _animCtrl, curve: Curves.easeIn);
-    _slideAnim = Tween<Offset>(
-      begin: const Offset(0, 0.2),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(parent: _animCtrl, curve: Curves.easeOutCubic));
-    
     // ✅ TabController avec TickerProviderStateMixin
     _tabCtrl = TabController(length: _types.length, vsync: this)
       ..addListener(_onTabChanged);
 
     _initOffline();
     _charger();
+    _chargerNiveaux();
 
     _searchCtrl.addListener(() {
       setState(() => _recherche = _searchCtrl.text);
@@ -258,6 +250,16 @@ class _DevoirsPageState extends State<DevoirsPage>
         _typeSelectionne = _types[_tabCtrl.index].code;
         _appliquerFiltres();
       });
+    }
+  }
+
+  Future<void> _chargerNiveaux() async {
+    try {
+      final niveaux = await FormationRepository().niveaux();
+      if (mounted) setState(() => _niveaux = niveaux);
+    } catch (_) {
+      // Filtre niveau simplement vide en cas d'échec réseau — non
+      // bloquant, cohérent avec le reste de cet écran.
     }
   }
 
@@ -362,28 +364,22 @@ class _DevoirsPageState extends State<DevoirsPage>
   }
 
   void _ouvrirDevoir(DevoirItem d) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => ComposerDevoirPage(
-          devoirId: d.id,
-          titre: d.titre,
-          dureeMin: d.dureeMinutes,
-          noteSur: d.noteSur.toInt(),
-        ),
-      ),
+    context.pushNamed(
+      AppRoute.devoirComposer,
+      pathParameters: {'devoirId': d.id.toString()},
+      queryParameters: {
+        'titre': d.titre,
+        'dureeMin': d.dureeMinutes.toString(),
+        'noteSur': d.noteSur.toInt().toString(),
+      },
     ).then((_) => _charger());
   }
 
   void _voirResultat(DevoirItem d) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => ResultatDevoirPage(
-          devoirId: d.id,
-          titre: d.titre,
-        ),
-      ),
+    context.pushNamed(
+      AppRoute.devoirResultat,
+      pathParameters: {'devoirId': d.id.toString()},
+      queryParameters: {'titre': d.titre},
     );
   }
 

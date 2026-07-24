@@ -8,15 +8,14 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:video_player/video_player.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
-import 'package:yeki/views/pages/apprenants/lecture_lecon_page.dart';
-import 'package:yeki/views/pages/apprenants/yeki_ia_chat_page.dart';
-import 'package:yeki/views/pages/apprenants/cours_detail_page.dart';
+import 'package:yeki/core/router/route_names.dart';
 import 'package:yeki/core/theme/yeki_design_system.dart';
 import 'package:yeki/core/constants/api_constants.dart';
 import 'package:yeki/utils/error_handler.dart';
@@ -422,7 +421,7 @@ class _DetailLeconPageState extends State<DetailLeconPage>
     if (token == null) return;
     try {
       final res = await http.get(
-        Uri.parse(ApiConstants.leconLike(widget.leconId)),
+        Uri.parse(ApiConstants.leconLike),
         headers: ApiHeaders.auth(token),
       );
       if (res.statusCode == 200 && mounted) {
@@ -465,7 +464,7 @@ class _DetailLeconPageState extends State<DetailLeconPage>
     if (mounted) setState(() => _isLiked = !_isLiked);
     try {
       await http.post(
-        Uri.parse(ApiConstants.leconLike(lecon.id)),
+        Uri.parse(ApiConstants.leconLikeId(lecon.id)),
         headers: ApiHeaders.auth(token),
       );
     } catch (_) {
@@ -513,16 +512,16 @@ class _DetailLeconPageState extends State<DetailLeconPage>
   void _ouvrirPdf() {
     final lecon = _leconCourante;
     if (lecon == null || !lecon.hasPdf) return;
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => LectureLeconPage(
-          leconId: lecon.id,
-          coursId: widget.coursId,
-          coursTitre: widget.coursTitre,
-          coursColor: widget.coursColor,
-        ),
-      ),
+    context.pushNamed(
+      AppRoute.leconLecture,
+      pathParameters: {
+        'leconId': lecon.id.toString(),
+        'coursId': widget.coursId.toString(),
+      },
+      queryParameters: {
+        'coursTitre': widget.coursTitre,
+        'coursColor': widget.coursColor.toString(),
+      },
     );
   }
 
@@ -536,17 +535,15 @@ class _DetailLeconPageState extends State<DetailLeconPage>
         courseColor: _courseColor,
         onVoirDiscussion: () {
           Navigator.pop(ctx);
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => YekiIAChatPage(
-                coursId: widget.coursId,
-                coursTitre: widget.coursTitre,
-                sourceInitiale: 'lecon',
-                sourceId: lecon.id,
-                sourceTitreInit: lecon.titre,
-              ),
-            ),
+          context.pushNamed(
+            AppRoute.iaChat,
+            pathParameters: {'coursId': widget.coursId.toString()},
+            queryParameters: {
+              'coursTitre': widget.coursTitre,
+              'sourceInitiale': 'lecon',
+              'sourceId': lecon.id.toString(),
+              'sourceTitreInit': lecon.titre,
+            },
           );
         },
         onPoserPreoccupation: () {
@@ -575,20 +572,17 @@ class _DetailLeconPageState extends State<DetailLeconPage>
         onSoumis: (String texte, File? image, File? audio) async {
           if (ctx.mounted) Navigator.pop(ctx);
           if (mounted) {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => YekiIAChatPage(
-                  coursId: widget.coursId,
-                  coursTitre: widget.coursTitre,
-                  sourceInitiale: 'lecon',
-                  sourceId: lecon.id,
-                  sourceTitreInit: lecon.titre,
-                  messageInitial: texte,
-                  initialImage: image,
-                  initialAudio: audio,
-                ),
-              ),
+            context.pushNamed(
+              AppRoute.iaChat,
+              pathParameters: {'coursId': widget.coursId.toString()},
+              queryParameters: {
+                'coursTitre': widget.coursTitre,
+                'sourceInitiale': 'lecon',
+                'sourceId': lecon.id.toString(),
+                'sourceTitreInit': lecon.titre,
+                'messageInitial': texte,
+              },
+              extra: {'initialImage': image, 'initialAudio': audio},
             );
           }
         },
@@ -701,18 +695,16 @@ class _DetailLeconPageState extends State<DetailLeconPage>
           if (mounted) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
               if (mounted) {
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => CoursDetailTabs(
-                      coursId: widget.coursId.toString(),
-                      titre: widget.coursTitre,
-                      coursColor: widget.coursColor,
-                      isPremium: true,
-                      initialTab: 3,
-                      scrollToQuestionId: questionId,
-                    ),
-                  ),
+                context.replaceNamed(
+                  AppRoute.coursDetail,
+                  pathParameters: {'coursId': widget.coursId.toString()},
+                  queryParameters: {
+                    'titre': widget.coursTitre,
+                    'coursColor': widget.coursColor.toString(),
+                    'isPremium': 'true',
+                    'tab': '3',
+                    'scrollToQuestionId': questionId.toString(),
+                  },
                 );
               }
             });
@@ -721,17 +713,15 @@ class _DetailLeconPageState extends State<DetailLeconPage>
           if (mounted) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
               if (mounted) {
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => CoursDetailTabs(
-                      coursId: widget.coursId.toString(),
-                      titre: widget.coursTitre,
-                      coursColor: widget.coursColor,
-                      isPremium: true,
-                      initialTab: 3,
-                    ),
-                  ),
+                context.replaceNamed(
+                  AppRoute.coursDetail,
+                  pathParameters: {'coursId': widget.coursId.toString()},
+                  queryParameters: {
+                    'titre': widget.coursTitre,
+                    'coursColor': widget.coursColor.toString(),
+                    'isPremium': 'true',
+                    'tab': '3',
+                  },
                 );
               }
             });
@@ -755,6 +745,22 @@ class _DetailLeconPageState extends State<DetailLeconPage>
         ErrorHandler.showError(ctx, 'Erreur réseau: ${e.toString()}');
       }
     }
+  }
+
+  void _naviguerVersExercicesLecon() {
+    final lecon = _leconCourante;
+    if (lecon == null) return;
+    context.pushNamed(
+      AppRoute.coursDetail,
+      pathParameters: {'coursId': widget.coursId.toString()},
+      queryParameters: {
+        'titre': widget.coursTitre,
+        'coursColor': widget.coursColor.toString(),
+        'isPremium': 'true',
+        'tab': '1', // Onglet exercices
+        'leconId': lecon.id.toString(),
+      },
+    );
   }
 
   @override
@@ -1076,6 +1082,15 @@ class _DetailLeconPageState extends State<DetailLeconPage>
             enabled: !lecon.estTerminee,
             onTap: _marquerTerminee,
             loading: _marquageLoading,
+          ),
+          const SizedBox(width: 10),
+          // Bouton Exercices (toujours visible car vérification dynamique)
+          _actionBtn(
+            icon: Icons.assignment_outlined,
+            label: 'Exercices',
+            color: _courseColor,
+            enabled: true,
+            onTap: _naviguerVersExercicesLecon,
           ),
         ],
       ),

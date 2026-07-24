@@ -1,13 +1,13 @@
 // lib/views/pages/enseignants/detail_cours_enseignant.dart
 // ═══════════════════════════════════════════════════════════════════════════
-// DÉTAIL COURS ENSEIGNANT — CORRIGÉ
+// DÉTAIL COURS ENSEIGNANT — VERSION CORRIGÉE (DÉFILEMENT OPTIMISÉ)
 // ═══════════════════════════════════════════════════════════════════════════
 
 import 'package:flutter/material.dart';
-import 'package:yeki/views/pages/apprenants/exercices_cours.dart';
+import 'package:yeki/features/exercices_cours/presentation/exercices_cours_page.dart';
 import 'package:yeki/views/pages/apprenants/forum_page.dart';
 import 'package:yeki/views/pages/apprenants/lecons_cours.dart';
-import 'package:yeki/views/pages/apprenants/devoirs_cours_page.dart';
+import 'package:yeki/features/devoirs_cours/presentation/devoirs_cours_page.dart';
 import 'package:yeki/views/pages/enseignants/interface_enseignant_page.dart';
 import 'package:yeki/core/theme/app_theme.dart';
 
@@ -33,16 +33,30 @@ class DetailCoursEnseignantPage extends StatefulWidget {
 
 class _DetailCoursEnseignantPageState extends State<DetailCoursEnseignantPage>
     with TickerProviderStateMixin {
+  // ✅ CORRECTION : Utiliser un TabController pour les onglets
   late TabController _tabController;
 
+  // Filtre de l'onglet Exercices, modifiable en place depuis l'onglet
+  // Leçons (voir `_naviguerVersExercicesAvecFiltre`, P3.3 §6) — jamais une
+  // navigation vers l'écran apprenant `CoursDetailTabs`.
+  int? _exercicesModuleIdFiltre;
+  int? _exercicesLeconIdFiltre;
+
   Color get primaryColor => widget.courseColor;
-  Color get secondaryColor => widget.courseColor.withValues(alpha: 0.7);
-  Color get accentColor => YekiColors.accent;
+  Color get secondaryColor => widget.courseColor.withAlpha(178);
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 4, vsync: this);
+  }
+
+  void _naviguerVersExercicesAvecFiltre({int? moduleId, int? leconId}) {
+    setState(() {
+      _exercicesModuleIdFiltre = moduleId;
+      _exercicesLeconIdFiltre = leconId;
+    });
+    _tabController.animateTo(1);
   }
 
   @override
@@ -55,21 +69,24 @@ class _DetailCoursEnseignantPageState extends State<DetailCoursEnseignantPage>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: YekiColors.backgroundLight,
+      // ✅ CORRECTION : Utiliser NestedScrollView avec un ScrollController
+      // Ne pas passer _tabController à NestedScrollView car il attend un ScrollController
       body: NestedScrollView(
-        headerSliverBuilder: (BuildContext context, bool innerBoxIsScrolled) {
-          return <Widget>[
+        headerSliverBuilder: (context, innerBoxIsScrolled) {
+          return [
             SliverOverlapAbsorber(
               handle: NestedScrollView.sliverOverlapAbsorberHandleFor(context),
               sliver: SliverAppBar(
                 expandedHeight: 200,
                 pinned: true,
+                floating: false,
                 elevation: 0,
                 backgroundColor: primaryColor,
                 leading: IconButton(
                   icon: Container(
                     padding: const EdgeInsets.all(6),
                     decoration: BoxDecoration(
-                      color: YekiColors.black.withValues(alpha: 0.26),
+                      color: YekiColors.black.withAlpha(66),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: const Icon(Icons.arrow_back_ios_new, color: YekiColors.white, size: 16),
@@ -95,7 +112,7 @@ class _DetailCoursEnseignantPageState extends State<DetailCoursEnseignantPage>
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                                 decoration: BoxDecoration(
-                                  color: YekiColors.white.withValues(alpha: 0.2),
+                                  color: YekiColors.white.withAlpha(51),
                                   borderRadius: BorderRadius.circular(8),
                                 ),
                                 child: Text(
@@ -130,7 +147,7 @@ class _DetailCoursEnseignantPageState extends State<DetailCoursEnseignantPage>
                     ),
                     child: TabBar(
                       controller: _tabController,
-                      indicatorColor: accentColor,
+                      indicatorColor: primaryColor,
                       indicatorWeight: 3,
                       labelColor: primaryColor,
                       unselectedLabelColor: YekiColors.textLight,
@@ -156,22 +173,28 @@ class _DetailCoursEnseignantPageState extends State<DetailCoursEnseignantPage>
               coursTitre: widget.titre,
               role: widget.role,
               tabController: _tabController,
+              onNaviguerExercices: _naviguerVersExercicesAvecFiltre,
               isPremium: true,
               courseColor: primaryColor,
             )),
             _buildTabContent(ExercicesCoursPage(
-              coursId: widget.coursId, 
-              role: widget.role, 
+              coursId: widget.coursId,
+              role: widget.role,
               coursTitre: widget.titre,
               courseColor: primaryColor,
+              moduleId: _exercicesModuleIdFiltre,
+              leconId: _exercicesLeconIdFiltre,
             )),
             _buildTabContent(DevoirsCoursPage(
               coursId: widget.coursId,
               coursTitre: widget.titre,
-              isEnseignantPrincipal: widget.estEnseignantPrincipal,
+              role: widget.role,
               courseColor: primaryColor,
             )),
-            _buildForumContent(),
+            _buildTabContent(ForumPage(
+              preoccupationCoursId: int.tryParse(widget.coursId),
+              preoccupationCoursTitre: widget.titre,
+            )),
           ],
         ),
       ),
@@ -179,36 +202,25 @@ class _DetailCoursEnseignantPageState extends State<DetailCoursEnseignantPage>
   }
 
   Widget _buildTabContent(Widget page) {
+    // ✅ CORRECTION : Utiliser Builder pour injecter le handle d'overlap
     return Builder(
-      builder: (BuildContext context) {
+      builder: (context) {
+        final handle = NestedScrollView.sliverOverlapAbsorberHandleFor(context);
+        
         return CustomScrollView(
           physics: const BouncingScrollPhysics(),
           slivers: [
             SliverOverlapInjector(
-              handle: NestedScrollView.sliverOverlapAbsorberHandleFor(context),
+              handle: handle,
             ),
             SliverPadding(
               padding: const EdgeInsets.only(top: 8, bottom: 20),
-              sliver: SliverToBoxAdapter(child: page),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _buildForumContent() {
-    return Builder(
-      builder: (context) {
-        return Column(
-          children: [
-            SizedBox(
-              height: MediaQuery.of(context).padding.top + kToolbarHeight + 60, 
-            ),
-            Expanded(
-              child: ForumPage(
-                preoccupationCoursId: int.tryParse(widget.coursId),
-                preoccupationCoursTitre: widget.titre,
+              sliver: SliverToBoxAdapter(
+                child: SizedBox(
+                  // Forcer une hauteur suffisante pour le contenu
+                  height: MediaQuery.of(context).size.height - kToolbarHeight - 60 - 100,
+                  child: page,
+                ),
               ),
             ),
           ],

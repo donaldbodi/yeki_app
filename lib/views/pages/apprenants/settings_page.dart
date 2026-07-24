@@ -5,9 +5,11 @@
 
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:yeki/main.dart';
+import 'package:yeki/core/router/auth_state.dart';
+import 'package:yeki/core/router/route_names.dart';
 import 'package:yeki/core/theme/app_theme.dart';
 import 'package:yeki/core/constants/api_constants.dart';
 import 'package:yeki/utils/error_handler.dart';
@@ -74,8 +76,8 @@ class _SettingsPageState extends State<SettingsPage> {
       ),
     );
 
-    if (confirm == true && mounted) {
-      await YekiAuth.logout(context);
+    if (confirm == true) {
+      await authState.logout();
     }
   }
 
@@ -116,10 +118,7 @@ class _SettingsPageState extends State<SettingsPage> {
       );
       if (!mounted) return;
       if (res.statusCode == 200) {
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.remove('token');
-        await prefs.remove('role');
-        if (mounted) await YekiAuth.logout(context);
+        await authState.clearSession();
       } else {
         ErrorHandler.showError(context, 'Erreur lors de la suppression.');
       }
@@ -271,6 +270,11 @@ class _SettingsPageState extends State<SettingsPage> {
               setState(() => _biometry = v);
               await _saveSettings();
             },
+          ),
+          _tile(
+            icon: Icons.replay_rounded, color: YekiColors.primaryDark,
+            title: 'Revoir l\'introduction',
+            onTap: () => context.goNamed(AppRoute.onboarding),
           ),
           const SizedBox(height: 16),
           _sectionTitle('Compte'),

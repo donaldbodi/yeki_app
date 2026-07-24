@@ -2,11 +2,15 @@
 // ═══════════════════════════════════════════════════════════════════════════
 //  YEKI UNIFIED RESPONSIVE DESIGN SYSTEM — GLASSMORPHISM EDITION
 // ═══════════════════════════════════════════════════════════════════════════
+// DÉPRÉCIÉ (P4.1) : remplacé par lib/core/design/tokens/ + lib/core/design/
+// theme/yeki_theme.dart. Conservé actif tant que les écrans n'ont pas migré
+// (voir CDC_DESIGN §2, phase 4 — aucun écran métier touché avant migration).
 
 import 'dart:ui';
 import 'package:flutter/material.dart';
 
 /// ── 1. CONFIGURATION DES BREAKPOINTS & UTILS RESPONSIVE ──────────────────
+@Deprecated('Remplacé par lib/core/design/tokens — voir P4.1. Ne pas utiliser dans du nouveau code ; migration écran par écran.')
 class YekiResponsive {
   static const double mobileMax = 600.0;
   static const double tabletMax = 1024.0;
@@ -39,6 +43,7 @@ class YekiResponsive {
 }
 
 /// ── 2. LAYOUT RESPONSIVE GLOBAL ──────────────────────────────────────────
+@Deprecated('Remplacé par lib/core/design/tokens — voir P4.1. Ne pas utiliser dans du nouveau code ; migration écran par écran.')
 class YekiResponsiveLayout extends StatelessWidget {
   final Widget mobile;
   final Widget? tablet;
@@ -67,6 +72,7 @@ class YekiResponsiveLayout extends StatelessWidget {
   }
 }
 
+@Deprecated('Remplacé par lib/core/design/tokens — voir P4.1. Ne pas utiliser dans du nouveau code ; migration écran par écran.')
 class YekiLoader extends StatelessWidget {
   final double size;
   final Color? color;
@@ -85,14 +91,15 @@ class YekiLoader extends StatelessWidget {
   }
 }
 
-
 /// ── 3. PALETTE DE COULEURS UNIFIÉE ────────────────────────────────────────
+@Deprecated('Remplacé par lib/core/design/tokens — voir P4.1. Ne pas utiliser dans du nouveau code ; migration écran par écran.')
 class YekiColors {
   static const Color primary = Color(0xFF2884A0);
   static const Color purple    = Color.fromARGB(255, 218, 61, 108);
   static const Color primaryDark = Color(0xFF1F5F75);
   static const Color primaryLight = Color(0xFF39A0C2);
-  
+  static const Color info = Color(0xFF3B82F6);
+
   static const Color accent = Color(0xFFFF7F77); 
   static const Color gold = Color(0xFFE2A84B);   
   static const Color success = Color(0xFF10B981);
@@ -112,6 +119,7 @@ class YekiColors {
 }
 
 /// ── 4. GRADIENTS MULTI-COUCHES ───────────────────────────────────────────
+@Deprecated('Remplacé par lib/core/design/tokens — voir P4.1. Ne pas utiliser dans du nouveau code ; migration écran par écran.')
 class YekiGradients {
   static const LinearGradient mainBackground = LinearGradient(
     colors: [Color(0xFFE0F2F1), Color(0xFFF4F8FC), Color(0xFFE1BEE7)],
@@ -130,6 +138,7 @@ class YekiGradients {
 }
 
 /// ── 5. RAYONS DE COURBURE EN COHÉRENCE VIA LES BREAKPOINTS ───────────────
+@Deprecated('Remplacé par lib/core/design/tokens — voir P4.1. Ne pas utiliser dans du nouveau code ; migration écran par écran.')
 class YekiRadius {
   static const double sm = 8.0;
   static const double md = 16.0;
@@ -141,6 +150,7 @@ class YekiRadius {
 }
 
 /// ── 6. TYPOGRAPHIES FLUIDES ET ADAPTATIVES ────────────────────────────────
+@Deprecated('Remplacé par lib/core/design/tokens — voir P4.1. Ne pas utiliser dans du nouveau code ; migration écran par écran.')
 class YekiTextStyles {
   static TextStyle h1(BuildContext context) => TextStyle(
         fontFamily: 'Plus Jakarta Sans',
@@ -179,6 +189,7 @@ class YekiTextStyles {
 }
 
 /// ── 7. CONTENEUR EN VERRE RESPONSIVE ──────────────────────────────────────
+@Deprecated('Remplacé par lib/core/design/tokens — voir P4.1. Ne pas utiliser dans du nouveau code ; migration écran par écran.')
 class YekiGlassCard extends StatelessWidget {
   final Widget child;
   final BorderRadius? borderRadius;
@@ -229,6 +240,7 @@ class YekiGlassCard extends StatelessWidget {
 }
 
 /// ── 8. BOUTON RESPONSIVE UNIFIÉ ──────────────────────────────────────────
+@Deprecated('Remplacé par lib/core/design/tokens — voir P4.1. Ne pas utiliser dans du nouveau code ; migration écran par écran.')
 class YekiButton extends StatelessWidget {
   final String label;
   final VoidCallback onPressed;

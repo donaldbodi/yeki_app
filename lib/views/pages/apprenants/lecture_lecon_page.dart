@@ -11,10 +11,10 @@ import 'package:flutter_pdfview/flutter_pdfview.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:yeki/widgets/yeki_fabs.dart';
 import 'package:yeki/core/theme/app_theme.dart';
 import 'package:yeki/core/constants/api_constants.dart';
 import 'package:yeki/utils/error_handler.dart';
+import 'package:yeki/widgets/yeki_fabs.dart';
 
 Future<String?> _getToken() async =>
     (await SharedPreferences.getInstance()).getString('token');
@@ -86,7 +86,6 @@ class _LectureLeconPageState extends State<LectureLeconPage>
   int _pdfPages = 0;
   int _pdfCurrent = 1;
   bool _pdfReady = false;
-  PDFViewController? _pdfCtrl;
   bool _marquageLoading = false;
 
   bool _drawerOpen = false;
@@ -207,10 +206,12 @@ class _LectureLeconPageState extends State<LectureLeconPage>
         await file.writeAsBytes(res.bodyBytes);
         if (mounted) setState(() { _pdfPath = file.path; _pdfLoading = false; });
       } else {
-        if (mounted) setState(() {
+        if (mounted) {
+          setState(() {
           _pdfError = 'Impossible de charger le PDF (${res.statusCode})';
           _pdfLoading = false;
         });
+        }
       }
     } catch (e) {
       if (mounted) setState(() { _pdfError = 'Erreur réseau'; _pdfLoading = false; });
@@ -225,7 +226,6 @@ class _LectureLeconPageState extends State<LectureLeconPage>
       _pdfError = null;
       _pdfPages = 0;
       _pdfCurrent = 1;
-      _pdfCtrl = null;
       _drawerOpen = false;
     });
     _drawerCtrl.reverse();
@@ -520,16 +520,15 @@ class _LectureLeconPageState extends State<LectureLeconPage>
           onRender: (pages) {
             if (mounted) setState(() { _pdfPages = pages ?? 0; _pdfReady = true; });
           },
-          onViewCreated: (ctrl) {
-            if (mounted) setState(() => _pdfCtrl = ctrl);
-          },
           onPageChanged: (page, total) {
-            if (mounted) setState(() {
+            if (mounted) {
+              setState(() {
               _pdfCurrent = (page ?? 0) + 1;
               _pdfPages = total ?? _pdfPages;
               if (_pdfPages > 0 && _pdfCurrent >= _pdfPages ~/ 2) _marquerVue(50);
               if (_pdfPages > 0 && _pdfCurrent >= _pdfPages) _marquerVue(100);
             });
+            }
           },
           onError: (e) {
             if (mounted) setState(() => _pdfError = 'Erreur PDF: $e');

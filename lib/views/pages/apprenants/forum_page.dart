@@ -1,34 +1,38 @@
 // lib/views/pages/apprenants/forum_page.dart
 // ═══════════════════════════════════════════════════════════════════════════
+// YEKI FORUM PAGE — Design Unifié Premium
+// Version complète et fonctionnelle avec corrections
+// ═══════════════════════════════════════════════════════════════════════════
 
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timeago/timeago.dart' as timeago;
-import 'package:yeki/views/pages/apprenants/details_question_forum.dart';
-import 'package:yeki/views/pages/apprenants/lecture_lecon_page.dart';
-import 'package:yeki/views/pages/apprenants/passer_exercice.dart';
-import 'package:yeki/views/pages/apprenants/resultat_devoir_page.dart';
+import 'package:yeki/core/router/route_names.dart';
 import 'package:yeki/core/theme/app_theme.dart';
 import 'package:yeki/core/constants/api_constants.dart';
 import 'package:yeki/utils/error_handler.dart';
+import 'package:audioplayers/audioplayers.dart';
 
 const Map<String, Color> _srcColor = {
-  'lecon': Colors.blue,
+  'lecon': YekiColors.info,
   'exercice': YekiColors.purple,
   'devoir': YekiColors.warning,
   'libre': YekiColors.success,
 };
+
 const Map<String, IconData> _srcIcon = {
   'lecon': Icons.play_lesson_rounded,
   'exercice': Icons.edit_note_rounded,
   'devoir': Icons.assignment_rounded,
   'libre': Icons.chat_bubble_outline_rounded,
 };
+
 const Map<String, String> _srcLabel = {
   'lecon': 'Leçon',
   'exercice': 'Exercice',
@@ -57,6 +61,176 @@ String _getInitials(String nom, String username) {
   return n[0].toUpperCase();
 }
 
+// ════════════════════════════════════════════════════════════
+// LECTEUR AUDIO AMÉLIORÉ - VERSION CORRIGÉE (sans onPlayerError)
+// ════════════════════════════════════════════════════════════
+class ForumAudioPlayer extends StatefulWidget {
+  final String audioUrl;
+  const ForumAudioPlayer({super.key, required this.audioUrl});
+  @override
+  State<ForumAudioPlayer> createState() => _ForumAudioPlayerState();
+}
+
+class _ForumAudioPlayerState extends State<ForumAudioPlayer> {
+  final AudioPlayer _audioPlayer = AudioPlayer();
+  bool _isPlaying = false;
+  bool _isLoading = false;
+  Duration _position = Duration.zero;
+  Duration _duration = Duration.zero;
+
+  @override
+  void initState() {
+    super.initState();
+    _initAudioPlayer();
+  }
+
+  Future<void> _initAudioPlayer() async {
+    try {
+      // Écouter les changements d'état
+      _audioPlayer.onPlayerStateChanged.listen((state) {
+        if (mounted) {
+          setState(() {
+            _isPlaying = state == PlayerState.playing;
+          });
+        }
+      });
+      
+      // Écouter les changements de position
+      _audioPlayer.onPositionChanged.listen((position) {
+        if (mounted) {
+          setState(() {
+            _position = position;
+          });
+        }
+      });
+      
+      // Écouter les changements de durée
+      _audioPlayer.onDurationChanged.listen((duration) {
+        if (mounted) {
+          setState(() {
+            _duration = duration;
+          });
+        }
+      });
+      
+      // Écouter la fin de lecture
+      _audioPlayer.onPlayerComplete.listen((event) {
+        if (mounted) {
+          setState(() {
+            _isPlaying = false;
+            _position = Duration.zero;
+          });
+        }
+      });
+      
+      // La gestion des erreurs se fait via try-catch dans les opérations
+    } catch (e) {
+      debugPrint('Erreur initialisation audio: $e');
+    }
+  }
+
+  Future<void> _togglePlay() async {
+    try {
+      if (_isPlaying) {
+        await _audioPlayer.pause();
+      } else {
+        if (_position == Duration.zero) {
+          setState(() => _isLoading = true);
+          try {
+            // Utiliser setSourceUrl (remplace setUrl déprécié)
+            await _audioPlayer.setSourceUrl(widget.audioUrl);
+          } catch (e) {
+            debugPrint('Erreur setSourceUrl: $e');
+            if (mounted) {
+              ErrorHandler.showError(context, 'Erreur de chargement audio');
+            }
+            setState(() => _isLoading = false);
+            return;
+          }
+          setState(() => _isLoading = false);
+        }
+        await _audioPlayer.resume();
+      }
+    } catch (e) {
+      debugPrint('Erreur lecture audio: $e');
+      if (mounted) {
+        ErrorHandler.showError(context, 'Erreur de lecture audio');
+        setState(() {
+          _isLoading = false;
+          _isPlaying = false;
+        });
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _audioPlayer.dispose();
+    super.dispose();
+  }
+
+  String _formatDuration(Duration duration) {
+    String twoDigits(int n) => n.toString().padLeft(2, '0');
+    String twoDigitMinutes = twoDigits(duration.inMinutes.remainder(60));
+    String twoDigitSeconds = twoDigits(duration.inSeconds.remainder(60));
+    return '$twoDigitMinutes:$twoDigitSeconds';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        GestureDetector(
+          onTap: _isLoading ? null : _togglePlay,
+          child: _isLoading
+              ? const SizedBox(
+                  width: 32,
+                  height: 32,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : Icon(
+                  _isPlaying ? Icons.pause_circle_filled : Icons.play_circle_filled,
+                  color: YekiColors.purple,
+                  size: 32,
+                ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            children: [
+              LinearProgressIndicator(
+                value: _duration.inSeconds > 0
+                    ? _position.inSeconds / _duration.inSeconds
+                    : 0.0,
+                backgroundColor: YekiColors.borderLight,
+                valueColor: const AlwaysStoppedAnimation<Color>(YekiColors.purple),
+                minHeight: 3,
+              ),
+              const SizedBox(height: 4),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    _formatDuration(_position),
+                    style: const TextStyle(fontSize: 10, color: YekiColors.textLight),
+                  ),
+                  Text(
+                    _formatDuration(_duration),
+                    style: const TextStyle(fontSize: 10, color: YekiColors.textLight),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+// MODÈLE DE QUESTION
+// ════════════════════════════════════════════════════════════
 class QForum {
   final int id;
   final String contenu, source, creeLe;
@@ -133,6 +307,9 @@ class QForum {
   }
 }
 
+// ════════════════════════════════════════════════════════════
+// MODÈLE DE RÉPONSE
+// ════════════════════════════════════════════════════════════
 class RepForum {
   final int id;
   final String contenu, creeLe, auteurNom, auteurUsername;
@@ -170,52 +347,9 @@ class RepForum {
       );
 }
 
-// Lecteur audio simple
-class ForumAudioPlayer extends StatefulWidget {
-  final String audioUrl;
-  const ForumAudioPlayer({super.key, required this.audioUrl});
-  @override
-  State<ForumAudioPlayer> createState() => _ForumAudioPlayerState();
-}
-
-class _ForumAudioPlayerState extends State<ForumAudioPlayer> {
-  bool _isPlaying = false;
-  void _togglePlay() => setState(() => _isPlaying = !_isPlaying);
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        GestureDetector(
-          onTap: _togglePlay,
-          child: Icon(_isPlaying ? Icons.pause_circle_filled : Icons.play_circle_filled,
-              color: YekiColors.purple, size: 32),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            children: [
-              LinearProgressIndicator(
-                value: _isPlaying ? 0.5 : 0.0,
-                backgroundColor: YekiColors.borderLight,
-                valueColor: const AlwaysStoppedAnimation<Color>(YekiColors.purple),
-                minHeight: 3,
-              ),
-              const SizedBox(height: 4),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: const [
-                  Text('00:00', style: TextStyle(fontSize: 10)),
-                  Text('00:30', style: TextStyle(fontSize: 10)),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
+// ════════════════════════════════════════════════════════════
+// PAGE PRINCIPALE DU FORUM
+// ════════════════════════════════════════════════════════════
 class ForumPage extends StatefulWidget {
   final int? scrollToQuestionId;
   final String? preoccupationContenu;
@@ -250,12 +384,14 @@ class ForumPage extends StatefulWidget {
   State<ForumPage> createState() => _ForumPageState();
 }
 
-class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin {
+class _ForumPageState extends State<ForumPage>
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   bool _loading = true;
   List<QForum> _questions = [];
   String _sourceFiltre = 'tous';
   String _searchText = '';
   Timer? _poll;
+  DateTime? _dernierSondage;
   final _searchCtrl = TextEditingController();
 
   bool _composerVisible = false;
@@ -271,11 +407,12 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     timeago.setLocaleMessages('fr', timeago.FrMessages());
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadQuestions();
     });
-    _poll = Timer.periodic(const Duration(seconds: 30), (_) => _loadQuestions(silent: true));
+    _demarrerSondage();
     if (widget.preoccupationContenu != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _composerCtrl.text = widget.preoccupationContenu!;
@@ -287,10 +424,59 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _poll?.cancel();
     _searchCtrl.dispose();
     _composerCtrl.dispose();
     super.dispose();
+  }
+
+  // ── Sondage temps réel (repli WebSocket) ───────────────────────────────
+  // PythonAnywhere ne supporte pas les WebSockets (voir
+  // docs/FORUM_TEMPS_REEL.md) : ce sondage ne tourne JAMAIS en arrière-plan,
+  // uniquement pendant que cet écran est visible.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _demarrerSondage();
+      _sonderActivite();
+    } else {
+      _poll?.cancel();
+    }
+  }
+
+  void _demarrerSondage() {
+    _poll?.cancel();
+    _dernierSondage ??= DateTime.now();
+    _poll = Timer.periodic(const Duration(seconds: 8), (_) => _sonderActivite());
+  }
+
+  String get _room => widget.preoccupationCoursId?.toString() ?? 'global';
+
+  /// Sondage léger et incrémental (?since=) : ne redemande la liste complète
+  /// que si une activité réelle est détectée depuis le dernier passage.
+  Future<void> _sonderActivite() async {
+    final token = await _getToken();
+    if (token == null) return;
+    final since = _dernierSondage;
+    final maintenant = DateTime.now();
+    try {
+      final uri = Uri.parse(ApiConstants.forumMessages(_room)).replace(
+        queryParameters:
+            since != null ? {'since': since.toUtc().toIso8601String()} : null,
+      );
+      final response = await http.get(uri, headers: ApiHeaders.auth(token));
+      _dernierSondage = maintenant;
+      if (response.statusCode != 200) return;
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      final nouvellesQuestions = (data['nouvelles_questions'] as List?) ?? const [];
+      final reponsesRecentesIds = (data['reponses_recentes_ids'] as List?) ?? const [];
+      if (nouvellesQuestions.isNotEmpty || reponsesRecentesIds.isNotEmpty) {
+        await _loadQuestions(silent: true);
+      }
+    } catch (e) {
+      debugPrint('Erreur sondage forum: $e');
+    }
   }
 
   Future<void> _loadQuestions({bool silent = false}) async {
@@ -324,6 +510,9 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin {
       }
     } catch (e) {
       if (!silent && mounted) setState(() => _loading = false);
+      if (!silent) {
+        debugPrint('Erreur chargement questions: $e');
+      }
     }
   }
 
@@ -349,31 +538,36 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin {
 
   void _navigateToSource(QForum q) {
     if (q.source == 'lecon' && q.leconId != null && q.coursId != null) {
-      Navigator.push(context, MaterialPageRoute(
-        builder: (_) => LectureLeconPage(
-          leconId: q.leconId!,
-          coursId: q.coursId!,
-          coursTitre: q.coursTitre,
-          coursColor: widget.coursColor ?? _accentColor.value,
-        ),
-      ));
+      context.pushNamed(
+        AppRoute.leconLecture,
+        pathParameters: {
+          'leconId': q.leconId!.toString(),
+          'coursId': q.coursId!.toString(),
+        },
+        queryParameters: {
+          'coursTitre': q.coursTitre,
+          'coursColor': (widget.coursColor ?? _accentColor.value).toString(),
+        },
+      );
     } else if (q.source == 'exercice' && q.exerciceId != null && q.coursId != null) {
-      Navigator.push(context, MaterialPageRoute(
-        builder: (_) => PasserExercicePage(
-          exerciceId: q.exerciceId!,
-          coursId: q.coursId,
-          coursTitre: q.coursTitre,
-        ),
-      ));
+      context.pushNamed(
+        AppRoute.exercicePasser,
+        pathParameters: {'exerciceId': q.exerciceId!.toString()},
+        queryParameters: {
+          'coursId': q.coursId!.toString(),
+          'coursTitre': q.coursTitre,
+        },
+      );
     } else if (q.source == 'devoir' && q.devoirId != null && q.coursId != null) {
-      Navigator.push(context, MaterialPageRoute(
-        builder: (_) => ResultatDevoirPage(
-          devoirId: q.devoirId!,
-          titre: q.devoirTitre,
-          coursId: q.coursId,
-          coursTitre: q.coursTitre,
-        ),
-      ));
+      context.pushNamed(
+        AppRoute.devoirResultat,
+        pathParameters: {'devoirId': q.devoirId!.toString()},
+        queryParameters: {
+          'titre': q.devoirTitre,
+          'coursId': q.coursId!.toString(),
+          'coursTitre': q.coursTitre,
+        },
+      );
     }
   }
 
@@ -415,13 +609,23 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin {
 
     if (_selectedImage != null) {
       final imageBytes = await _selectedImage!.readAsBytes();
-      request.files.add(http.MultipartFile.fromBytes('image', imageBytes,
-          filename: 'question_image_${DateTime.now().millisecondsSinceEpoch}.jpg'));
+      request.files.add(
+        http.MultipartFile.fromBytes(
+          'image',
+          imageBytes,
+          filename: 'question_image_${DateTime.now().millisecondsSinceEpoch}.jpg',
+        ),
+      );
     }
     if (_selectedAudio != null) {
       final audioBytes = await _selectedAudio!.readAsBytes();
-      request.files.add(http.MultipartFile.fromBytes('audio', audioBytes,
-          filename: 'question_audio_${DateTime.now().millisecondsSinceEpoch}.m4a'));
+      request.files.add(
+        http.MultipartFile.fromBytes(
+          'audio',
+          audioBytes,
+          filename: 'question_audio_${DateTime.now().millisecondsSinceEpoch}.m4a',
+        ),
+      );
     }
 
     try {
@@ -608,8 +812,13 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin {
           hintStyle: YekiTextStyles.bodySmall,
           prefixIcon: Icon(Icons.search_rounded, color: _accentColor, size: 22),
           suffixIcon: _searchText.isNotEmpty
-              ? GestureDetector(onTap: () { _searchCtrl.clear(); setState(() => _searchText = ''); },
-                  child: Icon(Icons.close_rounded, size: 18, color: YekiColors.textLight))
+              ? GestureDetector(
+                  onTap: () {
+                    _searchCtrl.clear();
+                    setState(() => _searchText = '');
+                  },
+                  child: Icon(Icons.close_rounded, size: 18, color: YekiColors.textLight),
+                )
               : null,
           border: InputBorder.none,
           contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
@@ -633,7 +842,10 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin {
             children: [
               Container(
                 padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(color: _accentColor.withValues(alpha: 0.08), borderRadius: YekiRadius.borderRadiusSm),
+                decoration: BoxDecoration(
+                  color: _accentColor.withValues(alpha: 0.08),
+                  borderRadius: YekiRadius.borderRadiusSm,
+                ),
                 child: Icon(Icons.edit_rounded, color: _accentColor, size: 16),
               ),
               const SizedBox(width: 10),
@@ -642,8 +854,12 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin {
               GestureDetector(
                 onTap: () => setState(() => _composerVisible = false),
                 child: Container(
-                  width: 32, height: 32,
-                  decoration: BoxDecoration(color: YekiColors.backgroundLight, borderRadius: YekiRadius.borderRadiusSm),
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: YekiColors.backgroundLight,
+                    borderRadius: YekiRadius.borderRadiusSm,
+                  ),
                   child: const Icon(Icons.close_rounded, size: 16),
                 ),
               ),
@@ -674,7 +890,10 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin {
                       decoration: BoxDecoration(
                         color: isSelected ? color.withValues(alpha: 0.08) : YekiColors.backgroundLight,
                         borderRadius: YekiRadius.borderRadiusXl,
-                        border: Border.all(color: isSelected ? color.withValues(alpha: 0.3) : YekiColors.borderLight, width: 1),
+                        border: Border.all(
+                          color: isSelected ? color.withValues(alpha: 0.3) : YekiColors.borderLight,
+                          width: 1,
+                        ),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
@@ -682,8 +901,11 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin {
                           Icon(_srcIcon[s]!, size: 12, color: isSelected ? color : YekiColors.textLight),
                           const SizedBox(width: 5),
                           Text(_srcLabel[s]!,
-                              style: TextStyle(fontSize: 12, fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                                  color: isSelected ? color : YekiColors.textMedium)),
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                                color: isSelected ? color : YekiColors.textMedium,
+                              )),
                         ],
                       ),
                     ),
@@ -714,9 +936,19 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin {
           const SizedBox(height: 12),
           Row(
             children: [
-              _buildMediaButton(icon: Icons.image_outlined, label: 'Image', color: Colors.blue, onTap: _pickImage),
+              _buildMediaButton(
+                icon: Icons.image_outlined,
+                label: 'Image',
+                color: Colors.blue,
+                onTap: _pickImage,
+              ),
               const SizedBox(width: 12),
-              _buildMediaButton(icon: Icons.audiotrack_rounded, label: 'Audio', color: YekiColors.purple, onTap: _pickAudio),
+              _buildMediaButton(
+                icon: Icons.audiotrack_rounded,
+                label: 'Audio',
+                color: YekiColors.purple,
+                onTap: _pickAudio,
+              ),
             ],
           ),
           if (_selectedImage != null) ...[
@@ -736,7 +968,8 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin {
                     child: Image.file(_selectedImage!, width: double.infinity, height: 80, fit: BoxFit.cover),
                   ),
                   Positioned(
-                    top: 4, right: 4,
+                    top: 4,
+                    right: 4,
                     child: GestureDetector(
                       onTap: _removeImage,
                       child: Container(
@@ -764,9 +997,17 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin {
                   Icon(Icons.audiotrack_rounded, color: YekiColors.purple, size: 18),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: Text(_selectedAudio!.path.split('/').last, style: const TextStyle(fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis),
+                    child: Text(
+                      _selectedAudio!.path.split('/').last,
+                      style: const TextStyle(fontSize: 12),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
-                  GestureDetector(onTap: _removeAudio, child: const Icon(Icons.close_rounded, size: 18)),
+                  GestureDetector(
+                    onTap: _removeAudio,
+                    child: const Icon(Icons.close_rounded, size: 18),
+                  ),
                 ],
               ),
             ),
@@ -783,7 +1024,12 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildMediaButton({required IconData icon, required String label, required Color color, required VoidCallback onTap}) {
+  Widget _buildMediaButton({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
     return Expanded(
       child: GestureDetector(
         onTap: onTap,
@@ -822,9 +1068,12 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin {
           Icon(icon, size: 12, color: color),
           const SizedBox(width: 8),
           Expanded(
-            child: Text('${_srcLabel[source] ?? source} : $contextLabel',
-                style: TextStyle(fontSize: 11, color: color, fontWeight: FontWeight.w600),
-                maxLines: 1, overflow: TextOverflow.ellipsis),
+            child: Text(
+              '${_srcLabel[source] ?? source} : $contextLabel',
+              style: TextStyle(fontSize: 11, color: color, fontWeight: FontWeight.w600),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
         ],
       ),
@@ -838,14 +1087,23 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin {
     final isHighlighted = q.id == widget.scrollToQuestionId;
 
     return GestureDetector(
-      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => DetailQuestionForumPage(questionId: q.id, question: q)))
-          .then((_) => _loadQuestions()),
+      onTap: () => context.pushNamed(
+        AppRoute.forumQuestionDetail,
+        pathParameters: {'questionId': q.id.toString()},
+        queryParameters: {
+          if (widget.coursColor != null) 'coursColor': widget.coursColor.toString(),
+        },
+        extra: q,
+      ).then((_) => _loadQuestions()),
       child: Container(
         margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
         decoration: BoxDecoration(
           color: YekiColors.white,
           borderRadius: YekiRadius.borderRadiusLg,
-          border: Border.all(color: isHighlighted ? color.withValues(alpha: 0.4) : YekiColors.borderLight, width: 1),
+          border: Border.all(
+            color: isHighlighted ? color.withValues(alpha: 0.4) : YekiColors.borderLight,
+            width: 1,
+          ),
           boxShadow: YekiShadows.subtle,
         ),
         child: Column(
@@ -857,7 +1115,10 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin {
                 children: [
                   Container(
                     padding: const EdgeInsets.all(6),
-                    decoration: BoxDecoration(color: color.withValues(alpha: 0.08), borderRadius: YekiRadius.borderRadiusSm),
+                    decoration: BoxDecoration(
+                      color: color.withValues(alpha: 0.08),
+                      borderRadius: YekiRadius.borderRadiusSm,
+                    ),
                     child: Icon(icon, size: 14, color: color),
                   ),
                   const SizedBox(width: 8),
@@ -865,22 +1126,41 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin {
                   if (q.source != 'libre' && q.contexteLabel.isNotEmpty) ...[
                     const SizedBox(width: 6),
                     Expanded(
-                      child: Text(q.contexteLabel, style: TextStyle(fontSize: 11), maxLines: 1, overflow: TextOverflow.ellipsis),
+                      child: Text(
+                        q.contexteLabel,
+                        style: const TextStyle(fontSize: 11),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                   ],
                   if (q.estResolue)
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(color: YekiColors.success.withValues(alpha: 0.08), borderRadius: YekiRadius.borderRadiusSm),
-                      child: Text('Résolue', style: TextStyle(fontSize: 10, color: YekiColors.success, fontWeight: FontWeight.w700)),
+                      decoration: BoxDecoration(
+                        color: YekiColors.success.withValues(alpha: 0.08),
+                        borderRadius: YekiRadius.borderRadiusSm,
+                      ),
+                      child: Text(
+                        'Résolue',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: YekiColors.success,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
                     ),
                 ],
               ),
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
-              child: Text(q.contenu, maxLines: 3, overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 14, height: 1.5)),
+              child: Text(
+                q.contenu,
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 14, height: 1.5),
+              ),
             ),
             if (q.imageUrl != null && q.imageUrl!.isNotEmpty) ...[
               const SizedBox(height: 10),
@@ -888,9 +1168,16 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin {
                 padding: const EdgeInsets.symmetric(horizontal: 14),
                 child: ClipRRect(
                   borderRadius: YekiRadius.borderRadiusMd,
-                  child: Image.network(q.imageUrl!, height: 160, width: double.infinity, fit: BoxFit.cover,
-                    errorBuilder: (_, _, _) => Container(height: 160, color: YekiColors.backgroundLight,
-                        child: const Center(child: Icon(Icons.broken_image, size: 40))),
+                  child: Image.network(
+                    q.imageUrl!,
+                    height: 160,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Container(
+                      height: 160,
+                      color: YekiColors.backgroundLight,
+                      child: const Center(child: Icon(Icons.broken_image, size: 40)),
+                    ),
                   ),
                 ),
               ),
@@ -915,11 +1202,21 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin {
               padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
               child: Row(
                 children: [
-                  _buildAvatar(q.auteurNom, q.auteurUsername, q.auteurEstEnseignant, color, 16),
+                  _buildAvatar(
+                    q.auteurNom,
+                    q.auteurUsername,
+                    q.auteurEstEnseignant,
+                    color,
+                    16,
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
-                    child: Text(q.auteurNom.isNotEmpty ? q.auteurNom : q.auteurUsername,
-                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis),
+                    child: Text(
+                      q.auteurNom.isNotEmpty ? q.auteurNom : q.auteurUsername,
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
                   _statIcon(Icons.chat_bubble_outline_rounded, '${q.nbReponses}'),
                   const SizedBox(width: 10),
@@ -930,7 +1227,10 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin {
                     child: Icon(Icons.open_in_new_rounded, size: 14, color: YekiColors.textLight),
                   ),
                   const SizedBox(width: 8),
-                  Text(_formatTimeAgo(q.creeLe), style: const TextStyle(fontSize: 11)),
+                  Text(
+                    _formatTimeAgo(q.creeLe),
+                    style: const TextStyle(fontSize: 11),
+                  ),
                 ],
               ),
             ),
@@ -955,15 +1255,27 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin {
         CircleAvatar(
           radius: radius,
           backgroundColor: estEnseignant ? _accentColor.withValues(alpha: 0.12) : color.withValues(alpha: 0.08),
-          child: Text(_getInitials(nom, username),
-              style: TextStyle(fontSize: radius * 0.7, color: estEnseignant ? _accentColor : color, fontWeight: FontWeight.w800)),
+          child: Text(
+            _getInitials(nom, username),
+            style: TextStyle(
+              fontSize: radius * 0.7,
+              color: estEnseignant ? _accentColor : color,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
         ),
         if (estEnseignant)
           Positioned(
-            right: 0, bottom: 0,
+            right: 0,
+            bottom: 0,
             child: Container(
-              width: radius * 0.35, height: radius * 0.35,
-              decoration: BoxDecoration(color: _accentColor, shape: BoxShape.circle, border: Border.all(color: YekiColors.white, width: 1)),
+              width: radius * 0.35,
+              height: radius * 0.35,
+              decoration: BoxDecoration(
+                color: _accentColor,
+                shape: BoxShape.circle,
+                border: Border.all(color: YekiColors.white, width: 1),
+              ),
             ),
           ),
       ],
@@ -989,8 +1301,11 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin {
             const SizedBox(height: 16),
             const Text('Aucune préoccupation', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
             const SizedBox(height: 8),
-            const Text('Les questions posées depuis les leçons,\nexercices et devoirs apparaîtront ici.',
-                textAlign: TextAlign.center, style: TextStyle(fontSize: 13, height: 1.5)),
+            const Text(
+              'Les questions posées depuis les leçons,\nexercices et devoirs apparaîtront ici.',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 13, height: 1.5),
+            ),
           ],
         ),
       ),

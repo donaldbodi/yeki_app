@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:yeki/core/constants/api_constants.dart';
+import 'package:yeki/core/design/components/inputs/yk_color_picker.dart';
 
 // ─────────────────────────────────────────────────────────────────
 // MODIFIER COURS SHEET
@@ -9,7 +11,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 // Permet à l'enseignant cadre de modifier un cours de son département
 // ─────────────────────────────────────────────────────────────────
 
-const String _baseUrlM = 'https://yeki.pythonanywhere.com/api';
+const String _baseUrlM = ApiConstants.baseUrl;
 const Color _primaryM = Color(0xFF6A1B9A);
 const Color _darkM = Color(0xFF0D1B2A);
 
@@ -33,22 +35,6 @@ const List<Map<String, dynamic>> _iconesCours = [
   {'nom': 'eco', 'icon': Icons.eco},
 ];
 
-const List<Color> _couleursCours = [
-  Color(0xFF6A1B9A),
-  Color(0xFF008080),
-  Color(0xFF1565C0),
-  Color(0xFF2E7D32),
-  Color(0xFFE65100),
-  Color(0xFFC62828),
-  Color(0xFF6A1B9A),
-  Color(0xFF00838F),
-  Color(0xFF283593),
-  Color(0xFF558B2F),
-  Color(0xFFAD1457),
-  Color(0xFF4527A0),
-  Color(0xFF00695C),
-  Color(0xFF37474F),
-];
 
 class ModifierCoursSheet extends StatefulWidget {
   final Map cours;
@@ -406,40 +392,15 @@ class _ModifierCoursSheetState extends State<ModifierCoursSheet> {
       );
 
   // ── Sélecteur de couleur ──────────────────────────────────────────
+  // Migré vers YkColorPicker (P4.7) : alimenté exclusivement par
+  // YkCourseColors.palette, plus de grille de couleurs en dur ici.
   Widget _buildCouleurPicker() {
-    return Wrap(
-      spacing: 10,
-      runSpacing: 10,
-      children: _couleursCours.map((c) {
-        final isSelected = c.value == _selectedCouleur.value;
-        return GestureDetector(
-          onTap: () => setState(() => _selectedCouleur = c),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(
-              color: c,
-              shape: BoxShape.circle,
-              border: isSelected
-                  ? Border.all(color: Colors.white, width: 2.5)
-                  : null,
-              boxShadow: isSelected
-                  ? [
-                      BoxShadow(
-                        color: c.withOpacity(0.6),
-                        blurRadius: 8,
-                        spreadRadius: 1,
-                      ),
-                    ]
-                  : [],
-            ),
-            child: isSelected
-                ? const Icon(Icons.check, color: Colors.white, size: 18)
-                : null,
-          ),
-        );
-      }).toList(),
+    return YkColorPicker(
+      selectedHex: _colorToHex(_selectedCouleur),
+      onChanged: (hex) => setState(() {
+        _selectedCouleur =
+            Color(int.parse('FF${hex.replaceAll('#', '')}', radix: 16));
+      }),
     );
   }
 

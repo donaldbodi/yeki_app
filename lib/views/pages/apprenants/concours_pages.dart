@@ -6,10 +6,11 @@
 import 'dart:convert';
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:yeki/views/pages/apprenants/formations_models.dart';
-import 'package:yeki/views/pages/apprenants/concours_detail_page.dart';
+import 'package:yeki/core/router/route_names.dart';
 import 'package:yeki/core/theme/yeki_design_system.dart';
 import 'package:yeki/core/constants/api_constants.dart';
 
@@ -505,11 +506,10 @@ class _ConcoursPageState extends State<ConcoursPage> {
               color: Colors.transparent,
               child: InkWell(
                 onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => DetailConcoursPage(concoursId: dept.id, deptPrecharge: dept),
-                    ),
+                  context.pushNamed(
+                    AppRoute.concoursDetail,
+                    pathParameters: {'concoursId': dept.id.toString()},
+                    extra: dept,
                   ).then((_) => _charger());
                 },
                 borderRadius: BorderRadius.circular(24),

@@ -2,12 +2,12 @@
 // Version avec méthodes statiques - Support Web
 
 import 'dart:async';
-import 'dart:convert';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:hive/hive.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:http/http.dart' as http;
+import 'package:yeki/core/network/api_client.dart';
+import 'package:yeki/core/network/api_exception.dart';
 import 'package:yeki/services/download_manager.dart';
 
 // Modèles pour le stockage local
@@ -273,7 +273,7 @@ class OfflineService {
       if (action == null) continue;
       
       try {
-        final success = await _executeAction(action, token);
+        final success = await _executeAction(action);
         if (success) {
           succeeded.add(key);
         } else {
@@ -303,33 +303,17 @@ class OfflineService {
     _isSyncing = false;
   }
   
-  static Future<bool> _executeAction(PendingAction action, String token) async {
-    final url = Uri.parse('https://yeki.pythonanywhere.com/api/${action.endpoint}');
-    final headers = {
-      'Content-Type': 'application/json',
-      'Authorization': 'Token $token',
-    };
-    
+  static Future<bool> _executeAction(PendingAction action) async {
+    // AuthInterceptor injecte désormais l'en-tête d'authentification — plus
+    // besoin de threader le token jusqu'ici.
+    const supportedMethods = {'POST', 'PUT', 'PATCH', 'DELETE'};
+    final method = action.method.toUpperCase();
+    if (!supportedMethods.contains(method)) return false;
+
     try {
-      http.Response? response;
-      
-      switch (action.method.toUpperCase()) {
-        case 'POST':
-          response = await http.post(url, headers: headers, body: jsonEncode(action.data));
-          break;
-        case 'PUT':
-          response = await http.put(url, headers: headers, body: jsonEncode(action.data));
-          break;
-        case 'PATCH':
-          response = await http.patch(url, headers: headers, body: jsonEncode(action.data));
-          break;
-        case 'DELETE':
-          response = await http.delete(url, headers: headers);
-          break;
-      }
-      
-      return response != null && response.statusCode >= 200 && response.statusCode < 300;
-    } catch (e) {
+      await ApiClient().request(method, action.endpoint, data: action.data);
+      return true;
+    } on ApiException {
       return false;
     }
   }
@@ -365,7 +349,35 @@ class OfflineService {
     if (kIsWeb) return;
     await _settingsCache.delete('draft_$devoirId');
   }
-  
+
+  // P6.4 : même mécanisme que les brouillons de devoir ci-dessus — une
+  // coupure réseau pendant la saisie d'un exercice ne doit pas coûter
+  // une tentative (exigence explicite).
+  static Future<void> saveExerciceDraft(int exerciceId, Map<int, String> reponses) async {
+    if (kIsWeb) return;
+    await _settingsCache.put('draft_exercice_$exerciceId', {
+      'reponses': reponses.map((k, v) => MapEntry(k.toString(), v)),
+      'updatedAt': DateTime.now().toIso8601String(),
+    });
+  }
+
+  static Map<int, String>? getExerciceDraft(int exerciceId) {
+    if (kIsWeb) return null;
+    final draft = _settingsCache.get('draft_exercice_$exerciceId');
+    if (draft != null) {
+      final reponses = Map<int, String>.from(
+        (draft['reponses'] as Map).map((k, v) => MapEntry(int.parse(k), v as String))
+      );
+      return reponses;
+    }
+    return null;
+  }
+
+  static Future<void> clearExerciceDraft(int exerciceId) async {
+    if (kIsWeb) return;
+    await _settingsCache.delete('draft_exercice_$exerciceId');
+  }
+
   // ============ NETTOYAGE ============
   
   static Future<void> clearOldCache({int olderThanDays = 30}) async {

@@ -1,15 +1,15 @@
 // lib/views/pages/apprenants/cours_detail_page.dart
-// ════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════════════
 // DÉTAILS DU COURS — GLASSMORPHISM LIGHT EDITION
-// ════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════════════
 
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:yeki/views/pages/apprenants/devoirs_cours_page.dart';
+import 'package:yeki/features/devoirs_cours/presentation/devoirs_cours_page.dart';
 import 'package:yeki/views/pages/apprenants/forum_page.dart';
 import 'package:yeki/views/pages/apprenants/lecons_cours.dart';
-import 'package:yeki/views/pages/apprenants/exercices_cours.dart';
+import 'package:yeki/features/exercices_cours/presentation/exercices_cours_page.dart';
 import 'package:yeki/core/theme/yeki_design_system.dart';
 
 class CoursDetailTabs extends StatefulWidget {
@@ -19,6 +19,8 @@ class CoursDetailTabs extends StatefulWidget {
   final bool isPremium;
   final int initialTab;
   final int? scrollToQuestionId;
+  final int? moduleId;
+  final int? leconId;
 
   const CoursDetailTabs({
     super.key,
@@ -28,6 +30,8 @@ class CoursDetailTabs extends StatefulWidget {
     this.isPremium = true,
     this.initialTab = 0,
     this.scrollToQuestionId,
+    this.moduleId,
+    this.leconId,
   });
 
   @override
@@ -49,10 +53,18 @@ class _CoursDetailTabsState extends State<CoursDetailTabs>
   int? _forumPreoccupationDevoirId;
   String? _forumPreoccupationDevoirTitre;
 
+  // Filtre de l'onglet Exercices — initialisé depuis les paramètres de
+  // route, puis modifiable en place depuis l'onglet Leçons (voir
+  // `_naviguerVersExercicesAvecFiltre`, P3.3 §6).
+  int? _exercicesModuleIdFiltre;
+  int? _exercicesLeconIdFiltre;
+
   @override
   void initState() {
     super.initState();
     _courseColor = Color(widget.coursColor);
+    _exercicesModuleIdFiltre = widget.moduleId;
+    _exercicesLeconIdFiltre = widget.leconId;
     _tabController = TabController(
       length: 4,
       vsync: this,
@@ -78,6 +90,17 @@ class _CoursDetailTabsState extends State<CoursDetailTabs>
   void naviguerVersForumAvecQuestion(int questionId) {
     setState(() => _forumScrollToId = questionId);
     _tabController.animateTo(3);
+  }
+
+  /// Bascule sur l'onglet Exercices avec le filtre demandé, en place —
+  /// jamais une nouvelle navigation (voir `LeconsCoursPage.onNaviguerExercices`,
+  /// P3.3 §6).
+  void _naviguerVersExercicesAvecFiltre({int? moduleId, int? leconId}) {
+    setState(() {
+      _exercicesModuleIdFiltre = moduleId;
+      _exercicesLeconIdFiltre = leconId;
+    });
+    _tabController.animateTo(1);
   }
 
   void setPreoccupationData({
@@ -320,6 +343,7 @@ class _CoursDetailTabsState extends State<CoursDetailTabs>
           coursTitre: widget.titre,
           tabController: _tabController,
           onNaviguerForum: naviguerVersForumAvecQuestion,
+          onNaviguerExercices: _naviguerVersExercicesAvecFiltre,
           isPremium: widget.isPremium,
           courseColor: _courseColor,
         ),
@@ -329,6 +353,8 @@ class _CoursDetailTabsState extends State<CoursDetailTabs>
                 coursTitre: widget.titre,
                 onNaviguerForum: naviguerVersForumAvecQuestion,
                 courseColor: _courseColor,
+                moduleId: _exercicesModuleIdFiltre,
+                leconId: _exercicesLeconIdFiltre,
               )
             : _buildPremiumLock('exercices'),
         widget.isPremium

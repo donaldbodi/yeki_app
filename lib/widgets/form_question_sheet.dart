@@ -3,11 +3,12 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:yeki/core/constants/api_constants.dart';
 
 // ─────────────────────────────────────────────────────────────────
 // CONSTANTES
 // ─────────────────────────────────────────────────────────────────
-const String _base = 'https://yeki.pythonanywhere.com/api';
+const String _base = ApiConstants.baseUrl;
 
 const Color _teal   = Color(0xFF008088);
 const Color _dark   = Color(0xFF0D1B2A);

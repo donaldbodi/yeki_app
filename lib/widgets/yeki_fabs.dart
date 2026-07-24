@@ -6,13 +6,14 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:yeki/views/pages/apprenants/yeki_ia_chat_page.dart';
 import 'package:yeki/views/pages/apprenants/forum_page.dart';
-import 'package:yeki/core/design/yeki_design.dart';
+import 'package:yeki/core/router/route_names.dart';
+import 'package:yeki/core/design_system/yeki_design.dart';
 import 'package:yeki/core/constants/api_constants.dart';
 
 // Import conditionnel pour record
@@ -37,6 +38,13 @@ Future<String?> _tok() async =>
 // ════════════════════════════════════════════════════════════════
 // WIDGET PRINCIPAL
 // ════════════════════════════════════════════════════════════════
+@Deprecated(
+  'Remplacé par lib/core/design/components/actions/{yk_fab,yk_chip}.dart '
+  '— voir P4.7. Embarque une fonctionnalité complète (enregistrement '
+  'audio + upload + soumission forum) hors périmètre du composant Yk* ; '
+  'la migration de lecture_lecon_page.dart est un ticket séparé (décision '
+  'actée P4.7). Ne pas utiliser dans du nouveau code.',
+)
 class YekiFabs extends StatefulWidget {
   final int    coursId;
   final String coursTitre;
@@ -139,15 +147,16 @@ class _YekiFabsState extends State<YekiFabs> with TickerProviderStateMixin {
               color: const Color(0xFF008088),
               onTap: () {
                 Navigator.pop(ctx);
-                Navigator.push(context, MaterialPageRoute(
-                  builder: (_) => YekiIAChatPage(
-                    coursId:         widget.coursId,
-                    coursTitre:      widget.coursTitre,
-                    sourceInitiale:  widget.source,
-                    sourceId:        widget.sourceId,
-                    sourceTitreInit: widget.sourceTitre,
-                  ),
-                ));
+                context.pushNamed(
+                  AppRoute.iaChat,
+                  pathParameters: {'coursId': widget.coursId.toString()},
+                  queryParameters: {
+                    'coursTitre': widget.coursTitre,
+                    'sourceInitiale': widget.source,
+                    if (widget.sourceId != null) 'sourceId': widget.sourceId.toString(),
+                    'sourceTitreInit': widget.sourceTitre,
+                  },
+                );
               },
             ),
             const SizedBox(height: 10),
@@ -193,15 +202,16 @@ class _YekiFabsState extends State<YekiFabs> with TickerProviderStateMixin {
         sourceTitre: widget.sourceTitre,
         onSoumis: (int? questionId) {
           if (isIA) {
-            Navigator.push(context, MaterialPageRoute(
-              builder: (_) => YekiIAChatPage(
-                coursId:         widget.coursId,
-                coursTitre:      widget.coursTitre,
-                sourceInitiale:  widget.source,
-                sourceId:        widget.sourceId,
-                sourceTitreInit: widget.sourceTitre,
-              ),
-            ));
+            context.pushNamed(
+              AppRoute.iaChat,
+              pathParameters: {'coursId': widget.coursId.toString()},
+              queryParameters: {
+                'coursTitre': widget.coursTitre,
+                'sourceInitiale': widget.source,
+                if (widget.sourceId != null) 'sourceId': widget.sourceId.toString(),
+                'sourceTitreInit': widget.sourceTitre,
+              },
+            );
           } else {
             if (widget.tabController != null && mounted) {
               widget.tabController!.animateTo(widget.forumTabIndex);

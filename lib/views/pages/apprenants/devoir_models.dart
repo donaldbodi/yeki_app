@@ -1,5 +1,13 @@
 // devoir_models.dart
-// Modèles Dart partagés entre toutes les pages devoirs
+// Modèles Dart partagés entre toutes les pages devoirs.
+//
+// P7.5 : `ChoixDevoir`/`QuestionDevoir`/`DevoirDetail` (vue composition
+// apprenant) supprimés — 0 appelant restant (confirmé par recherche),
+// remplacés par `ChoixDevoirComposer`/`QuestionDevoirComposer`/
+// `DevoirAComposer` (`lib/models/devoir_models.dart`), qui corrigent au
+// passage un bug réel : `QuestionDevoir.fromJson` lisait `j['texte']` pour
+// l'énoncé au lieu du champ réel `enonce`. `DevoirModel`/`OlympiadeInfo`
+// ci-dessous restent utilisés (dashboard `devoirs_page.dart`), inchangés.
 
 class OlympiadeInfo {
   final int      id;
@@ -100,84 +108,4 @@ class DevoirModel {
                    ? OlympiadeInfo.fromJson(j['olympiade'])
                    : null,
   );
-}
-
-class ChoixDevoir {
-  final int    id;
-  final String texte;
-  const ChoixDevoir({required this.id, required this.texte});
-  factory ChoixDevoir.fromJson(Map j) =>
-      ChoixDevoir(id: j['id'], texte: j['texte'] ?? '');
-}
-
-class QuestionDevoir {
-  final int               id;
-  final String            texte;
-  final String            type;   // qcm | texte
-  final int               points;
-  final int               ordre;
-  final List<ChoixDevoir> choix;
-
-  const QuestionDevoir({
-    required this.id,
-    required this.texte,
-    required this.type,
-    required this.points,
-    required this.ordre,
-    required this.choix,
-  });
-
-  factory QuestionDevoir.fromJson(Map j) => QuestionDevoir(
-    id:     j['id'],
-    texte:  j['texte'] ?? '',
-    type:   j['type_question'] ?? 'texte',
-    points: j['points'] ?? 1,
-    ordre:  j['ordre'] ?? 0,
-    choix:  (j['choix'] as List? ?? [])
-                .map((c) => ChoixDevoir.fromJson(c))
-                .toList(),
-  );
-}
-
-class DevoirDetail {
-  final int                 id;
-  final String              titre;
-  final String              typeDevoir;
-  final int                 dureeMinutes;
-  final bool                questionParQuestion;
-  final bool                tempsStrict;
-  final int                 nbSortiesTolerees;
-  final int?                tempsRestant;
-  final List<QuestionDevoir> questions;
-
-  const DevoirDetail({
-    required this.id,
-    required this.titre,
-    required this.typeDevoir,
-    required this.dureeMinutes,
-    required this.questionParQuestion,
-    required this.tempsStrict,
-    required this.nbSortiesTolerees,
-    this.tempsRestant,
-    required this.questions,
-  });
-
-  factory DevoirDetail.fromJson(Map<String, dynamic> j) {
-    final olymp = j['olympiade'];
-    return DevoirDetail(
-      id:                  j['id'],
-      titre:               j['titre'] ?? '',
-      typeDevoir:          j['type_devoir'] ?? 'cursus',
-      dureeMinutes:        j['duree_minutes'] ?? 0,
-      questionParQuestion: olymp?['question_par_question'] ?? false,
-      tempsStrict:         olymp?['temps_strict'] ?? false,
-      nbSortiesTolerees:   olymp?['nb_sorties_tolerees'] ?? 0,
-      tempsRestant:        j['temps_restant'],
-      questions:           (j['questions'] as List? ?? [])
-                               .map((q) => QuestionDevoir.fromJson(q))
-                               .toList(),
-    );
-  }
-
-  bool get estOlympiade => typeDevoir == 'olympiade';
 }
