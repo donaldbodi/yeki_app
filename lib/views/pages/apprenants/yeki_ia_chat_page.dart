@@ -1,25 +1,53 @@
 // lib/views/pages/apprenants/yeki_ia_chat_page.dart
-// ═══════════════════════════════════════════════════════════════════════════
-// DISCUSSION PRIVÉE AVEC YEKI IA (CLAUDE 3.5 SONNET) — CORRIGÉE
-// ═══════════════════════════════════════════════════════════════════════════
+//
+// Refondu en P10.6 (migration mécanique, rituel P5.0) : bascule vers
+// `IaRepository` (plus de `http`/`SharedPreferences` bruts) et vers les
+// tokens/composants `Yk*` (plus de `YekiColors`/`YekiButton`/`YekiLoader`,
+// dépréciés). Structure et comportement globalement inchangés — migration
+// mécanique, pas une réinvention visuelle.
+//
+// Corrections apportées au passage (bugs/écarts confirmés par le ticket,
+// pas des choix de design) :
+// - `minWalletBalance = 50.0` — valeur métier codée en dur (règle 3),
+//   déconnectée du vrai seuil backend (`ParametreSysteme['solde_min_ia']`,
+//   20 FCFA par défaut) et jamais synchronisée. Aucun endpoint ne permet
+//   de lire ce seuil par avance (`estimer_fourchette_cout` n'existe que
+//   DANS la vue d'envoi) — supprimée : le solde insuffisant n'est plus
+//   anticipé côté client, il est détecté à partir de la vraie réponse 402
+//   du backend (`solde_actuel`, `minimum_requis`, `cout_estime_min/max`),
+//   qui fait autorité.
+// - `ApiException.fromEnvelope` perdait silencieusement les champs
+//   `solde_actuel`/`minimum_requis`/`cout_estime_min/max` du 402/503 (repli
+//   `detail is String` ne gardait que le message) — corrigé dans
+//   `api_exception.dart` au passage, condition nécessaire pour afficher
+//   ces informations ici.
+// - `_imageFile`/`_audioFile` (choisis via `image_picker`) passent de
+//   `File` (dart:io) à `Uint8List` : `File` plante sur le web, même bug
+//   déjà corrigé ailleurs dans le projet. L'enregistrement microphone
+//   (`record`) garde un chemin temporaire disque le temps de
+//   l'enregistrement (exigence du plugin), converti en `Uint8List`
+//   immédiatement après l'arrêt — jamais transporté plus loin.
+// - Réponses IA rendues via `YkRichViewer` (formules incluses si le
+//   contenu utilise un jour la convention `yk-formula`), plus un `Text`
+//   brut.
 
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
+import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
-import 'package:yeki/core/theme/app_theme.dart';
-import 'package:yeki/core/constants/api_constants.dart';
+
+import 'package:yeki/core/design/components/components.dart';
+import 'package:yeki/core/design/tokens/tokens.dart';
+import 'package:yeki/core/network/api_exception.dart';
+import 'package:yeki/core/router/route_names.dart';
+import 'package:yeki/repositories/ia_repository.dart';
+import 'package:yeki/repositories/wallet_repository.dart';
 import 'package:yeki/utils/error_handler.dart';
-
-const double minWalletBalance = 50.0;
-
-Future<String?> _getToken() async =>
-    (await SharedPreferences.getInstance()).getString('token');
 
 class _IAChatMessage {
   final int? id;
@@ -51,42 +79,48 @@ class _IAChatMessage {
   });
 
   factory _IAChatMessage.fromJson(Map<String, dynamic> j) => _IAChatMessage(
-        id: j['id'],
-        role: j['role'] ?? 'user',
-        contenu: j['contenu'] ?? '',
-        imageUrl: j['image_url'] as String?,
-        audioUrl: j['audio_url'] as String?,
-        source: j['source'] ?? 'libre',
-        sourceTitre: j['source_titre'] ?? '',
-        creeLe: DateTime.tryParse(j['cree_le'] ?? '') ?? DateTime.now(),
-        tokensInput: j['tokens_input'],
-        tokensOutput: j['tokens_output'],
-        coutXaf: j['cout_xaf'],
-      );
+    id: j['id'],
+    role: j['role'] ?? 'user',
+    contenu: j['contenu'] ?? '',
+    imageUrl: j['image_url'] as String?,
+    audioUrl: j['audio_url'] as String?,
+    source: j['source'] ?? 'libre',
+    sourceTitre: j['source_titre'] ?? '',
+    creeLe: DateTime.tryParse(j['cree_le'] ?? '') ?? DateTime.now(),
+    tokensInput: j['tokens_input'],
+    tokensOutput: j['tokens_output'],
+    coutXaf: j['cout_xaf'],
+  );
 }
 
-class _WalletInfo {
-  final int solde;
-  final int totalRecharge;
-  final int totalDepense;
-  const _WalletInfo({
-    required this.solde,
-    required this.totalRecharge,
-    required this.totalDepense,
+/// Détail d'un refus 402 (solde insuffisant) — fait autorité, jamais
+/// anticipé côté client (voir commentaire de tête).
+class _SoldeInsuffisantInfo {
+  const _SoldeInsuffisantInfo({
+    required this.soldeActuel,
+    required this.minimumRequis,
+    required this.coutEstimeMin,
+    required this.coutEstimeMax,
   });
-  factory _WalletInfo.fromJson(Map<String, dynamic> j) => _WalletInfo(
-        solde: j['solde'] ?? 0,
-        totalRecharge: j['total_recharge'] ?? 0,
-        totalDepense: j['total_depense'] ?? 0,
-      );
+
+  final int soldeActuel;
+  final int minimumRequis;
+  final int coutEstimeMin;
+  final int coutEstimeMax;
 }
 
-const Map<String, Color> _srcColors = {
-  'lecon': Colors.blue,
-  'exercice': YekiColors.purple,
-  'devoir': YekiColors.warning,
-  'libre': YekiColors.success,
-};
+String _sourceLabel(String src) {
+  switch (src) {
+    case 'lecon':
+      return 'Leçon';
+    case 'exercice':
+      return 'Exercice';
+    case 'devoir':
+      return 'Devoir';
+    default:
+      return 'Question';
+  }
+}
 
 class YekiIAChatPage extends StatefulWidget {
   final int coursId;
@@ -95,6 +129,12 @@ class YekiIAChatPage extends StatefulWidget {
   final String sourceInitiale;
   final int? sourceId;
   final String sourceTitreInit;
+
+  /// Prérempli depuis `detail_lecon_page.dart::_PreoccupationSheet` (bottom
+  /// sheet propre à cet écran — pas `form_preoccupation_sheet.dart`), qui
+  /// travaille encore en `File` (hors périmètre P10.5/P10.6, non retouché
+  /// ici). Convertis en `Uint8List` dès `initState` — jamais réutilisés
+  /// comme `File` au-delà.
   final File? initialImage;
   final File? initialAudio;
 
@@ -114,18 +154,20 @@ class YekiIAChatPage extends StatefulWidget {
   State<YekiIAChatPage> createState() => _YekiIAChatPageState();
 }
 
-class _YekiIAChatPageState extends State<YekiIAChatPage>
-    with TickerProviderStateMixin {
+class _YekiIAChatPageState extends State<YekiIAChatPage> with TickerProviderStateMixin {
+  final _iaRepo = IaRepository();
+  final _walletRepo = WalletRepository();
   final List<_IAChatMessage> _messages = [];
   final _msgCtrl = TextEditingController();
   final _scrollCtrl = ScrollController();
   bool _loading = true;
   bool _sending = false;
-  File? _imageFile;
-  File? _audioFile;
-  _WalletInfo? _wallet;
+  Uint8List? _imageBytes;
+  Uint8List? _audioBytes;
+  int? _solde;
+  _SoldeInsuffisantInfo? _soldeInsuffisant;
 
-  // Enregistrement audio
+  // Enregistrement audio.
   final AudioRecorder _audioRecorder = AudioRecorder();
   bool _isRecording = false;
   bool _hasPermission = false;
@@ -137,30 +179,33 @@ class _YekiIAChatPageState extends State<YekiIAChatPage>
   @override
   void initState() {
     super.initState();
-    _typingCtrl = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 1200))
-      ..repeat();
+    _typingCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 1200))..repeat();
     _chargerHistorique();
-    _chargerWallet();
+    _chargerSolde();
     _checkMicrophonePermission();
-
-    if (widget.initialImage != null) {
-      _imageFile = widget.initialImage;
-    }
-    if (widget.initialAudio != null) {
-      _audioFile = widget.initialAudio;
-    }
+    _chargerMediaInitiaux();
 
     if (widget.messageInitial != null && widget.messageInitial!.isNotEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _msgCtrl.text = widget.messageInitial!;
         Future.delayed(const Duration(milliseconds: 500), () {
-          if (mounted && _msgCtrl.text.isNotEmpty) {
-            _envoyer();
-          }
+          if (mounted && _msgCtrl.text.isNotEmpty) _envoyer();
         });
       });
     }
+  }
+
+  Future<void> _chargerMediaInitiaux() async {
+    final image = widget.initialImage;
+    final audio = widget.initialAudio;
+    if (image == null && audio == null) return;
+    final imageBytes = image != null ? await image.readAsBytes() : null;
+    final audioBytes = audio != null ? await audio.readAsBytes() : null;
+    if (!mounted) return;
+    setState(() {
+      _imageBytes = imageBytes;
+      _audioBytes = audioBytes;
+    });
   }
 
   @override
@@ -168,7 +213,6 @@ class _YekiIAChatPageState extends State<YekiIAChatPage>
     _typingCtrl.dispose();
     _msgCtrl.dispose();
     _scrollCtrl.dispose();
-    _stopRecording();
     _recordingTimer?.cancel();
     _audioRecorder.dispose();
     super.dispose();
@@ -176,29 +220,22 @@ class _YekiIAChatPageState extends State<YekiIAChatPage>
 
   Future<void> _checkMicrophonePermission() async {
     try {
-      if (await _audioRecorder.hasPermission()) {
-        setState(() => _hasPermission = true);
-      } else {
-        final permission = await _audioRecorder.hasPermission();
-        setState(() => _hasPermission = permission);
-        if (!permission && mounted) {
-          ErrorHandler.showError(context, 'Permission microphone requise');
-        }
-      }
-    } catch (e) {
-      setState(() => _hasPermission = false);
+      final permission = await _audioRecorder.hasPermission();
+      if (mounted) setState(() => _hasPermission = permission);
+    } catch (_) {
+      if (mounted) setState(() => _hasPermission = false);
     }
   }
 
   Future<void> _requestMicrophonePermission() async {
     try {
       final permission = await _audioRecorder.hasPermission();
-      setState(() => _hasPermission = permission);
+      if (mounted) setState(() => _hasPermission = permission);
       if (!permission && mounted) {
-        ErrorHandler.showError(context, 'Autorisez l\'accès au microphone');
+        ErrorHandler.showError(context, "Autorisez l'accès au microphone");
       }
-    } catch (e) {
-      ErrorHandler.showError(context, 'Erreur permission microphone');
+    } catch (_) {
+      if (mounted) ErrorHandler.showError(context, 'Erreur permission microphone');
     }
   }
 
@@ -212,41 +249,41 @@ class _YekiIAChatPageState extends State<YekiIAChatPage>
       final directory = await getTemporaryDirectory();
       final timestamp = DateTime.now().millisecondsSinceEpoch;
       final path = '${directory.path}/audio_$timestamp.m4a';
-      
+
       await _audioRecorder.start(
         RecordConfig(encoder: AudioEncoder.aacLc, bitRate: 128000, sampleRate: 44100),
         path: path,
       );
-      
+
       setState(() {
         _isRecording = true;
         _recordingDuration = Duration.zero;
       });
-      
+
       _recordingTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
         if (mounted && _isRecording) {
-          setState(() {
-            _recordingDuration = _recordingDuration + const Duration(seconds: 1);
-          });
+          setState(() => _recordingDuration += const Duration(seconds: 1));
         }
       });
     } catch (e) {
-      ErrorHandler.showError(context, 'Erreur démarrage enregistrement: $e');
+      if (mounted) ErrorHandler.showError(context, 'Erreur démarrage enregistrement: $e');
     }
   }
 
   Future<void> _stopRecording() async {
     if (!_isRecording) return;
-    
+
     try {
       final path = await _audioRecorder.stop();
       _recordingTimer?.cancel();
-      
+
       if (path != null && mounted) {
         final file = File(path);
         if (await file.exists() && await file.length() > 0) {
+          final bytes = await file.readAsBytes();
+          await file.delete();
           setState(() {
-            _audioFile = file;
+            _audioBytes = bytes;
             _isRecording = false;
           });
           ErrorHandler.showSuccess(context, 'Audio enregistré');
@@ -257,9 +294,9 @@ class _YekiIAChatPageState extends State<YekiIAChatPage>
       } else {
         setState(() => _isRecording = false);
       }
-    } catch (e) {
+    } catch (_) {
       setState(() => _isRecording = false);
-      ErrorHandler.showError(context, 'Erreur arrêt enregistrement');
+      if (mounted) ErrorHandler.showError(context, "Erreur d'arrêt d'enregistrement");
     }
   }
 
@@ -274,75 +311,38 @@ class _YekiIAChatPageState extends State<YekiIAChatPage>
 
   String _formatDuration(Duration d) {
     String twoDigits(int n) => n.toString().padLeft(2, '0');
-    final minutes = twoDigits(d.inMinutes.remainder(60));
-    final seconds = twoDigits(d.inSeconds.remainder(60));
-    return '$minutes:$seconds';
+    return '${twoDigits(d.inMinutes.remainder(60))}:${twoDigits(d.inSeconds.remainder(60))}';
   }
 
-  Future<void> _chargerWallet() async {
-    final token = await _getToken();
+  Future<void> _chargerSolde() async {
     try {
-      final res = await http.get(
-        Uri.parse(ApiConstants.walletSolde),
-        headers: ApiHeaders.auth(token),
-      );
-      if (res.statusCode == 200 && mounted) {
-        setState(() {
-          _wallet = _WalletInfo.fromJson(jsonDecode(res.body));
-        });
-      }
+      final solde = await _walletRepo.solde();
+      if (mounted) setState(() => _solde = solde);
     } catch (_) {}
   }
 
   Future<void> _chargerHistorique() async {
     setState(() => _loading = true);
-    final token = await _getToken();
     try {
-      final res = await http.get(
-        Uri.parse(ApiConstants.iaHistorique(widget.coursId)),
-        headers: ApiHeaders.auth(token),
-      );
-      if (res.statusCode == 200 && mounted) {
-        final List data = jsonDecode(res.body);
-        setState(() {
-          _messages.clear();
-          _messages.addAll(data.map((j) => _IAChatMessage.fromJson(j)));
-          _loading = false;
-        });
-        _scrollToBottom();
-
-        if (widget.messageInitial != null &&
-            widget.messageInitial!.isNotEmpty &&
-            _messages.isEmpty) {
-          _envoyer();
-        }
+      final data = await _iaRepo.historique(widget.coursId);
+      if (!mounted) return;
+      setState(() {
+        _messages.clear();
+        _messages.addAll(data.map((j) => _IAChatMessage.fromJson(j)));
+        _loading = false;
+      });
+      _scrollToBottom();
+      if (widget.messageInitial != null && widget.messageInitial!.isNotEmpty && _messages.isEmpty) {
+        _envoyer();
       }
     } catch (_) {
       if (mounted) setState(() => _loading = false);
     }
   }
 
-  Future<bool> _verifierSoldeSuffisant() async {
-    if (_wallet == null) await _chargerWallet();
-    
-    if (_wallet != null && _wallet!.solde < minWalletBalance) {
-      if (mounted) {
-        ErrorHandler.showError(context,
-          'Solde insuffisant. Minimum requis: ${minWalletBalance.toInt()} FCFA.\n'
-          'Votre solde: ${_wallet!.solde} FCFA.\n\n'
-          'Veuillez recharger votre wallet.');
-      }
-      return false;
-    }
-    return true;
-  }
-
   Future<void> _envoyer({String? prefill}) async {
     final texte = (prefill ?? _msgCtrl.text).trim();
-    if (texte.isEmpty && _imageFile == null && _audioFile == null) return;
-
-    final soldeOk = await _verifierSoldeSuffisant();
-    if (!soldeOk) return;
+    if (texte.isEmpty && _imageBytes == null && _audioBytes == null) return;
 
     final msgUser = _IAChatMessage(
       role: 'user',
@@ -351,110 +351,89 @@ class _YekiIAChatPageState extends State<YekiIAChatPage>
       sourceTitre: widget.sourceTitreInit,
       creeLe: DateTime.now(),
     );
-    setState(() {
-      _messages.add(msgUser);
-      _sending = true;
-    });
-    _msgCtrl.clear();
-    _scrollToBottom();
-
     final typing = _IAChatMessage(
       role: 'assistant',
       contenu: '…',
       creeLe: DateTime.now(),
       isStreaming: true,
     );
-    setState(() => _messages.add(typing));
+    setState(() {
+      _messages.add(msgUser);
+      _messages.add(typing);
+      _sending = true;
+    });
+    _msgCtrl.clear();
     _scrollToBottom();
 
-    final token = await _getToken();
+    final imageBytes = _imageBytes;
+    final audioBytes = _audioBytes;
+    setState(() {
+      _imageBytes = null;
+      _audioBytes = null;
+    });
+
     try {
-      final request = http.MultipartRequest(
-        'POST',
-        Uri.parse(ApiConstants.iaChat(widget.coursId)),
+      final data = await _iaRepo.chat(
+        coursId: widget.coursId,
+        message: texte,
+        source: widget.sourceInitiale,
+        sourceId: widget.sourceId,
+        sourceTitre: widget.sourceTitreInit,
+        imageBytes: imageBytes,
+        audioBytes: audioBytes,
       );
-      request.headers['Authorization'] = 'Token ${token ?? ''}';
-      request.fields['message'] = texte;
-      request.fields['source'] = widget.sourceInitiale;
-      request.fields['source_id'] = '${widget.sourceId ?? ''}';
-      request.fields['source_titre'] = widget.sourceTitreInit;
-      
-      if (_imageFile != null) {
-        request.files.add(await http.MultipartFile.fromPath('image', _imageFile!.path));
-      }
-      if (_audioFile != null) {
-        request.files.add(await http.MultipartFile.fromPath('audio', _audioFile!.path));
-      }
-      
+      if (!mounted) return;
       setState(() {
-        _imageFile = null;
-        _audioFile = null;
-      });
-
-      final streamed = await request.send();
-      final res = await http.Response.fromStream(streamed);
-
-      if (res.statusCode == 200 && mounted) {
-        final data = jsonDecode(res.body);
-        final reponse = data['reponse'] as String? ?? '';
-        final cout = data['cout_xaf'] as int? ?? 0;
-        final soldeRestant = data['solde_restant'] as int?;
-        
-        if (soldeRestant != null && _wallet != null) {
-          setState(() {
-            _wallet = _WalletInfo(
-              solde: soldeRestant,
-              totalRecharge: _wallet!.totalRecharge,
-              totalDepense: _wallet!.totalDepense + cout,
-            );
-          });
-        } else {
-          await _chargerWallet();
-        }
-        
-        setState(() {
-          _messages.removeLast();
-          _messages.add(_IAChatMessage(
+        _messages.removeLast();
+        _messages.add(
+          _IAChatMessage(
             id: data['assistant_id'],
             role: 'assistant',
-            contenu: reponse,
+            contenu: data['reponse'] as String? ?? '',
             creeLe: DateTime.now(),
             tokensInput: data['tokens_input'],
             tokensOutput: data['tokens_output'],
-            coutXaf: cout,
-          ));
+            coutXaf: data['cout_xaf'] as int?,
+          ),
+        );
+        _solde = data['solde_restant'] as int? ?? _solde;
+        _soldeInsuffisant = null;
+      });
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      if (e.statusCode == 402) {
+        setState(() {
+          _messages.removeLast();
+          _messages.removeLast();
+          _soldeInsuffisant = _SoldeInsuffisantInfo(
+            soldeActuel: (e.fields['solde_actuel'] as num?)?.toInt() ?? 0,
+            minimumRequis: (e.fields['minimum_requis'] as num?)?.toInt() ?? 0,
+            coutEstimeMin: (e.fields['cout_estime_min'] as num?)?.toInt() ?? 0,
+            coutEstimeMax: (e.fields['cout_estime_max'] as num?)?.toInt() ?? 0,
+          );
         });
-        
-        if (cout > 0) {
-          ErrorHandler.showSuccess(context, '💰 Coût: $cout FCFA | Solde: ${soldeRestant ?? _wallet?.solde} FCFA');
-        }
       } else {
-        String errorMsg = 'Erreur lors de l\'envoi';
-        try {
-          final errorData = jsonDecode(res.body);
-          errorMsg = errorData['detail'] ?? errorData['reponse_secours'] ?? errorMsg;
-        } catch (_) {}
-        
         setState(() {
           _messages.removeLast();
-          _messages.add(_IAChatMessage(
-            role: 'assistant',
-            contenu: 'Yeki IA : $errorMsg',
-            creeLe: DateTime.now(),
-          ));
+          _messages.add(
+            _IAChatMessage(role: 'assistant', contenu: 'Yéki IA : ${e.message}', creeLe: DateTime.now()),
+          );
+          final soldeActuel = e.fields['solde_actuel'];
+          if (soldeActuel is num) _solde = soldeActuel.toInt();
         });
       }
-    } catch (_) {
-      if (mounted) {
-        setState(() {
-          _messages.removeLast();
-          _messages.add(_IAChatMessage(
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _messages.removeLast();
+        _messages.add(
+          _IAChatMessage(
             role: 'assistant',
-            contenu: 'Yeki IA : Erreur de connexion. Vérifiez votre réseau.',
+            contenu: 'Yéki IA : Erreur de connexion. Vérifiez votre réseau.',
             creeLe: DateTime.now(),
-          ));
-        });
-      }
+          ),
+        );
+      });
     }
     if (mounted) {
       setState(() => _sending = false);
@@ -478,7 +457,8 @@ class _YekiIAChatPageState extends State<YekiIAChatPage>
     final picker = ImagePicker();
     final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 70);
     if (picked != null && mounted) {
-      setState(() => _imageFile = File(picked.path));
+      final bytes = await picked.readAsBytes();
+      setState(() => _imageBytes = bytes);
     }
   }
 
@@ -486,121 +466,102 @@ class _YekiIAChatPageState extends State<YekiIAChatPage>
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: YekiRadius.borderRadiusXl),
-        backgroundColor: YekiColors.white,
-        title: const Text('Effacer la conversation',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-        content: const Text('Toute la conversation avec Yeki IA sera supprimée.'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(YkRadius.lg)),
+        title: const Text('Effacer la conversation'),
+        content: const Text('Toute la conversation avec Yéki IA sera supprimée.'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Annuler', style: TextStyle(color: YekiColors.textMedium))),
-          TextButton(onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Effacer', style: TextStyle(color: YekiColors.error))),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Annuler')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text('Effacer', style: TextStyle(color: YkColors.error)),
+          ),
         ],
       ),
     );
     if (ok != true) return;
-    final token = await _getToken();
-    await http.delete(
-      Uri.parse(ApiConstants.iaHistorique(widget.coursId)),
-      headers: ApiHeaders.auth(token),
-    );
-    if (mounted) setState(() => _messages.clear());
+    try {
+      await _iaRepo.effacerHistorique(widget.coursId);
+      if (mounted) setState(() => _messages.clear());
+    } catch (_) {
+      if (mounted) ErrorHandler.showError(context, "Erreur lors de l'effacement.");
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: YekiColors.backgroundLight,
-      appBar: _buildAppBar(),
+      backgroundColor: YkColors.background(context),
+      appBar: _buildAppBar(context),
       body: Column(
         children: [
-          _buildSoldeBanner(),
+          _buildSoldeBanner(context),
           Expanded(
             child: _loading
-                ? const Center(child: YekiLoader())
+                ? Center(child: YkProgress(shape: YkProgressShape.circular))
+                : (_messages.isEmpty && _soldeInsuffisant != null)
+                ? _buildSoldeInsuffisantEmptyState(context)
                 : _messages.isEmpty
-                    ? _buildEmptyState()
-                    : ListView.builder(
-                        controller: _scrollCtrl,
-                        padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
-                        itemCount: _messages.length,
-                        itemBuilder: (_, i) => _buildBubble(_messages[i]),
-                      ),
+                ? _buildEmptyState(context)
+                : ListView.builder(
+                    controller: _scrollCtrl,
+                    padding: EdgeInsets.fromLTRB(YkSpacing.sm, YkSpacing.sm, YkSpacing.sm, YkSpacing.xs),
+                    itemCount: _messages.length,
+                    itemBuilder: (_, i) => _buildBubble(context, _messages[i]),
+                  ),
           ),
-          if (_isRecording)
-            _buildRecordingBar()
-          else
-            _buildInputBar(),
+          if (_isRecording) _buildRecordingBar(context) else _buildInputBar(context),
         ],
       ),
     );
   }
 
-  Widget _buildRecordingBar() {
+  Widget _buildRecordingBar(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.all(YkSpacing.md),
       decoration: BoxDecoration(
-        color: YekiColors.white,
-        border: Border(top: BorderSide(color: YekiColors.borderLight)),
+        color: YkColors.surface(context),
+        border: Border(top: BorderSide(color: YkColors.border(context))),
       ),
       child: Row(
         children: [
-          Container(width: 12, height: 12, decoration: const BoxDecoration(color: YekiColors.error, shape: BoxShape.circle)),
-          const SizedBox(width: 12),
-          Container(width: 12, height: 12, decoration: BoxDecoration(color: YekiColors.error.withValues(alpha: 0.5), shape: BoxShape.circle)),
-          const SizedBox(width: 12),
-          Text('Enregistrement • ${_formatDuration(_recordingDuration)}',
-              style: const TextStyle(color: YekiColors.error, fontWeight: FontWeight.w600, fontSize: 14)),
+          Container(width: 12, height: 12, decoration: BoxDecoration(color: YkColors.error, shape: BoxShape.circle)),
+          SizedBox(width: YkSpacing.sm),
+          Text(
+            'Enregistrement • ${_formatDuration(_recordingDuration)}',
+            style: YkTypography.label(context).copyWith(color: YkColors.error),
+          ),
           const Spacer(),
-          GestureDetector(
-            onTap: _stopRecording,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              decoration: BoxDecoration(color: YekiColors.success, borderRadius: BorderRadius.circular(20)),
-              child: const Text('Arrêter', style: TextStyle(color: YekiColors.white, fontWeight: FontWeight.bold)),
-            ),
-          ),
-          const SizedBox(width: 8),
-          GestureDetector(
-            onTap: _cancelRecording,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              decoration: BoxDecoration(color: YekiColors.textLight, borderRadius: BorderRadius.circular(20)),
-              child: const Text('Annuler', style: TextStyle(color: YekiColors.white, fontWeight: FontWeight.bold)),
-            ),
-          ),
+          YkButton(label: 'Arrêter', variant: YkButtonVariant.primary, onPressed: _stopRecording),
+          SizedBox(width: YkSpacing.xs),
+          YkButton(label: 'Annuler', variant: YkButtonVariant.tertiary, onPressed: _cancelRecording),
         ],
       ),
     );
   }
 
-  AppBar _buildAppBar() {
+  PreferredSizeWidget _buildAppBar(BuildContext context) {
+    final accent = YkColors.accent(context);
     return AppBar(
-      backgroundColor: YekiColors.white,
-      elevation: 0,
-      leading: IconButton(
-        icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18),
-        onPressed: () => Navigator.pop(context),
-      ),
       title: Row(
         children: [
-          Container(
-            width: 36, height: 36,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(colors: [YekiColors.primaryDark, YekiColors.primaryLight]),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: const Center(child: Text('YIA', style: TextStyle(color: YekiColors.white, fontSize: 11, fontWeight: FontWeight.w900))),
+          CircleAvatar(
+            radius: 18,
+            backgroundColor: accent,
+            child: Text('YIA', style: YkTypography.caption(context).copyWith(color: YkColors.onAccent(context))),
           ),
-          const SizedBox(width: 10),
+          SizedBox(width: YkSpacing.xs),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Text('Yéki IA', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
-                Text(widget.coursTitre, style: const TextStyle(fontSize: 11), maxLines: 1, overflow: TextOverflow.ellipsis),
+                const Text('Yéki IA'),
+                Text(
+                  widget.coursTitre,
+                  style: YkTypography.caption(context).copyWith(color: YkColors.textSecondary(context)),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ],
             ),
           ),
@@ -608,39 +569,194 @@ class _YekiIAChatPageState extends State<YekiIAChatPage>
       ),
       actions: [
         IconButton(
-          icon: const Icon(Icons.delete_outline_rounded, size: 20),
+          icon: const Icon(Icons.delete_outline_rounded),
           onPressed: _messages.isNotEmpty ? _effacerConversation : null,
           tooltip: 'Effacer la conversation',
         ),
-        const SizedBox(width: 4),
       ],
-      bottom: PreferredSize(
-        preferredSize: const Size.fromHeight(1),
-        child: Divider(height: 1, color: YekiColors.borderLight),
+    );
+  }
+
+  Widget _buildSoldeBanner(BuildContext context) {
+    if (_solde == null) return const SizedBox.shrink();
+    final enAlerte = _soldeInsuffisant != null;
+    final color = enAlerte ? YkColors.error : YkColors.accent(context);
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: YkSpacing.md, vertical: YkSpacing.xs),
+      color: color.withValues(alpha: 0.08),
+      child: Row(
+        children: [
+          Icon(
+            enAlerte ? Icons.warning_amber_rounded : Icons.account_balance_wallet_rounded,
+            color: color,
+            size: 16,
+          ),
+          SizedBox(width: YkSpacing.xs),
+          Expanded(
+            child: Text(
+              'Solde : $_solde FCFA',
+              style: YkTypography.label(context).copyWith(color: color),
+            ),
+          ),
+          if (enAlerte)
+            TextButton(
+              onPressed: () => context.pushNamed(AppRoute.recharge),
+              child: const Text('Recharger'),
+            ),
+        ],
       ),
     );
   }
 
-  Widget _buildSoldeBanner() {
-    if (_wallet == null) return const SizedBox.shrink();
-    
-    final solde = _wallet!.solde;
-    final isLow = solde < minWalletBalance;
-    
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-      color: isLow ? YekiColors.accent.withValues(alpha: 0.1) : YekiColors.primaryDark.withValues(alpha: 0.05),
+  Widget _buildSoldeInsuffisantEmptyState(BuildContext context) {
+    final info = _soldeInsuffisant!;
+    return YkEmptyState(
+      icon: Icons.account_balance_wallet_outlined,
+      title: 'Solde insuffisant',
+      message:
+          'Votre solde (${info.soldeActuel} FCFA) est sous le minimum requis '
+          '(${info.minimumRequis} FCFA).\nCoût estimé de cette question : '
+          'entre ${info.coutEstimeMin} et ${info.coutEstimeMax} FCFA.',
+      actionLabel: 'Recharger',
+      onAction: () => context.pushNamed(AppRoute.recharge),
+    );
+  }
+
+  Widget _buildEmptyState(BuildContext context) {
+    final accent = YkColors.accent(context);
+    return Center(
+      child: Padding(
+        padding: EdgeInsets.all(YkSpacing.xl),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircleAvatar(
+              radius: 40,
+              backgroundColor: accent,
+              child: Text(
+                'YIA',
+                style: YkTypography.h3(context).copyWith(color: YkColors.onAccent(context)),
+              ),
+            ),
+            SizedBox(height: YkSpacing.lg),
+            Text('Yéki IA', style: YkTypography.h3(context).copyWith(color: YkColors.textPrimary(context))),
+            SizedBox(height: YkSpacing.xs),
+            Text(
+              'Votre assistant pédagogique expert de ce cours.\n'
+              'Posez vos questions, je les analyse et y réponds '
+              'en utilisant le contenu du cours.',
+              textAlign: TextAlign.center,
+              style: YkTypography.bodyMd(context).copyWith(color: YkColors.textSecondary(context)),
+            ),
+            SizedBox(height: YkSpacing.lg),
+            _buildSuggestion(context, 'Explique-moi ce concept en détail', Icons.lightbulb_outline_rounded),
+            SizedBox(height: YkSpacing.xs),
+            _buildSuggestion(context, 'Donne-moi un exemple concret tiré du cours', Icons.science_outlined),
+            SizedBox(height: YkSpacing.xs),
+            _buildSuggestion(context, "Je n'ai pas compris cette partie du cours", Icons.help_outline_rounded),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSuggestion(BuildContext context, String text, IconData icon) {
+    return YkCard(
+      onTap: () {
+        _msgCtrl.text = text;
+        setState(() {});
+      },
       child: Row(
         children: [
-          Icon(isLow ? Icons.warning_amber_rounded : Icons.account_balance_wallet_rounded,
-              color: isLow ? YekiColors.accent : YekiColors.primaryDark, size: 16),
-          const SizedBox(width: 8),
+          Icon(icon, color: YkColors.accent(context), size: 16),
+          SizedBox(width: YkSpacing.sm),
           Expanded(
+            child: Text(text, style: YkTypography.bodySm(context).copyWith(color: YkColors.textPrimary(context))),
+          ),
+          Icon(Icons.arrow_forward_ios_rounded, size: 12, color: YkColors.textTertiary(context)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBubble(BuildContext context, _IAChatMessage msg) {
+    final isUser = msg.role == 'user';
+    if (isUser) return _buildBubbleUser(context, msg);
+    return _buildBubbleAssistant(context, msg);
+  }
+
+  Widget _buildBubbleUser(BuildContext context, _IAChatMessage msg) {
+    final accent = YkColors.accent(context);
+    return Padding(
+      padding: EdgeInsets.only(bottom: YkSpacing.sm, left: 48),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          if (msg.source != 'libre' && msg.sourceTitre.isNotEmpty)
+            Padding(
+              padding: EdgeInsets.only(bottom: YkSpacing.xxs),
+              child: YkBadge(
+                variant: YkBadgeVariant.label,
+                label: '${_sourceLabel(msg.source)} : ${msg.sourceTitre}',
+                color: accent,
+              ),
+            ),
+          if (msg.imageUrl != null)
+            Padding(
+              padding: EdgeInsets.only(bottom: YkSpacing.xxs),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(YkRadius.md),
+                child: Image.network(
+                  msg.imageUrl!,
+                  height: 160,
+                  width: 220,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                ),
+              ),
+            ),
+          if (msg.audioUrl != null)
+            Padding(
+              padding: EdgeInsets.only(bottom: YkSpacing.xxs),
+              child: Container(
+                padding: EdgeInsets.symmetric(horizontal: YkSpacing.sm, vertical: YkSpacing.xs),
+                decoration: BoxDecoration(
+                  color: YkColors.surfaceVariant(context),
+                  borderRadius: BorderRadius.circular(YkRadius.sm),
+                  border: Border.all(color: YkColors.border(context)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.audiotrack_rounded, color: accent, size: 16),
+                    SizedBox(width: YkSpacing.xs),
+                    Text('Fichier audio', style: YkTypography.caption(context)),
+                  ],
+                ),
+              ),
+            ),
+          if (msg.contenu.isNotEmpty)
+            Container(
+              padding: EdgeInsets.symmetric(horizontal: YkSpacing.md, vertical: YkSpacing.sm),
+              decoration: BoxDecoration(
+                color: accent,
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(16),
+                  topRight: Radius.circular(8),
+                  bottomLeft: Radius.circular(16),
+                  bottomRight: Radius.circular(16),
+                ),
+              ),
+              child: Text(
+                msg.contenu,
+                style: YkTypography.bodyMd(context).copyWith(color: YkColors.onAccent(context)),
+              ),
+            ),
+          Padding(
+            padding: EdgeInsets.only(top: YkSpacing.xxs),
             child: Text(
-              isLow 
-                  ? '⚠️ Solde faible: $solde FCFA (minimum $minWalletBalance FCFA requis)'
-                  : '💰 Solde: $solde FCFA',
-              style: TextStyle(color: isLow ? YekiColors.accent : YekiColors.textMedium, fontSize: 12, fontWeight: FontWeight.w600),
+              _formatTime(msg.creeLe),
+              style: YkTypography.caption(context).copyWith(color: YkColors.textTertiary(context)),
             ),
           ),
         ],
@@ -648,242 +764,58 @@ class _YekiIAChatPageState extends State<YekiIAChatPage>
     );
   }
 
-  Widget _buildEmptyState() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 80, height: 80,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(colors: [YekiColors.primaryDark, YekiColors.primaryLight]),
-                borderRadius: BorderRadius.circular(24),
-              ),
-              child: const Center(child: Text('YIA', style: TextStyle(color: YekiColors.white, fontSize: 22, fontWeight: FontWeight.w900))),
-            ),
-            const SizedBox(height: 20),
-            const Text('Yéki IA', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
-            const SizedBox(height: 8),
-            Text(
-              'Votre assistant pédagogique expert de ce cours.\n'
-              'Posez vos questions, je les analyse et y réponds '
-              'en utilisant le contenu du cours.',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 14, height: 1.5),
-            ),
-            if (_wallet != null && _wallet!.solde < minWalletBalance) ...[
-              const SizedBox(height: 16),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: YekiColors.accent.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: YekiColors.accent.withValues(alpha: 0.3)),
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.info_outline, color: YekiColors.accent, size: 20),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        'Solde minimum: $minWalletBalance FCFA par question.\n'
-                        'Rechargez votre wallet pour continuer.',
-                        style: TextStyle(color: YekiColors.accent, fontSize: 12),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-            const SizedBox(height: 24),
-            _buildSuggestion('Explique-moi ce concept en détail', Icons.lightbulb_outline_rounded),
-            const SizedBox(height: 8),
-            _buildSuggestion('Donne-moi un exemple concret tiré du cours', Icons.science_outlined),
-            const SizedBox(height: 8),
-            _buildSuggestion('Je n\'ai pas compris cette partie du cours', Icons.help_outline_rounded),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSuggestion(String text, IconData icon) {
-    return GestureDetector(
-      onTap: () {
-        _msgCtrl.text = text;
-        setState(() {});
-      },
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          color: YekiColors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: YekiColors.borderLight),
-        ),
-        child: Row(
-          children: [
-            Icon(icon, color: YekiColors.primaryDark, size: 16),
-            const SizedBox(width: 10),
-            Expanded(child: Text(text, style: const TextStyle(fontSize: 13))),
-            const Icon(Icons.arrow_forward_ios_rounded, size: 12),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBubble(_IAChatMessage msg) {
-    final isUser = msg.role == 'user';
-    final isStreaming = msg.isStreaming;
-
-    if (isUser) {
-      return Padding(
-        padding: const EdgeInsets.only(bottom: 12, left: 48),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            if (msg.source != 'libre' && msg.sourceTitre.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 4, right: 4),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: (_srcColors[msg.source] ?? YekiColors.primaryDark).withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    '${_sourceLabel(msg.source)} : ${msg.sourceTitre}',
-                    style: TextStyle(fontSize: 10, color: _srcColors[msg.source] ?? YekiColors.primaryDark, fontWeight: FontWeight.w600),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ),
-            if (msg.imageUrl != null)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 4),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: Image.network(msg.imageUrl!, height: 160, width: 220, fit: BoxFit.cover,
-                      errorBuilder: (_, _, _) => const SizedBox.shrink()),
-                ),
-              ),
-            if (msg.audioUrl != null)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 4),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: YekiColors.backgroundLight,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: YekiColors.borderLight),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.audiotrack_rounded, color: YekiColors.purple, size: 16),
-                      const SizedBox(width: 8),
-                      const Text('Fichier audio', style: TextStyle(fontSize: 11)),
-                    ],
-                  ),
-                ),
-              ),
-            if (msg.contenu.isNotEmpty)
-              Container(
-                margin: (msg.imageUrl != null || msg.audioUrl != null) ? const EdgeInsets.only(top: 4) : EdgeInsets.zero,
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(colors: [YekiColors.primaryDark, YekiColors.primaryDark.withValues(alpha: 0.8)]),
-                  borderRadius: const BorderRadius.only(
-                    topLeft: Radius.circular(16),
-                    topRight: Radius.circular(8),
-                    bottomLeft: Radius.circular(16),
-                    bottomRight: Radius.circular(16),
-                  ),
-                ),
-                child: Text(msg.contenu, style: const TextStyle(color: YekiColors.white, fontSize: 14, height: 1.5)),
-              ),
-            Padding(
-              padding: const EdgeInsets.only(top: 4, right: 4),
-              child: Text(_formatTime(msg.creeLe), style: const TextStyle(fontSize: 10)),
-            ),
-          ],
-        ),
-      );
-    }
-
+  Widget _buildBubbleAssistant(BuildContext context, _IAChatMessage msg) {
+    final accent = YkColors.accent(context);
     return Padding(
-      padding: const EdgeInsets.only(bottom: 16, right: 48),
+      padding: EdgeInsets.only(bottom: YkSpacing.md, right: 48),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 32, height: 32,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(colors: [YekiColors.primaryDark, YekiColors.primaryLight]),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: const Center(child: Text('YIA', style: TextStyle(color: YekiColors.white, fontSize: 9, fontWeight: FontWeight.w900))),
+          CircleAvatar(
+            radius: 16,
+            backgroundColor: accent,
+            child: Text('YIA', style: YkTypography.caption(context).copyWith(color: YkColors.onAccent(context))),
           ),
-          const SizedBox(width: 8),
+          SizedBox(width: YkSpacing.xs),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   children: [
-                    const Text('Yéki IA', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800)),
-                    const SizedBox(width: 8),
-                    if (isStreaming)
-                      _buildTypingIndicator()
+                    Text('Yéki IA', style: YkTypography.label(context).copyWith(color: YkColors.textPrimary(context))),
+                    SizedBox(width: YkSpacing.xs),
+                    if (msg.isStreaming)
+                      _buildTypingIndicator(context)
                     else
-                      Text(_formatTime(msg.creeLe), style: const TextStyle(fontSize: 10)),
+                      Text(
+                        _formatTime(msg.creeLe),
+                        style: YkTypography.caption(context).copyWith(color: YkColors.textTertiary(context)),
+                      ),
                   ],
                 ),
-                const SizedBox(height: 4),
-                if (isStreaming)
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: YekiColors.white,
-                      borderRadius: const BorderRadius.only(
-                        topLeft: Radius.circular(8),
-                        topRight: Radius.circular(16),
-                        bottomLeft: Radius.circular(16),
-                        bottomRight: Radius.circular(16),
-                      ),
-                      border: Border.all(color: YekiColors.borderLight),
-                    ),
-                    child: _buildDots(),
-                  )
-                else
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                    decoration: BoxDecoration(
-                      color: YekiColors.white,
-                      borderRadius: const BorderRadius.only(
-                        topLeft: Radius.circular(8),
-                        topRight: Radius.circular(16),
-                        bottomLeft: Radius.circular(16),
-                        bottomRight: Radius.circular(16),
-                      ),
-                      border: Border.all(color: YekiColors.borderLight),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(msg.contenu, style: const TextStyle(fontSize: 14, height: 1.6)),
-                        if (msg.coutXaf != null && msg.coutXaf! > 0)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 8),
-                            child: Text('💰 Coût: ${msg.coutXaf} FCFA', style: const TextStyle(fontSize: 10)),
-                          ),
-                      ],
-                    ),
-                  ),
+                SizedBox(height: YkSpacing.xxs),
+                YkCard(
+                  variant: YkCardVariant.outlined,
+                  child: msg.isStreaming
+                      ? _buildDots(context)
+                      : Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            YkRichViewer(html: msg.contenu),
+                            if (msg.coutXaf != null && msg.coutXaf! > 0)
+                              Padding(
+                                padding: EdgeInsets.only(top: YkSpacing.xs),
+                                child: Text(
+                                  'Coût : ${msg.coutXaf} FCFA',
+                                  style: YkTypography.caption(
+                                    context,
+                                  ).copyWith(color: YkColors.textTertiary(context)),
+                                ),
+                              ),
+                          ],
+                        ),
+                ),
               ],
             ),
           ),
@@ -892,14 +824,14 @@ class _YekiIAChatPageState extends State<YekiIAChatPage>
     );
   }
 
-  Widget _buildTypingIndicator() => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-        decoration: BoxDecoration(color: YekiColors.primaryDark.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(8)),
-        child: const Text('en train de rédiger…',
-            style: TextStyle(fontSize: 9, fontWeight: FontWeight.w600)),
-      );
+  Widget _buildTypingIndicator(BuildContext context) => YkBadge(
+    variant: YkBadgeVariant.label,
+    label: 'en train de rédiger…',
+    color: YkColors.accent(context),
+  );
 
-  Widget _buildDots() {
+  Widget _buildDots(BuildContext context) {
+    final accent = YkColors.accent(context);
     return AnimatedBuilder(
       animation: _typingCtrl,
       builder: (_, _) {
@@ -909,10 +841,10 @@ class _YekiIAChatPageState extends State<YekiIAChatPage>
           children: List.generate(3, (i) {
             final opacity = ((v * 3 - i).clamp(0.0, 1.0) * (1 - (v * 3 - i - 1).clamp(0.0, 1.0))).clamp(0.3, 1.0);
             return Padding(
-              padding: const EdgeInsets.only(right: 4),
+              padding: EdgeInsets.only(right: YkSpacing.xxs),
               child: Opacity(
                 opacity: opacity,
-                child: Container(width: 7, height: 7, decoration: const BoxDecoration(color: YekiColors.primaryDark, shape: BoxShape.circle)),
+                child: Container(width: 7, height: 7, decoration: BoxDecoration(color: accent, shape: BoxShape.circle)),
               ),
             );
           }),
@@ -921,164 +853,118 @@ class _YekiIAChatPageState extends State<YekiIAChatPage>
     );
   }
 
-  Widget _buildInputBar() {
-    final hasImage = _imageFile != null;
-    final hasAudio = _audioFile != null;
-    final soldeOk = _wallet != null && _wallet!.solde >= minWalletBalance;
-    final canSend = !_sending && soldeOk && 
-                    (_msgCtrl.text.trim().isNotEmpty || hasImage || hasAudio);
-    
+  Widget _buildInputBar(BuildContext context) {
+    final hasImage = _imageBytes != null;
+    final hasAudio = _audioBytes != null;
+    final canSend = !_sending && (_msgCtrl.text.trim().isNotEmpty || hasImage || hasAudio);
+
     return Container(
       padding: EdgeInsets.only(
-          left: 12, right: 12, top: 10,
-          bottom: MediaQuery.of(context).padding.bottom + 10),
+        left: YkSpacing.sm,
+        right: YkSpacing.sm,
+        top: YkSpacing.sm,
+        bottom: MediaQuery.of(context).padding.bottom + YkSpacing.sm,
+      ),
       decoration: BoxDecoration(
-        color: YekiColors.white,
-        border: Border(top: BorderSide(color: YekiColors.borderLight)),
+        color: YkColors.surface(context),
+        border: Border(top: BorderSide(color: YkColors.border(context))),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           if (hasImage || hasAudio)
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
+            Padding(
+              padding: EdgeInsets.only(bottom: YkSpacing.xs),
               child: Row(
                 children: [
                   if (hasImage)
                     _buildFilePreview(
-                      child: Stack(
-                        children: [
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(8),
-                            child: Image.file(_imageFile!, height: 50, width: 50, fit: BoxFit.cover),
-                          ),
-                          Positioned(
-                            top: 0, right: 0,
-                            child: GestureDetector(
-                              onTap: () => setState(() => _imageFile = null),
-                              child: Container(
-                                padding: const EdgeInsets.all(2),
-                                decoration: const BoxDecoration(color: YekiColors.error, shape: BoxShape.circle),
-                                child: const Icon(Icons.close_rounded, size: 12),
-                              ),
-                            ),
-                          ),
-                        ],
+                      context,
+                      onRemove: () => setState(() => _imageBytes = null),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(YkRadius.xs),
+                        child: Image.memory(_imageBytes!, height: 40, width: 40, fit: BoxFit.cover),
                       ),
                     ),
                   if (hasAudio)
                     _buildFilePreview(
-                      child: Row(
-                        children: [
-                          Icon(Icons.audiotrack_rounded, color: YekiColors.purple, size: 16),
-                          const SizedBox(width: 8),
-                          SizedBox(
-                            width: 100,
-                            child: Text(_audioFile!.path.split('/').last, style: const TextStyle(fontSize: 10), maxLines: 1, overflow: TextOverflow.ellipsis),
-                          ),
-                          GestureDetector(
-                            onTap: () => setState(() => _audioFile = null),
-                            child: const Icon(Icons.close_rounded, size: 14),
-                          ),
-                        ],
-                      ),
+                      context,
+                      onRemove: () => setState(() => _audioBytes = null),
+                      child: Icon(Icons.audiotrack_rounded, color: YkColors.accent(context), size: 20),
                     ),
                 ],
               ),
             ),
-          const SizedBox(height: 8),
           Row(
             children: [
-              GestureDetector(
-                onTap: _choisirImage,
-                child: Container(
-                  width: 40, height: 40,
-                  decoration: BoxDecoration(
-                    color: YekiColors.backgroundLight,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: YekiColors.borderLight),
-                  ),
-                  child: const Icon(Icons.image_outlined, size: 20),
-                ),
+              YkIconButton(
+                icon: Icons.image_outlined,
+                label: 'Ajouter une image',
+                variant: YkIconButtonVariant.tonal,
+                onPressed: _choisirImage,
               ),
-              const SizedBox(width: 8),
-              GestureDetector(
-                onTap: _startRecording,
-                child: Container(
-                  width: 40, height: 40,
-                  decoration: BoxDecoration(
-                    color: _isRecording ? YekiColors.error.withValues(alpha: 0.1) : YekiColors.backgroundLight,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: _isRecording ? YekiColors.error : YekiColors.borderLight),
-                  ),
-                  child: Icon(Icons.mic_rounded, color: _isRecording ? YekiColors.error : YekiColors.textLight, size: 20),
-                ),
+              SizedBox(width: YkSpacing.xs),
+              YkIconButton(
+                icon: Icons.mic_rounded,
+                label: 'Enregistrer un message vocal',
+                variant: _isRecording ? YkIconButtonVariant.filled : YkIconButtonVariant.tonal,
+                onPressed: _startRecording,
               ),
-              const SizedBox(width: 8),
+              SizedBox(width: YkSpacing.xs),
               Expanded(
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: YekiColors.backgroundLight,
-                    borderRadius: BorderRadius.circular(24),
-                    border: Border.all(color: YekiColors.borderLight),
-                  ),
-                  child: TextField(
-                    controller: _msgCtrl,
-                    style: const TextStyle(fontSize: 14),
-                    maxLines: 4,
-                    minLines: 1,
-                    decoration: const InputDecoration(
-                      hintText: 'Posez votre question (minimum 50 FCFA)...',
-                      hintStyle: TextStyle(fontSize: 13),
-                      border: InputBorder.none,
-                      contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                child: YkTextField(
+                  controller: _msgCtrl,
+                  type: YkTextFieldType.multiline,
+                  maxLines: 4,
+                  hint: 'Posez votre question...',
+                  onChanged: (_) => setState(() {}),
+                ),
+              ),
+              SizedBox(width: YkSpacing.xs),
+              _sending
+                  ? Padding(
+                      padding: EdgeInsets.all(YkSpacing.sm),
+                      child: YkProgress(shape: YkProgressShape.circular, size: 24),
+                    )
+                  : YkIconButton(
+                      icon: Icons.send_rounded,
+                      label: 'Envoyer',
+                      variant: YkIconButtonVariant.filled,
+                      onPressed: canSend ? _envoyer : null,
                     ),
-                    onChanged: (_) => setState(() {}),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              GestureDetector(
-                onTap: canSend ? _envoyer : null,
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  width: 44, height: 44,
-                  decoration: BoxDecoration(
-                    gradient: canSend
-                        ? LinearGradient(colors: [YekiColors.primaryDark, YekiColors.primaryDark.withValues(alpha: 0.8)])
-                        : const LinearGradient(colors: [YekiColors.borderLight, YekiColors.borderLight]),
-                    shape: BoxShape.circle,
-                  ),
-                  child: _sending
-                      ? const Center(child: YekiLoader(color: YekiColors.white, size: 18))
-                      : const Icon(Icons.send_rounded, color: YekiColors.white, size: 20),
-                ),
-              ),
             ],
           ),
-          if (!soldeOk && _wallet != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Text(
-                '⚠️ Solde insuffisant. Minimum requis: ${minWalletBalance.toInt()} FCFA',
-                style: TextStyle(color: YekiColors.error, fontSize: 11),
-              ),
-            ),
         ],
       ),
     );
   }
 
-  Widget _buildFilePreview({required Widget child}) {
+  Widget _buildFilePreview(BuildContext context, {required Widget child, required VoidCallback onRemove}) {
     return Container(
-      margin: const EdgeInsets.only(right: 8),
-      padding: const EdgeInsets.all(4),
+      margin: EdgeInsets.only(right: YkSpacing.xs),
+      padding: EdgeInsets.all(YkSpacing.xxs),
       decoration: BoxDecoration(
-        color: YekiColors.backgroundLight,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: YekiColors.borderLight),
+        color: YkColors.surfaceVariant(context),
+        borderRadius: BorderRadius.circular(YkRadius.sm),
+        border: Border.all(color: YkColors.border(context)),
       ),
-      child: child,
+      child: Stack(
+        children: [
+          child,
+          Positioned(
+            top: -4,
+            right: -4,
+            child: GestureDetector(
+              onTap: onRemove,
+              child: Container(
+                padding: EdgeInsets.all(2),
+                decoration: BoxDecoration(color: YkColors.error, shape: BoxShape.circle),
+                child: const Icon(Icons.close_rounded, size: 12, color: Colors.white),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -1088,14 +974,5 @@ class _YekiIAChatPageState extends State<YekiIAChatPage>
       return '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
     }
     return '${dt.day}/${dt.month} ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
-  }
-
-  String _sourceLabel(String src) {
-    switch (src) {
-      case 'lecon': return 'Leçon';
-      case 'exercice': return 'Exercice';
-      case 'devoir': return 'Devoir';
-      default: return 'Question';
-    }
   }
 }

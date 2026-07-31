@@ -25,6 +25,7 @@ class FactureService {
     required int montantTotal,
     required DateTime date,
     String? departementNom,
+    String moyenPaiement = 'Mobile Money',
   }) async {
     final pdf = pw.Document();
     final format = NumberFormat('#,###', 'fr_FR');
@@ -47,7 +48,7 @@ class FactureService {
             format: format,
           ),
           pw.SizedBox(height: 30),
-          _buildFooter(departementNom),
+          _buildFooter(departementNom, moyenPaiement),
         ],
       ),
     );
@@ -236,11 +237,13 @@ class FactureService {
               ],
             ),
           ),
-          // Ligne 1 : Formation en ligne
-          _buildTableRow('Formation en ligne', montantLigne, format, isFirst: false),
+          // Ligne 1 : Formation en ligne — omise si nulle (facture
+          // présentiel seul, P9.3 : « ne contenant QUE le prix présentiel »)
+          if (montantLigne > 0)
+            _buildTableRow('Formation en ligne', montantLigne, format, isFirst: false),
           // Ligne 2 : Frais présentiel (si applicable)
           if (montantPresentiel > 0)
-            _buildTableRow('Frais présentiel', montantPresentiel, format),
+            _buildTableRow('Frais présentiel', montantPresentiel, format, isFirst: montantLigne <= 0),
           // Total
           pw.Divider(thickness: 1),
           _buildTableRow('TOTAL', montantTotal, format, isBold: true),
@@ -285,7 +288,7 @@ class FactureService {
     );
   }
 
-  static pw.Widget _buildFooter(String? departementNom) {
+  static pw.Widget _buildFooter(String? departementNom, String moyenPaiement) {
     return pw.Column(
       children: [
         pw.Divider(thickness: 1),
@@ -306,7 +309,7 @@ class FactureService {
                 ),
                 pw.SizedBox(height: 4),
                 pw.Text(
-                  'Paiement effectué en ligne via CinetPay',
+                  'Paiement effectué via $moyenPaiement',
                   style: pw.TextStyle(fontSize: 9, color: PdfColors.grey600),
                 ),
                 pw.Text(

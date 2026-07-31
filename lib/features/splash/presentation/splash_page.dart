@@ -25,6 +25,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:yeki/core/design/tokens/tokens.dart';
 import 'package:yeki/core/providers/app_info_provider.dart';
 import 'package:yeki/core/router/auth_state.dart';
+import 'package:yeki/services/push_notification_service.dart';
 import 'package:yeki/services/update_service.dart';
 
 class SplashPage extends ConsumerStatefulWidget {
@@ -80,6 +81,13 @@ class _SplashPageState extends ConsumerState<SplashPage> with SingleTickerProvid
       authState.bootstrap(),
       Future.delayed(const Duration(seconds: 2)),
     ]);
+    // Session restaurée (redémarrage app, utilisateur déjà connecté) :
+    // (ré)enregistrer le jeton push — jamais attendu, ne doit jamais
+    // retarder la sortie du splash (même règle que le reste de cette
+    // méthode).
+    if (authState.value.isAuthenticated) {
+      unawaited(PushNotificationService().initialiser());
+    }
   }
 
   Future<void> _checkVersionsInBackground() async {
@@ -88,36 +96,17 @@ class _SplashPageState extends ConsumerState<SplashPage> with SingleTickerProvid
       await UpdateService.showUpdateDialog(context, updateInfo);
     }
 
-    // Nouveau mécanisme (P5.1bis) : endpoint + écran réel arrivent en
-    // P12.1 — échoue silencieusement aujourd'hui (404), voir
-    // UpdateService.checkMandatoryVersion.
+    // `/api/app/version/` (P12.1) — `checkMandatoryVersion()` renvoie
+    // maintenant un `UpdateInfo` complet (téléchargement + checksum
+    // inclus), réutilisable tel quel par `showUpdateDialog` : quand
+    // `forceUpdate == true`, celui-ci route déjà vers le dialogue non
+    // dismissible qui télécharge + vérifie + installe. Limite assumée :
+    // si l'utilisateur a déjà quitté Splash quand cet appel de fond se
+    // résout, `context` peut être démonté (`mounted` vérifié ci-dessus).
     final mandatory = await UpdateService.checkMandatoryVersion();
     if (mandatory != null && mounted) {
-      await _showBlockingUpdateModal(mandatory);
+      await UpdateService.showUpdateDialog(context, mandatory);
     }
-  }
-
-  /// Modale de mise à jour obligatoire — placeholder minimal, pas
-  /// dismissible (`barrierDismissible: false` + `PopScope(canPop:
-  /// false)`, aucun bouton de fermeture). Le véritable écran de mise à
-  /// jour arrive en P12.1 ; non atteignable aujourd'hui tant que
-  /// `/api/app/version/` n'existe pas côté Django. Limite assumée : si
-  /// l'utilisateur a déjà quitté Splash quand cet appel de fond se
-  /// résout, `context` peut être démonté (`mounted` vérifié ci-dessus) —
-  /// une architecture d'overlay persistant au niveau app reste à
-  /// concevoir en P12.1, pas ici.
-  Future<void> _showBlockingUpdateModal(MandatoryVersionInfo info) {
-    return showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => PopScope(
-        canPop: false,
-        child: AlertDialog(
-          title: const Text('Mise à jour requise'),
-          content: Text(info.message),
-        ),
-      ),
-    );
   }
 
   @override

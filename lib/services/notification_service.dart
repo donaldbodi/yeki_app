@@ -1,14 +1,9 @@
 // lib/services/notification_service.dart
 // ═══════════════════════════════════════════════════════════════════════════
 
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:awesome_notifications/awesome_notifications.dart';
-import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:yeki/core/constants/api_constants.dart';
-
-const String _baseN = ApiConstants.baseUrl;
+import 'package:yeki/core/network/api_client.dart';
 
 /// Service singleton de notifications
 class NotificationService {
@@ -419,23 +414,9 @@ class NotificationService {
   // ── Récupérer les notifications depuis l'API backend ──────────
   Future<List<Map<String, dynamic>>> fetchNotifications() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString('token');
-      
-      if (token == null) return [];
-      
-      final response = await http.get(
-        Uri.parse('$_baseN/notifications/'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Token $token',
-        },
-      );
-      
-      if (response.statusCode == 200) {
-        final List data = jsonDecode(response.body);
-        return data.map((e) => Map<String, dynamic>.from(e)).toList();
-      }
+      final data = await ApiClient().get('/notifications/');
+      final list = data is List ? data : (data['results'] as List? ?? []);
+      return list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
     } catch (e) {
       debugPrint('Error fetching notifications: $e');
     }
@@ -445,20 +426,8 @@ class NotificationService {
   // ── Marquer une notification comme lue ────────────────────────
   Future<bool> markAsRead(int notificationId) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString('token');
-      
-      if (token == null) return false;
-      
-      final response = await http.patch(
-        Uri.parse('$_baseN/notifications/$notificationId/read/'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Token $token',
-        },
-      );
-      
-      return response.statusCode == 200;
+      await ApiClient().patch('/notifications/$notificationId/read/');
+      return true;
     } catch (e) {
       debugPrint('Error marking notification as read: $e');
       return false;
@@ -468,20 +437,8 @@ class NotificationService {
   // ── Marquer toutes les notifications comme lues ────────────────
   Future<bool> markAllAsRead() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString('token');
-      
-      if (token == null) return false;
-      
-      final response = await http.post(
-        Uri.parse('$_baseN/notifications/mark-all-read/'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Token $token',
-        },
-      );
-      
-      return response.statusCode == 200;
+      await ApiClient().post('/notifications/mark-all-read/');
+      return true;
     } catch (e) {
       debugPrint('Error marking all notifications as read: $e');
       return false;

@@ -16,10 +16,12 @@ import 'package:yeki/features/onboarding/presentation/onboarding_page.dart';
 import 'package:yeki/features/login/presentation/login_page.dart';
 import 'package:yeki/features/register/presentation/register_page.dart';
 import 'package:yeki/features/forgot_password/presentation/forgot_password_page.dart';
-import 'package:yeki/widgets/wallet_page.dart';
-import 'package:yeki/services/recharge_wallet_page.dart';
+import 'package:yeki/features/paiement/presentation/wallet_page.dart';
+import 'package:yeki/features/paiement/presentation/recharge_page.dart';
+import 'package:yeki/features/paiement/presentation/retrait_page.dart';
 
 import 'package:yeki/views/pages/apprenants/apprenant_shell.dart';
+import 'package:yeki/views/pages/apprenants/accueil_page.dart';
 import 'package:yeki/views/pages/apprenants/cursus_page.dart';
 import 'package:yeki/views/pages/apprenants/concours_pages.dart';
 import 'package:yeki/views/pages/apprenants/formations_pages.dart';
@@ -40,7 +42,7 @@ import 'package:yeki/features/olympiades/presentation/classement_olympiade_page.
 import 'package:yeki/views/pages/apprenants/classement_departement_page.dart';
 import 'package:yeki/views/pages/apprenants/formation_detail_page.dart';
 import 'package:yeki/features/olympiades/presentation/concours_detail_page.dart';
-import 'package:yeki/views/pages/apprenants/paiement_page.dart';
+import 'package:yeki/features/paiement/presentation/paiement_page.dart';
 import 'package:yeki/views/pages/apprenants/yeki_ia_chat_page.dart';
 import 'package:yeki/views/pages/apprenants/details_question_forum.dart';
 import 'package:yeki/views/pages/apprenants/edit_profil_page.dart';
@@ -48,7 +50,9 @@ import 'package:yeki/views/pages/apprenants/formations_models.dart' show Departe
 import 'package:yeki/views/pages/apprenants/forum_page.dart' show QForum;
 
 import 'package:yeki/views/pages/enseignants/enseignant_shell.dart';
-import 'package:yeki/views/pages/enseignants/admin_general_page.dart';
+import 'package:yeki/features/admin_general/presentation/admin_general_page.dart';
+import 'package:yeki/views/pages/enseignants/parcours_detail_page.dart';
+import 'package:yeki/views/pages/enseignants/departement_detail_page.dart';
 import 'package:yeki/views/pages/enseignants/enseignant_admin_dashboard_page.dart';
 import 'package:yeki/views/pages/enseignants/cadre_dashboard_page.dart';
 import 'package:yeki/views/pages/enseignants/principal_dashboard_page.dart';
@@ -60,6 +64,8 @@ import 'package:yeki/views/pages/enseignants/gestion_demandes_page.dart';
 import 'package:yeki/views/pages/enseignants/interface_enseignant_page.dart'
     show roleEnseignantFromBackend;
 
+import 'package:yeki/features/service_client/presentation/service_client_dashboard_page.dart';
+
 // ── Petits parseurs défensifs pour les paramètres de route ──────────────
 int _int(String? s, [int fallback = 0]) => int.tryParse(s ?? '') ?? fallback;
 int? _intOrNull(String? s) => s == null ? null : int.tryParse(s);
@@ -67,10 +73,12 @@ bool _bool(String? s, [bool fallback = false]) =>
     s == null ? fallback : s.toLowerCase() == 'true';
 bool? _boolOrNull(String? s) => s == null ? null : s.toLowerCase() == 'true';
 String _str(String? s, [String fallback = '']) => s ?? fallback;
-Map<String, dynamic>? _mapOrNull(dynamic extra) =>
-    extra is Map ? Map<String, dynamic>.from(extra) : null;
 
-final GlobalKey<NavigatorState> _rootNavigatorKey =
+/// Public (P10.4) : `PushNotificationService` en a besoin pour afficher un
+/// `YkToast` au premier plan (aucun `BuildContext` disponible dans un
+/// service, seul un `Overlay` ancré à ce navigateur racine peut en fournir
+/// un).
+final GlobalKey<NavigatorState> rootNavigatorKey =
     GlobalKey<NavigatorState>(debugLabel: 'root');
 final GlobalKey<NavigatorState> _apprenantShellKey =
     GlobalKey<NavigatorState>(debugLabel: 'apprenantShell');
@@ -81,7 +89,7 @@ final GlobalKey<NavigatorState> _enseignantShellKey =
 /// et par tout code ayant besoin de naviguer sans `BuildContext`
 /// (ex. `AuthInterceptor.onSessionExpired`).
 final GoRouter appRouter = GoRouter(
-  navigatorKey: _rootNavigatorKey,
+  navigatorKey: rootNavigatorKey,
   initialLocation: AppPath.splash,
   refreshListenable: authState,
   redirect: redirect,
@@ -132,32 +140,38 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: AppPath.profile,
       name: AppRoute.profile,
-      parentNavigatorKey: _rootNavigatorKey,
+      parentNavigatorKey: rootNavigatorKey,
       builder: (context, state) => const ProfilPage(),
     ),
     GoRoute(
       path: AppPath.profileEdit,
       name: AppRoute.profileEdit,
-      parentNavigatorKey: _rootNavigatorKey,
+      parentNavigatorKey: rootNavigatorKey,
       builder: (context, state) => const EditProfilePage(),
     ),
     GoRoute(
       path: AppPath.notifications,
       name: AppRoute.notifications,
-      parentNavigatorKey: _rootNavigatorKey,
+      parentNavigatorKey: rootNavigatorKey,
       builder: (context, state) => const NotificationsPage(),
     ),
     GoRoute(
       path: AppPath.wallet,
       name: AppRoute.wallet,
-      parentNavigatorKey: _rootNavigatorKey,
+      parentNavigatorKey: rootNavigatorKey,
       builder: (context, state) => const WalletPage(),
     ),
     GoRoute(
       path: AppPath.recharge,
       name: AppRoute.recharge,
-      parentNavigatorKey: _rootNavigatorKey,
-      builder: (context, state) => const RechargeWalletPage(),
+      parentNavigatorKey: rootNavigatorKey,
+      builder: (context, state) => const RechargePage(),
+    ),
+    GoRoute(
+      path: AppPath.retrait,
+      name: AppRoute.retrait,
+      parentNavigatorKey: rootNavigatorKey,
+      builder: (context, state) => const RetraitPage(),
     ),
 
     // ── Arbre apprenant : shell à onglets ────────────────────────────────
@@ -169,12 +183,19 @@ final GoRouter appRouter = GoRouter(
           navigatorKey: _apprenantShellKey,
           routes: [
             GoRoute(
-              path: AppPath.dashboardCursus,
-              name: AppRoute.dashboardCursus,
-              builder: (context, state) => const CursusPage(),
+              path: AppPath.dashboardAccueil,
+              name: AppRoute.dashboardAccueil,
+              builder: (context, state) => const AccueilPage(),
             ),
           ],
         ),
+        StatefulShellBranch(routes: [
+          GoRoute(
+            path: AppPath.dashboardCursus,
+            name: AppRoute.dashboardCursus,
+            builder: (context, state) => const CursusPage(),
+          ),
+        ]),
         StatefulShellBranch(routes: [
           GoRoute(
             path: AppPath.dashboardConcours,
@@ -211,19 +232,19 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: AppPath.repetiteurs,
       name: AppRoute.repetiteurs,
-      parentNavigatorKey: _rootNavigatorKey,
+      parentNavigatorKey: rootNavigatorKey,
       builder: (context, state) => const RepetiteursPage(),
     ),
     GoRoute(
       path: AppPath.settings,
       name: AppRoute.settings,
-      parentNavigatorKey: _rootNavigatorKey,
+      parentNavigatorKey: rootNavigatorKey,
       builder: (context, state) => const SettingsPage(),
     ),
     GoRoute(
       path: AppPath.coursDetail,
       name: AppRoute.coursDetail,
-      parentNavigatorKey: _rootNavigatorKey,
+      parentNavigatorKey: rootNavigatorKey,
       builder: (context, state) {
         final q = state.uri.queryParameters;
         return CoursDetailTabs(
@@ -241,7 +262,7 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: AppPath.leconDetail,
       name: AppRoute.leconDetail,
-      parentNavigatorKey: _rootNavigatorKey,
+      parentNavigatorKey: rootNavigatorKey,
       builder: (context, state) {
         final q = state.uri.queryParameters;
         return DetailLeconPage(
@@ -249,13 +270,14 @@ final GoRouter appRouter = GoRouter(
           coursId: _int(state.pathParameters['coursId']),
           coursTitre: _str(q['coursTitre']),
           coursColor: _int(q['coursColor'], 0xFF2884A0),
+          estAccessible: _bool(q['isPremium'], true),
         );
       },
     ),
     GoRoute(
       path: AppPath.leconLecture,
       name: AppRoute.leconLecture,
-      parentNavigatorKey: _rootNavigatorKey,
+      parentNavigatorKey: rootNavigatorKey,
       builder: (context, state) {
         final q = state.uri.queryParameters;
         return LectureLeconPage(
@@ -269,7 +291,7 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: AppPath.exercicePasser,
       name: AppRoute.exercicePasser,
-      parentNavigatorKey: _rootNavigatorKey,
+      parentNavigatorKey: rootNavigatorKey,
       builder: (context, state) {
         final q = state.uri.queryParameters;
         return PasserExercicePage(
@@ -282,7 +304,7 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: AppPath.exerciceResultat,
       name: AppRoute.exerciceResultat,
-      parentNavigatorKey: _rootNavigatorKey,
+      parentNavigatorKey: rootNavigatorKey,
       builder: (context, state) {
         final q = state.uri.queryParameters;
         return ResultatExercicePage(
@@ -299,7 +321,7 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: AppPath.devoirComposer,
       name: AppRoute.devoirComposer,
-      parentNavigatorKey: _rootNavigatorKey,
+      parentNavigatorKey: rootNavigatorKey,
       builder: (context, state) {
         final q = state.uri.queryParameters;
         return ComposerDevoirPage(
@@ -314,7 +336,7 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: AppPath.devoirResultat,
       name: AppRoute.devoirResultat,
-      parentNavigatorKey: _rootNavigatorKey,
+      parentNavigatorKey: rootNavigatorKey,
       builder: (context, state) {
         final q = state.uri.queryParameters;
         return ResultatDevoirPage(
@@ -328,7 +350,7 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: AppPath.olympiadeInscription,
       name: AppRoute.olympiadeInscription,
-      parentNavigatorKey: _rootNavigatorKey,
+      parentNavigatorKey: rootNavigatorKey,
       builder: (context, state) {
         final q = state.uri.queryParameters;
         final now = DateTime.now();
@@ -346,7 +368,7 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: AppPath.olympiadeClassement,
       name: AppRoute.olympiadeClassement,
-      parentNavigatorKey: _rootNavigatorKey,
+      parentNavigatorKey: rootNavigatorKey,
       builder: (context, state) => ClassementOlympiadePage(
         olympiadeId: _int(state.pathParameters['olympiadeId']),
         titre: _str(state.uri.queryParameters['titre']),
@@ -355,7 +377,7 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: AppPath.departementClassement,
       name: AppRoute.departementClassement,
-      parentNavigatorKey: _rootNavigatorKey,
+      parentNavigatorKey: rootNavigatorKey,
       builder: (context, state) => ClassementDepartementPage(
         departementId: _int(state.pathParameters['departementId']),
         departementNom: _str(state.uri.queryParameters['departementNom']),
@@ -364,7 +386,7 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: AppPath.formationDetail,
       name: AppRoute.formationDetail,
-      parentNavigatorKey: _rootNavigatorKey,
+      parentNavigatorKey: rootNavigatorKey,
       builder: (context, state) => FormationDetailPage(
         formationId: _int(state.pathParameters['formationId']),
         deptPrecharge: state.extra as DepartementItem?,
@@ -373,7 +395,7 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: AppPath.concoursDetail,
       name: AppRoute.concoursDetail,
-      parentNavigatorKey: _rootNavigatorKey,
+      parentNavigatorKey: rootNavigatorKey,
       builder: (context, state) => ConcoursDetailPage(
         concoursId: _int(state.pathParameters['concoursId']),
         deptPrecharge: state.extra as DepartementItem?,
@@ -382,7 +404,7 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: AppPath.paiement,
       name: AppRoute.paiement,
-      parentNavigatorKey: _rootNavigatorKey,
+      parentNavigatorKey: rootNavigatorKey,
       builder: (context, state) {
         final q = state.uri.queryParameters;
         return PaiementPage(
@@ -396,13 +418,16 @@ final GoRouter appRouter = GoRouter(
           isCursus: _bool(q['isCursus']),
           isHybride: _bool(q['isHybride']),
           isFormation: _bool(q['isFormation']),
+          montantAnnuel: _intOrNull(q['montantAnnuel']),
+          badge: q['badge'],
+          ancienPrixMensuel: _intOrNull(q['ancienPrixMensuel']),
         );
       },
     ),
     GoRoute(
       path: AppPath.iaChat,
       name: AppRoute.iaChat,
-      parentNavigatorKey: _rootNavigatorKey,
+      parentNavigatorKey: rootNavigatorKey,
       builder: (context, state) {
         final q = state.uri.queryParameters;
         final extra = state.extra as Map<String, dynamic>?;
@@ -421,7 +446,7 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: AppPath.forumQuestionDetail,
       name: AppRoute.forumQuestionDetail,
-      parentNavigatorKey: _rootNavigatorKey,
+      parentNavigatorKey: rootNavigatorKey,
       builder: (context, state) => DetailQuestionForumPage(
         questionId: _int(state.pathParameters['questionId']),
         question: state.extra as QForum?,
@@ -492,7 +517,7 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: AppPath.coursDetailEnseignant,
       name: AppRoute.coursDetailEnseignant,
-      parentNavigatorKey: _rootNavigatorKey,
+      parentNavigatorKey: rootNavigatorKey,
       builder: (context, state) {
         final q = state.uri.queryParameters;
         return DetailCoursEnseignantPage(
@@ -507,7 +532,7 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: AppPath.devoirGererEnseignant,
       name: AppRoute.devoirGererEnseignant,
-      parentNavigatorKey: _rootNavigatorKey,
+      parentNavigatorKey: rootNavigatorKey,
       builder: (context, state) {
         final q = state.uri.queryParameters;
         return DevoirDetailPage(
@@ -520,21 +545,20 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: AppPath.adminDepartementDetail,
       name: AppRoute.adminDepartementDetail,
-      parentNavigatorKey: _rootNavigatorKey,
+      parentNavigatorKey: rootNavigatorKey,
       builder: (context, state) {
         final q = state.uri.queryParameters;
         return DepartementDetailPage(
           departementId: _int(state.pathParameters['departementId']),
           departementNom: _str(q['departementNom']),
           parcoursNom: _str(q['parcoursNom']),
-          departementData: _mapOrNull(state.extra),
         );
       },
     ),
     GoRoute(
       path: AppPath.adminParcoursDetail,
       name: AppRoute.adminParcoursDetail,
-      parentNavigatorKey: _rootNavigatorKey,
+      parentNavigatorKey: rootNavigatorKey,
       builder: (context, state) {
         final q = state.uri.queryParameters;
         return ParcoursDetailPage(
@@ -547,38 +571,42 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: AppPath.coordinationDepartementDetail,
       name: AppRoute.coordinationDepartementDetail,
-      parentNavigatorKey: _rootNavigatorKey,
+      parentNavigatorKey: rootNavigatorKey,
       builder: (context, state) {
         final q = state.uri.queryParameters;
-        return AdminDepartementDetailPage(
+        return DepartementDetailPage(
           departementId: _int(state.pathParameters['departementId']),
           departementNom: _str(q['departementNom']),
           parcoursNom: _str(q['parcoursNom']),
-          departementData: _mapOrNull(state.extra),
         );
       },
     ),
     GoRoute(
       path: AppPath.cadreDepartementDetail,
       name: AppRoute.cadreDepartementDetail,
-      parentNavigatorKey: _rootNavigatorKey,
+      parentNavigatorKey: rootNavigatorKey,
       builder: (context, state) {
         final q = state.uri.queryParameters;
         return DetailDepartementPage(
           departementId: _int(state.pathParameters['departementId']),
           departementNom: _str(q['departementNom']),
-          departement: _mapOrNull(state.extra),
         );
       },
     ),
     GoRoute(
       path: AppPath.cadreGestionDemandes,
       name: AppRoute.cadreGestionDemandes,
-      parentNavigatorKey: _rootNavigatorKey,
+      parentNavigatorKey: rootNavigatorKey,
       builder: (context, state) => GestionDemandesPage(
         departementId: _int(state.pathParameters['departementId']),
         departementNom: _str(state.uri.queryParameters['departementNom']),
       ),
+    ),
+    GoRoute(
+      path: AppPath.serviceClientDashboard,
+      name: AppRoute.serviceClientDashboard,
+      parentNavigatorKey: rootNavigatorKey,
+      builder: (context, state) => const ServiceClientDashboardPage(),
     ),
   ],
 );

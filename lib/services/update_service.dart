@@ -1,17 +1,16 @@
 // lib/services/update_service.dart
 
-import 'dart:convert';
 import 'dart:io';
+import 'package:crypto/crypto.dart' show sha256;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:open_file/open_file.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:firebase_storage/firebase_storage.dart';
-import 'package:yeki/core/constants/api_constants.dart';
+import 'package:yeki/core/network/api_client.dart';
 
 /// Modèle d'information de mise à jour
 class UpdateInfo {
@@ -26,6 +25,14 @@ class UpdateInfo {
   final String releaseDate;
   final bool isNoUpdate;
 
+  /// Empreinte SHA-256 (hex) du binaire, vérifiée avant installation
+  /// (P12.1) — vide si le backend ne l'a pas encore renseignée pour
+  /// cette version (transition, ne bloque pas l'installation).
+  final String checksumSha256;
+
+  /// Canal de diffusion ('stable'/'beta'/'alpha') de cette version.
+  final String canal;
+
   UpdateInfo({
     required this.latestVersion,
     required this.currentVersion,
@@ -37,6 +44,8 @@ class UpdateInfo {
     this.fileSize = 0,
     this.releaseDate = '',
     this.isNoUpdate = false,
+    this.checksumSha256 = '',
+    this.canal = 'stable',
   });
 
   factory UpdateInfo.noUpdate(int currentVersion) {
@@ -63,22 +72,14 @@ class UpdateInfo {
       isUpdateAvailable: json['is_update_available'] as bool? ?? false,
       fileSize: json['file_size'] as int? ?? 0,
       releaseDate: json['release_date'] as String? ?? '',
+      checksumSha256: json['checksum_sha256'] as String? ?? '',
+      canal: json['canal'] as String? ?? 'stable',
     );
   }
 }
 
-/// Résultat du nouveau mécanisme de vérification obligatoire (P5.1bis,
-/// `/api/app/version/`) — volontairement minimal : le contrat de réponse
-/// réel et l'écran de blocage complet arrivent en P12.1.
-class MandatoryVersionInfo {
-  final String message;
-
-  const MandatoryVersionInfo({required this.message});
-}
-
 /// Service de mise à jour
 class UpdateService {
-  static const String baseUrl = ApiConstants.baseUrl;
   static const String prefSkipVersion = 'skip_version';
   static const String prefLastCheck = 'last_update_check';
 
@@ -123,22 +124,16 @@ class UpdateService {
       final skippedVersion = prefs.getString(prefSkipVersion);
 
       // Appeler l'API Django
-      final response = await http.get(
-        Uri.parse('$baseUrl/latest-version/?platform=$platform'),
-      ).timeout(const Duration(seconds: 15));
+      final data = await ApiClient().get('/latest-version/', query: {'platform': platform});
+      final updateInfo = UpdateInfo.fromJson(data, currentVersion);
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final updateInfo = UpdateInfo.fromJson(data, currentVersion);
+      // Vérifier si l'utilisateur a ignoré cette version
+      if (!updateInfo.forceUpdate && skippedVersion == updateInfo.versionName) {
+        return null;
+      }
 
-        // Vérifier si l'utilisateur a ignoré cette version
-        if (!updateInfo.forceUpdate && skippedVersion == updateInfo.versionName) {
-          return null;
-        }
-
-        if (updateInfo.isUpdateAvailable || showNoUpdate) {
-          return updateInfo;
-        }
+      if (updateInfo.isUpdateAvailable || showNoUpdate) {
+        return updateInfo;
       }
     } catch (e) {
       debugPrint('Erreur vérification mise à jour: $e');
@@ -146,35 +141,41 @@ class UpdateService {
     return null;
   }
 
-  /// Vérifie si une mise à jour OBLIGATOIRE est requise, via le nouveau
-  /// mécanisme `/api/app/version/` (P5.1bis) — coexiste temporairement
-  /// avec [checkForUpdate] (`/latest-version/`, fonctionnel dès
-  /// aujourd'hui) : l'endpoint et l'écran de blocage réels arrivent en
-  /// P12.1, cet appel est posé maintenant et sera câblé/réconcilié à ce
-  /// moment-là.
+  /// Vérifie si une mise à jour OBLIGATOIRE est requise, via
+  /// `/api/app/version/` (P12.1) — coexiste avec [checkForUpdate]
+  /// (`/latest-version/`, flux optionnel) : renvoie un [UpdateInfo]
+  /// complet (téléchargement + checksum inclus) plutôt qu'un message
+  /// seul, pour pouvoir être passé tel quel à [showUpdateDialog] et
+  /// déclencher un vrai téléchargement+installation vérifiés.
   ///
-  /// Tant que l'endpoint n'existe pas côté Django, cet appel échoue
-  /// (404) — capturé ici, jamais remonté : une panne réseau/serveur ne
-  /// doit JAMAIS bloquer l'utilisateur au splash.
-  static Future<MandatoryVersionInfo?> checkMandatoryVersion() async {
+  /// Une panne réseau/serveur ne doit JAMAIS bloquer l'utilisateur au
+  /// splash — capturée ici, jamais remontée.
+  static Future<UpdateInfo?> checkMandatoryVersion() async {
     try {
       final packageInfo = await PackageInfo.fromPlatform();
-      final response = await http
-          .get(
-            Uri.parse(
-              '${ApiConstants.appVersion}?plateforme=$currentPlatform&build=${packageInfo.buildNumber}',
-            ),
-          )
-          .timeout(const Duration(seconds: 5));
+      final currentVersion = int.tryParse(packageInfo.buildNumber) ?? 1;
+      final data = await ApiClient().get(
+        '/app/version/',
+        query: {'plateforme': currentPlatform, 'build': packageInfo.buildNumber},
+      ) as Map<String, dynamic>;
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body) as Map<String, dynamic>;
-        if (data['obligatoire'] == true) {
-          return MandatoryVersionInfo(
-            message: data['message'] as String? ?? 'Une mise à jour est requise pour continuer.',
-          );
-        }
+      final obligatoire = data['obligatoire'] as bool? ?? false;
+      final disponible = data['mise_a_jour_disponible'] as bool? ?? false;
+      if (!obligatoire && !disponible) {
+        return null;
       }
+      return UpdateInfo(
+        latestVersion: data['version_code'] as int? ?? currentVersion,
+        currentVersion: currentVersion,
+        versionName: data['version_name'] as String? ?? 'v1.0.0',
+        downloadUrl: data['download_url'] as String? ?? '',
+        changelog: data['changelog'] as String? ?? (data['message'] as String? ?? ''),
+        forceUpdate: obligatoire,
+        isUpdateAvailable: disponible,
+        fileSize: data['file_size'] as int? ?? 0,
+        checksumSha256: data['checksum_sha256'] as String? ?? '',
+        canal: data['canal'] as String? ?? 'stable',
+      );
     } catch (e) {
       debugPrint('Vérification version obligatoire (endpoint P12.1) : $e');
     }
@@ -188,14 +189,11 @@ class UpdateService {
       final currentVersion = int.tryParse(packageInfo.buildNumber) ?? 1;
       final platform = _getPlatform();
 
-      final response = await http.get(
-        Uri.parse('$baseUrl/check-update/?platform=$platform&current_version=$currentVersion'),
-      ).timeout(const Duration(seconds: 10));
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        return data['update_available'] as bool? ?? false;
-      }
+      final data = await ApiClient().get(
+        '/check-update/',
+        query: {'platform': platform, 'current_version': currentVersion.toString()},
+      );
+      return data['update_available'] as bool? ?? false;
     } catch (e) {
       debugPrint('Erreur vérification mise à jour rapide: $e');
     }
@@ -255,6 +253,26 @@ class UpdateService {
         return false;
       }
 
+      // Vérification d'intégrité (P12.1) — ferme la faille de sécurité
+      // centrale du ticket : jusqu'ici, aucune vérification n'existait
+      // entre le téléchargement et `OpenFile.open`. Un checksum vide
+      // (version pas encore rétro-remplie côté admin) n'est PAS bloquant
+      // (arbitrage tranché) ; un checksum présent mais qui ne correspond
+      // pas au fichier téléchargé l'est toujours.
+      final downloadedFile = File(savePath);
+      if (info.checksumSha256.isNotEmpty) {
+        final empreinteReelle = await _calculerSha256(downloadedFile);
+        if (empreinteReelle.toLowerCase() != info.checksumSha256.toLowerCase()) {
+          debugPrint('Échec de vérification d\'intégrité, fichier supprimé');
+          if (await downloadedFile.exists()) {
+            await downloadedFile.delete();
+          }
+          return false;
+        }
+      } else {
+        debugPrint('Aucun checksum fourni pour cette version — installation non vérifiée');
+      }
+
       // Ouvrir l'APK pour installation
       await OpenFile.open(savePath);
 
@@ -270,16 +288,19 @@ class UpdateService {
     }
   }
 
-  /// Télécharger depuis URL directe
+  /// Télécharger depuis URL directe — en flux (`downloadStream`, déjà
+  /// utilisé par `download_manager.dart`/`lecture_lecon_page.dart`), pas
+  /// de chargement de tout l'APK en mémoire d'un coup.
   static Future<bool> _downloadFromUrl(String url, String savePath) async {
     try {
-      final response = await http.get(Uri.parse(url));
-      if (response.statusCode == 200) {
-        final file = File(savePath);
-        await file.writeAsBytes(response.bodyBytes);
-        return await file.exists();
+      final response = await ApiClient().downloadStream(url);
+      final file = File(savePath);
+      final sink = file.openWrite();
+      await for (final chunk in response.data!.stream) {
+        sink.add(chunk);
       }
-      return false;
+      await sink.close();
+      return await file.exists();
     } catch (e) {
       debugPrint('Erreur _downloadFromUrl: $e');
       return false;
@@ -300,6 +321,13 @@ class UpdateService {
       debugPrint('Erreur _downloadFromFirebaseStorage: $e');
       return false;
     }
+  }
+
+  /// Calcule l'empreinte SHA-256 (hex) d'un fichier en flux (P12.1) —
+  /// évite de charger tout le fichier une seconde fois en mémoire.
+  static Future<String> _calculerSha256(File file) async {
+    final digest = await sha256.bind(file.openRead()).first;
+    return digest.toString();
   }
 
   /// Télécharger avec progression (pour UI)

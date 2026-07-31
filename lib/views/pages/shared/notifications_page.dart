@@ -1,45 +1,30 @@
 // lib/views/pages/shared/notifications_page.dart
-// ═══════════════════════════════════════════════════════════════════════════
-// PAGE NOTIFICATIONS — Avec Firebase et In-App
-// ═══════════════════════════════════════════════════════════════════════════
+//
+// Refondu en P10.4 (rituel P5.0) — basculement complet vers
+// `NotificationRepository`/`AppNotification` (plus de `http`/
+// `SharedPreferences` bruts, plus de classe `NotificationItem` locale
+// dupliquant le modèle). `ChangeNotifier` (`NotificationsController`),
+// pas `setState` (règle 7 de `check_design_system.sh`).
+//
+// Défauts corrigés par rapport à la version précédente : les 6 puces de
+// filtre affichées ne filtraient réellement que sur « Non lues » (les
+// autres ne changeaient que l'état visuel de sélection, jamais la liste
+// affichée) ; le tap sur une notification ne faisait que la marquer comme
+// lue, sans jamais lire `action_route` ni naviguer nulle part (exigence
+// centrale du ticket : « clic → go_router vers action_route ») ; le type
+// `paiement` manquait des tables couleur/icône ; la réponse paginée du
+// backend (`{results:[...]}`) n'était pas gérée (cast direct en `List`,
+// même classe de bug que celui trouvé dans `forum_page.dart`) — corrigé
+// dans `NotificationRepository.list()`, pas ici.
 
-import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
-import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:yeki/core/theme/app_theme.dart';
-import 'package:yeki/core/constants/api_constants.dart';
 
-class NotificationItem {
-  final int id;
-  final String type;
-  final String titre;
-  final String contenu;
-  bool estLue;
-  final DateTime creeLe;
-  final String? actionUrl;
-
-  NotificationItem({
-    required this.id,
-    required this.type,
-    required this.titre,
-    required this.contenu,
-    required this.estLue,
-    required this.creeLe,
-    this.actionUrl,
-  });
-
-  factory NotificationItem.fromJson(Map<String, dynamic> j) => NotificationItem(
-    id: j['id'],
-    type: j['type'] ?? 'system',
-    titre: j['titre'] ?? '',
-    contenu: j['contenu'] ?? '',
-    estLue: j['est_lue'] ?? false,
-    creeLe: DateTime.parse(j['cree_le']),
-    actionUrl: j['action_url'],
-  );
-}
+import 'package:yeki/core/design/components/components.dart';
+import 'package:yeki/core/design/tokens/tokens.dart';
+import 'package:yeki/features/notifications/presentation/notifications_controller.dart';
+import 'package:yeki/models/notification_models.dart';
 
 class NotificationsPage extends StatefulWidget {
   const NotificationsPage({super.key});
@@ -49,298 +34,273 @@ class NotificationsPage extends StatefulWidget {
 }
 
 class _NotificationsPageState extends State<NotificationsPage> {
-  bool _loading = true;
-  List<NotificationItem> _notifications = [];
-  String _filtre = 'Toutes';
-  int _nonLues = 0;
+  late final NotificationsController _controller;
 
   @override
   void initState() {
     super.initState();
-    _charger();
+    _controller = NotificationsController();
+    _controller.charger();
   }
 
-  Future<String?> _getToken() async =>
-      (await SharedPreferences.getInstance()).getString('token');
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
-  Future<void> _charger() async {
-    setState(() => _loading = true);
-    final token = await _getToken();
-    try {
-      final res = await http.get(
-        Uri.parse(ApiConstants.notifications),
-        headers: ApiHeaders.auth(token),
-      );
-      if (res.statusCode == 200) {
-        final data = jsonDecode(res.body) as List;
-        setState(() {
-          _notifications = data
-              .map((j) => NotificationItem.fromJson(j as Map<String, dynamic>))
-              .toList();
-          _nonLues = _notifications.where((n) => !n.estLue).length;
-          _loading = false;
-        });
-      } else {
-        setState(() => _loading = false);
-      }
-    } catch (e) {
-      setState(() => _loading = false);
+  void _onTapNotification(AppNotification n) {
+    if (!n.estLue) {
+      _controller.marquerLue(n.id);
     }
-  }
-
-  Future<void> _marquerLue(int id) async {
-    final token = await _getToken();
-    await http.patch(
-      Uri.parse(ApiConstants.notificationLire(id)),
-      headers: ApiHeaders.auth(token),
-    );
-    setState(() {
-      final index = _notifications.indexWhere((n) => n.id == id);
-      if (index != -1) {
-        _notifications[index].estLue = true;
-        _nonLues = _notifications.where((n) => !n.estLue).length;
-      }
-    });
-  }
-
-  Future<void> _marquerToutesLues() async {
-    final token = await _getToken();
-    await http.post(
-      Uri.parse(ApiConstants.notificationsToutLire),
-      headers: ApiHeaders.auth(token),
-    );
-    setState(() {
-      for (final n in _notifications) {
-        n.estLue = true;
-      }
-      _nonLues = 0;
-    });
-  }
-
-  List<NotificationItem> get _filtered {
-    if (_filtre == 'Non lues') {
-      return _notifications.where((n) => !n.estLue).toList();
+    if (n.actionRoute.isNotEmpty) {
+      context.go(n.actionRoute);
     }
-    return _notifications;
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: YekiColors.backgroundLight,
-      appBar: AppBar(
-        title: Row(
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, _) {
+        return Scaffold(
+          backgroundColor: YkColors.background(context),
+          appBar: AppBar(
+            title: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('Notifications'),
+                if (_controller.nonLuesCount > 0) ...[
+                  SizedBox(width: YkSpacing.xs),
+                  YkBadge(count: _controller.nonLuesCount),
+                ],
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: _controller.nonLuesCount > 0 ? _controller.marquerToutesLues : null,
+                child: const Text('Tout lire'),
+              ),
+              IconButton(
+                icon: const Icon(Icons.refresh_rounded),
+                tooltip: 'Actualiser',
+                onPressed: _controller.charger,
+              ),
+            ],
+          ),
+          body: Column(
+            children: [
+              _buildFiltres(context),
+              Expanded(child: _buildCorps(context)),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildFiltres(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: YkSpacing.md, vertical: YkSpacing.sm),
+      child: SizedBox(
+        height: 36,
+        child: ListView(
+          scrollDirection: Axis.horizontal,
           children: [
-            const Text('Notifications',
-                style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
-            if (_nonLues > 0) ...[
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: YekiColors.error,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text('$_nonLues',
-                    style: const TextStyle(color: YekiColors.white, fontSize: 11, fontWeight: FontWeight.w900)),
+            YkChip(
+              label: 'Toutes',
+              variant: YkChipVariant.filter,
+              selected: _controller.filtre == NotificationsFiltre.toutes,
+              onSelected: (_) => _controller.filtrerToutes(),
+            ),
+            SizedBox(width: YkSpacing.xs),
+            YkChip(
+              label: 'Non lues',
+              variant: YkChipVariant.filter,
+              selected: _controller.filtre == NotificationsFiltre.nonLues,
+              onSelected: (_) => _controller.filtrerNonLues(),
+            ),
+            for (final type in AppNotificationType.values) ...[
+              SizedBox(width: YkSpacing.xs),
+              YkChip(
+                label: _libelleType(type),
+                variant: YkChipVariant.filter,
+                selected:
+                    _controller.filtre == NotificationsFiltre.parType &&
+                    _controller.typeFiltre == type,
+                onSelected: (_) => _controller.filtrerParType(type),
               ),
             ],
           ],
         ),
-        actions: [
-          if (_nonLues > 0)
-            TextButton(
-              onPressed: _marquerToutesLues,
-              child: const Text('Tout lire',
-                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
-            ),
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _charger,
-          ),
-        ],
-        backgroundColor: YekiColors.white,
-        elevation: 0,
-      ),
-      body: _loading
-          ? const Center(child: YekiLoader())
-          : _notifications.isEmpty
-              ? _buildEmpty()
-              : Column(
-                  children: [
-                    _buildFilters(),
-                    Expanded(
-                      child: ListView.builder(
-                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 80),
-                        itemCount: _filtered.length,
-                        itemBuilder: (_, i) => _buildNotifCard(_filtered[i]),
-                      ),
-                    ),
-                  ],
-                ),
-    );
-  }
-
-  Widget _buildFilters() {
-    final filters = ['Toutes', 'Non lues', 'Devoirs', 'Corrections', 'Olympiades', 'Rappels'];
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          children: filters.map((f) {
-            final sel = _filtre == f;
-            return GestureDetector(
-              onTap: () => setState(() => _filtre = f),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                margin: const EdgeInsets.only(right: 8),
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-                decoration: BoxDecoration(
-                  color: sel ? YekiColors.primaryDark : YekiColors.backgroundLight,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: sel ? YekiColors.primaryDark : YekiColors.borderLight),
-                ),
-                child: Text(f,
-                    style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: sel ? YekiColors.white : YekiColors.textLight)),
-              ),
-            );
-          }).toList(),
-        ),
       ),
     );
   }
 
-  Widget _buildNotifCard(NotificationItem n) {
-    final colors = {
-      'devoir': YekiColors.warning,
-      'correction': YekiColors.success,
-      'olympiade': YekiColors.purple,
-      'rappel': YekiColors.accent,
-      'classement': YekiColors.gold,
-      'forum': YekiColors.primaryDark,
-      'system': YekiColors.textLight,
-    };
-    final icons = {
-      'devoir': Icons.assignment_rounded,
-      'correction': Icons.fact_check_rounded,
-      'olympiade': Icons.emoji_events_rounded,
-      'rappel': Icons.access_time_rounded,
-      'classement': Icons.leaderboard_rounded,
-      'forum': Icons.forum_rounded,
-      'system': Icons.notifications_rounded,
-    };
-    final color = colors[n.type] ?? YekiColors.textLight;
-    final icon = icons[n.type] ?? Icons.notifications_rounded;
+  Widget _buildCorps(BuildContext context) {
+    if (_controller.chargement) {
+      return Padding(
+        padding: EdgeInsets.all(YkSpacing.md),
+        child: YkSkeleton.list(itemCount: 6, itemHeight: 84),
+      );
+    }
+    if (_controller.enErreur) {
+      return YkEmptyState(
+        icon: Icons.wifi_off_rounded,
+        title: 'Impossible de charger vos notifications',
+        message: 'Vérifiez votre connexion puis réessayez.',
+        actionLabel: 'Réessayer',
+        onAction: _controller.charger,
+      );
+    }
+    final items = _controller.filtrees;
+    if (items.isEmpty) {
+      return YkEmptyState(
+        icon: Icons.notifications_none_rounded,
+        title: 'Aucune notification',
+        message: _messageVide(),
+      );
+    }
+    return RefreshIndicator(
+      onRefresh: _controller.charger,
+      child: ListView.separated(
+        padding: EdgeInsets.all(YkSpacing.md),
+        itemCount: items.length,
+        separatorBuilder: (_, _) => SizedBox(height: YkSpacing.sm),
+        itemBuilder: (context, index) => _buildCarte(context, items[index]),
+      ),
+    );
+  }
 
+  String _messageVide() {
+    switch (_controller.filtre) {
+      case NotificationsFiltre.toutes:
+        return "Vous n'avez reçu aucune notification pour l'instant.";
+      case NotificationsFiltre.nonLues:
+        return 'Toutes vos notifications ont déjà été lues.';
+      case NotificationsFiltre.parType:
+        return 'Aucune notification de type « ${_libelleType(_controller.typeFiltre!)} ».';
+    }
+  }
+
+  Widget _buildCarte(BuildContext context, AppNotification n) {
+    final style = _styleType(n.type);
     return Dismissible(
-      key: Key('notif_${n.id}'),
-      direction: DismissDirection.endToStart,
+      key: ValueKey(n.id),
+      direction: n.estLue ? DismissDirection.none : DismissDirection.endToStart,
+      confirmDismiss: (_) async {
+        await _controller.marquerLue(n.id);
+        return false;
+      },
       background: Container(
         alignment: Alignment.centerRight,
-        padding: const EdgeInsets.only(right: 20),
-        margin: const EdgeInsets.only(bottom: 10),
+        padding: EdgeInsets.symmetric(horizontal: YkSpacing.lg),
         decoration: BoxDecoration(
-          color: YekiColors.success.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(16),
+          color: YkColors.success.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(YkRadius.md),
         ),
-        child: const Icon(Icons.check_rounded, color: YekiColors.success),
+        child: Icon(Icons.done_rounded, color: YkColors.success),
       ),
-      onDismissed: (_) => _marquerLue(n.id),
-      child: GestureDetector(
-        onTap: () {
-          if (!n.estLue) _marquerLue(n.id);
-        },
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 300),
-          margin: const EdgeInsets.only(bottom: 10),
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: n.estLue ? YekiColors.white : color.withValues(alpha: 0.04),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: n.estLue ? YekiColors.borderLight : color.withValues(alpha: 0.2),
+      child: YkCard(
+        variant: n.estLue ? YkCardVariant.outlined : YkCardVariant.filled,
+        accentColor: n.estLue ? null : style.couleur,
+        onTap: () => _onTapNotification(n),
+        semanticLabel: n.titre,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            CircleAvatar(
+              radius: 20,
+              backgroundColor: style.couleur.withValues(alpha: 0.14),
+              child: Icon(style.icone, color: style.couleur, size: 20),
             ),
-            boxShadow: n.estLue ? [] : [BoxShadow(color: color.withValues(alpha: 0.08), blurRadius: 12, offset: const Offset(0, 3))],
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(icon, color: color, size: 20),
+            SizedBox(width: YkSpacing.sm),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    n.titre,
+                    style: YkTypography.label(context).copyWith(
+                      color: YkColors.textPrimary(context),
+                      fontWeight: n.estLue ? FontWeight.normal : FontWeight.bold,
+                    ),
+                  ),
+                  SizedBox(height: YkSpacing.xxs),
+                  Text(
+                    n.contenu,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: YkTypography.bodySm(
+                      context,
+                    ).copyWith(color: YkColors.textSecondary(context)),
+                  ),
+                  SizedBox(height: YkSpacing.xxs),
+                  Text(
+                    DateFormat('dd/MM/yyyy HH:mm').format(n.creeLe),
+                    style: YkTypography.caption(
+                      context,
+                    ).copyWith(color: YkColors.textTertiary(context)),
+                  ),
+                ],
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            n.titre,
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: n.estLue ? FontWeight.w600 : FontWeight.w800,
-                            ),
-                          ),
-                        ),
-                        if (!n.estLue)
-                          Container(
-                            width: 8, height: 8,
-                            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      n.contenu,
-                      style: const TextStyle(fontSize: 12, height: 1.4),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      DateFormat('dd/MM/yyyy HH:mm').format(n.creeLe),
-                      style: const TextStyle(fontSize: 11, color: YekiColors.textLight),
-                    ),
-                  ],
-                ),
-              ),
+            ),
+            if (!n.estLue) ...[
+              SizedBox(width: YkSpacing.xs),
+              YkBadge(variant: YkBadgeVariant.dot, color: YkColors.accent(context)),
             ],
-          ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildEmpty() => Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(28),
-              decoration: BoxDecoration(
-                color: YekiColors.primaryDark.withValues(alpha: 0.06),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(Icons.notifications_outlined, size: 52, color: YekiColors.primaryDark.withValues(alpha: 0.4)),
-            ),
-            const SizedBox(height: 16),
-            const Text('Aucune notification',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-            const SizedBox(height: 8),
-            Text('Vous êtes à jour !',
-                style: const TextStyle(fontSize: 13)),
-          ],
-        ),
-      );
+  String _libelleType(AppNotificationType type) {
+    switch (type) {
+      case AppNotificationType.devoir:
+        return 'Devoirs';
+      case AppNotificationType.correction:
+        return 'Corrections';
+      case AppNotificationType.olympiade:
+        return 'Olympiades';
+      case AppNotificationType.rappel:
+        return 'Rappels';
+      case AppNotificationType.classement:
+        return 'Classements';
+      case AppNotificationType.forum:
+        return 'Forum';
+      case AppNotificationType.system:
+        return 'Système';
+      case AppNotificationType.paiement:
+        return 'Paiement';
+    }
+  }
+
+  _StyleNotification _styleType(AppNotificationType type) {
+    switch (type) {
+      case AppNotificationType.devoir:
+        return _StyleNotification(Icons.assignment_outlined, YkColors.info);
+      case AppNotificationType.correction:
+        return _StyleNotification(Icons.fact_check_outlined, YkColors.success);
+      case AppNotificationType.olympiade:
+        return _StyleNotification(Icons.emoji_events_outlined, YkColors.warning);
+      case AppNotificationType.rappel:
+        return _StyleNotification(Icons.alarm_outlined, YkColors.warning);
+      case AppNotificationType.classement:
+        return _StyleNotification(Icons.leaderboard_outlined, YkColors.info);
+      case AppNotificationType.forum:
+        return _StyleNotification(Icons.forum_outlined, YkColors.info);
+      case AppNotificationType.paiement:
+        return _StyleNotification(Icons.payments_outlined, YkColors.success);
+      case AppNotificationType.system:
+        return _StyleNotification(Icons.info_outline_rounded, YkColors.primary700);
+    }
+  }
+}
+
+class _StyleNotification {
+  const _StyleNotification(this.icone, this.couleur);
+
+  final IconData icone;
+  final Color couleur;
 }

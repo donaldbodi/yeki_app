@@ -7,6 +7,7 @@ export '../nav/yk_nav_destination.dart';
 
 // ── Actions ──────────────────────────────────────────────────────
 export 'actions/yk_button.dart';
+export 'actions/yk_repetiteur_button.dart';
 export 'actions/yk_chip.dart';
 export 'actions/yk_fab.dart';
 export 'actions/yk_icon_button.dart';
@@ -43,6 +44,7 @@ export 'containers/yk_tabs.dart';
 // ── Données ──────────────────────────────────────────────────────
 export 'data/yk_avatar.dart';
 export 'data/yk_badge.dart';
+export 'data/yk_copyable_code.dart';
 export 'data/yk_countdown.dart';
 export 'data/yk_data_table.dart';
 export 'data/yk_key_value.dart';
@@ -78,3 +80,4 @@ export 'overlays/yk_onboarding_spot.dart';
 export 'overlays/yk_paywall.dart';
 export 'overlays/yk_popover.dart';
 export 'overlays/yk_tooltip.dart';
+export 'overlays/yk_wallet_debit_confirm_sheet.dart';

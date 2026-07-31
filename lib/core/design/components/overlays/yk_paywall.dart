@@ -2,10 +2,18 @@ import 'package:flutter/material.dart';
 
 import '../../tokens/tokens.dart';
 import '../actions/yk_button.dart';
+import '../containers/yk_card.dart';
 
 /// Un plan tarifaire — texte/prix/CTA tous fournis par l'appelant.
 class YkPaywallPlan {
-  const YkPaywallPlan({required this.label, required this.priceLabel, this.badge, required this.onSelect});
+  const YkPaywallPlan({
+    required this.label,
+    required this.priceLabel,
+    this.badge,
+    this.ancienPrixLabel,
+    this.economieLabel,
+    required this.onSelect,
+  });
 
   final String label;
 
@@ -13,6 +21,14 @@ class YkPaywallPlan {
   /// figé dans le composant** (règle 3 : c'est une valeur métier).
   final String priceLabel;
   final String? badge;
+
+  /// Ancien prix, barré, affiché à côté de [priceLabel] — ex. « Promotion »
+  /// avec un historique de baisse. `null` si aucune promotion en cours.
+  final String? ancienPrixLabel;
+
+  /// Économie réalisée déjà formatée (ex. « Économisez 8 000 FCFA vs
+  /// mensuel ») — typiquement sur l'offre annuelle. `null` sinon.
+  final String? economieLabel;
   final VoidCallback onSelect;
 }
 
@@ -31,12 +47,22 @@ class YkPaywall extends StatelessWidget {
     required this.description,
     required this.features,
     required this.plans,
+    this.presentielLabel,
+    this.presentielDescription,
+    this.onSelectPresentiel,
   });
 
   final String title;
   final String description;
   final List<String> features;
   final List<YkPaywallPlan> plans;
+
+  /// Le présentiel est un COMPLÉMENT optionnel, jamais un prérequis —
+  /// rendu dans une carte séparée, en retrait des [plans] principaux
+  /// (exigence explicite P9.3 : ne jamais le présenter comme obligatoire).
+  final String? presentielLabel;
+  final String? presentielDescription;
+  final VoidCallback? onSelectPresentiel;
 
   @override
   Widget build(BuildContext context) {
@@ -82,14 +108,106 @@ class YkPaywall extends StatelessWidget {
             ),
           SizedBox(height: YkSpacing.md),
           for (var i = 0; i < plans.length; i++)
-            Padding(
-              padding: EdgeInsets.only(bottom: YkSpacing.sm),
-              child: YkButton(
-                label: '${plans[i].label} — ${plans[i].priceLabel}',
-                onPressed: plans[i].onSelect,
-                variant: i == 0 ? YkButtonVariant.primary : YkButtonVariant.secondary,
+            Padding(padding: EdgeInsets.only(bottom: YkSpacing.sm), child: _buildPlan(context, plans[i], i == 0)),
+          if (presentielLabel != null) ...[SizedBox(height: YkSpacing.xs), _buildPresentiel(context)],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPlan(BuildContext context, YkPaywallPlan plan, bool misEnAvant) {
+    return YkCard(
+      variant: misEnAvant ? YkCardVariant.filled : YkCardVariant.outlined,
+      accentColor: misEnAvant ? YkColors.warning : null,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  plan.label,
+                  style: YkTypography.label(context).copyWith(color: YkColors.textPrimary(context)),
+                ),
               ),
+              if (plan.badge != null) _buildBadge(context, plan.badge!),
+            ],
+          ),
+          SizedBox(height: YkSpacing.xxs),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              if (plan.ancienPrixLabel != null) ...[
+                Text(
+                  plan.ancienPrixLabel!,
+                  style: YkTypography.bodySm(context).copyWith(
+                    color: YkColors.textTertiary(context),
+                    decoration: TextDecoration.lineThrough,
+                  ),
+                ),
+                SizedBox(width: YkSpacing.xs),
+              ],
+              Text(
+                plan.priceLabel,
+                style: YkTypography.h4(context).copyWith(color: YkColors.textPrimary(context)),
+              ),
+            ],
+          ),
+          if (plan.economieLabel != null) ...[
+            SizedBox(height: YkSpacing.xxs),
+            Text(
+              plan.economieLabel!,
+              style: YkTypography.bodySm(context).copyWith(color: YkColors.success, fontWeight: FontWeight.w600),
             ),
+          ],
+          SizedBox(height: YkSpacing.sm),
+          YkButton(
+            label: 'Choisir',
+            onPressed: plan.onSelect,
+            variant: misEnAvant ? YkButtonVariant.primary : YkButtonVariant.secondary,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBadge(BuildContext context, String badge) {
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: YkSpacing.xs, vertical: YkSpacing.xxs),
+      decoration: BoxDecoration(color: YkColors.warning, borderRadius: BorderRadius.circular(YkRadius.sm)),
+      child: Text(
+        badge,
+        style: YkTypography.caption(context).copyWith(color: Colors.white, fontWeight: FontWeight.w700),
+      ),
+    );
+  }
+
+  Widget _buildPresentiel(BuildContext context) {
+    return YkCard(
+      variant: YkCardVariant.outlined,
+      onTap: onSelectPresentiel,
+      child: Row(
+        children: [
+          Icon(Icons.groups_rounded, color: YkColors.textSecondary(context)),
+          SizedBox(width: YkSpacing.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  presentielLabel!,
+                  style: YkTypography.label(context).copyWith(color: YkColors.textPrimary(context)),
+                ),
+                if (presentielDescription != null)
+                  Text(
+                    presentielDescription!,
+                    style: YkTypography.bodySm(context).copyWith(color: YkColors.textSecondary(context)),
+                  ),
+              ],
+            ),
+          ),
+          Icon(Icons.chevron_right_rounded, color: YkColors.textTertiary(context)),
         ],
       ),
     );

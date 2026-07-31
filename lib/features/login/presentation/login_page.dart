@@ -10,6 +10,8 @@
 // check_design_system.sh) : tout l'état passe par `YkFormController`
 // (déjà un ChangeNotifier) ou des ValueNotifier.
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -19,6 +21,7 @@ import 'package:yeki/core/network/api_exception.dart';
 import 'package:yeki/core/router/auth_state.dart';
 import 'package:yeki/core/router/route_names.dart';
 import 'package:yeki/repositories/auth_repository.dart';
+import 'package:yeki/services/push_notification_service.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -92,6 +95,9 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
       // `.value`, ce qui déclenche seul la ré-évaluation du guard
       // (`GoRouter(refreshListenable: authState)`).
       await authState.login(token: result.token, role: result.role);
+      // Jamais attendu : l'enregistrement du jeton push ne doit pas
+      // retarder la redirection post-connexion.
+      unawaited(PushNotificationService().initialiser());
     } on ApiException catch (e) {
       if (e.isThrottled) {
         if (mounted) {

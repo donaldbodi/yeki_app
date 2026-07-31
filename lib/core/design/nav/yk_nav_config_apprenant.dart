@@ -21,9 +21,8 @@ final List<YkNavGroup> apprenantNavGroups = [
         label: 'Accueil',
         icon: Icons.home_outlined,
         selectedIcon: Icons.home,
+        routeName: AppRoute.dashboardAccueil,
         inCompactBar: true,
-        // TODO(nav): aucun tableau de bord "Accueil" apprenant n'existe
-        // encore comme route globale — CDC_DESIGN §4.2.1, destination 1.
       ),
     ],
   ),

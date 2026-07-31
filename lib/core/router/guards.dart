@@ -10,15 +10,14 @@ import 'route_paths.dart';
 /// Seule fonction de branchement par rôle qui subsiste dans tout le
 /// projet — remplace `YekiAuth._widgetFromRole` (apprenant/enseignant,
 /// main.dart) ET le `switch` interne de `EnseignantHomePage._fetchUserRole`
-/// (les 5 dashboards enseignant). `service_client` et tout rôle non
-/// reconnu tombent dans le même seau de repli générique que l'ancien
-/// `RoleEnseignant.enseignantSecondaire` — mapping de repli assumé, pas
-/// une expérience dédiée conçue pour ce rôle (hors périmètre d'un ticket
-/// de routage).
+/// (les 5 dashboards enseignant). `service_client` a son propre dashboard
+/// à onglets depuis P9.5 (`ServiceClientDashboardPage`) — seul tout rôle
+/// non reconnu tombe encore dans le seau de repli générique
+/// `enseignantSecondaire`.
 String homePathForRole(String? role) {
   switch (role) {
     case 'apprenant':
-      return AppPath.dashboardCursus;
+      return AppPath.dashboardAccueil;
     case 'admin':
       return AppPath.enseignantAdmin;
     case 'enseignant_admin':
@@ -27,8 +26,10 @@ String homePathForRole(String? role) {
       return AppPath.enseignantCadre;
     case 'enseignant_principal':
       return AppPath.enseignantPrincipal;
+    case 'service_client':
+      return AppPath.serviceClientDashboard;
     default:
-      // 'enseignant', 'service_client', ou tout rôle inconnu.
+      // 'enseignant' ou tout rôle inconnu.
       return AppPath.enseignantSecondaire;
   }
 }

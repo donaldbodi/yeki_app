@@ -1,45 +1,36 @@
 // lib/widgets/form_preoccupation_sheet.dart
+//
+// Refondu en P10.5 (rituel P5.0). Corrige le bug transverse « rien ne
+// s'affiche dans le forum après soumission » : `cours_id` n'était ajouté
+// au corps POST QUE pour la branche `lecon` — les branches `exercice`/
+// `devoir` l'omettaient, alors qu'une question sans `cours_id` n'apparaît
+// jamais dans le forum filtré par cours. Corrigé À LA SOURCE dans
+// `ForumRepository.creerQuestion` (ajoute `cours_id` dès que `coursId` est
+// fourni, indépendamment de `source`), donc corrigé pour ce fichier ET
+// pour tout futur appelant du repository.
+//
+// Navigation post-envoi simplifiée : le backend renvoie la question créée
+// COMPLÈTE (`id`, `cours_id`, `cours_titre`) — on navigue directement vers
+// `AppRoute.forumQuestionDetail` avec CET `id`, plutôt que vers l'onglet
+// Forum d'un cours en espérant qu'elle y apparaisse (l'ancien code avait
+// trois branches de navigation différentes selon le contexte d'appel ;
+// `tabController`/`onNaviguerForum` n'étaient en réalité jamais fournis
+// par aucun des 3 appelants réels de `ouvrirPreoccupation` — code mort
+// supprimé).
+//
+// Bascule complète vers `ForumRepository` (plus de `http`/
+// `SharedPreferences` bruts) et `YkSheet`/`Yk*` (plus de 14 couleurs en
+// dur — rule 2).
 
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:yeki/core/constants/api_constants.dart';
+
+import 'package:yeki/core/design/components/components.dart';
+import 'package:yeki/core/design/tokens/tokens.dart';
+import 'package:yeki/core/network/api_exception.dart';
 import 'package:yeki/core/router/route_names.dart';
-import 'package:yeki/views/pages/apprenants/forum_page.dart';
-
-// Palette harmonisée
-const Color brandBackground = Color(0xFF135F74);
-const Color actionOrange = Color(0xFFFF6B00);
-const Color _textDark = Color(0xFF1A1C1E);
-//const Color _textMedium = Color(0xFF5A5C5E);
-const Color _textLight = Color(0xFF8A8C8E);
-const Color _borderLight = Color(0xFFE0E4E8);
-//const Color _borderMedium = Color(0xFFD0D4D8);
-const Color _bgLight = Color(0xFFF8FAFC);
-const Color _white = Color(0xFFFFFFFF);
-const Color _green = Color(0xFF10B981);
-const Color _red = Color(0xFFEF4444);
-const Color _blue = Color(0xFF3B82F6);
-const Color _purple = Color(0xFFA855F7);
-const Color _orange = Color(0xFFF97316);
-
-const String _basePreocc = ApiConstants.baseUrl;
-
-const Map<String, Color> _srcColP = {
-  'lecon': _blue,
-  'exercice': _purple,
-  'devoir': _orange,
-  'libre': _green,
-};
-
-const Map<String, IconData> _srcIcoP = {
-  'lecon': Icons.play_lesson_rounded,
-  'exercice': Icons.edit_note_rounded,
-  'devoir': Icons.assignment_rounded,
-  'libre': Icons.chat_bubble_outline_rounded,
-};
+import 'package:yeki/repositories/forum_repository.dart';
+import 'package:yeki/widgets/forum_style.dart';
 
 void ouvrirPreoccupation({
   required BuildContext context,
@@ -54,9 +45,6 @@ void ouvrirPreoccupation({
   String? exerciceTitre,
   int? devoirId,
   String? devoirTitre,
-  TabController? tabController,
-  int forumTabIndex = 3,
-  void Function(int)? onNaviguerForum,
 }) {
   showModalBottomSheet(
     context: context,
@@ -74,14 +62,25 @@ void ouvrirPreoccupation({
       exerciceTitre: exerciceTitre,
       devoirId: devoirId,
       devoirTitre: devoirTitre,
-      tabController: tabController,
-      forumTabIndex: forumTabIndex,
-      onNaviguerForum: onNaviguerForum,
     ),
   );
 }
 
 class _PreoccupationSheet extends StatefulWidget {
+  const _PreoccupationSheet({
+    required this.source,
+    required this.contenuPrefill,
+    this.leconId,
+    this.leconTitre,
+    this.coursId,
+    this.coursTitre,
+    this.coursColor,
+    this.exerciceId,
+    this.exerciceTitre,
+    this.devoirId,
+    this.devoirTitre,
+  });
+
   final String source;
   final String contenuPrefill;
   final int? leconId;
@@ -93,21 +92,6 @@ class _PreoccupationSheet extends StatefulWidget {
   final String? exerciceTitre;
   final int? devoirId;
   final String? devoirTitre;
-  final TabController? tabController;
-  final int forumTabIndex;
-  final void Function(int)? onNaviguerForum;
-
-  const _PreoccupationSheet({
-    required this.source,
-    required this.contenuPrefill,
-    this.leconId, this.leconTitre,
-    this.coursId, this.coursTitre, this.coursColor,
-    this.exerciceId, this.exerciceTitre,
-    this.devoirId, this.devoirTitre,
-    this.tabController,
-    required this.forumTabIndex,
-    this.onNaviguerForum,
-  });
 
   @override
   State<_PreoccupationSheet> createState() => _PreoccupationSheetState();
@@ -115,6 +99,7 @@ class _PreoccupationSheet extends StatefulWidget {
 
 class _PreoccupationSheetState extends State<_PreoccupationSheet> {
   final _ctrl = TextEditingController();
+  final _repo = ForumRepository();
   bool _sending = false;
 
   @override
@@ -132,258 +117,162 @@ class _PreoccupationSheetState extends State<_PreoccupationSheet> {
   Future<void> _envoyer() async {
     final texte = _ctrl.text.trim();
     if (texte.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Écrivez votre question.'),
-          backgroundColor: _orange,
-          behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.all(16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        ),
-      );
+      YkSnack.error(context, 'Écrivez votre question.');
       return;
     }
 
     setState(() => _sending = true);
-
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final tok = prefs.getString('token');
-
-      final body = <String, dynamic>{
-        'contenu': texte,
-        'source': widget.source,
-      };
-
-      if (widget.leconId != null) {
-        body['lecon_id'] = widget.leconId;
-        body['lecon_titre'] = widget.leconTitre ?? '';
-        body['cours_id'] = widget.coursId;
-        body['cours_titre'] = widget.coursTitre ?? '';
-      }
-
-      if (widget.exerciceId != null) {
-        body['exercice_id'] = widget.exerciceId;
-        body['exercice_titre'] = widget.exerciceTitre ?? '';
-      }
-
-      if (widget.devoirId != null) {
-        body['devoir_id'] = widget.devoirId;
-        body['devoir_titre'] = widget.devoirTitre ?? '';
-      }
-
-      final res = await http.post(
-        Uri.parse('$_basePreocc/forum/questions/'),
-        headers: {
-          'Content-Type': 'application/json',
-          if (tok != null) 'Authorization': 'Token $tok',
-        },
-        body: jsonEncode(body),
+      final question = await _repo.creerQuestion(
+        contenu: texte,
+        source: widget.source,
+        leconId: widget.leconId,
+        leconTitre: widget.leconTitre,
+        coursId: widget.coursId,
+        coursTitre: widget.coursTitre,
+        exerciceId: widget.exerciceId,
+        exerciceTitre: widget.exerciceTitre,
+        devoirId: widget.devoirId,
+        devoirTitre: widget.devoirTitre,
       );
+      if (!mounted) return;
+      Navigator.pop(context);
 
-      if (res.statusCode == 201) {
-        final data = jsonDecode(res.body) as Map<String, dynamic>;
-        final newId = data['id'] as int?;
-
-        if (!mounted) return;
-        Navigator.pop(context);
-
-        if (widget.tabController != null && widget.coursId != null && widget.coursTitre != null) {
-          widget.tabController!.animateTo(widget.forumTabIndex);
-          if (widget.onNaviguerForum != null && newId != null) {
-            widget.onNaviguerForum!(newId);
-          }
-        } else if (widget.coursId != null && widget.coursTitre != null) {
-          context.pushNamed(
-            AppRoute.coursDetail,
-            pathParameters: {'coursId': widget.coursId!.toString()},
-            queryParameters: {
-              'titre': widget.coursTitre!,
-              'coursColor': (widget.coursColor ?? brandBackground.value).toString(),
-              'isPremium': 'true',
-              'tab': widget.forumTabIndex.toString(),
-              if (newId != null) 'scrollToQuestionId': newId.toString(),
-            },
-          );
-        } else {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => Scaffold(
-                backgroundColor: _bgLight,
-                appBar: AppBar(
-                  backgroundColor: _white,
-                  title: const Text('Forum', style: TextStyle(color: _textDark)),
-                  iconTheme: const IconThemeData(color: _textDark),
-                  elevation: 0,
-                  bottom: const PreferredSize(
-                    preferredSize: Size.fromHeight(1),
-                    child: Divider(height: 1, color: _borderLight),
-                  ),
-                ),
-                body: ForumPage(scrollToQuestionId: newId),
-              ),
-            ),
-          );
-        }
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('✓ Question envoyée au forum !'),
-            backgroundColor: _green,
-            behavior: SnackBarBehavior.floating,
-            margin: const EdgeInsets.all(16),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          ),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Erreur lors de l\'envoi.'),
-            backgroundColor: _red,
-            behavior: SnackBarBehavior.floating,
-            margin: const EdgeInsets.all(16),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          ),
+      final newId = question['id'] as int?;
+      if (newId != null) {
+        context.pushNamed(
+          AppRoute.forumQuestionDetail,
+          pathParameters: {'questionId': newId.toString()},
+          queryParameters: {
+            if (widget.coursColor != null) 'coursColor': widget.coursColor.toString(),
+          },
         );
       }
+      YkSnack.success(context, 'Question envoyée au forum !');
+    } on ApiException catch (e) {
+      if (mounted) YkSnack.error(context, e.message);
     } catch (_) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Erreur réseau.'),
-          backgroundColor: _red,
-          behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.all(16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        ),
-      );
+      if (mounted) YkSnack.error(context, 'Erreur réseau.');
+    } finally {
+      if (mounted) setState(() => _sending = false);
     }
+  }
 
-    if (mounted) setState(() => _sending = false);
+  String _contexteLabel() {
+    switch (widget.source) {
+      case 'lecon':
+        return widget.leconTitre ?? '';
+      case 'exercice':
+        return widget.exerciceTitre ?? '';
+      case 'devoir':
+        return widget.devoirTitre ?? '';
+      default:
+        return 'Question libre';
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final col = _srcColP[widget.source] ?? brandBackground;
-    final ico = _srcIcoP[widget.source] ?? Icons.help_outline_rounded;
-    final contextLabel = _contextLabel();
+    final couleur = sourcePreoccupationCouleur(context, widget.source);
+    final icone = sourcePreoccupationIcone(widget.source);
+    final contexteLabel = _contexteLabel();
 
     return Container(
       decoration: BoxDecoration(
-        color: _white,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        color: YkColors.surface(context),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(YkRadius.xl)),
       ),
       padding: EdgeInsets.only(
-        left: 24, right: 24, top: 16,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+        left: YkSpacing.lg,
+        right: YkSpacing.lg,
+        top: YkSpacing.md,
+        bottom: MediaQuery.of(context).viewInsets.bottom + YkSpacing.lg,
       ),
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Center(child: Container(
-          width: 40, height: 4,
-          decoration: BoxDecoration(color: _borderLight, borderRadius: BorderRadius.circular(10)),
-        )),
-        const SizedBox(height: 20),
-        Row(children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: col.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: col.withOpacity(0.2), width: 0.8),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: YkColors.border(context),
+                borderRadius: BorderRadius.circular(YkRadius.full),
+              ),
             ),
-            child: Icon(ico, color: col, size: 20),
           ),
-          const SizedBox(width: 12),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('Poser une question',
-                style: TextStyle(color: _textDark, fontSize: 18, fontWeight: FontWeight.w800)),
-            if (contextLabel.isNotEmpty)
-              Text(contextLabel,
-                  style: TextStyle(fontSize: 12, color: col, fontWeight: FontWeight.w600),
-                  maxLines: 1, overflow: TextOverflow.ellipsis),
-          ])),
-        ]),
-        const SizedBox(height: 16),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(
-            color: col.withOpacity(0.08),
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: col.withOpacity(0.25), width: 0.8),
+          SizedBox(height: YkSpacing.lg),
+          Row(
+            children: [
+              CircleAvatar(
+                radius: 20,
+                backgroundColor: couleur.withValues(alpha: 0.12),
+                child: Icon(icone, color: couleur, size: 20),
+              ),
+              SizedBox(width: YkSpacing.sm),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Poser une question',
+                      style: YkTypography.h4(
+                        context,
+                      ).copyWith(color: YkColors.textPrimary(context)),
+                    ),
+                    if (contexteLabel.isNotEmpty)
+                      Text(
+                        contexteLabel,
+                        style: YkTypography.bodySm(context).copyWith(color: couleur),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                  ],
+                ),
+              ),
+            ],
           ),
-          child: Row(children: [
-            Icon(Icons.link_rounded, size: 13, color: col),
-            const SizedBox(width: 8),
-            Expanded(child: Text(
-              'Depuis ${_srcLabel(widget.source)} : $contextLabel',
-              style: TextStyle(fontSize: 12, color: col, fontWeight: FontWeight.w500),
-              maxLines: 1, overflow: TextOverflow.ellipsis,
-            )),
-          ]),
-        ),
-        const SizedBox(height: 14),
-        Container(
-          decoration: BoxDecoration(
-            color: _bgLight,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: _borderLight, width: 1),
+          SizedBox(height: YkSpacing.md),
+          YkCard(
+            variant: YkCardVariant.filled,
+            accentColor: couleur,
+            child: Row(
+              children: [
+                Icon(Icons.link_rounded, size: 14, color: couleur),
+                SizedBox(width: YkSpacing.xs),
+                Expanded(
+                  child: Text(
+                    'Depuis ${sourcePreoccupationLabel(widget.source)} : $contexteLabel',
+                    style: YkTypography.bodySm(context).copyWith(color: couleur),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
           ),
-          child: TextField(
+          SizedBox(height: YkSpacing.md),
+          YkTextField(
             controller: _ctrl,
+            type: YkTextFieldType.multiline,
             maxLines: 5,
             autofocus: true,
-            style: TextStyle(color: _textDark, fontSize: 14, height: 1.6),
-            decoration: InputDecoration(
-              hintText: 'Décrivez votre préoccupation en détail...',
-              hintStyle: TextStyle(color: _textLight, fontSize: 13),
-              border: InputBorder.none,
-              contentPadding: const EdgeInsets.all(14),
-            ),
+            hint: 'Décrivez votre préoccupation en détail...',
           ),
-        ),
-        const SizedBox(height: 16),
-        SizedBox(
-          width: double.infinity,
-          child: GestureDetector(
-            onTap: _sending ? null : _envoyer,
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(colors: [col, col.withOpacity(0.8)]),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                if (_sending)
-                  SizedBox(width: 20, height: 20,
-                      child: CircularProgressIndicator(color: _white, strokeWidth: 2))
-                else ...[
-                  const Icon(Icons.send_rounded, color: _white, size: 18),
-                  const SizedBox(width: 8),
-                  const Text('Envoyer au forum', style: TextStyle(
-                    color: _white, fontSize: 15, fontWeight: FontWeight.bold)),
-                ],
-              ]),
-            ),
+          SizedBox(height: YkSpacing.md),
+          YkButton(
+            label: 'Envoyer au forum',
+            icon: Icons.send_rounded,
+            isLoading: _sending,
+            onPressed: _sending ? null : _envoyer,
           ),
-        ),
-        const SizedBox(height: 6),
-        Text('Vous serez redirigé vers le forum après envoi.',
-            style: TextStyle(fontSize: 11, color: _textLight)),
-      ]),
+          SizedBox(height: YkSpacing.xs),
+          Text(
+            'Vous serez redirigé vers le forum après envoi.',
+            style: YkTypography.caption(context).copyWith(color: YkColors.textTertiary(context)),
+          ),
+        ],
+      ),
     );
-  }
-
-  String _contextLabel() {
-    switch (widget.source) {
-      case 'lecon': return widget.leconTitre ?? '';
-      case 'exercice': return widget.exerciceTitre ?? '';
-      case 'devoir': return widget.devoirTitre ?? '';
-      default: return 'Question libre';
-    }
-  }
-
-  String _srcLabel(String source) {
-    const map = {'lecon': 'la leçon', 'exercice': 'l\'exercice', 'devoir': 'le devoir', 'libre': 'une question libre'};
-    return map[source] ?? source;
   }
 }

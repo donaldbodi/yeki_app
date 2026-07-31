@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:yeki/core/design/components/components.dart';
+import 'package:yeki/core/design/tokens/tokens.dart';
 import 'package:yeki/core/router/auth_state.dart';
 import 'package:yeki/core/router/guards.dart';
-import 'package:yeki/core/theme/app_theme.dart';
 
 /// Cible de `GoRouter.errorBuilder` (chemin non reconnu) et de la route
 /// nommée `/404`. Écran volontairement simple — ce ticket porte sur le
@@ -14,28 +15,29 @@ class NotFoundPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: YekiColors.backgroundLight,
+      backgroundColor: YkColors.background(context),
       body: Center(
         child: Padding(
-          padding: const EdgeInsets.all(24),
+          padding: EdgeInsets.all(YkSpacing.xl),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.search_off_rounded, size: 72, color: YekiColors.textMedium),
-              const SizedBox(height: 16),
-              const Text(
+              Icon(Icons.search_off_rounded, size: 72, color: YkColors.textSecondary(context)),
+              SizedBox(height: YkSpacing.md),
+              Text(
                 'Page introuvable',
-                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: YekiColors.textDark),
+                style: YkTypography.h4(context).copyWith(color: YkColors.textPrimary(context)),
               ),
-              const SizedBox(height: 8),
-              const Text(
+              SizedBox(height: YkSpacing.xs),
+              Text(
                 "Cette page n'existe pas ou plus.",
-                style: TextStyle(color: YekiColors.textMedium),
+                style: YkTypography.bodyMd(context).copyWith(color: YkColors.textSecondary(context)),
               ),
-              const SizedBox(height: 24),
-              ElevatedButton(
+              SizedBox(height: YkSpacing.lg),
+              YkButton(
+                label: "Retour à l'accueil",
                 onPressed: () => context.go(homePathForRole(authState.value.role)),
-                child: const Text("Retour à l'accueil"),
+                variant: YkButtonVariant.primary,
               ),
             ],
           ),

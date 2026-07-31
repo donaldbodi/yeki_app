@@ -14,6 +14,7 @@ abstract final class AppPath {
   static const String designSystem = '/design-system';
 
   // ── Apprenant : onglets du shell (chemins complets) ─────────────
+  static const String dashboardAccueil = '/dashboard/accueil';
   static const String dashboardCursus = '/dashboard/cursus';
   static const String dashboardConcours = '/dashboard/concours';
   static const String dashboardFormations = '/dashboard/formations';
@@ -48,6 +49,7 @@ abstract final class AppPath {
   static const String notifications = '/notifications';
   static const String wallet = '/wallet';
   static const String recharge = '/recharge';
+  static const String retrait = '/retrait';
 
   // ── Enseignant : racine + onglets du shell ──────────────────────
   static const String enseignantDashboard = '/enseignant/dashboard';
@@ -72,4 +74,5 @@ abstract final class AppPath {
       '/enseignant/cadre/departements/:departementId';
   static const String cadreGestionDemandes =
       '/enseignant/cadre/departements/:departementId/demandes';
+  static const String serviceClientDashboard = '/service-client';
 }

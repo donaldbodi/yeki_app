@@ -1,182 +1,79 @@
 // lib/views/pages/apprenants/apprenant_shell.dart
-// ═══════════════════════════════════════════════════════════════════════════
-// COQUE APPRENANT — chrome (barre de navigation basse) uniquement.
-// Remplace l'ancien `Dashboard` (dasboard.dart, supprimé) : le contenu de
-// chaque onglet vient maintenant de `navigationShell`
-// (StatefulShellRoute.indexedStack), pas d'un `IndexedStack` géré à la
-// main — ce widget ne connaît que le chrome, pas les 5 pages elles-mêmes.
-// ═══════════════════════════════════════════════════════════════════════════
+//
+// Coque apprenant — refondu en P11.1 (rituel P5.0) : bascule vers
+// `YkAdaptiveScaffold`/`YkNavConfig.forRole('apprenant')` (barre du bas en
+// compact, navbar gauche déployée en large — exigence explicite du
+// ticket), remplace la barre du bas maison (glassmorphism codée en dur,
+// `YekiColors`/`YekiGradients` dépréciés) construite ici auparavant.
+//
+// Ajoute la branche "Accueil" (P11.1) — 6 branches désormais, alignées sur
+// `yk_nav_config_apprenant.dart` (CDC_DESIGN §4.2.1) qui prévoyait déjà
+// cette destination. Les destinations SANS route de branche
+// (Forum/Yéki IA : pas encore de destination globale ; Notifications/
+// Portefeuille : routes plein écran hors shell) sont distinguées par
+// `_indexDeBranche` — seules les 6 premières déclenchent `goBranch`
+// (préserve la pile de navigation propre à chaque onglet), les autres
+// utilisent `context.goNamed` standard.
+//
+// `notificationsProvider` (créé en P3.4, jamais consommé nulle part
+// jusqu'ici — confirmé par recherche) est branché ici pour la première
+// fois : alimente le badge réel de la destination "Notifications".
 
-import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:yeki/core/design/components/components.dart';
+import 'package:yeki/core/providers/current_user_provider.dart';
+import 'package:yeki/core/providers/notifications_provider.dart';
+import 'package:yeki/core/router/auth_state.dart';
+import 'package:yeki/core/router/route_names.dart';
 
-import 'package:yeki/core/theme/yeki_design_system.dart';
+/// Ordre des branches du `StatefulShellRoute` — doit rester synchronisé
+/// avec `app_router.dart` (arbre apprenant).
+const List<String> _brancheRouteNames = [
+  AppRoute.dashboardAccueil,
+  AppRoute.dashboardCursus,
+  AppRoute.dashboardConcours,
+  AppRoute.dashboardFormations,
+  AppRoute.dashboardOlympiades,
+  AppRoute.dashboardDevoirs,
+];
 
-class ApprenantShellPage extends StatelessWidget {
+class ApprenantShellPage extends ConsumerWidget {
   final StatefulNavigationShell navigationShell;
 
   const ApprenantShellPage({super.key, required this.navigationShell});
 
-  static const List<_NavItem> _navItems = [
-    _NavItem(Icons.school_rounded, Icons.school_outlined, 'Cursus'),
-    _NavItem(Icons.emoji_events_rounded, Icons.emoji_events_outlined, 'Concours'),
-    _NavItem(Icons.layers_rounded, Icons.layers_outlined, 'Formations'),
-    _NavItem(Icons.star_rounded, Icons.star_outline_rounded, 'Olympiades'),
-    _NavItem(Icons.assignment_rounded, Icons.assignment_outlined, 'Devoirs'),
-  ];
+  String get _selectedRouteName => _brancheRouteNames[navigationShell.currentIndex];
+
+  void _onDestinationTap(BuildContext context, String routeName) {
+    final indexDeBranche = _brancheRouteNames.indexOf(routeName);
+    if (indexDeBranche != -1) {
+      navigationShell.goBranch(indexDeBranche, initialLocation: indexDeBranche == navigationShell.currentIndex);
+    } else {
+      context.goNamed(routeName);
+    }
+  }
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      extendBody: true,
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: YekiGradients.mainBackground,
-        ),
-        child: Stack(
-          children: [
-            // Sphères décoratives de fond
-            Positioned(
-              top: -30,
-              right: -30,
-              child: Container(
-                width: 200,
-                height: 200,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: YekiColors.primaryLight.withValues(alpha: 0.12),
-                ),
-              ),
-            ),
-            Positioned(
-              bottom: 100,
-              left: -50,
-              child: Container(
-                width: 250,
-                height: 250,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: YekiColors.accent.withValues(alpha: 0.08),
-                ),
-              ),
-            ),
-            Positioned(
-              top: 300,
-              right: -20,
-              child: Container(
-                width: 150,
-                height: 150,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: YekiColors.gold.withValues(alpha: 0.08),
-                ),
-              ),
-            ),
-            SafeArea(
-              bottom: false,
-              child: navigationShell,
-            ),
-          ],
-        ),
-      ),
-      bottomNavigationBar: _buildGlassBottomBar(),
+  Widget build(BuildContext context, WidgetRef ref) {
+    final notificationsNonLues = ref.watch(notificationsProvider).valueOrNull ?? 0;
+    final profil = ref.watch(currentUserProvider).valueOrNull;
+    final nomAffiche = profil == null
+        ? 'Apprenant'
+        : (profil.firstName.isNotEmpty ? profil.firstName : profil.username);
+
+    return YkAdaptiveScaffold(
+      groups: YkNavConfig.forRole('apprenant'),
+      selectedRouteName: _selectedRouteName,
+      onDestinationTap: (routeName) => _onDestinationTap(context, routeName),
+      userName: nomAffiche,
+      userRole: 'Apprenant',
+      onSettings: () => context.pushNamed(AppRoute.profile),
+      onLogout: () => authState.clearSession(),
+      badges: {'notifications': notificationsNonLues},
+      body: navigationShell,
     );
   }
-
-  Widget _buildGlassBottomBar() {
-    return Container(
-      margin: const EdgeInsets.fromLTRB(12, 0, 12, 20),
-      height: 70,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 16,
-            offset: const Offset(0, -2),
-          ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(24),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-          child: Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  YekiColors.white.withValues(alpha: 0.75),
-                  YekiColors.white.withValues(alpha: 0.50),
-                ],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(24),
-              border: Border.all(
-                color: YekiColors.white.withValues(alpha: 0.6),
-                width: 1.5,
-              ),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: List.generate(_navItems.length, (idx) => _buildBottomNavItem(idx)),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBottomNavItem(int idx) {
-    final item = _navItems[idx];
-    final bool isSelected = navigationShell.currentIndex == idx;
-
-    return Expanded(
-      child: GestureDetector(
-        onTap: () => navigationShell.goBranch(idx),
-        behavior: HitTestBehavior.opaque,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 250),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-              decoration: BoxDecoration(
-                color: isSelected ? YekiColors.primary.withValues(alpha: 0.12) : Colors.transparent,
-                borderRadius: BorderRadius.circular(14),
-                border: isSelected
-                    ? Border.all(
-                        color: YekiColors.primary.withValues(alpha: 0.15),
-                        width: 1.0,
-                      )
-                    : null,
-              ),
-              child: Icon(
-                isSelected ? item.iconFilled : item.iconOutlined,
-                color: isSelected ? YekiColors.primaryDark : YekiColors.textMedium,
-                size: 22,
-              ),
-            ),
-            const SizedBox(height: 3),
-            Text(
-              item.label,
-              style: TextStyle(
-                color: isSelected ? YekiColors.primaryDark : YekiColors.textMedium,
-                fontSize: 10,
-                fontWeight: isSelected ? FontWeight.w800 : FontWeight.w500,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _NavItem {
-  final IconData iconFilled, iconOutlined;
-  final String label;
-  const _NavItem(this.iconFilled, this.iconOutlined, this.label);
 }

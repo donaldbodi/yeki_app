@@ -1,72 +1,91 @@
 // lib/views/pages/enseignants/historique_page.dart
-// ═══════════════════════════════════════════════════════════════════════════
-// PAGE HISTORIQUE ENSEIGNANT — VERSION ULTRA SIMPLE ET STABLE
-// ═══════════════════════════════════════════════════════════════════════════
+//
+// Refondu en P11.8 (rituel P5.0) : bascule vers `HistoriqueRepository`
+// (plus de `http`/`SharedPreferences` bruts) et les tokens/composants
+// `Yk*` — `YkTimeline` remplace la timeline à barre verticale faite main
+// (voir le commentaire de tête d'`YkTimeline`, qui cite déjà cet écran
+// comme cible).
+//
+// **Écart de design-système découvert** : les 24 couleurs distinctes de
+// l'ancien `_actionMeta` (une par type d'action) n'ont aucun équivalent
+// dans les tokens `Yk*` — la palette CDC ne définit que 4 couleurs
+// sémantiques (success/warning/error/info) + la teinte primaire, pas de
+// palette catégorielle pour différencier N catégories non ordonnées.
+// Plutôt qu'inventer nos propres teintes (interdit par le commentaire de
+// tête de `colors.dart` : « ne pas les améliorer à l'œil »), les 10
+// catégories cyclent sur les 5 tokens sémantiques disponibles — l'icône
+// (unique par catégorie) reste le différenciateur principal, la couleur
+// n'étant plus qu'un renfort. Signalé dans la fiche d'écart, pas résolu
+// silencieusement.
+//
+// `YkTimeline` n'a ni regroupement par date ni emplacement pour le détail
+// clé/valeur par entrée (`data`) — les groupes de date restent des
+// `YkTimeline` séparés sous un en-tête pilule, et le détail est replié
+// dans `subtitle` (lignes "Clé : valeur").
 
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
-import 'package:yeki/core/theme/app_theme.dart';
-import 'package:yeki/core/constants/api_constants.dart';
 
-// ─── CONFIGURATION ─────────────────────────────────────────────────────────
+import 'package:yeki/core/design/components/components.dart';
+import 'package:yeki/core/design/tokens/tokens.dart';
+import 'package:yeki/repositories/historique_repository.dart';
 
-const Map<String, Map<String, dynamic>> _actionMeta = {
-  'course_created':    {'icon': Icons.add_circle_outlined,    'color': Color(0xFF2E7D32), 'cat': 'cours', 'label': 'Cours créé'},
-  'course_modified':   {'icon': Icons.edit_outlined,          'color': Color(0xFF1565C0), 'cat': 'cours', 'label': 'Cours modifié'},
-  'course_deleted':    {'icon': Icons.delete_outline,         'color': Color(0xFFC62828), 'cat': 'cours', 'label': 'Cours supprimé'},
-  'teacher_assigned':  {'icon': Icons.person_add_outlined,    'color': Color(0xFFE65100), 'cat': 'enseignants', 'label': 'Enseignant assigné'},
-  'teacher_changed':   {'icon': Icons.swap_horiz,             'color': Color(0xFFE65100), 'cat': 'enseignants', 'label': 'Enseignant changé'},
-  'secondary_added':   {'icon': Icons.group_add_outlined,     'color': Color(0xFF00838F), 'cat': 'enseignants', 'label': 'Assistant ajouté'},
-  'secondary_removed': {'icon': Icons.group_remove_outlined,  'color': Color(0xFFAD1457), 'cat': 'enseignants', 'label': 'Assistant retiré'},
-  'module_created':    {'icon': Icons.folder_outlined,        'color': Color(0xFF6A1B9A), 'cat': 'modules', 'label': 'Module créé'},
-  'module_modified':   {'icon': Icons.folder_open_outlined,   'color': Color(0xFF4527A0), 'cat': 'modules', 'label': 'Module modifié'},
-  'module_deleted':    {'icon': Icons.folder_delete_outlined, 'color': Color(0xFFC62828), 'cat': 'modules', 'label': 'Module supprimé'},
-  'lesson_created':    {'icon': Icons.article_outlined,       'color': Color(0xFF00695C), 'cat': 'lecons', 'label': 'Leçon créée'},
-  'lesson_modified':   {'icon': Icons.edit_note_outlined,     'color': Color(0xFF00695C), 'cat': 'lecons', 'label': 'Leçon modifiée'},
-  'lesson_deleted':    {'icon': Icons.delete_sweep_outlined,  'color': Color(0xFFC62828), 'cat': 'lecons', 'label': 'Leçon supprimée'},
-  'homework_created':  {'icon': Icons.assignment_outlined,    'color': Color(0xFF558B2F), 'cat': 'devoirs', 'label': 'Devoir créé'},
-  'homework_modified': {'icon': Icons.assignment_late_outlined,'color': Color(0xFF558B2F), 'cat': 'devoirs', 'label': 'Devoir modifié'},
-  'homework_graded':   {'icon': Icons.grading_outlined,       'color': Color(0xFF558B2F), 'cat': 'devoirs', 'label': 'Devoir corrigé'},
-  'exercise_created':  {'icon': Icons.quiz_outlined,          'color': Color(0xFF283593), 'cat': 'exercices', 'label': 'Exercice créé'},
-  'question_added':    {'icon': Icons.help_outline,           'color': Color(0xFF283593), 'cat': 'exercices', 'label': 'Question ajoutée'},
-  'olympiad_created':  {'icon': Icons.emoji_events_outlined,  'color': Color(0xFFBF360C), 'cat': 'olympiades', 'label': 'Olympiade créée'},
-  'olympiad_closed':   {'icon': Icons.event_busy_outlined,    'color': Color(0xFFBF360C), 'cat': 'olympiades', 'label': 'Olympiade fermée'},
-  'ranking_computed':  {'icon': Icons.leaderboard_outlined,   'color': Color(0xFFBF360C), 'cat': 'olympiades', 'label': 'Classement calculé'},
-  'department_created':{'icon': Icons.domain_add_outlined,    'color': Color(0xFF00695C), 'cat': 'departements', 'label': 'Département créé'},
-  'cadre_assigned':    {'icon': Icons.supervisor_account_outlined, 'color': Color(0xFF006064), 'cat': 'departements', 'label': 'Cadre assigné'},
-  'submission_graded': {'icon': Icons.done_all,               'color': Color(0xFF2E7D32), 'cat': 'corrections', 'label': 'Soumission corrigée'},
-};
-
-Map<String, dynamic> _getMeta(String action) =>
-    _actionMeta[action] ??
-    {'icon': Icons.history, 'color': YekiColors.textLight, 'cat': 'autre', 'label': action};
-
-// ─── FILTRES ─────────────────────────────────────────────────────────────
-
-class _HFilter {
+class _CategorieMeta {
+  const _CategorieMeta({required this.key, required this.label, required this.icon});
   final String key;
   final String label;
   final IconData icon;
-  const _HFilter({required this.key, required this.label, required this.icon});
 }
 
-const List<_HFilter> _filters = [
-  _HFilter(key: '',             label: 'Tout',         icon: Icons.apps),
-  _HFilter(key: 'cours',        label: 'Cours',        icon: Icons.book_outlined),
-  _HFilter(key: 'modules',      label: 'Modules',      icon: Icons.folder_outlined),
-  _HFilter(key: 'lecons',       label: 'Leçons',       icon: Icons.article_outlined),
-  _HFilter(key: 'devoirs',      label: 'Devoirs',      icon: Icons.assignment_outlined),
-  _HFilter(key: 'exercices',    label: 'Exercices',    icon: Icons.quiz_outlined),
-  _HFilter(key: 'olympiades',   label: 'Olympiades',   icon: Icons.emoji_events_outlined),
-  _HFilter(key: 'enseignants',  label: 'Enseignants',  icon: Icons.people_outlined),
-  _HFilter(key: 'departements', label: 'Départements', icon: Icons.domain_outlined),
-  _HFilter(key: 'corrections',  label: 'Corrections',  icon: Icons.grading_outlined),
+const List<_CategorieMeta> _categories = [
+  _CategorieMeta(key: '', label: 'Tout', icon: Icons.apps),
+  _CategorieMeta(key: 'cours', label: 'Cours', icon: Icons.book_outlined),
+  _CategorieMeta(key: 'modules', label: 'Modules', icon: Icons.folder_outlined),
+  _CategorieMeta(key: 'lecons', label: 'Leçons', icon: Icons.article_outlined),
+  _CategorieMeta(key: 'devoirs', label: 'Devoirs', icon: Icons.assignment_outlined),
+  _CategorieMeta(key: 'exercices', label: 'Exercices', icon: Icons.quiz_outlined),
+  _CategorieMeta(key: 'olympiades', label: 'Olympiades', icon: Icons.emoji_events_outlined),
+  _CategorieMeta(key: 'enseignants', label: 'Enseignants', icon: Icons.people_outlined),
+  _CategorieMeta(key: 'departements', label: 'Départements', icon: Icons.domain_outlined),
+  _CategorieMeta(key: 'corrections', label: 'Corrections', icon: Icons.grading_outlined),
 ];
 
-// ─── PAGE PRINCIPALE ──────────────────────────────────────────────────────
+const Map<String, IconData> _iconesAction = {
+  'course_created': Icons.add_circle_outlined,
+  'course_modified': Icons.edit_outlined,
+  'course_deleted': Icons.delete_outline,
+  'teacher_assigned': Icons.person_add_outlined,
+  'teacher_changed': Icons.swap_horiz,
+  'secondary_added': Icons.group_add_outlined,
+  'secondary_removed': Icons.group_remove_outlined,
+  'module_created': Icons.folder_outlined,
+  'module_modified': Icons.folder_open_outlined,
+  'module_deleted': Icons.folder_delete_outlined,
+  'lesson_created': Icons.article_outlined,
+  'lesson_modified': Icons.edit_note_outlined,
+  'lesson_deleted': Icons.delete_sweep_outlined,
+  'homework_created': Icons.assignment_outlined,
+  'homework_modified': Icons.assignment_late_outlined,
+  'homework_graded': Icons.grading_outlined,
+  'exercise_created': Icons.quiz_outlined,
+  'question_added': Icons.help_outline,
+  'olympiad_created': Icons.emoji_events_outlined,
+  'olympiad_closed': Icons.event_busy_outlined,
+  'ranking_computed': Icons.leaderboard_outlined,
+  'department_created': Icons.domain_add_outlined,
+  'cadre_assigned': Icons.supervisor_account_outlined,
+  'submission_graded': Icons.done_all,
+};
+
+const Map<String, String> _libellesChamps = {
+  'titre': 'Titre', 'nom': 'Nom', 'cours': 'Cours', 'niveau': 'Niveau',
+  'departement': 'Département', 'parcours': 'Parcours', 'enseignant': 'Enseignant',
+  'apprenant': 'Apprenant', 'devoir': 'Devoir', 'lecon': 'Leçon', 'module': 'Module',
+  'exercice': 'Exercice', 'olympiade': 'Olympiade', 'matiere': 'Matière',
+  'edition': 'Édition', 'note': 'Note', 'note_sur': 'Note sur', 'etoiles': 'Étoiles',
+  'ordre': 'Ordre', 'participants': 'Participants', 'date_limite': 'Date limite',
+  'debut': 'Début', 'nb_questions': 'Questions', 'color_code': 'Couleur',
+};
 
 class HistoriquePage extends StatefulWidget {
   const HistoriquePage({super.key});
@@ -76,15 +95,17 @@ class HistoriquePage extends StatefulWidget {
 }
 
 class _HistoriquePageState extends State<HistoriquePage> {
-  bool _loading = true;
-  bool _loadingStats = true;
-  String _error = '';
+  final _repo = HistoriqueRepository();
 
-  List<Map<String, dynamic>> _activites = [];
+  bool _loading = true;
+  bool _chargementStats = true;
+  String? _erreur;
+
+  List<ActiviteHistorique> _activites = [];
   Map<String, dynamic> _stats = {};
 
-  String _selectedCategory = '';
-  String _selectedPeriode = '';
+  String _categorieSelectionnee = '';
+  String _periodeSelectionnee = '';
 
   @override
   void initState() {
@@ -92,99 +113,55 @@ class _HistoriquePageState extends State<HistoriquePage> {
     _chargerTout();
   }
 
-  // ─── API ──────────────────────────────────────────────────────────────
-
-  Future<Map<String, String>> _authHeaders() async {
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('token');
-    return {
-      'Content-Type': 'application/json',
-      if (token != null) 'Authorization': 'Token $token',
-    };
-  }
-
-  Future<void> _chargerTout() async {
-    await Future.wait([_chargerActivites(), _chargerStats()]);
-  }
+  Future<void> _chargerTout() => Future.wait([_chargerActivites(), _chargerStats()]);
 
   Future<void> _chargerActivites() async {
     setState(() {
       _loading = true;
-      _error = '';
+      _erreur = null;
     });
+    DateTime? depuis;
+    if (_periodeSelectionnee == 'semaine') {
+      depuis = DateTime.now().subtract(const Duration(days: 7));
+    } else if (_periodeSelectionnee == 'mois') {
+      depuis = DateTime(DateTime.now().year, DateTime.now().month, 1);
+    }
     try {
-      final headers = await _authHeaders();
-
-      final params = <String, String>{};
-      if (_selectedCategory.isNotEmpty) params['category'] = _selectedCategory;
-
-      if (_selectedPeriode == 'semaine') {
-        final depuis = DateTime.now().subtract(const Duration(days: 7));
-        params['depuis'] = DateFormat('yyyy-MM-dd').format(depuis);
-      } else if (_selectedPeriode == 'mois') {
-        final depuis = DateTime(DateTime.now().year, DateTime.now().month, 1);
-        params['depuis'] = DateFormat('yyyy-MM-dd').format(depuis);
-      }
-
-      params['limit'] = '200';
-
-      final uri = Uri.parse(ApiConstants.historique).replace(queryParameters: params);
-      final res = await http.get(uri, headers: headers);
-
-      if (res.statusCode == 200) {
-        final List<dynamic> data = jsonDecode(res.body);
-        setState(() {
-          _activites = data.map((e) => Map<String, dynamic>.from(e as Map)).toList();
-        });
-      } else {
-        setState(() => _error = 'Erreur ${res.statusCode}');
-      }
-    } catch (e) {
-      setState(() => _error = 'Erreur réseau');
+      final activites = await _repo.activites(categorie: _categorieSelectionnee, depuis: depuis);
+      if (mounted) setState(() => _activites = activites);
+    } catch (_) {
+      if (mounted) setState(() => _erreur = 'Erreur réseau.');
     } finally {
-      setState(() => _loading = false);
+      if (mounted) setState(() => _loading = false);
     }
   }
 
   Future<void> _chargerStats() async {
-    setState(() => _loadingStats = true);
+    setState(() => _chargementStats = true);
     try {
-      final headers = await _authHeaders();
-      final res = await http.get(
-        Uri.parse(ApiConstants.historiqueStats),
-        headers: headers,
-      );
-      if (res.statusCode == 200) {
-        setState(() => _stats = Map<String, dynamic>.from(jsonDecode(res.body)));
-      }
-    } catch (_) {}
-    finally {
-      setState(() => _loadingStats = false);
+      final stats = await _repo.stats();
+      if (mounted) setState(() => _stats = stats);
+    } catch (_) {
+    } finally {
+      if (mounted) setState(() => _chargementStats = false);
     }
   }
 
-  // ─── HELPERS ──────────────────────────────────────────────────────────
-
-  Map<String, List<Map<String, dynamic>>> _grouperParDate() {
-    final grouped = <String, List<Map<String, dynamic>>>{};
+  Map<String, List<ActiviteHistorique>> _grouperParDate() {
+    final groupes = <String, List<ActiviteHistorique>>{};
     for (final a in _activites) {
-      final ts = a['timestamp'];
-      if (ts == null) continue;
-      try {
-        final dt = DateTime.parse(ts.toString()).toLocal();
-        final key = _labelDate(dt);
-        grouped.putIfAbsent(key, () => []).add(a);
-      } catch (_) {}
+      if (a.timestamp == null) continue;
+      final cle = _libelleDate(a.timestamp!.toLocal());
+      groupes.putIfAbsent(cle, () => []).add(a);
     }
-    return grouped;
+    return groupes;
   }
 
-  String _labelDate(DateTime dt) {
+  String _libelleDate(DateTime dt) {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final dtDay = DateTime(dt.year, dt.month, dt.day);
     final diff = today.difference(dtDay).inDays;
-
     if (diff == 0) return "Aujourd'hui";
     if (diff == 1) return 'Hier';
     if (diff < 7) return 'Cette semaine';
@@ -192,149 +169,78 @@ class _HistoriquePageState extends State<HistoriquePage> {
     return DateFormat('MMMM yyyy', 'fr_FR').format(dt);
   }
 
-  String _formatTime(String? ts) {
-    if (ts == null) return '';
-    try {
-      final dt = DateTime.parse(ts).toLocal();
-      final now = DateTime.now();
-      final diff = now.difference(dt);
-      if (diff.inMinutes < 1) return 'À l\'instant';
-      if (diff.inMinutes < 60) return 'Il y a ${diff.inMinutes}min';
-      if (diff.inHours < 24) return 'Il y a ${diff.inHours}h';
-      if (diff.inDays < 7) return 'Il y a ${diff.inDays}j';
-      return DateFormat('dd/MM à HH:mm').format(dt);
-    } catch (_) {
-      return '';
-    }
+  String _formaterHeure(DateTime? dt) {
+    if (dt == null) return '';
+    final local = dt.toLocal();
+    final diff = DateTime.now().difference(local);
+    if (diff.inMinutes < 1) return "À l'instant";
+    if (diff.inMinutes < 60) return 'Il y a ${diff.inMinutes}min';
+    if (diff.inHours < 24) return 'Il y a ${diff.inHours}h';
+    if (diff.inDays < 7) return 'Il y a ${diff.inDays}j';
+    return DateFormat('dd/MM à HH:mm').format(local);
   }
 
-  String _formatKey(String key) {
-    final map = {
-      'titre': 'Titre',
-      'nom': 'Nom',
-      'cours': 'Cours',
-      'niveau': 'Niveau',
-      'departement': 'Département',
-      'parcours': 'Parcours',
-      'enseignant': 'Enseignant',
-      'apprenant': 'Apprenant',
-      'devoir': 'Devoir',
-      'lecon': 'Leçon',
-      'module': 'Module',
-      'exercice': 'Exercice',
-      'olympiade': 'Olympiade',
-      'matiere': 'Matière',
-      'edition': 'Édition',
-      'note': 'Note',
-      'note_sur': 'Note sur',
-      'etoiles': 'Étoiles',
-      'ordre': 'Ordre',
-      'participants': 'Participants',
-      'date_limite': 'Date limite',
-      'debut': 'Début',
-      'nb_questions': 'Questions',
-      'color_code': 'Couleur',
-    };
-    return map[key] ?? key.replaceAll('_', ' ');
+  Color _couleurCategorie(BuildContext context, String action) {
+    final tokens = [YkColors.info, YkColors.success, YkColors.warning, YkColors.error, YkColors.accent(context)];
+    return tokens[action.hashCode.abs() % tokens.length];
   }
-
-  // ─── BUILD ────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: YekiColors.backgroundLight,
-      body: SafeArea(
-        child: _loading
-            ? const Center(child: YekiLoader())
-            : _error.isNotEmpty
-                ? _buildErrorState()
-                : _activites.isEmpty
-                    ? _buildEmptyState()
-                    : RefreshIndicator(
-                        onRefresh: _chargerTout,
-                        color: YekiColors.primaryDark,
-                        child: ListView(
-                          padding: const EdgeInsets.only(bottom: 24),
-                          children: [
-                            _buildHeader(),
-                            _buildFilters(),
-                            if (_stats.isNotEmpty && _selectedCategory.isEmpty)
-                              _buildCategoryGrid(),
-                            ..._buildTimeline(),
-                          ],
-                        ),
+      backgroundColor: YkColors.background(context),
+      body: _loading
+          ? Padding(padding: EdgeInsets.all(YkSpacing.md), child: YkSkeleton.list(itemCount: 6))
+          : _erreur != null
+              ? YkEmptyState(icon: Icons.cloud_off_rounded, title: 'Erreur', message: _erreur!, actionLabel: 'Réessayer', onAction: _chargerTout)
+              : _activites.isEmpty
+                  ? _etatVide(context)
+                  : RefreshIndicator(
+                      onRefresh: _chargerTout,
+                      child: ListView(
+                        padding: EdgeInsets.only(bottom: YkSpacing.xl),
+                        children: [
+                          _entete(context),
+                          _filtres(context),
+                          if (_stats.isNotEmpty && _categorieSelectionnee.isEmpty) _repartitionCategories(context),
+                          ..._timelineGroupee(context),
+                        ],
                       ),
-      ),
+                    ),
     );
   }
 
-  // ─── HEADER ───────────────────────────────────────────────────────────
-
-  Widget _buildHeader() {
+  Widget _entete(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Color(0xFF1A5276), YekiColors.primaryDark],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.only(
-          bottomLeft: Radius.circular(24),
-          bottomRight: Radius.circular(24),
-        ),
+      padding: EdgeInsets.fromLTRB(YkSpacing.lg, YkSpacing.md, YkSpacing.lg, YkSpacing.md),
+      decoration: BoxDecoration(
+        color: YkColors.accent(context),
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(YkRadius.xl)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(Icons.history_outlined, color: YekiColors.white.withValues(alpha: 0.7), size: 16),
-              const SizedBox(width: 6),
-              Text(
-                'HISTORIQUE',
-                style: TextStyle(
-                  color: YekiColors.white.withValues(alpha: 0.7),
-                  fontSize: 11,
-                  letterSpacing: 2,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
+              Icon(Icons.history_outlined, color: Colors.white70, size: 16),
+              SizedBox(width: YkSpacing.xxs),
+              Text('HISTORIQUE', style: YkTypography.caption(context).copyWith(color: Colors.white70, letterSpacing: 2)),
               const Spacer(),
-              IconButton(
-                icon: const Icon(Icons.refresh, color: YekiColors.white, size: 20),
-                onPressed: _chargerTout,
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
-              ),
+              IconButton(icon: const Icon(Icons.refresh, color: Colors.white), onPressed: _chargerTout),
             ],
           ),
-          const SizedBox(height: 6),
-          const Text(
-            'Mes activités',
-            style: TextStyle(
-              color: YekiColors.white,
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 12),
-          _loadingStats
-              ? SizedBox(
-                  height: 28,
-                  child: Center(
-                    child: YekiLoader(size: 18, color: YekiColors.white.withValues(alpha: 0.54)),
-                  ),
-                )
+          Text('Mes activités', style: YkTypography.h2(context).copyWith(color: Colors.white)),
+          SizedBox(height: YkSpacing.sm),
+          _chargementStats
+              ? SizedBox(height: 28, child: Center(child: YkProgress(shape: YkProgressShape.circular, size: 18, color: Colors.white)))
               : Row(
                   children: [
-                    _statBadge('${_stats['total'] ?? 0}', 'au total', Icons.timeline),
-                    const SizedBox(width: 10),
-                    _statBadge('${_stats['cette_semaine'] ?? 0}', 'cette semaine', Icons.date_range),
-                    const SizedBox(width: 10),
-                    _statBadge('${_stats['ce_mois'] ?? 0}', 'ce mois', Icons.calendar_month),
+                    _statBadge(context, '${_stats['total'] ?? 0}', 'au total', Icons.timeline),
+                    SizedBox(width: YkSpacing.sm),
+                    _statBadge(context, '${_stats['cette_semaine'] ?? 0}', 'cette semaine', Icons.date_range),
+                    SizedBox(width: YkSpacing.sm),
+                    _statBadge(context, '${_stats['ce_mois'] ?? 0}', 'ce mois', Icons.calendar_month),
                   ],
                 ),
         ],
@@ -342,133 +248,64 @@ class _HistoriquePageState extends State<HistoriquePage> {
     );
   }
 
-  Widget _statBadge(String count, String label, IconData icon) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-        decoration: BoxDecoration(
-          color: YekiColors.white.withValues(alpha: 0.15),
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, color: YekiColors.white, size: 12),
-            const SizedBox(width: 4),
-            Text(
-              '$count $label',
-              style: const TextStyle(
-                color: YekiColors.white,
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-        ),
-      );
-
-  // ─── FILTRES ──────────────────────────────────────────────────────────
-
-  Widget _buildFilters() {
+  Widget _statBadge(BuildContext context, String count, String label, IconData icon) {
     return Container(
-      color: YekiColors.white,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: EdgeInsets.symmetric(horizontal: YkSpacing.sm, vertical: YkSpacing.xxs),
+      decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(YkRadius.full)),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: Colors.white, size: 12),
+          SizedBox(width: YkSpacing.xxs),
+          Text('$count $label', style: YkTypography.caption(context).copyWith(color: Colors.white, fontWeight: FontWeight.w600)),
+        ],
+      ),
+    );
+  }
+
+  Widget _filtres(BuildContext context) {
+    return Container(
+      color: YkColors.surface(context),
+      padding: EdgeInsets.symmetric(horizontal: YkSpacing.sm, vertical: YkSpacing.sm),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Filtres de catégorie
           SizedBox(
             height: 40,
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
-              itemCount: _filters.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 6),
+              itemCount: _categories.length,
+              separatorBuilder: (_, _) => SizedBox(width: YkSpacing.xxs),
               itemBuilder: (_, index) {
-                final f = _filters[index];
-                final isSelected = _selectedCategory == f.key;
-                return GestureDetector(
-                  onTap: () {
-                    setState(() => _selectedCategory = f.key);
+                final cat = _categories[index];
+                final categories = Map<String, dynamic>.from(_stats['categories'] as Map? ?? {});
+                final count = categories[cat.key] as int?;
+                return YkChip(
+                  label: count != null && count > 0 ? '${cat.label} ($count)' : cat.label,
+                  avatar: Icon(cat.icon, size: 14),
+                  variant: YkChipVariant.filter,
+                  selected: _categorieSelectionnee == cat.key,
+                  onPressed: () {
+                    setState(() => _categorieSelectionnee = cat.key);
                     _chargerActivites();
                   },
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: isSelected ? YekiColors.primaryDark : YekiColors.primaryDark.withValues(alpha: 0.07),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                        color: isSelected ? YekiColors.primaryDark : YekiColors.primaryDark.withValues(alpha: 0.2),
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          f.icon,
-                          size: 14,
-                          color: isSelected ? YekiColors.white : YekiColors.primaryDark,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          f.label,
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: isSelected ? YekiColors.white : YekiColors.primaryDark,
-                          ),
-                        ),
-                        if (!_loadingStats &&
-                            f.key.isNotEmpty &&
-                            (_stats['categories'] as Map<String, dynamic>?)?[f.key] != null &&
-                            ((_stats['categories'] as Map<String, dynamic>)[f.key] as int) > 0) ...[
-                          const SizedBox(width: 4),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 5,
-                              vertical: 1,
-                            ),
-                            decoration: BoxDecoration(
-                              color: isSelected ? YekiColors.white.withValues(alpha: 0.3) : YekiColors.primaryDark,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(
-                              '${(_stats['categories'] as Map<String, dynamic>)[f.key]}',
-                              style: TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                                color: isSelected ? YekiColors.white : YekiColors.white,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
                 );
               },
             ),
           ),
-          const SizedBox(height: 6),
-          // Période
+          SizedBox(height: YkSpacing.xs),
           Row(
             children: [
-              const Text(
-                'Période :',
-                style: TextStyle(fontSize: 12, color: YekiColors.textDark),
-              ),
-              const SizedBox(width: 8),
-              _periodeChip('Tout', ''),
-              const SizedBox(width: 4),
-              _periodeChip('7 jours', 'semaine'),
-              const SizedBox(width: 4),
-              _periodeChip('Ce mois', 'mois'),
+              Text('Période :', style: YkTypography.bodySm(context).copyWith(color: YkColors.textPrimary(context))),
+              SizedBox(width: YkSpacing.xs),
+              _periodeChip(context, 'Tout', ''),
+              SizedBox(width: YkSpacing.xxs),
+              _periodeChip(context, '7 jours', 'semaine'),
+              SizedBox(width: YkSpacing.xxs),
+              _periodeChip(context, 'Ce mois', 'mois'),
               const Spacer(),
               if (!_loading)
-                Text(
-                  '${_activites.length} résultat${_activites.length > 1 ? 's' : ''}',
-                  style: const TextStyle(fontSize: 11, color: YekiColors.textLight),
-                ),
+                Text('${_activites.length} résultat${_activites.length > 1 ? 's' : ''}', style: YkTypography.caption(context).copyWith(color: YkColors.textSecondary(context))),
             ],
           ),
         ],
@@ -476,115 +313,45 @@ class _HistoriquePageState extends State<HistoriquePage> {
     );
   }
 
-  Widget _periodeChip(String label, String value) {
-    final isSelected = _selectedPeriode == value;
-    return GestureDetector(
-      onTap: () {
-        setState(() => _selectedPeriode = value);
+  Widget _periodeChip(BuildContext context, String label, String value) {
+    return YkChip(
+      label: label,
+      variant: YkChipVariant.filter,
+      selected: _periodeSelectionnee == value,
+      onPressed: () {
+        setState(() => _periodeSelectionnee = value);
         _chargerActivites();
       },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-        decoration: BoxDecoration(
-          color: isSelected ? YekiColors.textDark : YekiColors.borderLight,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w600,
-            color: isSelected ? YekiColors.white : YekiColors.textLight,
-          ),
-        ),
-      ),
     );
   }
 
-  // ─── CATEGORY GRID ────────────────────────────────────────────────────
-
-  Widget _buildCategoryGrid() {
-    final cats = _stats['categories'] as Map<String, dynamic>? ?? {};
-    final nonZero = cats.entries.where((e) => (e.value as int) > 0).toList();
-    if (nonZero.isEmpty) return const SizedBox();
-
-    final catMeta = {
-      'cours':        {'icon': Icons.book_outlined,         'color': Color(0xFF1565C0), 'label': 'Cours'},
-      'modules':      {'icon': Icons.folder_outlined,       'color': Color(0xFF6A1B9A), 'label': 'Modules'},
-      'lecons':       {'icon': Icons.article_outlined,      'color': Color(0xFF00695C), 'label': 'Leçons'},
-      'devoirs':      {'icon': Icons.assignment_outlined,   'color': Color(0xFF558B2F), 'label': 'Devoirs'},
-      'exercices':    {'icon': Icons.quiz_outlined,         'color': Color(0xFF283593), 'label': 'Exercices'},
-      'olympiades':   {'icon': Icons.emoji_events_outlined, 'color': Color(0xFFBF360C), 'label': 'Olympiades'},
-      'enseignants':  {'icon': Icons.people_outlined,       'color': Color(0xFFE65100), 'label': 'Enseignants'},
-      'departements': {'icon': Icons.domain_outlined,       'color': Color(0xFF006064), 'label': 'Dépts'},
-      'corrections':  {'icon': Icons.grading_outlined,      'color': Color(0xFF2E7D32), 'label': 'Corrections'},
-    };
+  Widget _repartitionCategories(BuildContext context) {
+    final categories = Map<String, dynamic>.from(_stats['categories'] as Map? ?? {});
+    final nonZero = categories.entries.where((e) => (e.value as int) > 0).toList();
+    if (nonZero.isEmpty) return const SizedBox.shrink();
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: YekiColors.white,
-          borderRadius: BorderRadius.circular(24),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.04),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
+      padding: EdgeInsets.all(YkSpacing.md),
+      child: YkCard(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Répartition de vos activités',
-              style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: YekiColors.textDark),
-            ),
-            const SizedBox(height: 12),
+            Text('Répartition de vos activités', style: YkTypography.label(context).copyWith(color: YkColors.textPrimary(context))),
+            SizedBox(height: YkSpacing.sm),
             Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: nonZero.map((entry) {
-                final meta = catMeta[entry.key] ?? {'icon': Icons.circle, 'color': YekiColors.textLight, 'label': entry.key};
-                final color = meta['color'] as Color;
-                final icon = meta['icon'] as IconData;
-                final label = meta['label'] as String;
-                final count = entry.value as int;
-
-                return GestureDetector(
-                  onTap: () {
-                    setState(() => _selectedCategory = entry.key);
-                    _chargerActivites();
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-                    decoration: BoxDecoration(
-                      color: color.withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: color.withValues(alpha: 0.25)),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(icon, color: color, size: 14),
-                        const SizedBox(width: 5),
-                        Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: color)),
-                        const SizedBox(width: 5),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                          decoration: BoxDecoration(
-                            color: color,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text('$count', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: YekiColors.white)),
-                        ),
-                      ],
-                    ),
+              spacing: YkSpacing.xs,
+              runSpacing: YkSpacing.xs,
+              children: [
+                for (final entry in nonZero)
+                  YkChip(
+                    label: '${_categories.firstWhere((c) => c.key == entry.key, orElse: () => _categories.first).label} (${entry.value})',
+                    avatar: Icon(_categories.firstWhere((c) => c.key == entry.key, orElse: () => _categories.first).icon, size: 14),
+                    onPressed: () {
+                      setState(() => _categorieSelectionnee = entry.key);
+                      _chargerActivites();
+                    },
                   ),
-                );
-              }).toList(),
+              ],
             ),
           ],
         ),
@@ -592,274 +359,67 @@ class _HistoriquePageState extends State<HistoriquePage> {
     );
   }
 
-  // ─── TIMELINE ──────────────────────────────────────────────────────────
-
-  List<Widget> _buildTimeline() {
-    final grouped = _grouperParDate();
-    final List<Widget> widgets = [];
-
-    for (final entry in grouped.entries) {
-      widgets.add(_buildDateHeader(entry.key));
-      for (int i = 0; i < entry.value.length; i++) {
-        widgets.add(_buildTimelineItem(entry.value[i], i, entry.value.length));
-      }
+  List<Widget> _timelineGroupee(BuildContext context) {
+    final groupes = _grouperParDate();
+    final widgets = <Widget>[];
+    for (final entry in groupes.entries) {
+      widgets.add(_enteteDate(context, entry.key));
+      widgets.add(
+        Padding(
+          padding: EdgeInsets.symmetric(horizontal: YkSpacing.md),
+          child: YkTimeline(
+            entries: [
+              for (final activite in entry.value)
+                YkTimelineEntry(
+                  title: activite.label,
+                  subtitle: _sousTitre(activite),
+                  time: _formaterHeure(activite.timestamp),
+                  icon: _iconesAction[activite.action] ?? Icons.history,
+                  color: _couleurCategorie(context, activite.action),
+                ),
+            ],
+          ),
+        ),
+      );
     }
-
     return widgets;
   }
 
-  Widget _buildDateHeader(String label) => Padding(
-        padding: const EdgeInsets.only(top: 16, left: 14, right: 14, bottom: 8),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: YekiColors.primaryDark.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Text(
-                label,
-                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: YekiColors.primaryDark),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Container(
-                height: 1,
-                color: YekiColors.borderLight,
-              ),
-            ),
-          ],
-        ),
-      );
+  String? _sousTitre(ActiviteHistorique activite) {
+    final lignes = <String>[];
+    if (activite.description.isNotEmpty) lignes.add(activite.description);
+    for (final e in activite.data.entries) {
+      lignes.add('${_libellesChamps[e.key] ?? e.key.replaceAll('_', ' ')} : ${e.value ?? '—'}');
+    }
+    return lignes.isEmpty ? null : lignes.join('\n');
+  }
 
-  Widget _buildTimelineItem(Map<String, dynamic> activite, int index, int total) {
-    final action = activite['action']?.toString() ?? '';
-    final label = activite['action_label']?.toString() ?? _getMeta(action)['label'] ?? action;
-    final description = activite['description']?.toString() ?? '';
-    final ts = activite['timestamp']?.toString();
-    final data = (activite['data'] as Map<String, dynamic>?) ?? {};
-    final meta = _getMeta(action);
-    final color = meta['color'] as Color;
-    final icon = meta['icon'] as IconData;
-
-    final bool isLast = index == total - 1;
-
+  Widget _enteteDate(BuildContext context, String label) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 14),
+      padding: EdgeInsets.fromLTRB(YkSpacing.md, YkSpacing.md, YkSpacing.md, YkSpacing.xs),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── Barre verticale ────────────────────────────────────
-          SizedBox(
-            width: 40,
-            child: Column(
-              children: [
-                Container(
-                  width: 14,
-                  height: 14,
-                  decoration: BoxDecoration(
-                    color: color,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: YekiColors.white, width: 2),
-                    boxShadow: [
-                      BoxShadow(
-                        color: color.withValues(alpha: 0.3),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                ),
-                if (!isLast)
-                  Container(
-                    width: 2,
-                    height: 30,
-                    color: color.withValues(alpha: 0.2),
-                  ),
-              ],
-            ),
-          ),
-          // ── Contenu ────────────────────────────────────────────
-          Expanded(
-            child: Container(
-              margin: const EdgeInsets.only(left: 8, bottom: 16),
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: YekiColors.white,
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(color: YekiColors.borderLight, width: 1),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.03),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: color.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Icon(icon, color: color, size: 18),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              label,
-                              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: YekiColors.textDark),
-                            ),
-                            if (description.isNotEmpty) ...[
-                              const SizedBox(height: 4),
-                              Text(
-                                description,
-                                style: const TextStyle(fontSize: 12, color: YekiColors.textMedium),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ],
-                            const SizedBox(height: 6),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                              decoration: BoxDecoration(
-                                color: color.withValues(alpha: 0.08),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Text(
-                                _formatTime(ts),
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w500,
-                                  color: color.withValues(alpha: 0.8),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  if (data.isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    Container(
-                      height: 1,
-                      color: YekiColors.borderLight,
-                    ),
-                    const SizedBox(height: 8),
-                    ...data.entries.map(
-                      (e) => Padding(
-                        padding: const EdgeInsets.only(bottom: 4),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            SizedBox(
-                              width: 100,
-                              child: Text(
-                                _formatKey(e.key),
-                                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: YekiColors.textMedium),
-                              ),
-                            ),
-                            Expanded(
-                              child: Text(
-                                e.value?.toString() ?? '—',
-                                style: const TextStyle(fontSize: 11, color: YekiColors.textDark),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ),
+          YkBadge(variant: YkBadgeVariant.label, label: label, color: YkColors.accent(context)),
+          SizedBox(width: YkSpacing.xs),
+          Expanded(child: Divider(color: YkColors.border(context))),
         ],
       ),
     );
   }
 
-  // ─── ETATS VIDES ──────────────────────────────────────────────────────
-
-  Widget _buildEmptyState() {
-    final filter = _filters.firstWhere(
-      (f) => f.key == _selectedCategory,
-      orElse: () => const _HFilter(key: '', label: 'Tout', icon: Icons.apps),
-    );
-
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(40),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: YekiColors.primaryDark.withValues(alpha: 0.07),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(filter.icon, size: 48, color: YekiColors.primaryDark.withValues(alpha: 0.4)),
-            ),
-            const SizedBox(height: 20),
-            Text(
-              _selectedCategory.isEmpty
-                  ? 'Aucune activité enregistrée'
-                  : 'Aucune activité "${filter.label}"',
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: YekiColors.textDark),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              _selectedCategory.isEmpty
-                  ? 'Vos actions apparaîtront ici\nau fur et à mesure.'
-                  : 'Essayez un autre filtre.',
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 13, color: YekiColors.textMedium),
-            ),
-            if (_selectedCategory.isNotEmpty) ...[
-              const SizedBox(height: 16),
-              TextButton.icon(
-                onPressed: () {
-                  setState(() => _selectedCategory = '');
-                  _chargerActivites();
-                },
-                icon: const Icon(Icons.clear_all, color: YekiColors.primaryDark),
-                label: const Text('Voir tout l\'historique', style: TextStyle(color: YekiColors.primaryDark)),
-              ),
-            ],
-          ],
-        ),
-      ),
+  Widget _etatVide(BuildContext context) {
+    final filtre = _categories.firstWhere((c) => c.key == _categorieSelectionnee, orElse: () => _categories.first);
+    return YkEmptyState(
+      icon: filtre.icon,
+      title: _categorieSelectionnee.isEmpty ? 'Aucune activité enregistrée' : 'Aucune activité "${filtre.label}"',
+      message: _categorieSelectionnee.isEmpty ? 'Vos actions apparaîtront ici au fur et à mesure.' : 'Essayez un autre filtre.',
+      actionLabel: _categorieSelectionnee.isNotEmpty ? "Voir tout l'historique" : null,
+      onAction: _categorieSelectionnee.isNotEmpty
+          ? () {
+              setState(() => _categorieSelectionnee = '');
+              _chargerActivites();
+            }
+          : null,
     );
   }
-
-  Widget _buildErrorState() => Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.cloud_off, size: 48, color: YekiColors.borderLight),
-            const SizedBox(height: 16),
-            Text(_error, style: const TextStyle(color: YekiColors.textDark)),
-            const SizedBox(height: 16),
-            YekiButton(
-              label: 'Réessayer',
-              icon: Icons.refresh,
-              onPressed: _chargerTout,
-              width: 160,
-            ),
-          ],
-        ),
-      );
 }

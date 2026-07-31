@@ -6,9 +6,10 @@
 import 'dart:io';
 import 'dart:async';
 import 'package:flutter/foundation.dart' show kIsWeb, VoidCallback;
-import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:open_file/open_file.dart';
+import 'package:yeki/core/network/api_client.dart';
+import 'package:yeki/services/offline_encryption_service.dart';
 
 enum DownloadStatus {
   notDownloaded,
@@ -113,42 +114,46 @@ class DownloadManager {
     try {
       final dirPath = await _getDownloadDirectory();
       final filePath = '$dirPath/${_sanitizeFileName(fileName)}';
-      final file = File(filePath);
+      // Téléchargement en clair vers un fichier temporaire — le flux
+      // chunk par chunk est conservé tel quel (pas de régression mémoire
+      // pendant le téléchargement) ; seul le fichier FINAL conservé sur
+      // disque est chiffré (P12.3).
+      final tmpFile = File('$filePath.tmp');
 
-      final request = http.Request('GET', Uri.parse(url));
-      final response = await request.send();
+      final response = await ApiClient().downloadStream(url);
+      final totalBytes = int.tryParse(response.headers.value('content-length') ?? '');
+      var receivedBytes = 0;
+      final sink = tmpFile.openWrite();
 
-      if (response.statusCode == 200) {
-        final totalBytes = response.contentLength;
-        var receivedBytes = 0;
-        final sink = file.openWrite();
-
-        await for (final chunk in response.stream) {
-          if (cancelToken.isCancelled) {
-            await sink.close();
-            await file.delete();
-            controller?.addError('Annulé');
-            return;
-          }
-
-          sink.add(chunk);
-          receivedBytes += chunk.length;
-          if (totalBytes != null && totalBytes > 0) {
-            final progress = receivedBytes / totalBytes;
-            controller?.add(progress);
-          }
+      await for (final chunk in response.data!.stream) {
+        if (cancelToken.isCancelled) {
+          await sink.close();
+          await tmpFile.delete();
+          controller?.addError('Annulé');
+          return;
         }
-        await sink.close();
 
-        _downloadPaths[fileId] = filePath;
-        controller?.add(1.0);
-        controller?.close();
-        _progressControllers.remove(fileId);
-        _cancelTokens.remove(fileId);
-        onComplete?.call();
-      } else {
-        throw Exception('HTTP ${response.statusCode}');
+        sink.add(chunk);
+        receivedBytes += chunk.length;
+        if (totalBytes != null && totalBytes > 0) {
+          final progress = receivedBytes / totalBytes;
+          controller?.add(progress);
+        }
       }
+      await sink.close();
+
+      // Chiffrement (P12.3) — le clair n'existe plus que le temps de ce
+      // passage ; ce qui reste sur disque est le fichier chiffré.
+      final octetsClairs = await tmpFile.readAsBytes();
+      await OfflineEncryptionService.encryptBytesToFile(octetsClairs, filePath);
+      await tmpFile.delete();
+
+      _downloadPaths[fileId] = filePath;
+      controller?.add(1.0);
+      controller?.close();
+      _progressControllers.remove(fileId);
+      _cancelTokens.remove(fileId);
+      onComplete?.call();
     } catch (e) {
       controller?.addError(e.toString());
       controller?.close();
@@ -181,12 +186,38 @@ class DownloadManager {
     _progressControllers.remove(fileId);
   }
 
+  /// Ouvre le fichier téléchargé avec une application externe
+  /// (`OpenFile.open`) — le fichier conservé sur disque est chiffré
+  /// (P12.3), donc déchiffré vers un fichier temporaire avant ouverture.
+  /// Limite assumée : `OpenFile.open` ne renvoie aucun signal de fin de
+  /// lecture côté application externe, donc ce fichier temporaire déchiffré
+  /// ne peut pas être supprimé de façon fiable après usage (même limite
+  /// que le fichier de mise à jour téléchargé en P12.1, qui persiste lui
+  /// aussi dans un dossier durable une fois ouvert).
   Future<void> openDownloadedFile(String fileId) async {
     if (kIsWeb) return;
     final path = _downloadPaths[fileId];
     if (path != null && await File(path).exists()) {
-      await OpenFile.open(path);
+      final fichierTemp = await OfflineEncryptionService.decryptToTempFile(
+        path,
+        _sanitizeFileName('open_$fileId'),
+      );
+      await OpenFile.open(fichierTemp.path);
     }
+  }
+
+  /// Déchiffre le fichier téléchargé vers un fichier temporaire, pour un
+  /// lecteur (PDF/vidéo) que l'appelant contrôle directement — à
+  /// supprimer par l'appelant une fois la lecture terminée (le clair ne
+  /// doit exister que le temps de la lecture).
+  Future<File?> openForPlayback(String fileId) async {
+    if (kIsWeb) return null;
+    final path = _downloadPaths[fileId];
+    if (path == null || !await File(path).exists()) return null;
+    return OfflineEncryptionService.decryptToTempFile(
+      path,
+      _sanitizeFileName('play_$fileId'),
+    );
   }
 
   String _sanitizeFileName(String fileName) {

@@ -1,49 +1,42 @@
 // lib/views/pages/apprenants/forum_page.dart
-// ═══════════════════════════════════════════════════════════════════════════
-// YEKI FORUM PAGE — Design Unifié Premium
-// Version complète et fonctionnelle avec corrections
-// ═══════════════════════════════════════════════════════════════════════════
+//
+// Refondu en P10.5 (migration mécanique, rituel P5.0) : bascule vers
+// `ForumRepository` (plus de `http`/`SharedPreferences`/`dart:convert`
+// bruts) et vers les tokens/composants `Yk*` (plus de `YekiColors`/
+// `YekiRadius`/`YekiShadows`/`YekiTextStyles`/`YekiButton`/`YekiLoader`,
+// dépréciés). Structure et comportement inchangés — migration mécanique,
+// pas une réinvention visuelle (décision explicite, vu le volume et le
+// risque de régression sans QA visuelle possible).
+//
+// Corrections apportées au passage (bugs confirmés, pas des choix de
+// design) :
+// - `_loadQuestions()` castait directement l'enveloppe paginée du
+//   backend (`{count, next, previous, results}`) en `List` — corrigé À LA
+//   SOURCE dans `ForumRepository.listQuestions()`.
+// - `ApiConstants.forumRealtimeEnabled` (actuellement `false`) n'était
+//   JAMAIS consulté : le sondage 8 s tournait inconditionnellement malgré
+//   le drapeau. Câblé ici — le sondage ne démarre que si le drapeau est à
+//   `true`.
+// - `_selectedImage`/`_selectedAudio` passent de `File` (dart:io) à
+//   `Uint8List` : `File` plante sur le web (voir `YkPickedFile` dans
+//   `yk_file_upload.dart`), même bug déjà corrigé ailleurs.
 
 import 'dart:async';
-import 'dart:convert';
-import 'dart:io';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timeago/timeago.dart' as timeago;
-import 'package:yeki/core/router/route_names.dart';
-import 'package:yeki/core/theme/app_theme.dart';
+
 import 'package:yeki/core/constants/api_constants.dart';
+import 'package:yeki/core/design/components/components.dart';
+import 'package:yeki/core/design/tokens/tokens.dart';
+import 'package:yeki/core/router/route_names.dart';
+import 'package:yeki/repositories/forum_repository.dart';
 import 'package:yeki/utils/error_handler.dart';
-import 'package:audioplayers/audioplayers.dart';
-
-const Map<String, Color> _srcColor = {
-  'lecon': YekiColors.info,
-  'exercice': YekiColors.purple,
-  'devoir': YekiColors.warning,
-  'libre': YekiColors.success,
-};
-
-const Map<String, IconData> _srcIcon = {
-  'lecon': Icons.play_lesson_rounded,
-  'exercice': Icons.edit_note_rounded,
-  'devoir': Icons.assignment_rounded,
-  'libre': Icons.chat_bubble_outline_rounded,
-};
-
-const Map<String, String> _srcLabel = {
-  'lecon': 'Leçon',
-  'exercice': 'Exercice',
-  'devoir': 'Devoir',
-  'libre': 'Libre',
-};
-
-Future<String?> _getToken() async {
-  final prefs = await SharedPreferences.getInstance();
-  return prefs.getString('token');
-}
+import 'package:yeki/widgets/forum_audio_player.dart';
+import 'package:yeki/widgets/forum_style.dart';
 
 String _formatTimeAgo(String iso) {
   try {
@@ -59,173 +52,6 @@ String _getInitials(String nom, String username) {
   final parts = n.trim().split(' ');
   if (parts.length >= 2) return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
   return n[0].toUpperCase();
-}
-
-// ════════════════════════════════════════════════════════════
-// LECTEUR AUDIO AMÉLIORÉ - VERSION CORRIGÉE (sans onPlayerError)
-// ════════════════════════════════════════════════════════════
-class ForumAudioPlayer extends StatefulWidget {
-  final String audioUrl;
-  const ForumAudioPlayer({super.key, required this.audioUrl});
-  @override
-  State<ForumAudioPlayer> createState() => _ForumAudioPlayerState();
-}
-
-class _ForumAudioPlayerState extends State<ForumAudioPlayer> {
-  final AudioPlayer _audioPlayer = AudioPlayer();
-  bool _isPlaying = false;
-  bool _isLoading = false;
-  Duration _position = Duration.zero;
-  Duration _duration = Duration.zero;
-
-  @override
-  void initState() {
-    super.initState();
-    _initAudioPlayer();
-  }
-
-  Future<void> _initAudioPlayer() async {
-    try {
-      // Écouter les changements d'état
-      _audioPlayer.onPlayerStateChanged.listen((state) {
-        if (mounted) {
-          setState(() {
-            _isPlaying = state == PlayerState.playing;
-          });
-        }
-      });
-      
-      // Écouter les changements de position
-      _audioPlayer.onPositionChanged.listen((position) {
-        if (mounted) {
-          setState(() {
-            _position = position;
-          });
-        }
-      });
-      
-      // Écouter les changements de durée
-      _audioPlayer.onDurationChanged.listen((duration) {
-        if (mounted) {
-          setState(() {
-            _duration = duration;
-          });
-        }
-      });
-      
-      // Écouter la fin de lecture
-      _audioPlayer.onPlayerComplete.listen((event) {
-        if (mounted) {
-          setState(() {
-            _isPlaying = false;
-            _position = Duration.zero;
-          });
-        }
-      });
-      
-      // La gestion des erreurs se fait via try-catch dans les opérations
-    } catch (e) {
-      debugPrint('Erreur initialisation audio: $e');
-    }
-  }
-
-  Future<void> _togglePlay() async {
-    try {
-      if (_isPlaying) {
-        await _audioPlayer.pause();
-      } else {
-        if (_position == Duration.zero) {
-          setState(() => _isLoading = true);
-          try {
-            // Utiliser setSourceUrl (remplace setUrl déprécié)
-            await _audioPlayer.setSourceUrl(widget.audioUrl);
-          } catch (e) {
-            debugPrint('Erreur setSourceUrl: $e');
-            if (mounted) {
-              ErrorHandler.showError(context, 'Erreur de chargement audio');
-            }
-            setState(() => _isLoading = false);
-            return;
-          }
-          setState(() => _isLoading = false);
-        }
-        await _audioPlayer.resume();
-      }
-    } catch (e) {
-      debugPrint('Erreur lecture audio: $e');
-      if (mounted) {
-        ErrorHandler.showError(context, 'Erreur de lecture audio');
-        setState(() {
-          _isLoading = false;
-          _isPlaying = false;
-        });
-      }
-    }
-  }
-
-  @override
-  void dispose() {
-    _audioPlayer.dispose();
-    super.dispose();
-  }
-
-  String _formatDuration(Duration duration) {
-    String twoDigits(int n) => n.toString().padLeft(2, '0');
-    String twoDigitMinutes = twoDigits(duration.inMinutes.remainder(60));
-    String twoDigitSeconds = twoDigits(duration.inSeconds.remainder(60));
-    return '$twoDigitMinutes:$twoDigitSeconds';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        GestureDetector(
-          onTap: _isLoading ? null : _togglePlay,
-          child: _isLoading
-              ? const SizedBox(
-                  width: 32,
-                  height: 32,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : Icon(
-                  _isPlaying ? Icons.pause_circle_filled : Icons.play_circle_filled,
-                  color: YekiColors.purple,
-                  size: 32,
-                ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            children: [
-              LinearProgressIndicator(
-                value: _duration.inSeconds > 0
-                    ? _position.inSeconds / _duration.inSeconds
-                    : 0.0,
-                backgroundColor: YekiColors.borderLight,
-                valueColor: const AlwaysStoppedAnimation<Color>(YekiColors.purple),
-                minHeight: 3,
-              ),
-              const SizedBox(height: 4),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    _formatDuration(_position),
-                    style: const TextStyle(fontSize: 10, color: YekiColors.textLight),
-                  ),
-                  Text(
-                    _formatDuration(_duration),
-                    style: const TextStyle(fontSize: 10, color: YekiColors.textLight),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
 }
 
 // ════════════════════════════════════════════════════════════
@@ -268,30 +94,28 @@ class QForum {
   });
 
   factory QForum.fromJson(Map<String, dynamic> j) => QForum(
-        id: j['id'],
-        contenu: j['contenu'] ?? '',
-        source: j['source'] ?? 'libre',
-        creeLe: j['cree_le'] ?? '',
-        estResolue: j['est_resolue'] ?? false,
-        nbVues: j['nb_vues'] ?? 0,
-        nbReponses: j['nb_reponses'] ?? 0,
-        auteurNom: j['auteur_nom'] ?? '',
-        auteurUsername: j['auteur_username'] ?? '',
-        auteurEstEnseignant: j['auteur_est_enseignant'] ?? false,
-        leconId: j['lecon_id'],
-        leconTitre: j['lecon_titre'] ?? '',
-        coursId: j['cours_id'],
-        coursTitre: j['cours_titre'] ?? '',
-        exerciceId: j['exercice_id'],
-        exerciceTitre: j['exercice_titre'] ?? '',
-        devoirId: j['devoir_id'],
-        devoirTitre: j['devoir_titre'] ?? '',
-        imageUrl: j['image_url'] as String?,
-        audioUrl: j['audio_url'] as String?,
-        reponses: (j['reponses'] as List? ?? [])
-            .map((r) => RepForum.fromJson(r))
-            .toList(),
-      );
+    id: j['id'],
+    contenu: j['contenu'] ?? '',
+    source: j['source'] ?? 'libre',
+    creeLe: j['cree_le'] ?? '',
+    estResolue: j['est_resolue'] ?? false,
+    nbVues: j['nb_vues'] ?? 0,
+    nbReponses: j['nb_reponses'] ?? 0,
+    auteurNom: j['auteur_nom'] ?? '',
+    auteurUsername: j['auteur_username'] ?? '',
+    auteurEstEnseignant: j['auteur_est_enseignant'] ?? false,
+    leconId: j['lecon_id'],
+    leconTitre: j['lecon_titre'] ?? '',
+    coursId: j['cours_id'],
+    coursTitre: j['cours_titre'] ?? '',
+    exerciceId: j['exercice_id'],
+    exerciceTitre: j['exercice_titre'] ?? '',
+    devoirId: j['devoir_id'],
+    devoirTitre: j['devoir_titre'] ?? '',
+    imageUrl: j['image_url'] as String?,
+    audioUrl: j['audio_url'] as String?,
+    reponses: (j['reponses'] as List? ?? []).map((r) => RepForum.fromJson(r)).toList(),
+  );
 
   String get contexteLabel {
     switch (source) {
@@ -333,18 +157,18 @@ class RepForum {
   });
 
   factory RepForum.fromJson(Map<String, dynamic> j) => RepForum(
-        id: j['id'],
-        contenu: j['contenu'] ?? '',
-        creeLe: j['cree_le'] ?? '',
-        estSolution: j['est_solution'] ?? false,
-        auteurNom: j['auteur_nom'] ?? '',
-        auteurUsername: j['auteur_username'] ?? '',
-        auteurEstEnseignant: j['auteur_est_enseignant'] ?? false,
-        nbLikes: j['nb_likes'] ?? 0,
-        monLike: j['mon_like'] ?? false,
-        imageUrl: j['image_url'] as String?,
-        audioUrl: j['audio_url'] as String?,
-      );
+    id: j['id'],
+    contenu: j['contenu'] ?? '',
+    creeLe: j['cree_le'] ?? '',
+    estSolution: j['est_solution'] ?? false,
+    auteurNom: j['auteur_nom'] ?? '',
+    auteurUsername: j['auteur_username'] ?? '',
+    auteurEstEnseignant: j['auteur_est_enseignant'] ?? false,
+    nbLikes: j['nb_likes'] ?? 0,
+    monLike: j['mon_like'] ?? false,
+    imageUrl: j['image_url'] as String?,
+    audioUrl: j['audio_url'] as String?,
+  );
 }
 
 // ════════════════════════════════════════════════════════════
@@ -384,8 +208,8 @@ class ForumPage extends StatefulWidget {
   State<ForumPage> createState() => _ForumPageState();
 }
 
-class _ForumPageState extends State<ForumPage>
-    with TickerProviderStateMixin, WidgetsBindingObserver {
+class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin, WidgetsBindingObserver {
+  final _repo = ForumRepository();
   bool _loading = true;
   List<QForum> _questions = [];
   String _sourceFiltre = 'tous';
@@ -398,11 +222,13 @@ class _ForumPageState extends State<ForumPage>
   final _composerCtrl = TextEditingController();
   bool _sending = false;
   String _composerSource = 'libre';
-  File? _selectedImage;
-  File? _selectedAudio;
   final ImagePicker _picker = ImagePicker();
+  Uint8List? _selectedImageBytes;
+  Uint8List? _selectedAudioBytes;
+  String? _selectedAudioNom;
 
-  Color get _accentColor => widget.coursColor != null ? Color(widget.coursColor!) : YekiColors.primaryDark;
+  Color _accentColor(BuildContext context) =>
+      widget.coursColor != null ? Color(widget.coursColor!) : YkColors.accent(context);
 
   @override
   void initState() {
@@ -433,10 +259,14 @@ class _ForumPageState extends State<ForumPage>
 
   // ── Sondage temps réel (repli WebSocket) ───────────────────────────────
   // PythonAnywhere ne supporte pas les WebSockets (voir
-  // docs/FORUM_TEMPS_REEL.md) : ce sondage ne tourne JAMAIS en arrière-plan,
-  // uniquement pendant que cet écran est visible.
+  // docs/FORUM_TEMPS_REEL.md) : ce sondage ne tourne JAMAIS en arrière-plan
+  // (uniquement pendant que cet écran est visible), et ne démarre QUE
+  // derrière `ApiConstants.forumRealtimeEnabled` (`false` par défaut
+  // aujourd'hui — le drapeau existait mais n'était jamais consulté ici,
+  // corrigé en P10.5).
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (!ApiConstants.forumRealtimeEnabled) return;
     if (state == AppLifecycleState.resumed) {
       _demarrerSondage();
       _sonderActivite();
@@ -446,6 +276,7 @@ class _ForumPageState extends State<ForumPage>
   }
 
   void _demarrerSondage() {
+    if (!ApiConstants.forumRealtimeEnabled) return;
     _poll?.cancel();
     _dernierSondage ??= DateTime.now();
     _poll = Timer.periodic(const Duration(seconds: 8), (_) => _sonderActivite());
@@ -453,22 +284,15 @@ class _ForumPageState extends State<ForumPage>
 
   String get _room => widget.preoccupationCoursId?.toString() ?? 'global';
 
-  /// Sondage léger et incrémental (?since=) : ne redemande la liste complète
-  /// que si une activité réelle est détectée depuis le dernier passage.
+  /// Sondage léger et incrémental (`?since=`) : ne redemande la liste
+  /// complète que si une activité réelle est détectée depuis le dernier
+  /// passage.
   Future<void> _sonderActivite() async {
-    final token = await _getToken();
-    if (token == null) return;
     final since = _dernierSondage;
     final maintenant = DateTime.now();
     try {
-      final uri = Uri.parse(ApiConstants.forumMessages(_room)).replace(
-        queryParameters:
-            since != null ? {'since': since.toUtc().toIso8601String()} : null,
-      );
-      final response = await http.get(uri, headers: ApiHeaders.auth(token));
+      final data = await _repo.sonderActivite(_room, since: since);
       _dernierSondage = maintenant;
-      if (response.statusCode != 200) return;
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
       final nouvellesQuestions = (data['nouvelles_questions'] as List?) ?? const [];
       final reponsesRecentesIds = (data['reponses_recentes_ids'] as List?) ?? const [];
       if (nouvellesQuestions.isNotEmpty || reponsesRecentesIds.isNotEmpty) {
@@ -481,44 +305,28 @@ class _ForumPageState extends State<ForumPage>
 
   Future<void> _loadQuestions({bool silent = false}) async {
     if (!silent && mounted) setState(() => _loading = true);
-    final token = await _getToken();
-    if (token == null) {
-      if (!silent && mounted) setState(() => _loading = false);
-      return;
-    }
-
     try {
-      final params = <String, String>{};
-      if (_sourceFiltre != 'tous') params['source'] = _sourceFiltre;
-      if (widget.preoccupationCoursId != null) params['cours_id'] = widget.preoccupationCoursId.toString();
-
-      final uri = Uri.parse(ApiConstants.forumQuestions).replace(queryParameters: params.isNotEmpty ? params : null);
-      final response = await http.get(uri, headers: ApiHeaders.auth(token));
-
-      if (response.statusCode == 200) {
-        final List<dynamic> data = jsonDecode(response.body);
-        final List<QForum> questions = data.map((j) => QForum.fromJson(j as Map<String, dynamic>)).toList();
-
-        if (mounted) {
-          setState(() {
-            _questions = questions;
-            _loading = false;
-          });
-        }
-      } else {
-        if (!silent && mounted) setState(() => _loading = false);
-      }
+      final data = await _repo.listQuestions(
+        source: _sourceFiltre,
+        coursId: widget.preoccupationCoursId,
+      );
+      if (!mounted) return;
+      setState(() {
+        _questions = data.map((j) => QForum.fromJson(j)).toList();
+        _loading = false;
+      });
     } catch (e) {
       if (!silent && mounted) setState(() => _loading = false);
-      if (!silent) {
-        debugPrint('Erreur chargement questions: $e');
-      }
+      if (!silent) debugPrint('Erreur chargement questions: $e');
     }
   }
 
   Future<void> _pickImage() async {
     final XFile? picked = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 70);
-    if (picked != null && mounted) setState(() => _selectedImage = File(picked.path));
+    if (picked != null && mounted) {
+      final bytes = await picked.readAsBytes();
+      setState(() => _selectedImageBytes = bytes);
+    }
   }
 
   Future<void> _pickAudio() async {
@@ -526,37 +334,38 @@ class _ForumPageState extends State<ForumPage>
     if (picked != null && mounted) {
       final ext = picked.path.split('.').last.toLowerCase();
       if (ext == 'mp3' || ext == 'm4a' || ext == 'wav' || ext == 'aac') {
-        setState(() => _selectedAudio = File(picked.path));
+        final bytes = await picked.readAsBytes();
+        setState(() {
+          _selectedAudioBytes = bytes;
+          _selectedAudioNom = picked.name;
+        });
       } else {
         ErrorHandler.showError(context, 'Format audio non supporté');
       }
     }
   }
 
-  void _removeImage() => setState(() => _selectedImage = null);
-  void _removeAudio() => setState(() => _selectedAudio = null);
+  void _removeImage() => setState(() => _selectedImageBytes = null);
+  void _removeAudio() => setState(() {
+    _selectedAudioBytes = null;
+    _selectedAudioNom = null;
+  });
 
   void _navigateToSource(QForum q) {
     if (q.source == 'lecon' && q.leconId != null && q.coursId != null) {
       context.pushNamed(
         AppRoute.leconLecture,
-        pathParameters: {
-          'leconId': q.leconId!.toString(),
-          'coursId': q.coursId!.toString(),
-        },
+        pathParameters: {'leconId': q.leconId!.toString(), 'coursId': q.coursId!.toString()},
         queryParameters: {
           'coursTitre': q.coursTitre,
-          'coursColor': (widget.coursColor ?? _accentColor.value).toString(),
+          'coursColor': (widget.coursColor ?? _accentColor(context).toARGB32()).toString(),
         },
       );
     } else if (q.source == 'exercice' && q.exerciceId != null && q.coursId != null) {
       context.pushNamed(
         AppRoute.exercicePasser,
         pathParameters: {'exerciceId': q.exerciceId!.toString()},
-        queryParameters: {
-          'coursId': q.coursId!.toString(),
-          'coursTitre': q.coursTitre,
-        },
+        queryParameters: {'coursId': q.coursId!.toString(), 'coursTitre': q.coursTitre},
       );
     } else if (q.source == 'devoir' && q.devoirId != null && q.coursId != null) {
       context.pushNamed(
@@ -573,81 +382,39 @@ class _ForumPageState extends State<ForumPage>
 
   Future<void> _envoyerQuestion() async {
     final texte = _composerCtrl.text.trim();
-    if (texte.isEmpty && _selectedImage == null && _selectedAudio == null) {
+    if (texte.isEmpty && _selectedImageBytes == null && _selectedAudioBytes == null) {
       ErrorHandler.showError(context, 'Veuillez écrire une question, ajouter une image ou un audio.');
       return;
     }
 
     setState(() => _sending = true);
-    final token = await _getToken();
-    if (token == null) {
-      setState(() => _sending = false);
-      ErrorHandler.showError(context, 'Vous devez être connecté.');
-      return;
-    }
-
-    final request = http.MultipartRequest('POST', Uri.parse(ApiConstants.forumQuestions));
-    request.headers['Authorization'] = 'Token $token';
-    request.fields['contenu'] = texte.isEmpty ? '[Message avec média]' : texte;
-    request.fields['source'] = _composerSource;
-    if (widget.preoccupationCoursId != null) {
-      request.fields['cours_id'] = widget.preoccupationCoursId.toString();
-      request.fields['cours_titre'] = widget.preoccupationCoursTitre ?? '';
-    }
-    if (widget.preoccupationLeconId != null) {
-      request.fields['lecon_id'] = widget.preoccupationLeconId.toString();
-      request.fields['lecon_titre'] = widget.preoccupationLeconTitre ?? '';
-    }
-    if (widget.preoccupationExerciceId != null) {
-      request.fields['exercice_id'] = widget.preoccupationExerciceId.toString();
-      request.fields['exercice_titre'] = widget.preoccupationExerciceTitre ?? '';
-    }
-    if (widget.preoccupationDevoirId != null) {
-      request.fields['devoir_id'] = widget.preoccupationDevoirId.toString();
-      request.fields['devoir_titre'] = widget.preoccupationDevoirTitre ?? '';
-    }
-
-    if (_selectedImage != null) {
-      final imageBytes = await _selectedImage!.readAsBytes();
-      request.files.add(
-        http.MultipartFile.fromBytes(
-          'image',
-          imageBytes,
-          filename: 'question_image_${DateTime.now().millisecondsSinceEpoch}.jpg',
-        ),
-      );
-    }
-    if (_selectedAudio != null) {
-      final audioBytes = await _selectedAudio!.readAsBytes();
-      request.files.add(
-        http.MultipartFile.fromBytes(
-          'audio',
-          audioBytes,
-          filename: 'question_audio_${DateTime.now().millisecondsSinceEpoch}.m4a',
-        ),
-      );
-    }
-
     try {
-      final response = await request.send();
-      final responseBody = await response.stream.bytesToString();
-      if (response.statusCode == 201) {
-        final data = jsonDecode(responseBody);
-        final nouvelleQuestion = QForum.fromJson(data);
-        setState(() {
-          _questions.insert(0, nouvelleQuestion);
-        });
+      final data = await _repo.creerQuestion(
+        contenu: texte.isEmpty ? '[Message avec média]' : texte,
+        source: _composerSource,
+        coursId: widget.preoccupationCoursId,
+        coursTitre: widget.preoccupationCoursTitre,
+        leconId: widget.preoccupationLeconId,
+        leconTitre: widget.preoccupationLeconTitre,
+        exerciceId: widget.preoccupationExerciceId,
+        exerciceTitre: widget.preoccupationExerciceTitre,
+        devoirId: widget.preoccupationDevoirId,
+        devoirTitre: widget.preoccupationDevoirTitre,
+        imageBytes: _selectedImageBytes,
+        audioBytes: _selectedAudioBytes,
+      );
+      final nouvelleQuestion = QForum.fromJson(data);
+      setState(() {
+        _questions.insert(0, nouvelleQuestion);
         _composerCtrl.clear();
-        _selectedImage = null;
-        _selectedAudio = null;
-        setState(() => _composerVisible = false);
-        ErrorHandler.showSuccess(context, '✓ Question envoyée avec succès');
-      } else {
-        final errorData = jsonDecode(responseBody);
-        ErrorHandler.showError(context, errorData['detail'] ?? 'Erreur lors de l\'envoi');
-      }
+        _selectedImageBytes = null;
+        _selectedAudioBytes = null;
+        _selectedAudioNom = null;
+        _composerVisible = false;
+      });
+      if (mounted) ErrorHandler.showSuccess(context, '✓ Question envoyée avec succès');
     } catch (e) {
-      ErrorHandler.showError(context, 'Erreur réseau: ${e.toString()}');
+      if (mounted) ErrorHandler.showError(context, 'Erreur lors de l\'envoi: $e');
     } finally {
       if (mounted) setState(() => _sending = false);
     }
@@ -657,11 +424,15 @@ class _ForumPageState extends State<ForumPage>
     var list = _questions;
     if (_searchText.isNotEmpty) {
       final query = _searchText.toLowerCase();
-      list = list.where((q) =>
-          q.contenu.toLowerCase().contains(query) ||
-          q.auteurNom.toLowerCase().contains(query) ||
-          q.auteurUsername.toLowerCase().contains(query) ||
-          q.contexteLabel.toLowerCase().contains(query)).toList();
+      list = list
+          .where(
+            (q) =>
+                q.contenu.toLowerCase().contains(query) ||
+                q.auteurNom.toLowerCase().contains(query) ||
+                q.auteurUsername.toLowerCase().contains(query) ||
+                q.contexteLabel.toLowerCase().contains(query),
+          )
+          .toList();
     }
     return list;
   }
@@ -670,122 +441,102 @@ class _ForumPageState extends State<ForumPage>
   Widget build(BuildContext context) {
     if (_loading) {
       return Container(
-        color: YekiColors.backgroundLight,
-        child: const Center(child: YekiLoader()),
+        color: YkColors.background(context),
+        child: Center(child: YkProgress(shape: YkProgressShape.circular)),
       );
     }
 
+    final accent = _accentColor(context);
     final filtered = _filteredQuestions;
 
     return Container(
-      color: YekiColors.backgroundLight,
+      color: YkColors.background(context),
       child: RefreshIndicator(
-        color: _accentColor,
-        backgroundColor: YekiColors.white,
+        color: accent,
+        backgroundColor: YkColors.surface(context),
         onRefresh: () => _loadQuestions(),
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
           padding: const EdgeInsets.only(bottom: 100),
           children: [
-            const SizedBox(height: 20),
-            _buildFilters(),
+            SizedBox(height: YkSpacing.lg),
+            _buildFilters(context),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: _buildSearchBar(),
+              padding: EdgeInsets.symmetric(horizontal: YkSpacing.md),
+              child: _buildSearchBar(context),
             ),
             AnimatedSize(
               duration: const Duration(milliseconds: 300),
               curve: Curves.easeOutCubic,
               child: _composerVisible
-                  ? Padding(padding: const EdgeInsets.fromLTRB(16, 8, 16, 8), child: _buildComposer())
+                  ? Padding(
+                      padding: EdgeInsets.symmetric(horizontal: YkSpacing.md, vertical: YkSpacing.xs),
+                      child: _buildComposer(context),
+                    )
                   : const SizedBox.shrink(),
             ),
             if (!_composerVisible)
               Padding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-                child: GestureDetector(
-                  onTap: () => setState(() => _composerVisible = true),
-                  child: Container(
-                    width: double.infinity,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: _accentColor,
-                      borderRadius: YekiRadius.borderRadiusMd,
-                    ),
-                    child: const Center(
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.add_rounded, color: YekiColors.white, size: 18),
-                          SizedBox(width: 8),
-                          Text('Poser une question', style: TextStyle(color: YekiColors.white, fontSize: 14, fontWeight: FontWeight.w800)),
-                        ],
-                      ),
-                    ),
-                  ),
+                padding: EdgeInsets.fromLTRB(YkSpacing.md, YkSpacing.xs, YkSpacing.md, YkSpacing.xxs),
+                child: YkButton(
+                  label: 'Poser une question',
+                  icon: Icons.add_rounded,
+                  onPressed: () => setState(() => _composerVisible = true),
                 ),
               ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+              padding: EdgeInsets.fromLTRB(YkSpacing.lg, YkSpacing.md, YkSpacing.lg, YkSpacing.xs),
               child: Row(
                 children: [
-                  const Text('Discussions',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, letterSpacing: -0.3)),
+                  Text(
+                    'Discussions',
+                    style: YkTypography.h4(context).copyWith(color: YkColors.textPrimary(context)),
+                  ),
                   const Spacer(),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: _accentColor.withValues(alpha: 0.08),
-                      borderRadius: YekiRadius.borderRadiusMd,
-                    ),
-                    child: Text('${filtered.length} préoccupation${filtered.length > 1 ? 's' : ''}',
-                        style: TextStyle(color: _accentColor, fontSize: 11.5, fontWeight: FontWeight.w700)),
+                  YkBadge(
+                    variant: YkBadgeVariant.label,
+                    label: '${filtered.length} préoccupation${filtered.length > 1 ? 's' : ''}',
+                    color: accent,
                   ),
                 ],
               ),
             ),
-            if (filtered.isEmpty) _buildEmptyState(),
-            ...List.generate(filtered.length, (index) => _buildQuestionCard(filtered[index])),
+            if (filtered.isEmpty) _buildEmptyState(context),
+            ...List.generate(filtered.length, (index) => _buildQuestionCard(context, filtered[index])),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildFilters() {
+  Widget _buildFilters(BuildContext context) {
     final items = [
       ('tous', 'Tous', null),
-      ('lecon', 'Leçons', _srcColor['lecon']!),
-      ('exercice', 'Exercices', _srcColor['exercice']!),
-      ('devoir', 'Devoirs', _srcColor['devoir']!),
-      ('libre', 'Libres', _srcColor['libre']!),
+      ('lecon', 'Leçons', YkColors.info),
+      ('exercice', 'Exercices', YkColors.accent(context)),
+      ('devoir', 'Devoirs', YkColors.warning),
+      ('libre', 'Libres', YkColors.success),
     ];
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      padding: EdgeInsets.symmetric(horizontal: YkSpacing.sm, vertical: YkSpacing.xxs),
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: Row(
           children: items.map((item) {
             final isSelected = _sourceFiltre == item.$1;
-            final color = item.$3 ?? _accentColor;
-            return GestureDetector(
-              onTap: () {
-                setState(() => _sourceFiltre = item.$1);
-                _loadQuestions();
-              },
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 250),
-                margin: const EdgeInsets.only(right: 8),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                decoration: BoxDecoration(
-                  color: isSelected ? color.withValues(alpha: 0.12) : YekiColors.backgroundAlt,
-                  borderRadius: YekiRadius.borderRadiusXl,
-                  border: Border.all(color: isSelected ? color.withValues(alpha: 0.35) : Colors.transparent, width: 1.5),
-                ),
-                child: Text(item.$2,
-                    style: TextStyle(fontSize: 12.5, fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-                        color: isSelected ? color : YekiColors.textLight)),
+            final color = item.$3 ?? _accentColor(context);
+            return Padding(
+              padding: EdgeInsets.only(right: YkSpacing.xs),
+              child: YkChip(
+                label: item.$2,
+                variant: YkChipVariant.filter,
+                selected: isSelected,
+                accentColor: color,
+                onSelected: (_) {
+                  setState(() => _sourceFiltre = item.$1);
+                  _loadQuestions();
+                },
               ),
             );
           }).toList(),
@@ -794,178 +545,128 @@ class _ForumPageState extends State<ForumPage>
     );
   }
 
-  Widget _buildSearchBar() {
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 4),
-      decoration: BoxDecoration(
-        color: YekiColors.white,
-        borderRadius: YekiRadius.borderRadiusXxl,
-        border: Border.all(color: YekiColors.borderLight, width: 1.0),
-        boxShadow: YekiShadows.subtle,
-      ),
-      child: TextField(
-        controller: _searchCtrl,
-        onChanged: (value) => setState(() => _searchText = value),
-        style: YekiTextStyles.bodyMedium,
-        decoration: InputDecoration(
-          hintText: 'Rechercher une préoccupation...',
-          hintStyle: YekiTextStyles.bodySmall,
-          prefixIcon: Icon(Icons.search_rounded, color: _accentColor, size: 22),
-          suffixIcon: _searchText.isNotEmpty
-              ? GestureDetector(
-                  onTap: () {
-                    _searchCtrl.clear();
-                    setState(() => _searchText = '');
-                  },
-                  child: Icon(Icons.close_rounded, size: 18, color: YekiColors.textLight),
-                )
-              : null,
-          border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
-        ),
-      ),
+  Widget _buildSearchBar(BuildContext context) {
+    return YkTextField(
+      controller: _searchCtrl,
+      type: YkTextFieldType.search,
+      hint: 'Rechercher une préoccupation...',
+      onChanged: (value) => setState(() => _searchText = value),
     );
   }
 
-  Widget _buildComposer() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: YekiColors.white,
-        borderRadius: YekiRadius.borderRadiusXl,
-        border: Border.all(color: _accentColor.withValues(alpha: 0.2), width: 1),
-      ),
+  Widget _buildComposer(BuildContext context) {
+    final accent = _accentColor(context);
+    return YkCard(
+      accentColor: accent.withValues(alpha: 0.2),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: _accentColor.withValues(alpha: 0.08),
-                  borderRadius: YekiRadius.borderRadiusSm,
-                ),
-                child: Icon(Icons.edit_rounded, color: _accentColor, size: 16),
+              CircleAvatar(
+                radius: 14,
+                backgroundColor: accent.withValues(alpha: 0.08),
+                child: Icon(Icons.edit_rounded, color: accent, size: 16),
               ),
-              const SizedBox(width: 10),
-              const Text('Nouvelle préoccupation', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
+              SizedBox(width: YkSpacing.xs),
+              Text(
+                'Nouvelle préoccupation',
+                style: YkTypography.label(context).copyWith(color: YkColors.textPrimary(context)),
+              ),
               const Spacer(),
-              GestureDetector(
-                onTap: () => setState(() => _composerVisible = false),
-                child: Container(
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(
-                    color: YekiColors.backgroundLight,
-                    borderRadius: YekiRadius.borderRadiusSm,
-                  ),
-                  child: const Icon(Icons.close_rounded, size: 16),
-                ),
+              YkIconButton(
+                icon: Icons.close_rounded,
+                label: 'Fermer',
+                variant: YkIconButtonVariant.ghost,
+                onPressed: () => setState(() => _composerVisible = false),
               ),
             ],
           ),
           if (widget.preoccupationSource != null && widget.preoccupationSource != 'libre') ...[
-            const SizedBox(height: 10),
+            SizedBox(height: YkSpacing.xs),
             _buildContextBadge(
+              context,
               source: widget.preoccupationSource!,
-              contextLabel: widget.preoccupationLeconTitre ??
+              contextLabel:
+                  widget.preoccupationLeconTitre ??
                   widget.preoccupationDevoirTitre ??
-                  widget.preoccupationExerciceTitre ?? '',
+                  widget.preoccupationExerciceTitre ??
+                  '',
             ),
           ],
-          const SizedBox(height: 12),
+          SizedBox(height: YkSpacing.sm),
           if (widget.preoccupationSource == null) ...[
             SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: Row(
                 children: ['libre', 'lecon', 'exercice', 'devoir'].map((s) {
                   final isSelected = _composerSource == s;
-                  final color = _srcColor[s] ?? _accentColor;
-                  return GestureDetector(
-                    onTap: () => setState(() => _composerSource = s),
-                    child: Container(
-                      margin: const EdgeInsets.only(right: 6),
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: isSelected ? color.withValues(alpha: 0.08) : YekiColors.backgroundLight,
-                        borderRadius: YekiRadius.borderRadiusXl,
-                        border: Border.all(
-                          color: isSelected ? color.withValues(alpha: 0.3) : YekiColors.borderLight,
-                          width: 1,
-                        ),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(_srcIcon[s]!, size: 12, color: isSelected ? color : YekiColors.textLight),
-                          const SizedBox(width: 5),
-                          Text(_srcLabel[s]!,
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                                color: isSelected ? color : YekiColors.textMedium,
-                              )),
-                        ],
-                      ),
+                  final color = sourcePreoccupationCouleur(context, s);
+                  return Padding(
+                    padding: EdgeInsets.only(right: YkSpacing.xxs),
+                    child: YkChip(
+                      label: sourceLabelCourt(s),
+                      variant: YkChipVariant.filter,
+                      selected: isSelected,
+                      accentColor: color,
+                      avatar: Icon(sourcePreoccupationIcone(s), size: 14, color: color),
+                      onSelected: (_) => setState(() => _composerSource = s),
                     ),
                   );
                 }).toList(),
               ),
             ),
-            const SizedBox(height: 10),
+            SizedBox(height: YkSpacing.xs),
           ],
-          Container(
-            decoration: BoxDecoration(
-              color: YekiColors.backgroundLight,
-              borderRadius: YekiRadius.borderRadiusLg,
-              border: Border.all(color: YekiColors.borderLight),
-            ),
-            child: TextField(
-              controller: _composerCtrl,
-              maxLines: 4,
-              style: const TextStyle(fontSize: 14, height: 1.5),
-              decoration: const InputDecoration(
-                hintText: 'Décrivez votre question ou difficulté...',
-                hintStyle: TextStyle(fontSize: 13),
-                border: InputBorder.none,
-                contentPadding: EdgeInsets.all(14),
-              ),
-            ),
+          YkTextField(
+            controller: _composerCtrl,
+            type: YkTextFieldType.multiline,
+            maxLines: 4,
+            hint: 'Décrivez votre question ou difficulté...',
           ),
-          const SizedBox(height: 12),
+          SizedBox(height: YkSpacing.sm),
           Row(
             children: [
-              _buildMediaButton(
-                icon: Icons.image_outlined,
-                label: 'Image',
-                color: Colors.blue,
-                onTap: _pickImage,
+              Expanded(
+                child: _buildMediaButton(
+                  context,
+                  icon: Icons.image_outlined,
+                  label: 'Image',
+                  color: YkColors.info,
+                  onTap: _pickImage,
+                ),
               ),
-              const SizedBox(width: 12),
-              _buildMediaButton(
-                icon: Icons.audiotrack_rounded,
-                label: 'Audio',
-                color: YekiColors.purple,
-                onTap: _pickAudio,
+              SizedBox(width: YkSpacing.sm),
+              Expanded(
+                child: _buildMediaButton(
+                  context,
+                  icon: Icons.audiotrack_rounded,
+                  label: 'Audio',
+                  color: YkColors.accent(context),
+                  onTap: _pickAudio,
+                ),
               ),
             ],
           ),
-          if (_selectedImage != null) ...[
-            const SizedBox(height: 10),
+          if (_selectedImageBytes != null) ...[
+            SizedBox(height: YkSpacing.xs),
             Container(
               height: 80,
               width: double.infinity,
               decoration: BoxDecoration(
-                color: YekiColors.backgroundLight,
-                borderRadius: YekiRadius.borderRadiusSm,
-                border: Border.all(color: YekiColors.borderLight),
+                borderRadius: BorderRadius.circular(YkRadius.sm),
+                border: Border.all(color: YkColors.border(context)),
               ),
               child: Stack(
                 children: [
                   ClipRRect(
-                    borderRadius: YekiRadius.borderRadiusSm,
-                    child: Image.file(_selectedImage!, width: double.infinity, height: 80, fit: BoxFit.cover),
+                    borderRadius: BorderRadius.circular(YkRadius.sm),
+                    child: Image.memory(
+                      _selectedImageBytes!,
+                      width: double.infinity,
+                      height: 80,
+                      fit: BoxFit.cover,
+                    ),
                   ),
                   Positioned(
                     top: 4,
@@ -974,8 +675,11 @@ class _ForumPageState extends State<ForumPage>
                       onTap: _removeImage,
                       child: Container(
                         padding: const EdgeInsets.all(4),
-                        decoration: BoxDecoration(color: YekiColors.black, borderRadius: YekiRadius.borderRadiusXl),
-                        child: const Icon(Icons.close_rounded, size: 16, color: YekiColors.white),
+                        decoration: BoxDecoration(
+                          color: Colors.black54,
+                          borderRadius: BorderRadius.circular(YkRadius.full),
+                        ),
+                        child: const Icon(Icons.close_rounded, size: 16, color: Colors.white),
                       ),
                     ),
                   ),
@@ -983,37 +687,35 @@ class _ForumPageState extends State<ForumPage>
               ),
             ),
           ],
-          if (_selectedAudio != null) ...[
-            const SizedBox(height: 10),
+          if (_selectedAudioBytes != null) ...[
+            SizedBox(height: YkSpacing.xs),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              padding: EdgeInsets.symmetric(horizontal: YkSpacing.sm, vertical: YkSpacing.xs),
               decoration: BoxDecoration(
-                color: YekiColors.backgroundLight,
-                borderRadius: YekiRadius.borderRadiusSm,
-                border: Border.all(color: YekiColors.borderLight),
+                borderRadius: BorderRadius.circular(YkRadius.sm),
+                border: Border.all(color: YkColors.border(context)),
               ),
               child: Row(
                 children: [
-                  Icon(Icons.audiotrack_rounded, color: YekiColors.purple, size: 18),
-                  const SizedBox(width: 12),
+                  Icon(Icons.audiotrack_rounded, color: YkColors.accent(context), size: 18),
+                  SizedBox(width: YkSpacing.sm),
                   Expanded(
                     child: Text(
-                      _selectedAudio!.path.split('/').last,
-                      style: const TextStyle(fontSize: 12),
+                      _selectedAudioNom ?? 'Audio sélectionné',
+                      style: YkTypography.bodySm(
+                        context,
+                      ).copyWith(color: YkColors.textSecondary(context)),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  GestureDetector(
-                    onTap: _removeAudio,
-                    child: const Icon(Icons.close_rounded, size: 18),
-                  ),
+                  GestureDetector(onTap: _removeAudio, child: const Icon(Icons.close_rounded, size: 18)),
                 ],
               ),
             ),
           ],
-          const SizedBox(height: 12),
-          YekiButton(
+          SizedBox(height: YkSpacing.sm),
+          YkButton(
             label: 'Poster la préoccupation',
             icon: Icons.send_rounded,
             onPressed: _sending ? null : _envoyerQuestion,
@@ -1024,53 +726,52 @@ class _ForumPageState extends State<ForumPage>
     );
   }
 
-  Widget _buildMediaButton({
+  Widget _buildMediaButton(
+    BuildContext context, {
     required IconData icon,
     required String label,
     required Color color,
     required VoidCallback onTap,
   }) {
-    return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.08),
-            borderRadius: YekiRadius.borderRadiusSm,
-            border: Border.all(color: color.withValues(alpha: 0.2), width: 1),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, size: 14, color: color),
-              const SizedBox(width: 6),
-              Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: color)),
-            ],
-          ),
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: EdgeInsets.symmetric(vertical: YkSpacing.xs),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(YkRadius.sm),
+          border: Border.all(color: color.withValues(alpha: 0.2), width: 1),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 14, color: color),
+            SizedBox(width: YkSpacing.xxs),
+            Text(label, style: YkTypography.bodySm(context).copyWith(color: color)),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildContextBadge({required String source, required String contextLabel}) {
-    final color = _srcColor[source] ?? _accentColor;
-    final icon = _srcIcon[source] ?? Icons.link_rounded;
+  Widget _buildContextBadge(BuildContext context, {required String source, required String contextLabel}) {
+    final color = sourcePreoccupationCouleur(context, source);
+    final icon = sourcePreoccupationIcone(source);
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: EdgeInsets.symmetric(horizontal: YkSpacing.sm, vertical: YkSpacing.xxs),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.06),
-        borderRadius: YekiRadius.borderRadiusSm,
+        borderRadius: BorderRadius.circular(YkRadius.sm),
         border: Border.all(color: color.withValues(alpha: 0.2)),
       ),
       child: Row(
         children: [
           Icon(icon, size: 12, color: color),
-          const SizedBox(width: 8),
+          SizedBox(width: YkSpacing.xs),
           Expanded(
             child: Text(
-              '${_srcLabel[source] ?? source} : $contextLabel',
-              style: TextStyle(fontSize: 11, color: color, fontWeight: FontWeight.w600),
+              '${sourceLabelCourt(source)} : $contextLabel',
+              style: YkTypography.caption(context).copyWith(color: color, fontWeight: FontWeight.w600),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
@@ -1080,159 +781,121 @@ class _ForumPageState extends State<ForumPage>
     );
   }
 
-  Widget _buildQuestionCard(QForum q) {
-    final color = _srcColor[q.source] ?? _accentColor;
-    final icon = _srcIcon[q.source] ?? Icons.chat_bubble_outline_rounded;
-    final label = _srcLabel[q.source] ?? 'Libre';
+  Widget _buildQuestionCard(BuildContext context, QForum q) {
+    final color = sourcePreoccupationCouleur(context, q.source);
+    final icon = sourcePreoccupationIcone(q.source);
+    final label = sourceLabelCourt(q.source);
     final isHighlighted = q.id == widget.scrollToQuestionId;
 
-    return GestureDetector(
-      onTap: () => context.pushNamed(
-        AppRoute.forumQuestionDetail,
-        pathParameters: {'questionId': q.id.toString()},
-        queryParameters: {
-          if (widget.coursColor != null) 'coursColor': widget.coursColor.toString(),
-        },
-        extra: q,
-      ).then((_) => _loadQuestions()),
-      child: Container(
-        margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-        decoration: BoxDecoration(
-          color: YekiColors.white,
-          borderRadius: YekiRadius.borderRadiusLg,
-          border: Border.all(
-            color: isHighlighted ? color.withValues(alpha: 0.4) : YekiColors.borderLight,
-            width: 1,
-          ),
-          boxShadow: YekiShadows.subtle,
-        ),
+    return Padding(
+      padding: EdgeInsets.fromLTRB(YkSpacing.md, 0, YkSpacing.md, YkSpacing.sm),
+      child: YkCard(
+        variant: YkCardVariant.elevated,
+        accentColor: isHighlighted ? color : null,
+        onTap: () => context
+            .pushNamed(
+              AppRoute.forumQuestionDetail,
+              pathParameters: {'questionId': q.id.toString()},
+              queryParameters: {
+                if (widget.coursColor != null) 'coursColor': widget.coursColor.toString(),
+              },
+              extra: q,
+            )
+            .then((_) => _loadQuestions()),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(14, 12, 14, 0),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(6),
-                    decoration: BoxDecoration(
-                      color: color.withValues(alpha: 0.08),
-                      borderRadius: YekiRadius.borderRadiusSm,
+            Row(
+              children: [
+                CircleAvatar(
+                  radius: 12,
+                  backgroundColor: color.withValues(alpha: 0.08),
+                  child: Icon(icon, size: 14, color: color),
+                ),
+                SizedBox(width: YkSpacing.xs),
+                Text(label, style: YkTypography.caption(context).copyWith(color: color, fontWeight: FontWeight.bold)),
+                if (q.source != 'libre' && q.contexteLabel.isNotEmpty) ...[
+                  SizedBox(width: YkSpacing.xxs),
+                  Expanded(
+                    child: Text(
+                      q.contexteLabel,
+                      style: YkTypography.caption(
+                        context,
+                      ).copyWith(color: YkColors.textTertiary(context)),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    child: Icon(icon, size: 14, color: color),
                   ),
-                  const SizedBox(width: 8),
-                  Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: color)),
-                  if (q.source != 'libre' && q.contexteLabel.isNotEmpty) ...[
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        q.contexteLabel,
-                        style: const TextStyle(fontSize: 11),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
-                  if (q.estResolue)
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: YekiColors.success.withValues(alpha: 0.08),
-                        borderRadius: YekiRadius.borderRadiusSm,
-                      ),
-                      child: Text(
-                        'Résolue',
-                        style: TextStyle(
-                          fontSize: 10,
-                          color: YekiColors.success,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
                 ],
-              ),
+                if (q.estResolue)
+                  YkBadge(variant: YkBadgeVariant.label, label: 'Résolue', color: YkColors.success),
+              ],
             ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
-              child: Text(
-                q.contenu,
-                maxLines: 3,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 14, height: 1.5),
-              ),
+            SizedBox(height: YkSpacing.xs),
+            Text(
+              q.contenu,
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+              style: YkTypography.bodyMd(context).copyWith(color: YkColors.textPrimary(context)),
             ),
             if (q.imageUrl != null && q.imageUrl!.isNotEmpty) ...[
-              const SizedBox(height: 10),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 14),
-                child: ClipRRect(
-                  borderRadius: YekiRadius.borderRadiusMd,
-                  child: Image.network(
-                    q.imageUrl!,
+              SizedBox(height: YkSpacing.xs),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(YkRadius.md),
+                child: Image.network(
+                  q.imageUrl!,
+                  height: 160,
+                  width: double.infinity,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, _, _) => Container(
                     height: 160,
-                    width: double.infinity,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(
-                      height: 160,
-                      color: YekiColors.backgroundLight,
-                      child: const Center(child: Icon(Icons.broken_image, size: 40)),
-                    ),
+                    color: YkColors.surfaceVariant(context),
+                    child: const Center(child: Icon(Icons.broken_image, size: 40)),
                   ),
                 ),
               ),
             ],
             if (q.audioUrl != null && q.audioUrl!.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 14),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: YekiColors.backgroundLight,
-                    borderRadius: YekiRadius.borderRadiusSm,
-                    border: Border.all(color: YekiColors.borderLight),
-                  ),
-                  child: ForumAudioPlayer(audioUrl: q.audioUrl!),
+              SizedBox(height: YkSpacing.xs),
+              Container(
+                padding: EdgeInsets.symmetric(horizontal: YkSpacing.sm, vertical: YkSpacing.xs),
+                decoration: BoxDecoration(
+                  color: YkColors.surfaceVariant(context),
+                  borderRadius: BorderRadius.circular(YkRadius.sm),
+                  border: Border.all(color: YkColors.border(context)),
                 ),
+                child: ForumAudioPlayer(audioUrl: q.audioUrl!),
               ),
             ],
-            const SizedBox(height: 12),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
-              child: Row(
-                children: [
-                  _buildAvatar(
-                    q.auteurNom,
-                    q.auteurUsername,
-                    q.auteurEstEnseignant,
-                    color,
-                    16,
+            SizedBox(height: YkSpacing.xs),
+            Row(
+              children: [
+                _buildAvatar(context, q.auteurNom, q.auteurUsername, q.auteurEstEnseignant, color, 16),
+                SizedBox(width: YkSpacing.xs),
+                Expanded(
+                  child: Text(
+                    q.auteurNom.isNotEmpty ? q.auteurNom : q.auteurUsername,
+                    style: YkTypography.bodySm(
+                      context,
+                    ).copyWith(color: YkColors.textSecondary(context)),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      q.auteurNom.isNotEmpty ? q.auteurNom : q.auteurUsername,
-                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  _statIcon(Icons.chat_bubble_outline_rounded, '${q.nbReponses}'),
-                  const SizedBox(width: 10),
-                  _statIcon(Icons.remove_red_eye_outlined, '${q.nbVues}'),
-                  const SizedBox(width: 10),
-                  GestureDetector(
-                    onTap: () => _navigateToSource(q),
-                    child: Icon(Icons.open_in_new_rounded, size: 14, color: YekiColors.textLight),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    _formatTimeAgo(q.creeLe),
-                    style: const TextStyle(fontSize: 11),
-                  ),
-                ],
-              ),
+                ),
+                _statIcon(context, Icons.chat_bubble_outline_rounded, '${q.nbReponses}'),
+                SizedBox(width: YkSpacing.xs),
+                _statIcon(context, Icons.remove_red_eye_outlined, '${q.nbVues}'),
+                SizedBox(width: YkSpacing.xs),
+                GestureDetector(
+                  onTap: () => _navigateToSource(q),
+                  child: Icon(Icons.open_in_new_rounded, size: 14, color: YkColors.textTertiary(context)),
+                ),
+                SizedBox(width: YkSpacing.xxs),
+                Text(
+                  _formatTimeAgo(q.creeLe),
+                  style: YkTypography.caption(context).copyWith(color: YkColors.textTertiary(context)),
+                ),
+              ],
             ),
           ],
         ),
@@ -1240,26 +903,34 @@ class _ForumPageState extends State<ForumPage>
     );
   }
 
-  Widget _statIcon(IconData icon, String text) => Row(
+  Widget _statIcon(BuildContext context, IconData icon, String text) => Row(
     mainAxisSize: MainAxisSize.min,
     children: [
-      Icon(icon, size: 13, color: YekiColors.textLight),
-      const SizedBox(width: 3),
-      Text(text, style: const TextStyle(fontSize: 11)),
+      Icon(icon, size: 13, color: YkColors.textTertiary(context)),
+      SizedBox(width: 3),
+      Text(text, style: YkTypography.caption(context).copyWith(color: YkColors.textTertiary(context))),
     ],
   );
 
-  Widget _buildAvatar(String nom, String username, bool estEnseignant, Color color, double radius) {
+  Widget _buildAvatar(
+    BuildContext context,
+    String nom,
+    String username,
+    bool estEnseignant,
+    Color color,
+    double radius,
+  ) {
+    final accent = _accentColor(context);
     return Stack(
       children: [
         CircleAvatar(
           radius: radius,
-          backgroundColor: estEnseignant ? _accentColor.withValues(alpha: 0.12) : color.withValues(alpha: 0.08),
+          backgroundColor: estEnseignant ? accent.withValues(alpha: 0.12) : color.withValues(alpha: 0.08),
           child: Text(
             _getInitials(nom, username),
             style: TextStyle(
               fontSize: radius * 0.7,
-              color: estEnseignant ? _accentColor : color,
+              color: estEnseignant ? accent : color,
               fontWeight: FontWeight.w800,
             ),
           ),
@@ -1272,9 +943,9 @@ class _ForumPageState extends State<ForumPage>
               width: radius * 0.35,
               height: radius * 0.35,
               decoration: BoxDecoration(
-                color: _accentColor,
+                color: accent,
                 shape: BoxShape.circle,
-                border: Border.all(color: YekiColors.white, width: 1),
+                border: Border.all(color: YkColors.surface(context), width: 1),
               ),
             ),
           ),
@@ -1282,32 +953,13 @@ class _ForumPageState extends State<ForumPage>
     );
   }
 
-  Widget _buildEmptyState() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 32),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: YekiColors.primaryDark.withValues(alpha: 0.06),
-                shape: BoxShape.circle,
-                border: Border.all(color: YekiColors.primaryDark.withValues(alpha: 0.12), width: 1),
-              ),
-              child: const Icon(Icons.forum_outlined, size: 48, color: YekiColors.textLight),
-            ),
-            const SizedBox(height: 16),
-            const Text('Aucune préoccupation', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-            const SizedBox(height: 8),
-            const Text(
-              'Les questions posées depuis les leçons,\nexercices et devoirs apparaîtront ici.',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 13, height: 1.5),
-            ),
-          ],
-        ),
+  Widget _buildEmptyState(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: YkSpacing.xxl, horizontal: YkSpacing.lg),
+      child: YkEmptyState(
+        icon: Icons.forum_outlined,
+        title: 'Aucune préoccupation',
+        message: 'Les questions posées depuis les leçons,\nexercices et devoirs apparaîtront ici.',
       ),
     );
   }

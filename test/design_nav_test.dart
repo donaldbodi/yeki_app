@@ -59,10 +59,12 @@ void main() {
       expect(flat.any((d) => d.label == 'Mon parcours'), isFalse);
     });
 
-    test('service_client : contient Paiements à valider et Gestion des répétiteurs', () {
+    test('service_client : une seule destination, câblée vers le dashboard à onglets (P9.5)', () {
       final flat = [for (final g in YkNavConfig.forRole('service_client')) ...g.destinations];
-      expect(flat.any((d) => d.label == 'Paiements à valider'), isTrue);
-      expect(flat.any((d) => d.label == 'Gestion des répétiteurs'), isTrue);
+      expect(flat.any((d) => d.label == 'Service Client' && d.isWired), isTrue);
+      // Les 2 anciennes destinations stub ont été consolidées en une seule.
+      expect(flat.any((d) => d.label == 'Paiements à valider'), isFalse);
+      expect(flat.any((d) => d.label == 'Gestion des répétiteurs'), isFalse);
     });
   });
 
@@ -132,9 +134,13 @@ void main() {
         _scaffold(size: const Size(1300, 900), role: 'apprenant', onDestinationTap: (r) => tapped = r),
       );
       await tester.pumpAndSettle();
-      // "Accueil" : premier élément de la liste, toujours visible sans
-      // avoir à faire défiler le rail — et non câblé (voir P4.6).
-      await tester.tap(find.text('Accueil'));
+      // "Forum" : destination sans route globale (widget embarqué par
+      // cours uniquement, voir yk_nav_config_apprenant.dart) — non câblée.
+      // Plus bas dans la liste que "Accueil" (premier élément) : la faire
+      // défiler dans la vue avant de taper (ListView virtualisée).
+      await tester.scrollUntilVisible(find.text('Forum'), 100);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Forum'));
       await tester.pumpAndSettle();
       expect(find.text('Bientôt disponible'), findsOneWidget);
       expect(tapped, isNull);
@@ -149,6 +155,17 @@ void main() {
       await tester.tap(find.text('Cursus'));
       await tester.pumpAndSettle();
       expect(tapped, 'dashboardCursus');
+    });
+
+    testWidgets('"Accueil" est désormais câblée (P11.1)', (tester) async {
+      String? tapped;
+      await tester.pumpWidget(
+        _scaffold(size: const Size(1300, 900), role: 'apprenant', onDestinationTap: (r) => tapped = r),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Accueil'));
+      await tester.pumpAndSettle();
+      expect(tapped, 'dashboardAccueil');
     });
 
     testWidgets('un badge fourni est visible sur la destination correspondante', (tester) async {

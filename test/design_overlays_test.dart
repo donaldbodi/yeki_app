@@ -181,7 +181,8 @@ void main() {
       expect(find.text('Exercices illimités'), findsOneWidget);
       expect(find.textContaining('1 500 FCFA/mois'), findsOneWidget);
 
-      await tester.tap(find.textContaining('13 000 FCFA/an'));
+      final carteAnnuel = find.ancestor(of: find.text('Annuel'), matching: find.byType(YkCard));
+      await tester.tap(find.descendant(of: carteAnnuel, matching: find.widgetWithText(YkButton, 'Choisir')));
       expect(chosen, 'annuel');
     });
 
@@ -199,8 +200,70 @@ void main() {
         ),
       );
       expect(find.textContaining('FCFA'), findsNothing);
-      expect(find.text('Gratuit'), findsNothing); // concaténé dans le libellé du bouton
-      expect(find.textContaining('Unique — Gratuit'), findsOneWidget);
+      expect(find.text('Unique'), findsOneWidget);
+      expect(find.text('Gratuit'), findsOneWidget);
+    });
+
+    testWidgets('badge + ancien prix barré + économie réalisée s\'affichent quand fournis', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        _host(
+          SingleChildScrollView(
+            child: YkPaywall(
+              title: 'Offre',
+              description: 'Desc',
+              features: const [],
+              plans: [
+                YkPaywallPlan(
+                  label: 'Mensuel',
+                  priceLabel: '1 000 FCFA/mois',
+                  badge: 'Promotion',
+                  ancienPrixLabel: '1 500 FCFA/mois',
+                  onSelect: () {},
+                ),
+                YkPaywallPlan(
+                  label: 'Annuel',
+                  priceLabel: '10 000 FCFA/an',
+                  economieLabel: 'Économisez 2 000 FCFA vs mensuel',
+                  onSelect: () {},
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+      expect(find.text('Promotion'), findsOneWidget);
+      expect(find.text('1 500 FCFA/mois'), findsOneWidget);
+      expect(find.text('Économisez 2 000 FCFA vs mensuel'), findsOneWidget);
+    });
+
+    testWidgets('le présentiel est une carte séparée, jamais dans la liste des plans', (
+      tester,
+    ) async {
+      var presentielChoisi = false;
+      await tester.pumpWidget(
+        _host(
+          SingleChildScrollView(
+            child: YkPaywall(
+              title: 'Offre',
+              description: 'Desc',
+              features: const [],
+              plans: [YkPaywallPlan(label: 'Mensuel', priceLabel: '1 000 FCFA/mois', onSelect: () {})],
+              presentielLabel: 'Supplément présentiel',
+              presentielDescription: 'Optionnel — sessions en salle',
+              onSelectPresentiel: () => presentielChoisi = true,
+            ),
+          ),
+        ),
+      );
+      expect(find.text('Supplément présentiel'), findsOneWidget);
+      expect(find.text('Optionnel — sessions en salle'), findsOneWidget);
+      // Une seule carte de plan (Mensuel) + la carte présentiel séparée = 2.
+      expect(find.byType(YkCard), findsNWidgets(2));
+
+      await tester.tap(find.text('Supplément présentiel'));
+      expect(presentielChoisi, isTrue);
     });
   });
 }

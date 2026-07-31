@@ -71,10 +71,10 @@ class YkColors {
 
   // ── Accesseurs contextuels clair/sombre ──────────────────────────────
   // Les composants Yk* lisent les couleurs via ces accesseurs plutôt que
-  // via Theme.of(context).colorScheme : main.dart utilise encore l'ANCIEN
-  // thème (app_theme.dart) tant que la bascule complète n'a pas eu lieu
-  // (décision P4.1) ; seul le signal clair/sombre vient de Theme, les
-  // valeurs de couleur viennent toujours de ce token — voir P4.3.
+  // via Theme.of(context).colorScheme — seul le signal clair/sombre vient
+  // de Theme, les valeurs de couleur viennent toujours de ce token (P4.3).
+  // `main.dart` utilise désormais `design/theme/yeki_theme.dart` (bascule
+  // faite, `app_theme.dart` supprimé).
   static bool isDark(BuildContext context) =>
       Theme.of(context).brightness == Brightness.dark;
 

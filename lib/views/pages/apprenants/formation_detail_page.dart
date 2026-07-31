@@ -1,45 +1,36 @@
 // lib/views/pages/apprenants/formation_detail_page.dart
-// ════════════════════════════════════════════════════════════════
-// DÉTAIL FORMATION (Métier + Classique) — GLASSMORPHISM EDITION
-// ════════════════════════════════════════════════════════════════
+//
+// Refondu en P11.2 (rituel P5.0, migration mécanique) : bascule vers
+// `FormationRepository.detailApprenant()` (endpoint déjà exposé par le
+// repository, remplace l'appel `http` brut dupliqué ici) et les tokens/
+// composants `Yk*` (plus de `YekiColors`/`YekiButton`/glassmorphism codée
+// en dur).
 
-import 'dart:convert';
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
+
+import 'package:yeki/core/design/components/components.dart';
+import 'package:yeki/core/design/tokens/tokens.dart';
 import 'package:yeki/core/router/route_names.dart';
+import 'package:yeki/repositories/formation_repository.dart';
 import 'package:yeki/views/pages/apprenants/formations_models.dart';
-import 'package:yeki/core/theme/yeki_design_system.dart';
-
-Future<String?> _getToken() async =>
-    (await SharedPreferences.getInstance()).getString('token');
-
-Map<String, String> _headers(String? t) => {
-  'Content-Type': 'application/json',
-  if (t != null) 'Authorization': 'Token $t',
-};
 
 class FormationDetailPage extends StatefulWidget {
+  const FormationDetailPage({super.key, required this.formationId, this.deptPrecharge});
+
   final int formationId;
   final DepartementItem? deptPrecharge;
-
-  const FormationDetailPage({
-    super.key,
-    required this.formationId,
-    this.deptPrecharge,
-  });
 
   @override
   State<FormationDetailPage> createState() => _FormationDetailPageState();
 }
 
-class _FormationDetailPageState extends State<FormationDetailPage>
-    with SingleTickerProviderStateMixin {
+class _FormationDetailPageState extends State<FormationDetailPage> with SingleTickerProviderStateMixin {
+  final _repo = FormationRepository();
+
   bool _loading = true;
   DepartementItem? _dept;
-  late TabController _tabCtrl;
+  late final TabController _tabCtrl;
 
   @override
   void initState() {
@@ -61,31 +52,21 @@ class _FormationDetailPageState extends State<FormationDetailPage>
 
   Future<void> _charger() async {
     setState(() => _loading = true);
-    final token = await _getToken();
     try {
-      final res = await http.get(
-        Uri.parse('$kBaseUrl/apprenant/departement/${widget.formationId}/'),
-        headers: _headers(token),
-      );
-      if (res.statusCode == 200 && mounted) {
-        final data = jsonDecode(res.body) as Map<String, dynamic>;
-        setState(() {
-          _dept = DepartementItem.fromJson(data);
-          _loading = false;
-        });
-      }
+      final dept = await _repo.detailApprenant(widget.formationId);
+      if (mounted) setState(() => _dept = dept);
     } catch (_) {
+    } finally {
       if (mounted) setState(() => _loading = false);
     }
   }
 
-  Color get _accentColor {
-    if (_dept == null) return YekiColors.primary;
+  Color _accentColor(BuildContext context) {
+    if (_dept == null) return YkColors.accent(context);
     try {
-      final hex = _dept!.couleur.replaceAll('#', '');
-      return Color(int.parse('FF$hex', radix: 16));
+      return Color(int.parse(_dept!.couleur.replaceAll('#', 'FF'), radix: 16));
     } catch (_) {
-      return _dept!.estFormationMetier ? YekiColors.warning : YekiColors.primary;
+      return _dept!.estFormationMetier ? YkColors.warning : YkColors.accent(context);
     }
   }
 
@@ -95,224 +76,131 @@ class _FormationDetailPageState extends State<FormationDetailPage>
   Widget build(BuildContext context) {
     if (_loading) {
       return Scaffold(
-        backgroundColor: YekiColors.bgLight,
-        body: Container(
-          decoration: const BoxDecoration(gradient: YekiGradients.mainBackground),
-          child: const Center(child: CircularProgressIndicator(color: YekiColors.primary)),
-        ),
+        backgroundColor: YkColors.background(context),
+        body: Center(child: YkProgress(shape: YkProgressShape.circular)),
       );
     }
     if (_dept == null) {
       return Scaffold(
-        backgroundColor: YekiColors.bgLight,
-        body: Container(
-          decoration: const BoxDecoration(gradient: YekiGradients.mainBackground),
-          child: Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.error_outline, size: 60, color: YekiColors.textLight),
-                const SizedBox(height: 16),
-                const Text('Formation introuvable', style: TextStyle(color: YekiColors.textMedium)),
-                const SizedBox(height: 12),
-                YekiButton(
-                  label: 'Retour',
-                  onPressed: () => Navigator.pop(context),
-                  width: 200,
-                ),
-              ],
-            ),
-          ),
+        backgroundColor: YkColors.background(context),
+        body: YkEmptyState(
+          icon: Icons.error_outline_rounded,
+          title: 'Formation introuvable',
+          message: "Cette formation n'existe plus ou est temporairement indisponible.",
+          actionLabel: 'Retour',
+          onAction: () => Navigator.pop(context),
         ),
       );
     }
 
     final dept = _dept!;
+    final accent = _accentColor(context);
 
     return Scaffold(
-      backgroundColor: YekiColors.bgLight,
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: YekiGradients.mainBackground,
-        ),
-        child: Stack(
+      backgroundColor: YkColors.background(context),
+      body: NestedScrollView(
+        headerSliverBuilder: (_, _) => [
+          _buildSliverAppBar(context, dept, accent),
+          SliverToBoxAdapter(child: _buildQuickStats(context, dept, accent)),
+          SliverPersistentHeader(
+            pinned: true,
+            delegate: YkPinnedHeader(
+              child: Container(
+                color: YkColors.background(context),
+                padding: EdgeInsets.symmetric(horizontal: YkSpacing.md, vertical: YkSpacing.xs),
+                child: YkTabs(
+                  controller: _tabCtrl,
+                  tabs: const [
+                    YkTabItem(label: 'À propos'),
+                    YkTabItem(label: 'Cours'),
+                    YkTabItem(label: 'Programme'),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+        body: TabBarView(
+          controller: _tabCtrl,
           children: [
-            // Sphères décoratives
-            Positioned(
-              top: -40,
-              right: -40,
-              child: Container(
-                width: 200,
-                height: 200,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: _accentColor.withValues(alpha: 0.08),
+            _TabAPropos(dept: dept, accentColor: accent),
+            _TabCours(dept: dept, accentColor: accent),
+            _TabProgramme(dept: dept, accentColor: accent),
+          ],
+        ),
+      ),
+      bottomNavigationBar: dept.nbCours > 0 ? _buildBarreBas(context, dept, accent) : null,
+    );
+  }
+
+  Widget _buildSliverAppBar(BuildContext context, DepartementItem dept, Color accent) {
+    return SliverAppBar(
+      expandedHeight: 260,
+      pinned: true,
+      backgroundColor: accent,
+      foregroundColor: YkColors.textOnPrimary,
+      flexibleSpace: FlexibleSpaceBar(
+        background: Stack(
+          fit: StackFit.expand,
+          children: [
+            if (dept.imageUrl != null)
+              Image.network(dept.imageUrl!, fit: BoxFit.cover, errorBuilder: (_, _, _) => _fondDegrade(accent))
+            else
+              _fondDegrade(accent),
+            Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Colors.transparent, Colors.black.withValues(alpha: 0.65)],
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
                 ),
               ),
             ),
             Positioned(
-              bottom: 100,
-              left: -50,
-              child: Container(
-                width: 180,
-                height: 180,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: YekiColors.accent.withValues(alpha: 0.06),
-                ),
-              ),
-            ),
-            NestedScrollView(
-              headerSliverBuilder: (_, _) => [
-                _buildSliverAppBar(dept),
-                SliverToBoxAdapter(child: _buildQuickStats(dept)),
-                SliverToBoxAdapter(child: _buildTabs()),
-              ],
-              body: TabBarView(
-                controller: _tabCtrl,
+              left: 20,
+              right: 20,
+              bottom: 20,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  _TabAPropos(dept: dept, accentColor: _accentColor),
-                  _TabCours(dept: dept, accentColor: _accentColor),
-                  _TabProgramme(dept: dept, accentColor: _accentColor),
+                  YkBadge(
+                    variant: YkBadgeVariant.label,
+                    label: _isMetier ? 'Formation métier' : 'Formation classique',
+                    color: Colors.white,
+                  ),
+                  SizedBox(height: YkSpacing.sm),
+                  Text(
+                    dept.nom,
+                    style: YkTypography.h2(context).copyWith(color: Colors.white, height: 1.2),
+                    maxLines: 2,
+                  ),
+                  if (dept.domaine.isNotEmpty)
+                    Text(dept.domaine, style: YkTypography.bodySm(context).copyWith(color: Colors.white70)),
+                  if (dept.cadre != null)
+                    Text(
+                      'Cadre : ${dept.cadre!['nom'] ?? ''}',
+                      style: YkTypography.caption(context).copyWith(color: Colors.white70),
+                    ),
+                  if (dept.estCertifiante)
+                    Padding(
+                      padding: EdgeInsets.only(top: YkSpacing.xs),
+                      child: YkBadge(variant: YkBadgeVariant.label, label: 'Formation certifiante', color: Colors.amber),
+                    ),
                 ],
               ),
             ),
           ],
         ),
       ),
-      bottomNavigationBar: dept.nbCours > 0
-          ? _buildBottomBar(dept)
-          : null,
     );
   }
 
-  Widget _buildSliverAppBar(DepartementItem dept) {
-    final c = _accentColor;
-    return SliverAppBar(
-      expandedHeight: 260,
-      pinned: true,
-      backgroundColor: c,
-      leading: IconButton(
-        icon: Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: Colors.black.withValues(alpha: 0.2),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: YekiColors.white.withValues(alpha: 0.1),
-              width: 1,
-            ),
-          ),
-          child: const Icon(Icons.arrow_back_ios_new_rounded, color: YekiColors.white, size: 16),
-        ),
-        onPressed: () => Navigator.pop(context),
-      ),
-      flexibleSpace: FlexibleSpaceBar(
-        background: Stack(fit: StackFit.expand, children: [
-          if (dept.imageUrl != null)
-            Image.network(dept.imageUrl!, fit: BoxFit.cover,
-                errorBuilder: (_, _, _) => _gradientBg(c))
-          else
-            _gradientBg(c),
-          Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  Colors.transparent,
-                  Colors.black.withValues(alpha: 0.65),
-                ],
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-              ),
-            ),
-          ),
-          Positioned(
-            left: 20, right: 20, bottom: 20,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        _isMetier ? YekiColors.warning : YekiColors.primary,
-                        _isMetier ? YekiColors.warning.withValues(alpha: 0.8) : YekiColors.primary.withValues(alpha: 0.8),
-                      ],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        _isMetier ? Icons.work_rounded : Icons.account_balance_rounded,
-                        size: 11, color: YekiColors.white,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        _isMetier ? 'Formation Métier' : 'Formation Classique',
-                        style: const TextStyle(color: YekiColors.white, fontSize: 11, fontWeight: FontWeight.bold),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  dept.nom,
-                  style: const TextStyle(color: YekiColors.white, fontSize: 22, fontWeight: FontWeight.w900, height: 1.2),
-                  maxLines: 2,
-                ),
-                if (dept.domaine.isNotEmpty)
-                  Text(
-                    dept.domaine,
-                    style: TextStyle(color: YekiColors.white.withValues(alpha: 0.8), fontSize: 13),
-                  ),
-                if (dept.cadre != null)
-                  Text(
-                    'Cadre : ${dept.cadre!['nom'] ?? ''}',
-                    style: TextStyle(color: YekiColors.white.withValues(alpha: 0.7), fontSize: 12),
-                  ),
-                if (dept.estCertifiante)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 6),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [YekiColors.gold, YekiColors.gold.withValues(alpha: 0.8)],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.verified_rounded, size: 11, color: YekiColors.white),
-                          SizedBox(width: 4),
-                          Text('Formation Certifiante',
-                              style: TextStyle(color: YekiColors.white, fontSize: 10, fontWeight: FontWeight.bold)),
-                        ],
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        ]),
-      ),
-    );
-  }
-
-  Widget _gradientBg(Color c) {
+  Widget _fondDegrade(Color couleur) {
     return Container(
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [c, c.withValues(alpha: 0.7), c.withValues(alpha: 0.4)],
+          colors: [couleur, couleur.withValues(alpha: 0.7), couleur.withValues(alpha: 0.4)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -320,110 +208,65 @@ class _FormationDetailPageState extends State<FormationDetailPage>
       child: Center(
         child: Icon(
           _isMetier ? Icons.work_outline_rounded : Icons.school_outlined,
-          size: 80, color: YekiColors.white.withValues(alpha: 0.1),
+          size: 80,
+          color: Colors.white.withValues(alpha: 0.15),
         ),
       ),
     );
   }
 
-  Widget _buildQuickStats(DepartementItem dept) {
-    final c = _accentColor;
-    final stats = <_QuickStat>[];
-
-    if (dept.dureeFormation.isNotEmpty)
-      stats.add(_QuickStat(
-          icon: Icons.schedule_rounded, label: 'Durée',
-          value: dept.dureeFormation, color: YekiColors.primary));
-    stats.add(_QuickStat(
-        icon: Icons.book_rounded, label: 'Cours',
-        value: '${dept.nbCours}', color: c));
-    if (dept.modeFormation.isNotEmpty)
-      stats.add(_QuickStat(
-          icon: Icons.devices_rounded, label: 'Mode',
-          value: dept.modeFormationLabel, color: YekiColors.purple));
-    stats.add(_QuickStat(
-        icon: Icons.attach_money_rounded, label: 'Accès',
-        value: dept.prix == 0 ? 'Gratuit' : '${dept.prix} F',
-        color: dept.prix == 0 ? YekiColors.success : YekiColors.gold));
-
-    if (stats.isEmpty) return const SizedBox.shrink();
-
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      padding: const EdgeInsets.symmetric(vertical: 16),
-      decoration: BoxDecoration(
-        color: YekiColors.white.withValues(alpha: 0.4),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: YekiColors.white.withValues(alpha: 0.6),
-          width: 1,
-        ),
+  Widget _buildQuickStats(BuildContext context, DepartementItem dept, Color accent) {
+    final stats = <(IconData, String, String, Color)>[
+      if (dept.dureeFormation.isNotEmpty) (Icons.schedule_rounded, 'Durée', dept.dureeFormation, YkColors.info),
+      (Icons.book_rounded, 'Cours', '${dept.nbCours}', accent),
+      if (dept.modeFormation.isNotEmpty)
+        (Icons.devices_rounded, 'Mode', dept.modeFormationLabel, YkColors.accent(context)),
+      (
+        Icons.attach_money_rounded,
+        'Accès',
+        dept.prix == 0 ? 'Gratuit' : '${dept.prix} F',
+        dept.prix == 0 ? YkColors.success : YkColors.warning,
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: stats.map((s) => _QuickStatWidget(stat: s)).toList(),
+    ];
+
+    return Padding(
+      padding: EdgeInsets.all(YkSpacing.md),
+      child: YkCard(
+        variant: YkCardVariant.filled,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: [
+            for (final (icon, label, valeur, couleur) in stats)
+              Column(
+                children: [
+                  Icon(icon, color: couleur, size: 22),
+                  SizedBox(height: YkSpacing.xxs),
+                  Text(
+                    valeur,
+                    style: YkTypography.label(context).copyWith(color: couleur),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  Text(label, style: YkTypography.caption(context).copyWith(color: YkColors.textSecondary(context))),
+                ],
+              ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildTabs() {
-    final c = _accentColor;
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: YekiColors.white.withValues(alpha: 0.4),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: YekiColors.white.withValues(alpha: 0.6),
-          width: 1,
-        ),
-      ),
-      child: TabBar(
-        controller: _tabCtrl,
-        labelColor: c,
-        unselectedLabelColor: YekiColors.textMedium,
-        indicator: BoxDecoration(
-          color: YekiColors.white.withValues(alpha: 0.6),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: YekiColors.white.withValues(alpha: 0.8),
-            width: 1,
-          ),
-        ),
-        indicatorWeight: 0,
-        labelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-        unselectedLabelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-        tabs: const [
-          Tab(icon: Icon(Icons.info_outline_rounded, size: 18), text: 'À propos'),
-          Tab(icon: Icon(Icons.book_rounded, size: 18), text: 'Cours'),
-          Tab(icon: Icon(Icons.list_alt_rounded, size: 18), text: 'Programme'),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildBottomBar(DepartementItem dept) {
-    final c = _accentColor;
+  Widget _buildBarreBas(BuildContext context, DepartementItem dept, Color accent) {
     return Container(
       padding: EdgeInsets.only(
-          left: 20, right: 20, top: 12,
-          bottom: MediaQuery.of(context).padding.bottom + 12),
+        left: YkSpacing.md,
+        right: YkSpacing.md,
+        top: YkSpacing.sm,
+        bottom: MediaQuery.of(context).padding.bottom + YkSpacing.sm,
+      ),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            YekiColors.white.withValues(alpha: 0.8),
-            YekiColors.white.withValues(alpha: 0.5),
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        border: Border(
-          top: BorderSide(
-            color: YekiColors.white.withValues(alpha: 0.5),
-            width: 1,
-          ),
-        ),
+        color: YkColors.surface(context),
+        border: Border(top: BorderSide(color: YkColors.border(context))),
       ),
       child: Row(
         children: [
@@ -436,35 +279,35 @@ class _FormationDetailPageState extends State<FormationDetailPage>
                   dept.progressionMoyenne > 0
                       ? '${dept.progressionMoyenne.toStringAsFixed(0)}% complété'
                       : '${dept.nbCours} cours disponibles',
-                  style: TextStyle(fontSize: 12, color: YekiColors.textMedium),
+                  style: YkTypography.caption(context).copyWith(color: YkColors.textSecondary(context)),
                 ),
-                const SizedBox(height: 6),
+                SizedBox(height: YkSpacing.xxs),
                 ClipRRect(
-                  borderRadius: BorderRadius.circular(4),
+                  borderRadius: BorderRadius.circular(YkRadius.full),
                   child: LinearProgressIndicator(
                     value: dept.progressionMoyenne / 100,
-                    backgroundColor: YekiColors.textLight.withValues(alpha: 0.2),
-                    valueColor: AlwaysStoppedAnimation<Color>(c),
+                    backgroundColor: YkColors.border(context),
+                    valueColor: AlwaysStoppedAnimation(accent),
                     minHeight: 6,
                   ),
                 ),
               ],
             ),
           ),
-          const SizedBox(width: 16),
-          YekiButton(
+          SizedBox(width: YkSpacing.md),
+          YkButton(
             label: dept.progressionMoyenne > 0 ? 'Continuer' : 'Commencer',
-            onPressed: dept.cours.isNotEmpty
-                ? () => context.pushNamed(
-                      AppRoute.coursDetail,
-                      pathParameters: {'coursId': dept.cours.first.id.toString()},
-                      queryParameters: {
-                        'titre': dept.cours.first.title,
-                        'coursColor': c.value.toString(),
-                      },
-                    )
-                : () {},
-            width: 120,
+            onPressed: dept.cours.isEmpty
+                ? null
+                : () => context.pushNamed(
+                    AppRoute.coursDetail,
+                    pathParameters: {'coursId': dept.cours.first.id.toString()},
+                    queryParameters: {
+                      'titre': dept.cours.first.title,
+                      'coursColor': accent.toARGB32().toString(),
+                      'isPremium': dept.estAccessible.toString(),
+                    },
+                  ),
           ),
         ],
       ),
@@ -472,69 +315,76 @@ class _FormationDetailPageState extends State<FormationDetailPage>
   }
 }
 
-// ══════════════════════════════════════════════════════════════
-// TAB À PROPOS — GLASSMORPHISM
-// ══════════════════════════════════════════════════════════════
+
 class _TabAPropos extends StatelessWidget {
+  const _TabAPropos({required this.dept, required this.accentColor});
   final DepartementItem dept;
   final Color accentColor;
-  const _TabAPropos({required this.dept, required this.accentColor});
 
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.all(YkSpacing.md),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (dept.description.isNotEmpty) ...[
-            _SectionHeader(
-                title: 'À propos de cette formation',
-                icon: Icons.info_outline_rounded,
-                color: accentColor),
-            const SizedBox(height: 10),
-            _GlassCard(
-              child: Text(dept.description,
-                  style: TextStyle(fontSize: 14, height: 1.7, color: YekiColors.textMedium)),
+            _SectionHeader(title: 'À propos de cette formation', icon: Icons.info_outline_rounded, color: accentColor),
+            SizedBox(height: YkSpacing.sm),
+            YkCard(
+              child: Text(
+                dept.description,
+                style: YkTypography.bodyMd(context).copyWith(color: YkColors.textSecondary(context), height: 1.6),
+              ),
             ),
-            const SizedBox(height: 24),
+            SizedBox(height: YkSpacing.lg),
           ],
-
           if (dept.objectifs.isNotEmpty) ...[
-            _SectionHeader(
-                title: 'Objectifs pédagogiques',
-                icon: Icons.flag_rounded,
-                color: accentColor),
-            const SizedBox(height: 10),
+            _SectionHeader(title: 'Objectifs pédagogiques', icon: Icons.flag_rounded, color: accentColor),
+            SizedBox(height: YkSpacing.sm),
             _BulletList(text: dept.objectifs, color: accentColor),
-            const SizedBox(height: 24),
+            SizedBox(height: YkSpacing.lg),
           ],
-
           if (dept.prerequis.isNotEmpty) ...[
-            _SectionHeader(
-                title: 'Prérequis',
-                icon: Icons.checklist_rounded,
-                color: YekiColors.warning),
-            const SizedBox(height: 10),
-            _BulletList(text: dept.prerequis, color: YekiColors.warning),
-            const SizedBox(height: 24),
+            _SectionHeader(title: 'Prérequis', icon: Icons.checklist_rounded, color: YkColors.warning),
+            SizedBox(height: YkSpacing.sm),
+            _BulletList(text: dept.prerequis, color: YkColors.warning),
+            SizedBox(height: YkSpacing.lg),
           ],
-
-          _SectionHeader(
-              title: 'Infos pratiques',
-              icon: Icons.info_rounded,
-              color: accentColor),
-          const SizedBox(height: 10),
+          _SectionHeader(title: 'Infos pratiques', icon: Icons.info_rounded, color: accentColor),
+          SizedBox(height: YkSpacing.sm),
           _PratiqueCard(dept: dept, accentColor: accentColor),
-
           if (dept.certificatDelivre.isNotEmpty) ...[
-            const SizedBox(height: 24),
-            _SectionHeader(
-                title: 'Certification',
-                icon: Icons.card_membership_rounded,
-                color: YekiColors.gold),
-            const SizedBox(height: 10),
-            _CertifCard(dept: dept),
+            SizedBox(height: YkSpacing.lg),
+            _SectionHeader(title: 'Certification', icon: Icons.card_membership_rounded, color: Colors.amber),
+            SizedBox(height: YkSpacing.sm),
+            YkCard(
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 25,
+                    backgroundColor: Colors.amber.withValues(alpha: 0.12),
+                    child: const Icon(Icons.card_membership_rounded, color: Colors.amber),
+                  ),
+                  SizedBox(width: YkSpacing.sm),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Certificat délivré',
+                          style: YkTypography.caption(context).copyWith(color: YkColors.textSecondary(context)),
+                        ),
+                        Text(
+                          dept.certificatDelivre,
+                          style: YkTypography.label(context).copyWith(color: YkColors.textPrimary(context)),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ],
         ],
       ),
@@ -542,121 +392,104 @@ class _TabAPropos extends StatelessWidget {
   }
 }
 
-// ══════════════════════════════════════════════════════════════
-// TAB COURS — GLASSMORPHISM
-// ══════════════════════════════════════════════════════════════
 class _TabCours extends StatelessWidget {
+  const _TabCours({required this.dept, required this.accentColor});
   final DepartementItem dept;
   final Color accentColor;
-  const _TabCours({required this.dept, required this.accentColor});
 
   @override
   Widget build(BuildContext context) {
     if (dept.cours.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.book_outlined, size: 60, color: YekiColors.textLight),
-            const SizedBox(height: 14),
-            Text('Aucun cours disponible',
-                style: TextStyle(color: YekiColors.textMedium)),
-          ],
-        ),
+      return YkEmptyState(
+        icon: Icons.book_outlined,
+        title: 'Aucun cours disponible',
+        message: 'Les cours de cette formation seront ajoutés prochainement.',
       );
     }
-
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
+    return ListView.separated(
+      padding: EdgeInsets.all(YkSpacing.md),
       itemCount: dept.cours.length,
-      itemBuilder: (ctx, i) {
+      separatorBuilder: (_, _) => SizedBox(height: YkSpacing.sm),
+      itemBuilder: (context, i) {
         final c = dept.cours[i];
-        Color cardColor;
+        Color couleur;
         try {
-          final hex = c.color.replaceAll('#', '');
-          cardColor = Color(int.parse('FF$hex', radix: 16));
+          couleur = Color(int.parse(c.color.replaceAll('#', 'FF'), radix: 16));
         } catch (_) {
-          cardColor = accentColor;
+          couleur = accentColor;
         }
-
-        return _GlassCard(
-          margin: const EdgeInsets.only(bottom: 12),
-          child: GestureDetector(
-            onTap: () => ctx.pushNamed(
-                  AppRoute.coursDetail,
-                  pathParameters: {'coursId': c.id.toString()},
-                  queryParameters: {
-                    'titre': c.title,
-                    'coursColor': cardColor.value.toString(),
-                  },
+        return YkCard(
+          accentColor: couleur,
+          onTap: () => context.pushNamed(
+            AppRoute.coursDetail,
+            pathParameters: {'coursId': c.id.toString()},
+            queryParameters: {
+              'titre': c.title,
+              'coursColor': couleur.toARGB32().toString(),
+              'isPremium': dept.estAccessible.toString(),
+            },
+          ),
+          child: Row(
+            children: [
+              CircleAvatar(
+                radius: 19,
+                backgroundColor: couleur.withValues(alpha: 0.12),
+                child: Text('${i + 1}', style: TextStyle(color: couleur, fontWeight: FontWeight.bold)),
+              ),
+              SizedBox(width: YkSpacing.sm),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      c.title,
+                      style: YkTypography.label(context).copyWith(color: YkColors.textPrimary(context)),
+                    ),
+                    if (c.enseignantPrincipal != '---')
+                      Text(
+                        c.enseignantPrincipal,
+                        style: YkTypography.caption(context).copyWith(color: YkColors.textSecondary(context)),
+                      ),
+                    SizedBox(height: YkSpacing.xxs),
+                    Row(
+                      children: [
+                        Icon(Icons.play_lesson_rounded, size: 11, color: YkColors.textSecondary(context)),
+                        SizedBox(width: 3),
+                        Text(
+                          '${c.lessons} leçons',
+                          style: YkTypography.caption(context).copyWith(color: YkColors.textSecondary(context)),
+                        ),
+                        SizedBox(width: YkSpacing.xs),
+                        Icon(Icons.assignment_rounded, size: 11, color: YkColors.textSecondary(context)),
+                        SizedBox(width: 3),
+                        Text(
+                          '${c.assignments}',
+                          style: YkTypography.caption(context).copyWith(color: YkColors.textSecondary(context)),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
+              ),
+              Column(
                 children: [
-                  Container(
-                    width: 38, height: 38,
-                    decoration: BoxDecoration(
-                      color: cardColor.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: cardColor.withValues(alpha: 0.2), width: 0.8),
-                    ),
-                    child: Center(
-                      child: Text('${i + 1}',
-                          style: TextStyle(color: cardColor, fontWeight: FontWeight.bold, fontSize: 14)),
-                    ),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(c.title,
-                            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: YekiColors.textDark)),
-                        if (c.enseignantPrincipal != '—')
-                          Text(c.enseignantPrincipal,
-                              style: TextStyle(fontSize: 11, color: YekiColors.textMedium)),
-                        const SizedBox(height: 6),
-                        Row(
-                          children: [
-                            Icon(Icons.play_lesson_rounded, size: 11, color: YekiColors.textMedium),
-                            const SizedBox(width: 3),
-                            Text('${c.lessons} leçons',
-                                style: TextStyle(fontSize: 11, color: YekiColors.textMedium)),
-                            const SizedBox(width: 10),
-                            Icon(Icons.assignment_rounded, size: 11, color: YekiColors.textMedium),
-                            const SizedBox(width: 3),
-                            Text('${c.assignments}',
-                                style: TextStyle(fontSize: 11, color: YekiColors.textMedium)),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
+                  Text('${c.progression.toStringAsFixed(0)}%', style: TextStyle(color: couleur, fontWeight: FontWeight.bold)),
+                  SizedBox(height: YkSpacing.xxs),
                   SizedBox(
-                    width: 50,
-                    child: Column(
-                      children: [
-                        Text('${c.progression.toStringAsFixed(0)}%',
-                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: cardColor)),
-                        const SizedBox(height: 4),
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(4),
-                          child: LinearProgressIndicator(
-                            value: c.progression / 100,
-                            backgroundColor: YekiColors.textLight.withValues(alpha: 0.2),
-                            valueColor: AlwaysStoppedAnimation<Color>(cardColor),
-                            minHeight: 4,
-                          ),
-                        ),
-                      ],
+                    width: 40,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(YkRadius.full),
+                      child: LinearProgressIndicator(
+                        value: c.progression / 100,
+                        backgroundColor: YkColors.border(context),
+                        valueColor: AlwaysStoppedAnimation(couleur),
+                        minHeight: 4,
+                      ),
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  Icon(Icons.chevron_right_rounded, color: YekiColors.textMedium),
                 ],
               ),
-            ),
+            ],
           ),
         );
       },
@@ -664,403 +497,237 @@ class _TabCours extends StatelessWidget {
   }
 }
 
-// ══════════════════════════════════════════════════════════════
-// TAB PROGRAMME — GLASSMORPHISM
-// ══════════════════════════════════════════════════════════════
 class _TabProgramme extends StatelessWidget {
+  const _TabProgramme({required this.dept, required this.accentColor});
   final DepartementItem dept;
   final Color accentColor;
-  const _TabProgramme({required this.dept, required this.accentColor});
 
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.all(YkSpacing.md),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _GlassCard(
-            child: Padding(
-              padding: const EdgeInsets.all(18),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: _ProgramStatBlock(
-                        value: '${dept.nbCours}',
-                        label: 'Cours',
-                        icon: Icons.book_rounded,
-                        color: accentColor),
-                  ),
-                  Container(width: 1, height: 50, color: YekiColors.textLight.withValues(alpha: 0.2)),
-                  Expanded(
-                    child: _ProgramStatBlock(
-                        value: dept.dureeFormation.isEmpty ? 'Flexible' : dept.dureeFormation,
-                        label: 'Durée',
-                        icon: Icons.timer_rounded,
-                        color: YekiColors.primary),
-                  ),
-                  Container(width: 1, height: 50, color: YekiColors.textLight.withValues(alpha: 0.2)),
-                  Expanded(
-                    child: _ProgramStatBlock(
-                        value: dept.estCertifiante ? 'Oui' : 'Non',
-                        label: 'Certifiante',
-                        icon: Icons.verified_rounded,
-                        color: dept.estCertifiante ? YekiColors.gold : YekiColors.textLight),
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          const SizedBox(height: 24),
-
-          if (dept.cours.isNotEmpty) ...[
-            _SectionHeader(
-                title: 'Modules de formation',
-                icon: Icons.list_alt_rounded,
-                color: accentColor),
-            const SizedBox(height: 12),
-            ...List.generate(dept.cours.length, (i) {
-              final c = dept.cours[i];
-              return _GlassCard(
-                margin: const EdgeInsets.only(bottom: 8),
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 28, height: 28,
-                        decoration: BoxDecoration(
-                          color: accentColor.withValues(alpha: 0.1),
-                          shape: BoxShape.circle,
-                        ),
-                        child: Center(
-                          child: Text('${i + 1}',
-                              style: TextStyle(color: accentColor, fontSize: 12, fontWeight: FontWeight.bold)),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(c.title,
-                                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: YekiColors.textDark)),
-                            Text('${c.lessons} leçons · ${c.assignments} devoirs',
-                                style: TextStyle(fontSize: 11, color: YekiColors.textMedium)),
-                          ],
-                        ),
-                      ),
-                      if (c.progression == 100)
-                        Icon(Icons.check_circle_rounded, size: 20, color: YekiColors.success)
-                      else if (c.progression > 0)
-                        Icon(Icons.radio_button_checked_rounded, size: 20, color: accentColor)
-                      else
-                        Icon(Icons.radio_button_unchecked_rounded, size: 20, color: YekiColors.textLight),
-                    ],
+          YkCard(
+            child: Row(
+              children: [
+                Expanded(
+                  child: _blocStat(context, '${dept.nbCours}', 'Cours', Icons.book_rounded, accentColor),
+                ),
+                Container(width: 1, height: 50, color: YkColors.border(context)),
+                Expanded(
+                  child: _blocStat(
+                    context,
+                    dept.dureeFormation.isEmpty ? 'Flexible' : dept.dureeFormation,
+                    'Durée',
+                    Icons.timer_rounded,
+                    YkColors.info,
                   ),
                 ),
-              );
-            }),
+                Container(width: 1, height: 50, color: YkColors.border(context)),
+                Expanded(
+                  child: _blocStat(
+                    context,
+                    dept.estCertifiante ? 'Oui' : 'Non',
+                    'Certifiante',
+                    Icons.verified_rounded,
+                    dept.estCertifiante ? Colors.amber : YkColors.textTertiary(context),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          SizedBox(height: YkSpacing.lg),
+          if (dept.cours.isNotEmpty) ...[
+            _SectionHeader(title: 'Modules de formation', icon: Icons.list_alt_rounded, color: accentColor),
+            SizedBox(height: YkSpacing.sm),
+            for (var i = 0; i < dept.cours.length; i++) ...[
+              YkCard(
+                child: Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 14,
+                      backgroundColor: accentColor.withValues(alpha: 0.1),
+                      child: Text('${i + 1}', style: TextStyle(color: accentColor, fontSize: 12, fontWeight: FontWeight.bold)),
+                    ),
+                    SizedBox(width: YkSpacing.sm),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            dept.cours[i].title,
+                            style: YkTypography.bodyMd(context).copyWith(color: YkColors.textPrimary(context)),
+                          ),
+                          Text(
+                            '${dept.cours[i].lessons} leçons · ${dept.cours[i].assignments} devoirs',
+                            style: YkTypography.caption(context).copyWith(color: YkColors.textSecondary(context)),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (dept.cours[i].progression == 100)
+                      Icon(Icons.check_circle_rounded, color: YkColors.success)
+                    else if (dept.cours[i].progression > 0)
+                      Icon(Icons.radio_button_checked_rounded, color: accentColor)
+                    else
+                      Icon(Icons.radio_button_unchecked_rounded, color: YkColors.textTertiary(context)),
+                  ],
+                ),
+              ),
+              SizedBox(height: YkSpacing.xs),
+            ],
           ],
-
           if (dept.prerequis.isNotEmpty) ...[
-            const SizedBox(height: 24),
-            _SectionHeader(
-                title: 'Prérequis',
-                icon: Icons.checklist_rounded,
-                color: YekiColors.warning),
-            const SizedBox(height: 10),
-            _GlassCard(
-              child: Text(dept.prerequis,
-                  style: TextStyle(fontSize: 13, height: 1.6, color: YekiColors.textMedium)),
+            SizedBox(height: YkSpacing.sm),
+            _SectionHeader(title: 'Prérequis', icon: Icons.checklist_rounded, color: YkColors.warning),
+            SizedBox(height: YkSpacing.sm),
+            YkCard(
+              child: Text(
+                dept.prerequis,
+                style: YkTypography.bodySm(context).copyWith(color: YkColors.textSecondary(context), height: 1.5),
+              ),
             ),
           ],
         ],
       ),
     );
   }
-}
 
-// ══════════════════════════════════════════════════════════════
-// COMPOSANTS GLASSMORPHISM
-// ══════════════════════════════════════════════════════════════
-
-class _GlassCard extends StatelessWidget {
-  final Widget child;
-  final EdgeInsetsGeometry? margin;
-
-  const _GlassCard({
-    required this.child,
-    this.margin,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: margin,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(16),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
-          child: Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: YekiColors.white.withValues(alpha: 0.6),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: YekiColors.white.withValues(alpha: 0.8),
-                width: 1,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.03),
-                  blurRadius: 20,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: child,
-          ),
+  Widget _blocStat(BuildContext context, String valeur, String label, IconData icon, Color couleur) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, color: couleur, size: 20),
+        SizedBox(height: YkSpacing.xxs),
+        Text(
+          valeur,
+          style: YkTypography.label(context).copyWith(color: couleur),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          textAlign: TextAlign.center,
         ),
-      ),
+        Text(label, style: YkTypography.caption(context).copyWith(color: YkColors.textSecondary(context))),
+      ],
     );
   }
 }
 
 class _SectionHeader extends StatelessWidget {
+  const _SectionHeader({required this.title, required this.icon, required this.color});
   final String title;
   final IconData icon;
   final Color color;
-  const _SectionHeader({
-    required this.title,
-    required this.icon,
-    required this.color,
-  });
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
         Icon(icon, size: 18, color: color),
-        const SizedBox(width: 8),
-        Text(title,
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: color)),
+        SizedBox(width: YkSpacing.xs),
+        Text(title, style: YkTypography.label(context).copyWith(color: color)),
       ],
     );
   }
 }
 
 class _BulletList extends StatelessWidget {
+  const _BulletList({required this.text, required this.color});
   final String text;
   final Color color;
-  const _BulletList({required this.text, required this.color});
 
   @override
   Widget build(BuildContext context) {
-    final lignes = text
-        .split(RegExp(r'\n|•|·'))
-        .map((s) => s.trim())
-        .where((s) => s.isNotEmpty)
-        .toList();
-
-    return _GlassCard(
+    final lignes = text.split(RegExp(r'\n|•|·')).map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
+    return YkCard(
       child: Column(
-        children: lignes.map((l) {
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 10),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  width: 6, height: 6,
-                  margin: const EdgeInsets.only(top: 6, right: 12),
-                  decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-                ),
-                Expanded(
-                  child: Text(l,
-                      style: TextStyle(fontSize: 14, height: 1.5, color: YekiColors.textMedium)),
-                ),
-              ],
-            ),
-          );
-        }).toList(),
-      ),
-    );
-  }
-}
-
-class _PratiqueCard extends StatelessWidget {
-  final DepartementItem dept;
-  final Color accentColor;
-  const _PratiqueCard({required this.dept, required this.accentColor});
-
-  @override
-  Widget build(BuildContext context) {
-    final items = <_ItemPratique>[];
-    if (dept.dureeFormation.isNotEmpty) {
-      items.add(_ItemPratique(
-          icon: Icons.schedule_rounded, label: 'Durée',
-          value: dept.dureeFormation, color: YekiColors.primary));
-    }
-    if (dept.modeFormation.isNotEmpty) {
-      items.add(_ItemPratique(
-          icon: Icons.devices_rounded, label: 'Mode',
-          value: dept.modeFormationLabel, color: YekiColors.purple));
-    }
-    if (dept.ville.isNotEmpty)
-      items.add(_ItemPratique(
-          icon: Icons.location_on_rounded, label: 'Lieu',
-          value: dept.ville, color: accentColor));
-    if (dept.domaine.isNotEmpty)
-      items.add(_ItemPratique(
-          icon: Icons.category_rounded, label: 'Domaine',
-          value: dept.domaine, color: YekiColors.warning));
-    items.add(_ItemPratique(
-        icon: dept.prix == 0 ? Icons.lock_open_rounded : Icons.lock_rounded,
-        label: 'Accès',
-        value: dept.prix == 0 ? 'Gratuit' : '${dept.prix} FCFA',
-        color: dept.prix == 0 ? YekiColors.success : YekiColors.gold));
-
-    if (items.isEmpty) return const SizedBox.shrink();
-
-    return _GlassCard(
-      child: Column(
-        children: List.generate(items.length, (i) {
-          final item = items[i];
-          return Column(
-            children: [
-              ListTile(
-                leading: Container(
-                  width: 40, height: 40,
-                  decoration: BoxDecoration(
-                    color: item.color.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: item.color.withValues(alpha: 0.2), width: 0.8),
-                  ),
-                  child: Icon(item.icon, color: item.color, size: 18),
-                ),
-                title: Text(item.label,
-                    style: TextStyle(fontSize: 11, color: YekiColors.textMedium)),
-                subtitle: Text(item.value,
-                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: YekiColors.textDark)),
-                dense: true,
-              ),
-              if (i < items.length - 1)
-                Divider(height: 1, indent: 68, color: YekiColors.textLight.withValues(alpha: 0.1)),
-            ],
-          );
-        }),
-      ),
-    );
-  }
-}
-
-class _ItemPratique {
-  final IconData icon;
-  final String label, value;
-  final Color color;
-  const _ItemPratique({
-    required this.icon,
-    required this.label,
-    required this.value,
-    required this.color,
-  });
-}
-
-class _CertifCard extends StatelessWidget {
-  final DepartementItem dept;
-  const _CertifCard({required this.dept});
-
-  @override
-  Widget build(BuildContext context) {
-    return _GlassCard(
-      child: Row(
         children: [
-          Container(
-            width: 50, height: 50,
-            decoration: BoxDecoration(
-              color: YekiColors.gold.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: YekiColors.gold.withValues(alpha: 0.2), width: 0.8),
+          for (final ligne in lignes)
+            Padding(
+              padding: EdgeInsets.only(bottom: YkSpacing.xs),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 6,
+                    height: 6,
+                    margin: EdgeInsets.only(top: 6, right: YkSpacing.sm),
+                    decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+                  ),
+                  Expanded(
+                    child: Text(
+                      ligne,
+                      style: YkTypography.bodySm(context).copyWith(color: YkColors.textSecondary(context), height: 1.5),
+                    ),
+                  ),
+                ],
+              ),
             ),
-            child: const Icon(Icons.card_membership_rounded, color: YekiColors.gold, size: 24),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Certificat délivré',
-                    style: TextStyle(fontSize: 11, color: YekiColors.textMedium, fontWeight: FontWeight.w500)),
-                Text(dept.certificatDelivre,
-                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: YekiColors.textDark)),
-              ],
-            ),
-          ),
-          const Icon(Icons.verified_rounded, color: YekiColors.gold, size: 24),
         ],
       ),
     );
   }
 }
 
-class _QuickStat {
-  final IconData icon;
-  final String label, value;
-  final Color color;
-  const _QuickStat({
-    required this.icon,
-    required this.label,
-    required this.value,
-    required this.color,
-  });
-}
-
-class _QuickStatWidget extends StatelessWidget {
-  final _QuickStat stat;
-  const _QuickStatWidget({required this.stat});
+class _PratiqueCard extends StatelessWidget {
+  const _PratiqueCard({required this.dept, required this.accentColor});
+  final DepartementItem dept;
+  final Color accentColor;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Icon(stat.icon, color: stat.color, size: 22),
-        const SizedBox(height: 6),
-        Text(stat.value,
-            style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: stat.color),
-            maxLines: 1, overflow: TextOverflow.ellipsis),
-        Text(stat.label,
-            style: TextStyle(fontSize: 10, color: YekiColors.textMedium)),
-      ],
-    );
-  }
-}
+    final items = <(IconData, String, String, Color)>[
+      if (dept.dureeFormation.isNotEmpty) (Icons.schedule_rounded, 'Durée', dept.dureeFormation, YkColors.info),
+      if (dept.modeFormation.isNotEmpty)
+        (Icons.devices_rounded, 'Mode', dept.modeFormationLabel, YkColors.accent(context)),
+      if (dept.ville.isNotEmpty) (Icons.location_on_rounded, 'Lieu', dept.ville, accentColor),
+      if (dept.domaine.isNotEmpty) (Icons.category_rounded, 'Domaine', dept.domaine, YkColors.warning),
+      (
+        dept.prix == 0 ? Icons.lock_open_rounded : Icons.lock_rounded,
+        'Accès',
+        dept.prix == 0 ? 'Gratuit' : '${dept.prix} FCFA',
+        dept.prix == 0 ? YkColors.success : YkColors.warning,
+      ),
+    ];
 
-class _ProgramStatBlock extends StatelessWidget {
-  final String value, label;
-  final IconData icon;
-  final Color color;
-  const _ProgramStatBlock({
-    required this.value,
-    required this.label,
-    required this.icon,
-    required this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, color: color, size: 20),
-        const SizedBox(height: 6),
-        Text(value,
-            style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: color),
-            maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center),
-        Text(label,
-            style: TextStyle(fontSize: 10, color: YekiColors.textMedium)),
-      ],
+    return YkCard(
+      child: Column(
+        children: [
+          for (var i = 0; i < items.length; i++) ...[
+            Row(
+              children: [
+                CircleAvatar(
+                  radius: 20,
+                  backgroundColor: items[i].$4.withValues(alpha: 0.12),
+                  child: Icon(items[i].$1, color: items[i].$4, size: 18),
+                ),
+                SizedBox(width: YkSpacing.sm),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        items[i].$2,
+                        style: YkTypography.caption(context).copyWith(color: YkColors.textSecondary(context)),
+                      ),
+                      Text(
+                        items[i].$3,
+                        style: YkTypography.label(context).copyWith(color: YkColors.textPrimary(context)),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            if (i < items.length - 1)
+              Padding(
+                padding: EdgeInsets.symmetric(vertical: YkSpacing.xs),
+                child: Divider(height: 1, color: YkColors.border(context)),
+              ),
+          ],
+        ],
+      ),
     );
   }
 }

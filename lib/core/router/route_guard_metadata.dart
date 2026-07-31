@@ -1,9 +1,10 @@
 import 'route_names.dart';
 
 /// Les 6 rôles backend qui ne sont pas `apprenant` (`Profile.USER_TYPES`,
-/// `apps/accounts/models.py`). `service_client` y est inclus : aucun écran
-/// dédié n'existe pour ce rôle, il partage l'arbre enseignant (voir
-/// `guards.dart`, note sur `homePathForRole`).
+/// `apps/accounts/models.py`). `service_client` a son propre dashboard
+/// depuis P9.5 (`AppRoute.serviceClientDashboard`, voir `guards.dart` —
+/// `homePathForRole`) mais reste dans ce set : il garde accès aux routes
+/// `enseignantAny` partagées (profil, historique...) au cas où.
 const Set<String> kEnseignantRoles = {
   'admin',
   'service_client',
@@ -77,6 +78,7 @@ final Map<String, RouteAccess> routeAccessByName = {
   AppRoute.designSystem: RouteAccess.public,
 
   // Apprenant.
+  AppRoute.dashboardAccueil: RouteAccess.apprenant,
   AppRoute.dashboardCursus: RouteAccess.apprenant,
   AppRoute.dashboardConcours: RouteAccess.apprenant,
   AppRoute.dashboardFormations: RouteAccess.apprenant,
@@ -109,6 +111,8 @@ final Map<String, RouteAccess> routeAccessByName = {
   AppRoute.notifications: RouteAccess.anyAuthenticated,
   AppRoute.wallet: RouteAccess.anyAuthenticated,
   AppRoute.recharge: RouteAccess.anyAuthenticated,
+  AppRoute.retrait: RouteAccess.roles({'enseignant_cadre'}),
+  AppRoute.serviceClientDashboard: RouteAccess.roles({'service_client'}),
 
   // Enseignant — onglets/alias.
   AppRoute.enseignantDashboard: RouteAccess.enseignantAny,

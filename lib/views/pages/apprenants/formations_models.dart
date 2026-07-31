@@ -4,12 +4,10 @@
 // AVEC GESTION DES NIVEAUX ACCESSIBLES ET ACCÈS RESTREINT
 // ════════════════════════════════════════════════════════════════
 
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:yeki/core/constants/api_constants.dart';
+import 'package:yeki/core/design/tokens/tokens.dart';
+import 'package:yeki/repositories/auth_repository.dart';
 
 const String kBaseUrl = ApiConstants.baseUrl;
 
@@ -229,13 +227,13 @@ class DepartementItem {
     return 'Demander l\'accès à cette formation';
   }
   
-  // Couleur de l'état d'accès
+  // Couleur de l'état d'accès (P11.2 : tokens Yk*, plus de Colors.* en dur).
   Color get couleurAcces {
-    if (!accesRestreint) return Colors.green;
-    if (estAccessible) return Colors.green;
-    if (demandeEnAttente) return Colors.orange;
-    if (demandeRefusee) return Colors.red;
-    return Colors.grey;
+    if (!accesRestreint) return YkColors.success;
+    if (estAccessible) return YkColors.success;
+    if (demandeEnAttente) return YkColors.warning;
+    if (demandeRefusee) return YkColors.error;
+    return YkColors.neutral400;
   }
   
   // Icône de l'état d'accès
@@ -359,28 +357,15 @@ class NiveauService {
   };
   
   static String? _cachedNiveau;
-  
+
+  /// P11.2 : passe par `AuthRepository` (`ApiClient`) au lieu d'un `http`
+  /// brut dupliquant `GET /profil/me/` — même endpoint, une seule source.
   static Future<String?> getNiveau() async {
     if (_cachedNiveau != null) return _cachedNiveau;
-    
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString('token');
-      if (token == null) return null;
-      
-      final response = await http.get(
-        Uri.parse('$kBaseUrl/profil/me/'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Token $token',
-        },
-      );
-      
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        _cachedNiveau = data['niveau']?.toString();
-        return _cachedNiveau;
-      }
+      final profil = await AuthRepository().getCurrentUser();
+      _cachedNiveau = profil.niveau;
+      return _cachedNiveau;
     } catch (e) {
       debugPrint('Erreur récupération niveau: $e');
     }

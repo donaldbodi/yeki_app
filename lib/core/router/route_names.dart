@@ -14,6 +14,7 @@ abstract final class AppRoute {
   static const String designSystem = 'designSystem';
 
   // ── Apprenant : onglets du shell ───────────────────────────────
+  static const String dashboardAccueil = 'dashboardAccueil';
   static const String dashboardCursus = 'dashboardCursus';
   static const String dashboardConcours = 'dashboardConcours';
   static const String dashboardFormations = 'dashboardFormations';
@@ -45,6 +46,7 @@ abstract final class AppRoute {
   static const String notifications = 'notifications';
   static const String wallet = 'wallet';
   static const String recharge = 'recharge';
+  static const String retrait = 'retrait';
 
   // ── Enseignant : onglets du shell + alias de dashboard ──────────
   static const String enseignantDashboard = 'enseignantDashboard';
@@ -65,4 +67,5 @@ abstract final class AppRoute {
       'coordinationDepartementDetail';
   static const String cadreDepartementDetail = 'cadreDepartementDetail';
   static const String cadreGestionDemandes = 'cadreGestionDemandes';
+  static const String serviceClientDashboard = 'serviceClientDashboard';
 }

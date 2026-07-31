@@ -77,7 +77,7 @@ class _OlympiadeInscriptionPageState extends State<OlympiadeInscriptionPage> {
     } on ApiException catch (e) {
       if (!mounted) return;
       if (e.code == ApiErrorCodes.paymentRequired) {
-        final paye = await YkManualPaymentFlow.show(
+        final paye = await YkWalletDebitConfirmSheet.show(
           context,
           montant: widget.prixParticipation,
           description:

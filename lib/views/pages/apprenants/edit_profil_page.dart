@@ -1,18 +1,16 @@
-// lib/views/pages/enseignants/edit_profil_page.dart (ou shared/edit_profil_page.dart)
-// ═══════════════════════════════════════════════════════════════════════════
-// PAGE D'ÉDITION DU PROFIL — AVEC VILLE ET WHATSAPP
-// ═══════════════════════════════════════════════════════════════════════════
+// lib/views/pages/apprenants/edit_profil_page.dart
+//
+// Refondu en P11.8 (rituel P5.0) : bascule vers `AuthRepository` (plus de
+// `http`/`SharedPreferences` bruts) et les tokens/composants `Yk*`
+// (`YkTextField`/`YkDropdown` remplacent les champs faits main).
 
-import 'dart:convert';
-import 'dart:typed_data';
-import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'package:http_parser/http_parser.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:yeki/core/theme/app_theme.dart';
-import 'package:yeki/core/constants/api_constants.dart';
-import 'package:yeki/utils/error_handler.dart';
+import 'package:flutter/material.dart';
+
+import 'package:yeki/core/design/components/components.dart';
+import 'package:yeki/core/design/tokens/tokens.dart';
+import 'package:yeki/core/network/api_exception.dart';
+import 'package:yeki/repositories/auth_repository.dart';
 
 /// Édition du profil de l'utilisateur CONNECTÉ — toujours « mon propre
 /// profil », jamais celui d'un tiers : autonome, fetch son propre profil
@@ -27,76 +25,52 @@ class EditProfilePage extends StatefulWidget {
 }
 
 class _EditProfilePageState extends State<EditProfilePage> {
-  late final TextEditingController _firstNameCtrl;
-  late final TextEditingController _lastNameCtrl;
-  late final TextEditingController _emailCtrl;
-  late final TextEditingController _phoneCtrl;
-  late final TextEditingController _bioCtrl;
-  late final TextEditingController _niveauCtrl;
-  late final TextEditingController _villeCtrl;
-  late final TextEditingController _whatsappCtrl;
+  final _repo = AuthRepository();
+
+  final _firstNameCtrl = TextEditingController();
+  final _lastNameCtrl = TextEditingController();
+  final _emailCtrl = TextEditingController();
+  final _phoneCtrl = TextEditingController();
+  final _bioCtrl = TextEditingController();
+  final _niveauCtrl = TextEditingController();
+  final _villeCtrl = TextEditingController();
+  final _whatsappCtrl = TextEditingController();
+
+  static const _cursusOptions = ['Secondaire - Francophone', 'Secondaire - Anglophone', 'Licence'];
 
   String? _cursus;
-  Uint8List? _avatarBytes;
-  String? _avatarName;
+  YkPickedFile? _avatar;
   bool _saving = false;
-  bool _loadingProfil = true;
+  bool _chargement = true;
   Map<String, dynamic> _profil = {};
-
-  final List<String> _cursusOptions = [
-    'Secondaire - Francophone',
-    'Secondaire - Anglophone',
-    'Licence',
-  ];
 
   @override
   void initState() {
     super.initState();
-    _firstNameCtrl = TextEditingController();
-    _lastNameCtrl = TextEditingController();
-    _emailCtrl = TextEditingController();
-    _phoneCtrl = TextEditingController();
-    _bioCtrl = TextEditingController();
-    _niveauCtrl = TextEditingController();
-    _villeCtrl = TextEditingController();
-    _whatsappCtrl = TextEditingController();
     _cursus = _cursusOptions.first;
-    _fetchProfil();
+    _charger();
   }
 
-  Future<void> _fetchProfil() async {
-    final token = await _getToken();
-    if (token == null) {
-      if (mounted) setState(() => _loadingProfil = false);
-      return;
-    }
+  Future<void> _charger() async {
     try {
-      final res = await http.get(
-        Uri.parse(ApiConstants.profilMe),
-        headers: {'Authorization': 'Token $token'},
-      );
-      if (res.statusCode == 200) {
-        final profil = jsonDecode(res.body) as Map<String, dynamic>;
-        if (!mounted) return;
-        setState(() {
-          _profil = profil;
-          _firstNameCtrl.text = profil['first_name'] ?? '';
-          _lastNameCtrl.text = profil['last_name'] ?? '';
-          _emailCtrl.text = profil['email'] ?? '';
-          _phoneCtrl.text = profil['phone'] ?? '';
-          _bioCtrl.text = profil['bio'] ?? '';
-          _niveauCtrl.text = profil['niveau'] ?? '';
-          _villeCtrl.text = profil['ville'] ?? '';
-          _whatsappCtrl.text = profil['whatsapp'] ?? '';
-          final cursusValue = profil['cursus'] as String?;
-          _cursus = (cursusValue?.isNotEmpty == true) ? cursusValue : _cursusOptions.first;
-          _loadingProfil = false;
-        });
-      } else if (mounted) {
-        setState(() => _loadingProfil = false);
-      }
-    } catch (e) {
-      if (mounted) setState(() => _loadingProfil = false);
+      final profil = await _repo.getCurrentUserRaw();
+      if (!mounted) return;
+      setState(() {
+        _profil = profil;
+        _firstNameCtrl.text = profil['first_name'] ?? '';
+        _lastNameCtrl.text = profil['last_name'] ?? '';
+        _emailCtrl.text = profil['email'] ?? '';
+        _phoneCtrl.text = profil['phone'] ?? '';
+        _bioCtrl.text = profil['bio'] ?? '';
+        _niveauCtrl.text = profil['niveau'] ?? '';
+        _villeCtrl.text = profil['ville'] ?? '';
+        _whatsappCtrl.text = profil['whatsapp'] ?? '';
+        final cursusValue = profil['cursus'] as String?;
+        _cursus = (cursusValue?.isNotEmpty == true) ? cursusValue : _cursusOptions.first;
+      });
+    } catch (_) {
+    } finally {
+      if (mounted) setState(() => _chargement = false);
     }
   }
 
@@ -113,101 +87,30 @@ class _EditProfilePageState extends State<EditProfilePage> {
     super.dispose();
   }
 
-  Future<String?> _getToken() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString('token');
-  }
-
-  Future<void> _pickAvatar() async {
-    try {
-      final result = await FilePicker.platform.pickFiles(
-        type: FileType.image,
-        withData: true,
-      );
-      if (result != null && result.files.single.bytes != null) {
-        setState(() {
-          _avatarBytes = result.files.single.bytes;
-          _avatarName = result.files.single.name;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        ErrorHandler.showError(context, 'Erreur lors de la sélection de l\'image');
-      }
-    }
-  }
-
-  Future<void> _save() async {
-    if (_saving) return;
-    
+  Future<void> _enregistrer() async {
     setState(() => _saving = true);
-    
-    final token = await _getToken();
-    if (token == null) {
-      if (mounted) {
-        ErrorHandler.showError(context, 'Session expirée. Veuillez vous reconnecter.');
-        setState(() => _saving = false);
-      }
-      return;
-    }
-
     try {
-      final uri = Uri.parse('${ApiConstants.baseUrl}/profil/update/');
-      final request = http.MultipartRequest('PATCH', uri);
-      request.headers['Authorization'] = 'Token $token';
-
-      // Ajout des champs texte
-      request.fields['first_name'] = _firstNameCtrl.text.trim();
-      request.fields['last_name'] = _lastNameCtrl.text.trim();
-      request.fields['email'] = _emailCtrl.text.trim();
-      request.fields['phone'] = _phoneCtrl.text.trim();
-      request.fields['bio'] = _bioCtrl.text.trim();
-      request.fields['niveau'] = _niveauCtrl.text.trim();
-      request.fields['ville'] = _villeCtrl.text.trim();
-      request.fields['whatsapp'] = _whatsappCtrl.text.trim();
-      
-      if (_cursus != null && _cursus!.isNotEmpty) {
-        request.fields['cursus'] = _cursus!;
-      }
-
-      // Ajout de l'avatar si sélectionné
-      if (_avatarBytes != null && _avatarName != null) {
-        final extension = _avatarName!.split('.').last.toLowerCase();
-        final mimeType = extension == 'png' ? 'png' : 'jpeg';
-        
-        request.files.add(
-          http.MultipartFile.fromBytes(
-            'avatar',
-            _avatarBytes!,
-            filename: _avatarName,
-            contentType: MediaType('image', mimeType),
-          ),
-        );
-      }
-
-      final streamedResponse = await request.send();
-      final response = await http.Response.fromStream(streamedResponse);
-
-      if (!mounted) return;
-      
-      setState(() => _saving = false);
-
-      if (response.statusCode == 200) {
-        ErrorHandler.showSuccess(context, 'Profil mis à jour avec succès !');
-        Navigator.pop(context, true);
-      } else {
-        String errorMessage = 'Erreur ${response.statusCode}';
-        try {
-          final errorData = jsonDecode(response.body);
-          errorMessage = errorData['detail'] ?? errorData['message'] ?? errorMessage;
-        } catch (_) {}
-        ErrorHandler.showError(context, errorMessage);
-      }
-    } catch (e) {
+      await _repo.updateProfil({
+        'first_name': _firstNameCtrl.text.trim(),
+        'last_name': _lastNameCtrl.text.trim(),
+        'email': _emailCtrl.text.trim(),
+        'phone': _phoneCtrl.text.trim(),
+        'bio': _bioCtrl.text.trim(),
+        'niveau': _niveauCtrl.text.trim(),
+        'ville': _villeCtrl.text.trim(),
+        'whatsapp': _whatsappCtrl.text.trim(),
+        if (_cursus != null && _cursus!.isNotEmpty) 'cursus': _cursus!,
+      }, avatar: _avatar);
       if (mounted) {
-        setState(() => _saving = false);
-        ErrorHandler.showError(context, 'Erreur réseau: ${e.toString()}');
+        YkSnack.success(context, 'Profil mis à jour avec succès !');
+        Navigator.pop(context, true);
       }
+    } on ApiException catch (e) {
+      if (mounted) YkSnack.error(context, e.message);
+    } catch (_) {
+      if (mounted) YkSnack.error(context, 'Erreur réseau.');
+    } finally {
+      if (mounted) setState(() => _saving = false);
     }
   }
 
@@ -218,93 +121,103 @@ class _EditProfilePageState extends State<EditProfilePage> {
 
   @override
   Widget build(BuildContext context) {
-    if (_loadingProfil) {
-      return const Scaffold(
-        backgroundColor: YekiColors.backgroundLight,
-        body: Center(child: CircularProgressIndicator(color: YekiColors.primaryDark)),
-      );
+    if (_chargement) {
+      return Scaffold(backgroundColor: YkColors.background(context), body: Center(child: YkProgress(shape: YkProgressShape.circular)));
     }
 
-    final currentAvatarUrl = _profil['avatar'] as String?;
-
     return Scaffold(
-      backgroundColor: YekiColors.backgroundLight,
-      appBar: AppBar(
-        title: const Text(
-          "Édition du Profil",
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: YekiColors.white),
-        ),
-        backgroundColor: YekiColors.textDark,
-        elevation: 0,
-        centerTitle: true,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: YekiColors.white, size: 18),
-          onPressed: () => Navigator.pop(context),
-        ),
-      ),
+      backgroundColor: YkColors.background(context),
+      appBar: AppBar(title: const Text('Édition du profil')),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
+        padding: EdgeInsets.all(YkSpacing.md),
         child: Column(
           children: [
-            // ── Avatar ────────────────────────────────────
-            _buildAvatarSection(currentAvatarUrl),
-            const SizedBox(height: 30),
-
-            // ── Informations personnelles ─────────────────
-            _formSection("Informations Personnelles", [
-              _buildField("Prénom", _firstNameCtrl, Icons.person_outline),
-              _buildField("Nom", _lastNameCtrl, Icons.person_outline),
-              _buildField("Bio / Résumé", _bioCtrl, Icons.description_outlined, maxLines: 3),
-            ]),
-
-            // ── Scolarité ─────────────────────────────────
-            _formSection("Scolarité", [
-              _buildDropdown("Cursus actuel", _cursus, _cursusOptions, (value) => setState(() => _cursus = value)),
-              _buildField("Niveau d'étude", _niveauCtrl, Icons.school_outlined),
-            ]),
-
-            // ── Contact ───────────────────────────────────
-            _formSection("Contact", [
-              _buildField("Email", _emailCtrl, Icons.email_outlined, type: TextInputType.emailAddress),
-              _buildField("Téléphone", _phoneCtrl, Icons.phone_outlined, type: TextInputType.phone),
-              _buildField("Ville", _villeCtrl, Icons.location_on_outlined),
-              if (_isEnseignant)
-                _buildField("WhatsApp", _whatsappCtrl, Icons.chat_bubble_outline, type: TextInputType.phone),
-            ]),
-
-            const SizedBox(height: 20),
-            _buildSaveButton(),
-            const SizedBox(height: 40),
+            _avatarSection(context),
+            SizedBox(height: YkSpacing.lg),
+            YkSection(
+              title: 'Informations personnelles',
+              child: YkCard(
+                child: Column(
+                  children: [
+                    YkTextField(controller: _firstNameCtrl, label: 'Prénom'),
+                    SizedBox(height: YkSpacing.sm),
+                    YkTextField(controller: _lastNameCtrl, label: 'Nom'),
+                    SizedBox(height: YkSpacing.sm),
+                    YkTextField(controller: _bioCtrl, label: 'Bio / Résumé', type: YkTextFieldType.multiline, maxLines: 3),
+                  ],
+                ),
+              ),
+            ),
+            SizedBox(height: YkSpacing.md),
+            YkSection(
+              title: 'Scolarité',
+              child: YkCard(
+                child: Column(
+                  children: [
+                    YkDropdown<String>(
+                      label: 'Cursus actuel',
+                      value: _cursus,
+                      items: [for (final c in _cursusOptions) YkDropdownItem(value: c, label: c)],
+                      onChanged: (v) => setState(() => _cursus = v),
+                    ),
+                    SizedBox(height: YkSpacing.sm),
+                    YkTextField(controller: _niveauCtrl, label: "Niveau d'étude"),
+                  ],
+                ),
+              ),
+            ),
+            SizedBox(height: YkSpacing.md),
+            YkSection(
+              title: 'Contact',
+              child: YkCard(
+                child: Column(
+                  children: [
+                    YkTextField(controller: _emailCtrl, label: 'Email'),
+                    SizedBox(height: YkSpacing.sm),
+                    YkTextField(controller: _phoneCtrl, label: 'Téléphone'),
+                    SizedBox(height: YkSpacing.sm),
+                    YkTextField(controller: _villeCtrl, label: 'Ville'),
+                    if (_isEnseignant) ...[
+                      SizedBox(height: YkSpacing.sm),
+                      YkTextField(controller: _whatsappCtrl, label: 'WhatsApp'),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+            SizedBox(height: YkSpacing.lg),
+            YkButton(label: 'Enregistrer les modifications', icon: Icons.save_rounded, isLoading: _saving, onPressed: _saving ? null : _enregistrer),
+            SizedBox(height: YkSpacing.xl),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildAvatarSection(String? currentAvatarUrl) {
+  Widget _avatarSection(BuildContext context) {
+    final avatarUrlActuel = _profil['avatar'] as String?;
     return Center(
       child: Stack(
         children: [
-          CircleAvatar(
-            radius: 60,
-            backgroundColor: YekiColors.primaryDark,
-            child: CircleAvatar(
-              radius: 57,
-              backgroundColor: YekiColors.white,
-              backgroundImage: _avatarBytes != null
-                  ? MemoryImage(_avatarBytes!) as ImageProvider
-                  : (currentAvatarUrl != null && currentAvatarUrl.isNotEmpty
-                      ? NetworkImage(currentAvatarUrl)
-                      : const AssetImage('assets/images/user.jpg') as ImageProvider),
+          ClipOval(
+            child: SizedBox(
+              width: 114,
+              height: 114,
+              child: _avatar != null
+                  ? Image.memory(_avatar!.bytes, fit: BoxFit.cover)
+                  : (avatarUrlActuel != null && avatarUrlActuel.isNotEmpty
+                      ? Image.network(avatarUrlActuel, fit: BoxFit.cover)
+                      : YkAvatar(fallbackText: _firstNameCtrl.text.isNotEmpty ? _firstNameCtrl.text : '?', size: YkAvatarSize.lg)),
             ),
           ),
           Positioned(
             bottom: 0,
             right: 0,
-            child: FloatingActionButton.small(
-              onPressed: _pickAvatar,
-              backgroundColor: YekiColors.primaryDark,
-              child: const Icon(Icons.camera_alt, color: YekiColors.white, size: 18),
+            child: YkIconButton(
+              icon: Icons.camera_alt_rounded,
+              label: 'Changer la photo de profil',
+              variant: YkIconButtonVariant.filled,
+              onPressed: _choisirAvatar,
             ),
           ),
         ],
@@ -312,128 +225,26 @@ class _EditProfilePageState extends State<EditProfilePage> {
     );
   }
 
-  Widget _formSection(String title, List<Widget> fields) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(left: 5, bottom: 10, top: 20),
-          child: Text(
-            title,
-            style: const TextStyle(
-              fontWeight: FontWeight.bold,
-              color: YekiColors.textDark,
-              fontSize: 15,
-            ),
-          ),
-        ),
-        Container(
-          padding: const EdgeInsets.all(15),
-          decoration: BoxDecoration(
-            color: YekiColors.white,
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: YekiShadows.subtle,
-          ),
-          child: Column(children: fields),
-        ),
-      ],
-    );
+  Future<void> _choisirAvatar() async {
+    // Réutilise `YkFileUpload._pick()` indirectement via son propre
+    // sélecteur serait plus lourd qu'utile ici (pas de zone de dépôt
+    // nécessaire pour un simple avatar) — on garde `FilePicker` direct
+    // mais on lit toujours via `.bytes` (jamais `.path`), cohérent avec
+    // la règle CDC §5.5.2 documentée par `YkFileUpload`.
+    final resultat = await _ouvrirSelecteurImage();
+    if (resultat != null) setState(() => _avatar = resultat);
   }
 
-  Widget _buildField(
-    String label,
-    TextEditingController controller,
-    IconData icon, {
-    int maxLines = 1,
-    TextInputType type = TextInputType.text,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 15),
-      child: TextField(
-        controller: controller,
-        maxLines: maxLines,
-        keyboardType: type,
-        style: const TextStyle(color: YekiColors.textDark),
-        decoration: InputDecoration(
-          labelText: label,
-          labelStyle: const TextStyle(color: YekiColors.textMedium),
-          prefixIcon: Icon(icon, color: YekiColors.primaryDark, size: 20),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: YekiColors.borderLight),
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: YekiColors.borderLight),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: YekiColors.primaryDark, width: 1.5),
-          ),
-          errorBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: YekiColors.error),
-          ),
-          filled: true,
-          fillColor: YekiColors.white,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDropdown<T>(
-    String label,
-    T? value,
-    List<T> items,
-    void Function(T?) onChanged,
-  ) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 15),
-      child: DropdownButtonFormField<T>(
-        value: items.contains(value) ? value : items.first,
-        decoration: InputDecoration(
-          labelText: label,
-          labelStyle: const TextStyle(color: YekiColors.textMedium),
-          prefixIcon: Icon(Icons.list_alt_rounded, color: YekiColors.primaryDark),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: YekiColors.borderLight),
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: YekiColors.borderLight),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: YekiColors.primaryDark, width: 1.5),
-          ),
-          filled: true,
-          fillColor: YekiColors.white,
-        ),
-        items: items.map((item) {
-          return DropdownMenuItem<T>(
-            value: item,
-            child: Text(
-              item.toString(),
-              style: const TextStyle(color: YekiColors.textDark),
-            ),
-          );
-        }).toList(),
-        onChanged: onChanged,
-        dropdownColor: YekiColors.white,
-        icon: Icon(Icons.keyboard_arrow_down_rounded, color: YekiColors.primaryDark),
-        style: const TextStyle(color: YekiColors.textDark),
-      ),
-    );
-  }
-
-  Widget _buildSaveButton() {
-    return YekiButton(
-      label: "Enregistrer les modifications",
-      icon: Icons.save_rounded,
-      onPressed: _saving ? null : _save,
-      isLoading: _saving,
-      backgroundColor: YekiColors.primaryDark,
+  Future<YkPickedFile?> _ouvrirSelecteurImage() async {
+    final result = await FilePicker.platform.pickFiles(type: FileType.image, withData: true);
+    final fichier = result?.files.single;
+    if (fichier?.bytes == null) return null;
+    final extension = fichier!.name.contains('.') ? fichier.name.split('.').last.toLowerCase() : '';
+    return YkPickedFile(
+      bytes: fichier.bytes!,
+      name: fichier.name,
+      mimeType: extension == 'png' ? 'image/png' : 'image/jpeg',
+      size: fichier.size,
     );
   }
 }

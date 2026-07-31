@@ -1,17 +1,20 @@
 // lib/views/pages/shared/profil_page.dart
-// ═══════════════════════════════════════════════════════════════════════════
-// PAGE PROFIL — AVEC VILLE, WHATSAPP ET CLASSEMENT
-// ═══════════════════════════════════════════════════════════════════════════
+//
+// Refondu en P11.8 (rituel P5.0) : bascule vers `AuthRepository`/
+// `ClassementRepository` (plus de `http`/`SharedPreferences` bruts) et
+// les tokens/composants `Yk*`. Les 2 couleurs en dur (dégradés d'en-tête
+// enseignant/apprenant) remplacées par des teintes dérivées du token
+// `YkColors.accent`.
 
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
-import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
+
+import 'package:yeki/core/design/components/components.dart';
+import 'package:yeki/core/design/tokens/tokens.dart';
 import 'package:yeki/core/router/route_names.dart';
-import 'package:yeki/core/theme/app_theme.dart';
-import 'package:yeki/core/constants/api_constants.dart';
+import 'package:yeki/repositories/auth_repository.dart';
+import 'package:yeki/repositories/classement_repository.dart';
 
 class ProfilPage extends StatefulWidget {
   const ProfilPage({super.key});
@@ -20,25 +23,19 @@ class ProfilPage extends StatefulWidget {
   State<ProfilPage> createState() => _ProfilPageState();
 }
 
-class _ProfilPageState extends State<ProfilPage>
-    with SingleTickerProviderStateMixin {
+class _ProfilPageState extends State<ProfilPage> with SingleTickerProviderStateMixin {
   bool _loading = true;
   Map<String, dynamic> _profil = {};
   Map<String, dynamic> _stats = {};
   Map<String, dynamic> _classement = {};
   String _userType = '';
 
-  late AnimationController _animCtrl;
-  late Animation<double> _fadeAnim;
+  late final _animCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 600));
+  late final _fadeAnim = CurvedAnimation(parent: _animCtrl, curve: Curves.easeOut);
 
   @override
   void initState() {
     super.initState();
-    _animCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 600),
-    );
-    _fadeAnim = CurvedAnimation(parent: _animCtrl, curve: Curves.easeOut);
     _charger();
   }
 
@@ -48,59 +45,33 @@ class _ProfilPageState extends State<ProfilPage>
     super.dispose();
   }
 
-  Future<Map<String, String>> _headers() async {
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('token');
-    return {
-      'Content-Type': 'application/json',
-      if (token != null) 'Authorization': 'Token $token',
-    };
-  }
-
   Future<void> _charger() async {
     setState(() => _loading = true);
     try {
-      final headers = await _headers();
-      
-      // Charger profil et stats
-      final [resProfil, resStats, resClassement] = await Future.wait([
-        http.get(Uri.parse(ApiConstants.profilMe), headers: headers),
-        http.get(Uri.parse(ApiConstants.profilStats), headers: headers),
-        http.get(Uri.parse(ApiConstants.monScore), headers: headers),
+      final profil = await AuthRepository().getCurrentUserRaw();
+      final userType = profil['user_type']?.toString() ?? '';
+      final estEnseignant = userType.contains('enseignant') || userType == 'admin';
+
+      final resultats = await Future.wait([
+        AuthRepository().profilStats(),
+        if (!estEnseignant) ClassementRepository().monScore() else Future.value(<String, dynamic>{}),
       ]);
 
       if (!mounted) return;
-
-      if (resProfil.statusCode == 200) {
-        final data = jsonDecode(resProfil.body) as Map<String, dynamic>;
-        setState(() {
-          _profil = data;
-          _userType = data['user_type']?.toString() ?? '';
-        });
-      }
-
-      if (resStats.statusCode == 200) {
-        setState(() {
-          _stats = jsonDecode(resStats.body) as Map<String, dynamic>;
-        });
-      }
-
-      if (resClassement.statusCode == 200) {
-        setState(() {
-          _classement = jsonDecode(resClassement.body) as Map<String, dynamic>;
-        });
-      }
-
+      setState(() {
+        _profil = profil;
+        _userType = userType;
+        _stats = resultats[0];
+        _classement = resultats[1];
+      });
       _animCtrl.forward();
     } catch (_) {
-      // Gestion silencieuse des erreurs
     } finally {
       if (mounted) setState(() => _loading = false);
     }
   }
 
-  bool get _isEnseignant =>
-      _userType.contains('enseignant') || _userType == 'admin';
+  bool get _isEnseignant => _userType.contains('enseignant') || _userType == 'admin';
 
   String get _nomComplet {
     final fn = _profil['first_name']?.toString() ?? '';
@@ -128,25 +99,6 @@ class _ProfilPageState extends State<ProfilPage>
     }
   }
 
-  Color get _roleColor {
-    switch (_userType) {
-      case 'apprenant':
-        return YekiColors.primaryDark;
-      case 'enseignant':
-        return YekiColors.primaryLight;
-      case 'enseignant_principal':
-        return YekiColors.purple;
-      case 'enseignant_cadre':
-        return YekiColors.accent;
-      case 'enseignant_admin':
-        return YekiColors.success;
-      case 'admin':
-        return YekiColors.error;
-      default:
-        return YekiColors.textLight;
-    }
-  }
-
   String get _initials {
     final parts = _nomComplet.trim().split(' ').where((p) => p.isNotEmpty).toList();
     if (parts.length >= 2) return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
@@ -157,37 +109,29 @@ class _ProfilPageState extends State<ProfilPage>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: YekiColors.backgroundLight,
+      backgroundColor: YkColors.background(context),
       body: _loading
-          ? _buildSkeleton()
+          ? _squelette(context)
           : FadeTransition(
               opacity: _fadeAnim,
               child: CustomScrollView(
                 physics: const BouncingScrollPhysics(),
-                slivers: [
-                  _buildSliverAppBar(),
-                  SliverToBoxAdapter(child: _buildBody()),
-                ],
+                slivers: [_sliverAppBar(context), SliverToBoxAdapter(child: _corps(context))],
               ),
             ),
     );
   }
 
-  // ─── APP BAR ────────────────────────────────────────────────────────────
-  Widget _buildSliverAppBar() {
+  Widget _sliverAppBar(BuildContext context) {
     final avatarUrl = _profil['avatar']?.toString();
+    final accent = YkColors.accent(context);
 
     return SliverAppBar(
       expandedHeight: 240,
       pinned: true,
-      backgroundColor: _isEnseignant ? YekiColors.primaryLight : YekiColors.primaryDark,
+      backgroundColor: accent,
       systemOverlayStyle: SystemUiOverlayStyle.light,
-      actions: [
-        IconButton(
-          icon: const Icon(Icons.refresh_rounded, color: YekiColors.white),
-          onPressed: _charger,
-        ),
-      ],
+      actions: [IconButton(icon: const Icon(Icons.refresh_rounded, color: Colors.white), onPressed: _charger)],
       flexibleSpace: FlexibleSpaceBar(
         collapseMode: CollapseMode.parallax,
         background: Stack(
@@ -196,35 +140,9 @@ class _ProfilPageState extends State<ProfilPage>
             Container(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
-                  colors: _isEnseignant
-                      ? [const Color(0xFF1A3A4A), YekiColors.primaryLight]
-                      : [const Color(0xFF1565A0), YekiColors.primaryDark],
+                  colors: [accent.withValues(alpha: 0.85), accent],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
-                ),
-              ),
-            ),
-            Positioned(
-              top: -40,
-              right: -40,
-              child: Container(
-                width: 160,
-                height: 160,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: YekiColors.white.withValues(alpha: 0.06),
-                ),
-              ),
-            ),
-            Positioned(
-              bottom: 60,
-              left: -30,
-              child: Container(
-                width: 120,
-                height: 120,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: YekiColors.white.withValues(alpha: 0.04),
                 ),
               ),
             ),
@@ -235,41 +153,17 @@ class _ProfilPageState extends State<ProfilPage>
                   mainAxisAlignment: MainAxisAlignment.end,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Container(
-                      width: 80,
-                      height: 80,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        border: Border.all(color: YekiColors.white, width: 3),
-                        boxShadow: YekiShadows.floating,
-                      ),
-                      child: ClipOval(
-                        child: avatarUrl != null
-                            ? Image.network(
-                                avatarUrl,
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, _, _) => _avatarFallback(),
-                              )
-                            : _avatarFallback(),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      _nomComplet,
-                      style: const TextStyle(
-                        color: YekiColors.white,
-                        fontSize: 22,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
+                    YkAvatar(imageUrl: avatarUrl, fallbackText: _initials.isEmpty ? '?' : _initials, size: YkAvatarSize.lg),
+                    SizedBox(height: YkSpacing.sm),
+                    Text(_nomComplet, style: YkTypography.h2(context).copyWith(color: Colors.white)),
                     if ((_profil['email']?.toString() ?? '').isNotEmpty)
-                      Text(
-                        _profil['email'].toString(),
-                        style: const TextStyle(color: YekiColors.white, fontSize: 12),
-                      ),
-                    const SizedBox(height: 8),
-                    _roleBadge(),
+                      Text(_profil['email'].toString(), style: YkTypography.bodySm(context).copyWith(color: Colors.white)),
+                    SizedBox(height: YkSpacing.xs),
+                    YkBadge(
+                      variant: YkBadgeVariant.label,
+                      label: _roleLabel,
+                      color: Colors.white,
+                    ),
                   ],
                 ),
               ),
@@ -280,635 +174,247 @@ class _ProfilPageState extends State<ProfilPage>
     );
   }
 
-  Widget _avatarFallback() => Container(
-        color: _roleColor.withValues(alpha: 0.2),
-        child: Center(
-          child: Text(
-            _initials,
-            style: const TextStyle(
-              fontSize: 28,
-              fontWeight: FontWeight.w900,
-              color: YekiColors.white,
-            ),
-          ),
-        ),
-      );
-
-  Widget _roleBadge() => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-        decoration: BoxDecoration(
-          color: YekiColors.white.withValues(alpha: 0.15),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: YekiColors.white),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              _isEnseignant ? Icons.verified_rounded : Icons.school_rounded,
-              color: YekiColors.white,
-              size: 13,
-            ),
-            const SizedBox(width: 5),
-            Text(
-              _roleLabel,
-              style: const TextStyle(
-                color: YekiColors.white,
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ],
-        ),
-      );
-
-  // ─── BODY ──────────────────────────────────────────────────────────────
-  Widget _buildBody() {
+  Widget _corps(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(top: 0, bottom: 40),
+      padding: EdgeInsets.only(bottom: YkSpacing.xl),
       child: Column(
         children: [
-          const SizedBox(height: 20),
-          _buildStats(),
-          const SizedBox(height: 24),
-          _buildInfosPerso(),
-          const SizedBox(height: 16),
-          if (_isEnseignant)
-            _buildSectionEnseignant()
-          else
-            _buildSectionApprenant(),
-          const SizedBox(height: 16),
-          // Classement pour les apprenants
-          if (!_isEnseignant && _classement.isNotEmpty)
-            _buildClassement(),
-          const SizedBox(height: 16),
-          if ((_profil['bio']?.toString() ?? '').isNotEmpty) _buildBio(),
-          const SizedBox(height: 24),
-          _buildActions(),
+          SizedBox(height: YkSpacing.lg),
+          _stats_(context),
+          SizedBox(height: YkSpacing.lg),
+          _infosPerso(context),
+          SizedBox(height: YkSpacing.md),
+          if (_isEnseignant) _sectionEnseignant(context) else _sectionApprenant(context),
+          SizedBox(height: YkSpacing.md),
+          if (!_isEnseignant && _classement.isNotEmpty) _classementCard(context),
+          SizedBox(height: YkSpacing.md),
+          if ((_profil['bio']?.toString() ?? '').isNotEmpty) _bio(context),
+          SizedBox(height: YkSpacing.lg),
+          _actions(context),
         ],
       ),
     );
   }
 
-  // ─── STATISTIQUES ──────────────────────────────────────────────────────
-  Widget _buildStats() {
-    List<_StatItem> items;
-    if (_isEnseignant) {
-      items = [
-        _StatItem(
-          'Cours',
-          '${_stats['nb_cours'] ?? 0}',
-          Icons.book_rounded,
-          YekiColors.primaryDark,
-        ),
-        _StatItem(
-          'Leçons',
-          '${_stats['nb_lecons'] ?? 0}',
-          Icons.article_rounded,
-          YekiColors.primaryLight,
-        ),
-        if (_userType == 'enseignant_cadre')
-          _StatItem(
-            'Dépts',
-            '${_stats['nb_departements'] ?? 0}',
-            Icons.domain_rounded,
-            YekiColors.accent,
-          ),
-        _StatItem(
-          'Devoirs',
-          '${_stats['nb_devoirs'] ?? 0}',
-          Icons.assignment_rounded,
-          YekiColors.purple,
-        ),
-      ];
-    } else {
-      items = [
-        _StatItem(
-          'Cours',
-          '${_stats['nb_cours'] ?? 0}',
-          Icons.school_rounded,
-          YekiColors.primaryDark,
-        ),
-        _StatItem(
-          'Devoirs',
-          '${_stats['nb_devoirs'] ?? 0}',
-          Icons.assignment_rounded,
-          YekiColors.purple,
-        ),
-        _StatItem(
-          'Moyenne',
-          '${(_stats['moyenne'] as num? ?? 0).toStringAsFixed(1)}/20',
-          Icons.stars_rounded,
-          YekiColors.accent,
-        ),
-      ];
-    }
+  Widget _stats_(BuildContext context) {
+    final items = _isEnseignant
+        ? [
+            (Icons.book_rounded, 'Cours', '${_stats['nb_cours'] ?? 0}'),
+            (Icons.article_rounded, 'Leçons', '${_stats['nb_lecons'] ?? 0}'),
+            if (_userType == 'enseignant_cadre') (Icons.domain_rounded, 'Dépts', '${_stats['nb_departements'] ?? 0}'),
+            (Icons.assignment_rounded, 'Devoirs', '${_stats['nb_devoirs'] ?? 0}'),
+          ]
+        : [
+            (Icons.school_rounded, 'Cours', '${_stats['nb_cours'] ?? 0}'),
+            (Icons.assignment_rounded, 'Devoirs', '${_stats['nb_devoirs'] ?? 0}'),
+            (Icons.stars_rounded, 'Moyenne', '${(_stats['moyenne'] as num? ?? 0).toStringAsFixed(1)}/20'),
+          ];
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: YekiColors.white,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: YekiShadows.medium,
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: items.map((s) => _buildStatCell(s)).toList(),
+      padding: EdgeInsets.symmetric(horizontal: YkSpacing.md),
+      child: Row(
+        children: [
+          for (var i = 0; i < items.length; i++) ...[
+            if (i > 0) SizedBox(width: YkSpacing.sm),
+            Expanded(child: YkStatCard(icon: items[i].$1, label: items[i].$2, value: items[i].$3)),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _infosPerso(BuildContext context) {
+    final lignes = <(IconData, String, String)>[];
+    if ((_profil['phone']?.toString() ?? '').isNotEmpty) lignes.add((Icons.phone_rounded, 'Téléphone', _profil['phone'].toString()));
+    if ((_profil['email']?.toString() ?? '').isNotEmpty) lignes.add((Icons.email_rounded, 'Email', _profil['email'].toString()));
+    if ((_profil['ville']?.toString() ?? '').isNotEmpty) lignes.add((Icons.location_on_rounded, 'Ville', _profil['ville'].toString()));
+    if (_isEnseignant && (_profil['whatsapp']?.toString() ?? '').isNotEmpty) {
+      lignes.add((Icons.chat_bubble_rounded, 'WhatsApp', _profil['whatsapp'].toString()));
+    }
+    if (!_isEnseignant) {
+      if ((_profil['cursus']?.toString() ?? '').isNotEmpty) lignes.add((Icons.route_rounded, 'Cursus', _profil['cursus'].toString()));
+      if ((_profil['niveau']?.toString() ?? '').isNotEmpty) lignes.add((Icons.grade_rounded, 'Niveau', _profil['niveau'].toString()));
+      if ((_profil['filiere']?.toString() ?? '').isNotEmpty) lignes.add((Icons.bookmark_rounded, 'Filière', _profil['filiere'].toString()));
+    }
+    if ((_profil['username']?.toString() ?? '').isNotEmpty) {
+      lignes.add((Icons.alternate_email_rounded, "Nom d'utilisateur", _profil['username'].toString()));
+    }
+    if (lignes.isEmpty) return const SizedBox.shrink();
+
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: YkSpacing.md),
+      child: YkSection(
+        title: 'Informations',
+        child: YkCard(
+          child: Column(
+            children: [
+              for (final l in lignes) YkKeyValue(label: l.$2, value: l.$3, icon: l.$1),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildStatCell(_StatItem item) => Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: item.color.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(item.icon, color: item.color, size: 20),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            item.value,
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w900,
-              color: item.color,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(item.label, style: const TextStyle(fontSize: 11)),
-        ],
-      );
-
-  // ─── CLASSEMENT ──────────────────────────────────────────────────────
-  Widget _buildClassement() {
+  Widget _classementCard(BuildContext context) {
     final score = _classement['score'] as num? ?? 0;
     final rang = _classement['rang'] as int?;
     final total = _classement['total_apprenants'] as int? ?? 0;
-    final progression = _classement['progression'] as num? ?? 0;
-    final scores = _classement['scores_categorie'] as Map<String, dynamic>? ?? {};
+    final progression = (_classement['progression'] as num? ?? 0).toDouble();
+    final scores = Map<String, dynamic>.from(_classement['scores_categorie'] as Map? ?? {});
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _sectionTitle('Classement', Icons.leaderboard_rounded),
-          const SizedBox(height: 10),
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: YekiColors.white,
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: YekiShadows.medium,
-            ),
-            child: Column(
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('Score total',
-                            style: TextStyle(fontSize: 12, color: YekiColors.textLight)),
-                        Text('${score.toStringAsFixed(0)} pts',
-                            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900)),
-                      ],
-                    ),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        const Text('Rang',
-                            style: TextStyle(fontSize: 12, color: YekiColors.textLight)),
-                        Text(
-                          rang != null ? '#$rang / $total' : 'Non classé',
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w900,
-                            color: rang != null && rang <= 3 ? YekiColors.gold : YekiColors.primaryDark,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-                if (progression != 0) ...[
-                  const SizedBox(height: 12),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: progression > 0
-                          ? YekiColors.success.withValues(alpha: 0.1)
-                          : YekiColors.error.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          progression > 0
-                              ? Icons.arrow_upward_rounded
-                              : Icons.arrow_downward_rounded,
-                          size: 16,
-                          color: progression > 0 ? YekiColors.success : YekiColors.error,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          '${progression.abs().toStringAsFixed(0)}%',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: progression > 0 ? YekiColors.success : YekiColors.error,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-                if (scores.isNotEmpty) ...[
-                  const SizedBox(height: 12),
-                  const Divider(color: YekiColors.borderLight),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: scores.entries.map((e) {
-                      return Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: YekiColors.primaryDark.withValues(alpha: 0.05),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: YekiColors.primaryDark.withValues(alpha: 0.1)),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              e.key.toString().replaceAll('_', ' '),
-                              style: const TextStyle(fontSize: 10, color: YekiColors.textMedium),
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              '${e.value.toStringAsFixed(0)} pts',
-                              style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700),
-                            ),
-                          ],
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ─── INFORMATIONS PERSONNELLES ────────────────────────────────────────
-  Widget _buildInfosPerso() {
-    final rows = <_InfoRow>[];
-
-    if ((_profil['phone']?.toString() ?? '').isNotEmpty) {
-      rows.add(_InfoRow(Icons.phone_rounded, 'Téléphone', _profil['phone'].toString()));
-    }
-    if ((_profil['email']?.toString() ?? '').isNotEmpty) {
-      rows.add(_InfoRow(Icons.email_rounded, 'Email', _profil['email'].toString()));
-    }
-
-    if ((_profil['ville']?.toString() ?? '').isNotEmpty) {
-      rows.add(_InfoRow(Icons.location_on_rounded, 'Ville', _profil['ville'].toString()));
-    }
-
-    if (_isEnseignant && (_profil['whatsapp']?.toString() ?? '').isNotEmpty) {
-      rows.add(_InfoRow(Icons.chat_bubble_rounded, 'WhatsApp', _profil['whatsapp'].toString()));
-    }
-
-    if (!_isEnseignant) {
-      if ((_profil['cursus']?.toString() ?? '').isNotEmpty) {
-        rows.add(_InfoRow(Icons.route_rounded, 'Cursus', _profil['cursus'].toString()));
-      }
-      if ((_profil['niveau']?.toString() ?? '').isNotEmpty) {
-        rows.add(_InfoRow(Icons.grade_rounded, 'Niveau', _profil['niveau'].toString()));
-      }
-      if ((_profil['filiere']?.toString() ?? '').isNotEmpty) {
-        rows.add(_InfoRow(Icons.bookmark_rounded, 'Filière', _profil['filiere'].toString()));
-      }
-    }
-    if ((_profil['username']?.toString() ?? '').isNotEmpty) {
-      rows.add(_InfoRow(Icons.alternate_email_rounded, 'Nom d\'utilisateur', _profil['username'].toString()));
-    }
-
-    if (rows.isEmpty) return const SizedBox();
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _sectionTitle('Informations', Icons.person_rounded),
-          const SizedBox(height: 10),
-          Container(
-            decoration: BoxDecoration(
-              color: YekiColors.white,
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: YekiShadows.subtle,
-            ),
-            child: Column(
-              children: rows.asMap().entries.map((entry) {
-                final isLast = entry.key == rows.length - 1;
-                return _buildInfoTile(entry.value, showBorder: !isLast);
-              }).toList(),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildInfoTile(_InfoRow row, {bool showBorder = true}) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-      decoration: BoxDecoration(
-        border: showBorder
-            ? Border(bottom: BorderSide(color: YekiColors.borderLight, width: 1))
-            : null,
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(7),
-            decoration: BoxDecoration(
-              color: YekiColors.primaryDark.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Icon(row.icon, size: 15, color: YekiColors.primaryDark),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  row.label,
-                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  row.value,
-                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ─── SECTIONS SPÉCIFIQUES ──────────────────────────────────────────────
-  Widget _buildSectionEnseignant() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _sectionTitle('Activité', Icons.analytics_rounded),
-          const SizedBox(height: 10),
-          Row(
+      padding: EdgeInsets.symmetric(horizontal: YkSpacing.md),
+      child: YkSection(
+        title: 'Classement',
+        child: YkCard(
+          child: Column(
             children: [
-              Expanded(
-                child: _buildMiniCard(
-                  'Enseignant\n$_roleLabel',
-                  Icons.verified_rounded,
-                  YekiColors.primaryLight,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _buildMiniCard(
-                  '${_stats['nb_cours'] ?? 0} cours\nactifs',
-                  Icons.book_rounded,
-                  YekiColors.primaryDark,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSectionApprenant() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _sectionTitle('Parcours', Icons.school_rounded),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: _buildMiniCard(
-                  _profil['cursus']?.toString() ?? 'Non défini',
-                  Icons.route_rounded,
-                  YekiColors.primaryDark,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _buildMiniCard(
-                  _profil['niveau']?.toString() ?? 'Non défini',
-                  Icons.grade_rounded,
-                  YekiColors.purple,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMiniCard(String text, IconData icon, Color color) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.07),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color.withValues(alpha: 0.15)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Icon(icon, color: color, size: 18),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              text,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                color: color,
-                height: 1.4,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildBio() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _sectionTitle('À propos', Icons.info_outline_rounded),
-          const SizedBox(height: 10),
-          Container(
-            padding: const EdgeInsets.all(18),
-            decoration: BoxDecoration(
-              color: YekiColors.white,
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: YekiShadows.subtle,
-            ),
-            child: Text(
-              _profil['bio'].toString(),
-              style: const TextStyle(fontSize: 14, height: 1.7),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ─── ACTIONS ───────────────────────────────────────────────────────────
-  Widget _buildActions() {
-    final color = _isEnseignant ? YekiColors.primaryLight : YekiColors.primaryDark;
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Column(
-        children: [
-          YekiButton(
-            label: 'Modifier mon profil',
-            icon: Icons.edit_rounded,
-            backgroundColor: color,
-            onPressed: () => context
-                .pushNamed(AppRoute.profileEdit)
-                .then((_) => _charger()),
-          ),
-          const SizedBox(height: 12),
-          GestureDetector(
-            onTap: () => context.pushNamed(AppRoute.settings),
-            child: Container(
-              decoration: BoxDecoration(
-                color: YekiColors.white,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: color.withValues(alpha: 0.25)),
-                boxShadow: YekiShadows.subtle,
-              ),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.settings_rounded, color: color, size: 18),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Paramètres',
-                      style: TextStyle(
-                        color: color,
-                        fontSize: 15,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ─── HELPERS ───────────────────────────────────────────────────────────
-  Widget _sectionTitle(String title, IconData icon) => Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(6),
-            decoration: BoxDecoration(
-              color: YekiColors.primaryDark.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Icon(icon, size: 14, color: YekiColors.primaryDark),
-          ),
-          const SizedBox(width: 8),
-          Text(title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
-        ],
-      );
-
-  Widget _buildSkeleton() => Scaffold(
-        backgroundColor: YekiColors.backgroundLight,
-        body: Column(
-          children: [
-            Container(height: 240, color: YekiColors.primaryDark.withValues(alpha: 0.3)),
-            const SizedBox(height: 20),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Column(
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  _skBox(h: 90, r: 16),
-                  const SizedBox(height: 16),
-                  _skBox(h: 140, r: 18),
-                  const SizedBox(height: 16),
-                  _skBox(h: 100, r: 18),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Score total', style: YkTypography.caption(context).copyWith(color: YkColors.textSecondary(context))),
+                      Text('${score.toStringAsFixed(0)} pts', style: YkTypography.h3(context).copyWith(color: YkColors.textPrimary(context))),
+                    ],
+                  ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text('Rang', style: YkTypography.caption(context).copyWith(color: YkColors.textSecondary(context))),
+                      Text(
+                        rang != null ? '#$rang / $total' : 'Non classé',
+                        style: YkTypography.h4(context).copyWith(color: rang != null && rang <= 3 ? YkColors.warning : YkColors.accent(context)),
+                      ),
+                    ],
+                  ),
                 ],
               ),
-            ),
+              if (progression != 0) ...[
+                SizedBox(height: YkSpacing.sm),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.start,
+                  children: [
+                    YkBadge(
+                      variant: YkBadgeVariant.label,
+                      label: '${progression > 0 ? '+' : ''}${progression.toStringAsFixed(0)}%',
+                      color: progression > 0 ? YkColors.success : YkColors.error,
+                    ),
+                  ],
+                ),
+              ],
+              if (scores.isNotEmpty) ...[
+                SizedBox(height: YkSpacing.sm),
+                Divider(color: YkColors.border(context)),
+                SizedBox(height: YkSpacing.xs),
+                Wrap(
+                  spacing: YkSpacing.xs,
+                  runSpacing: YkSpacing.xs,
+                  children: [
+                    for (final e in scores.entries)
+                      YkBadge(variant: YkBadgeVariant.label, label: '${e.key.toString().replaceAll('_', ' ')} : ${(e.value as num).toStringAsFixed(0)} pts', color: YkColors.accent(context)),
+                  ],
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _sectionEnseignant(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: YkSpacing.md),
+      child: YkSection(
+        title: 'Activité',
+        child: Row(
+          children: [
+            Expanded(child: _miniCard(context, 'Enseignant\n$_roleLabel', Icons.verified_rounded)),
+            SizedBox(width: YkSpacing.sm),
+            Expanded(child: _miniCard(context, '${_stats['nb_cours'] ?? 0} cours\nactifs', Icons.book_rounded)),
           ],
         ),
-      );
+      ),
+    );
+  }
 
-  Widget _skBox({double h = 20, double? w, double r = 8}) => Container(
-        height: h,
-        width: w,
-        margin: const EdgeInsets.only(bottom: 8),
-        decoration: BoxDecoration(
-          color: YekiColors.borderLight,
-          borderRadius: BorderRadius.circular(r),
+  Widget _sectionApprenant(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: YkSpacing.md),
+      child: YkSection(
+        title: 'Parcours',
+        child: Row(
+          children: [
+            Expanded(child: _miniCard(context, _profil['cursus']?.toString() ?? 'Non défini', Icons.route_rounded)),
+            SizedBox(width: YkSpacing.sm),
+            Expanded(child: _miniCard(context, _profil['niveau']?.toString() ?? 'Non défini', Icons.grade_rounded)),
+          ],
         ),
-      );
-}
+      ),
+    );
+  }
 
-// ─── CLASSES AUXILIAIRES ──────────────────────────────────────────────────
+  Widget _miniCard(BuildContext context, String texte, IconData icon) {
+    return YkCard(
+      variant: YkCardVariant.outlined,
+      accentColor: YkColors.accent(context),
+      child: Row(
+        children: [
+          Icon(icon, color: YkColors.accent(context), size: 18),
+          SizedBox(width: YkSpacing.xs),
+          Expanded(child: Text(texte, style: YkTypography.bodySm(context).copyWith(color: YkColors.accent(context), fontWeight: FontWeight.w700))),
+        ],
+      ),
+    );
+  }
 
-class _StatItem {
-  final String label, value;
-  final IconData icon;
-  final Color color;
-  const _StatItem(this.label, this.value, this.icon, this.color);
-}
+  Widget _bio(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: YkSpacing.md),
+      child: YkSection(
+        title: 'À propos',
+        child: YkCard(
+          child: Text(_profil['bio'].toString(), style: YkTypography.bodyMd(context).copyWith(color: YkColors.textPrimary(context), height: 1.6)),
+        ),
+      ),
+    );
+  }
 
-class _InfoRow {
-  final IconData icon;
-  final String label, value;
-  const _InfoRow(this.icon, this.label, this.value);
+  Widget _actions(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: YkSpacing.md),
+      child: Column(
+        children: [
+          YkButton(
+            label: 'Modifier mon profil',
+            icon: Icons.edit_rounded,
+            onPressed: () => context.pushNamed(AppRoute.profileEdit).then((_) => _charger()),
+          ),
+          SizedBox(height: YkSpacing.sm),
+          YkButton(
+            label: 'Paramètres',
+            icon: Icons.settings_rounded,
+            variant: YkButtonVariant.secondary,
+            onPressed: () => context.pushNamed(AppRoute.settings),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _squelette(BuildContext context) {
+    return Column(
+      children: [
+        SizedBox(height: 240, child: YkSkeleton.card(height: 240)),
+        SizedBox(height: YkSpacing.lg),
+        Padding(
+          padding: EdgeInsets.symmetric(horizontal: YkSpacing.md),
+          child: YkSkeleton.list(itemCount: 3, itemHeight: 100),
+        ),
+      ],
+    );
+  }
 }

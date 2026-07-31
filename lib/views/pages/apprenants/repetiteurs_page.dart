@@ -1,16 +1,31 @@
 // lib/views/pages/apprenants/repetiteurs_page.dart
-// ═══════════════════════════════════════════════════════════════════════════
-//  PAGE RECHERCHE RÉPÉTITEURS PAR MATIÈRE (WHATSAPP) - CORRIGÉE
-// ═══════════════════════════════════════════════════════════════════════════
+//
+// Refondu en P11.7 (rituel P5.0) : bascule vers `RepetiteurRepository`/
+// `AuthRepository`/`PaiementRepository` (plus de `http`/`SharedPreferences`
+// bruts) et les tokens/composants `Yk*`.
+//
+// **Bug WhatsApp corrigé** : le bouton contactait `r['whatsapp']` (le
+// numéro PROPRE de l'enseignant répétiteur) au lieu du numéro unique du
+// Service Client — confirmé exactement comme décrit par le ticket. Utilise
+// désormais `ParametresPublics.whatsappServiceClient` (`GET
+// /parametres/publics/`, déjà consommé ailleurs par le flux de paiement
+// manuel — même source, pas une nouvelle). Le message envoyé précise
+// toujours le nom de l'enseignant visé, pour que le Service Client sache
+// qui orienter.
+//
+// Le tarif "5000 FCFA/mois" était aussi figé en dur dans le message
+// WhatsApp (règle 3), indépendamment du vrai tarif du répétiteur — corrigé
+// pour utiliser `r['tarif']` (déjà lu par l'API, déjà affiché dans la
+// carte) au lieu d'un texte fixe.
 
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:yeki/core/theme/app_theme.dart';
-import 'package:yeki/core/constants/api_constants.dart';
-import 'package:yeki/utils/error_handler.dart';
+
+import 'package:yeki/core/design/components/components.dart';
+import 'package:yeki/core/design/tokens/tokens.dart';
+import 'package:yeki/repositories/auth_repository.dart';
+import 'package:yeki/repositories/paiement_repository.dart';
+import 'package:yeki/repositories/repetiteur_repository.dart';
 
 class RepetiteursPage extends StatefulWidget {
   const RepetiteursPage({super.key});
@@ -20,29 +35,29 @@ class RepetiteursPage extends StatefulWidget {
 }
 
 class _RepetiteursPageState extends State<RepetiteursPage> {
-  final TextEditingController _searchCtrl = TextEditingController();
-  final TextEditingController _niveauCtrl = TextEditingController();
-  final TextEditingController _villeCtrl = TextEditingController();
-  
+  final _repetiteurRepo = RepetiteurRepository();
+  final _paiementRepo = PaiementRepository();
+
+  final _searchCtrl = TextEditingController();
+  final _niveauCtrl = TextEditingController();
+  final _villeCtrl = TextEditingController();
+
+  final List<String> _matieresPopulaires = const [
+    'Mathématiques', 'Physique', 'Chimie', 'SVT',
+    'Informatique', 'Français', 'Anglais', 'Histoire-Géo',
+  ];
+
   List<Map<String, dynamic>> _repetiteurs = [];
   bool _loading = false;
-  bool _initialLoading = true;
-  String? _selectedMatiere;
-  String? _error;
-  
-  // Données du profil
-  Map<String, dynamic> _profil = {};
-  bool _profilCharged = false;
-
-  final List<String> _matieresPopulaires = [
-    'Mathématiques', 'Physique', 'Chimie', 'SVT', 
-    'Informatique', 'Français', 'Anglais', 'Histoire-Géo'
-  ];
+  bool _chargementInitial = true;
+  String? _matiereSelectionnee;
+  String? _erreur;
+  String? _whatsappServiceClient;
 
   @override
   void initState() {
     super.initState();
-    _chargerProfil();
+    _initialiser();
   }
 
   @override
@@ -53,638 +68,241 @@ class _RepetiteursPageState extends State<RepetiteursPage> {
     super.dispose();
   }
 
-  Future<String?> _getToken() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString('token');
-  }
-
-  Future<void> _chargerProfil() async {
-    setState(() => _initialLoading = true);
-    final token = await _getToken();
-    if (token == null) {
-      setState(() => _initialLoading = false);
-      return;
-    }
-    
+  Future<void> _initialiser() async {
     try {
-      final response = await http.get(
-        Uri.parse(ApiConstants.profilMe),
-        headers: ApiHeaders.auth(token),
-      );
-      
-      if (response.statusCode == 200 && mounted) {
-        final data = jsonDecode(response.body);
+      final profil = await AuthRepository().getCurrentUser();
+      final parametres = await _paiementRepo.parametresPublics();
+      if (mounted) {
         setState(() {
-          _profil = data;
-          _profilCharged = true;
-          
-          // Pré-remplir les champs avec les données du profil
-          if (_profil['niveau'] != null && _profil['niveau'].toString().isNotEmpty) {
-            _niveauCtrl.text = _profil['niveau'].toString();
-          }
-          if (_profil['ville'] != null && _profil['ville'].toString().isNotEmpty) {
-            _villeCtrl.text = _profil['ville'].toString();
-          }
-          _initialLoading = false;
+          if (profil.niveau?.isNotEmpty ?? false) _niveauCtrl.text = profil.niveau!;
+          if (profil.ville?.isNotEmpty ?? false) _villeCtrl.text = profil.ville!;
+          _whatsappServiceClient = parametres.whatsappServiceClient;
         });
-      } else {
-        setState(() => _initialLoading = false);
       }
     } catch (_) {
-      setState(() => _initialLoading = false);
+    } finally {
+      if (mounted) setState(() => _chargementInitial = false);
     }
   }
 
   Future<void> _rechercher(String matiere) async {
     if (matiere.trim().isEmpty) {
-      ErrorHandler.showWarning(context, 'Veuillez entrer une matière');
+      YkSnack.error(context, 'Veuillez entrer une matière.');
       return;
     }
-
     setState(() {
       _loading = true;
-      _error = null;
-      _selectedMatiere = matiere;
+      _erreur = null;
+      _matiereSelectionnee = matiere;
     });
-
-    final token = await _getToken();
-    if (token == null) {
-      setState(() {
-        _loading = false;
-        _error = 'Veuillez vous reconnecter';
-      });
-      return;
-    }
-
     try {
-      // Construire l'URL avec les paramètres
-      String url = '${ApiConstants.baseUrl}/repetiteurs/search/?matiere=${Uri.encodeComponent(matiere)}';
-      if (_villeCtrl.text.trim().isNotEmpty) {
-        url += '&ville=${Uri.encodeComponent(_villeCtrl.text.trim())}';
-      }
-      if (_niveauCtrl.text.trim().isNotEmpty) {
-        url += '&niveau=${Uri.encodeComponent(_niveauCtrl.text.trim())}';
-      }
-
-      final response = await http.get(
-        Uri.parse(url),
-        headers: ApiHeaders.auth(token),
-      );
-
-      if (response.statusCode == 200 && mounted) {
-        final data = jsonDecode(response.body);
-        setState(() {
-          _repetiteurs = List<Map<String, dynamic>>.from(data['repetiteurs'] ?? []);
-          _loading = false;
-        });
-        if (_repetiteurs.isEmpty) {
-          ErrorHandler.showWarning(context, 'Aucun répétiteur trouvé pour "$matiere"');
-        }
-      } else {
-        setState(() {
-          _loading = false;
-          _error = 'Erreur ${response.statusCode}';
-        });
-      }
-    } catch (e) {
-      setState(() {
-        _loading = false;
-        _error = 'Erreur de connexion';
+      final resultats = await _repetiteurRepo.search({
+        'matiere': matiere,
+        if (_villeCtrl.text.trim().isNotEmpty) 'ville': _villeCtrl.text.trim(),
+        if (_niveauCtrl.text.trim().isNotEmpty) 'niveau': _niveauCtrl.text.trim(),
       });
+      if (mounted) {
+        setState(() {
+          _repetiteurs = resultats;
+          _loading = false;
+        });
+        if (resultats.isEmpty) YkSnack.info(context, 'Aucun répétiteur trouvé pour "$matiere".');
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _erreur = 'Erreur de connexion.';
+        });
+      }
     }
   }
 
-  // CORRECTION: Version alternative qui fonctionne avec tous les formats
-  Future<void> _contacterWhatsAppV2(String numero, String nom, String matiere) async {
+  Future<void> _contacterServiceClient(String nomEnseignant, String matiere, dynamic tarif) async {
+    final numero = (_whatsappServiceClient ?? '').replaceAll(RegExp(r'[^0-9]'), '');
     if (numero.isEmpty) {
-      ErrorHandler.showError(context, 'Numéro de téléphone non disponible');
+      YkSnack.error(context, 'Numéro du service client indisponible pour le moment.');
       return;
     }
-    
-    // Nettoyer le numéro - méthode simplifiée
-    String cleanNumber = numero.replaceAll(RegExp(r'[^0-9]'), '');
-    
-    // Si le numéro commence par 237, on garde tel quel
-    if (cleanNumber.startsWith('237')) {
-      // Rien à faire
-    } 
-    // Si le numéro commence par 6 (Cameroun), on ajoute 237
-    else if (cleanNumber.startsWith('6')) {
-      cleanNumber = '237$cleanNumber';
-    }
-    // Si le numéro est court, on suppose que c'est un numéro camerounais
-    else if (cleanNumber.length <= 9) {
-      cleanNumber = '237$cleanNumber';
-    }
-    
-    // S'assurer que le numéro a au moins 10 chiffres
-    if (cleanNumber.length < 10) {
-      ErrorHandler.showError(context, 'Numéro WhatsApp invalide');
-      return;
-    }
-    
-    final niveau = _niveauCtrl.text.trim().isNotEmpty ? _niveauCtrl.text.trim() : 'votre niveau';
-    final ville = _villeCtrl.text.trim().isNotEmpty ? _villeCtrl.text.trim() : 'votre ville';
-    
+    final niveau = _niveauCtrl.text.trim().isNotEmpty ? _niveauCtrl.text.trim() : 'mon niveau';
+    final ville = _villeCtrl.text.trim().isNotEmpty ? _villeCtrl.text.trim() : 'ma ville';
+    final tarifLabel = tarif != null ? '$tarif FCFA/mois' : 'à confirmer';
     final message = Uri.encodeComponent(
-      'Bonjour $nom,\n\n'
-      'Je souhaite prendre des cours particuliers en $matiere avec vous via Yéki.\n'
+      'Bonjour,\n\n'
+      'Je souhaite prendre des cours particuliers en $matiere avec $nomEnseignant via Yéki.\n'
       'Niveau : $niveau\n'
       'Ville : $ville\n'
-      'Tarif : 5000 FCFA/mois.\n\n'
-      'Pouvez-vous me donner plus d\'informations sur vos disponibilités ?\n\n'
-      'Cordialement.'
+      'Tarif affiché : $tarifLabel.\n\n'
+      'Pouvez-vous m\'aider à organiser ces cours ?\n\n'
+      'Cordialement.',
     );
-    
-    // Utiliser l'URL API WhatsApp qui fonctionne toujours
-    final url = Uri.parse('https://api.whatsapp.com/send?phone=$cleanNumber&text=$message');
-    
-    debugPrint('WhatsApp URL (V2): $url');
-    
+    final url = Uri.parse('https://wa.me/$numero?text=$message');
     try {
-      if (await canLaunchUrl(url)) {
-        await launchUrl(url, mode: LaunchMode.externalApplication);
-      } else {
-        // Fallback sur wa.me
-        final fallbackUrl = Uri.parse('https://wa.me/$cleanNumber?text=$message');
-        if (await canLaunchUrl(fallbackUrl)) {
-          await launchUrl(fallbackUrl, mode: LaunchMode.externalApplication);
-        } else {
-          ErrorHandler.showError(context, 'Impossible d\'ouvrir WhatsApp. Vérifiez que l\'application est installée.');
-        }
+      if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
+        if (mounted) YkSnack.error(context, "Impossible d'ouvrir WhatsApp. Vérifiez que l'application est installée.");
       }
-    } catch (e) {
-      debugPrint('Erreur WhatsApp: $e');
-      // Essayer avec le navigateur
-      try {
-        await launchUrl(
-          Uri.parse('https://wa.me/$cleanNumber?text=$message'),
-          mode: LaunchMode.platformDefault,
-        );
-      } catch (_) {
-        ErrorHandler.showError(context, 'Impossible d\'ouvrir WhatsApp.');
-      }
+    } catch (_) {
+      if (mounted) YkSnack.error(context, "Impossible d'ouvrir WhatsApp.");
     }
-  }
-
-  // CORRECTION: Widget du bouton WhatsApp avec vérification
-  Widget _buildWhatsAppButton(String whatsapp, String nom, String matiere) {
-    final hasWhatsApp = whatsapp.isNotEmpty && whatsapp.trim() != '';
-    
-    if (!hasWhatsApp) {
-      return Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        decoration: BoxDecoration(
-          color: YekiColors.borderMedium,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: const Center(
-          child: Text(
-            'Numéro non disponible',
-            style: TextStyle(
-              fontSize: 14,
-              color: Colors.white,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
-      );
-    }
-    
-    return SizedBox(
-      width: double.infinity,
-      child: ElevatedButton.icon(
-        onPressed: () => _contacterWhatsAppV2(whatsapp, nom, matiere),
-        icon: const Icon(Icons.chat_rounded, size: 18),
-        label: const Text('Contacter sur WhatsApp'),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFF25D366),
-          foregroundColor: Colors.white,
-          elevation: 2,
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
-      ),
-    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: YekiColors.backgroundLight,
-      appBar: AppBar(
-        title: const Text('Trouver un répétiteur'),
-        backgroundColor: YekiColors.white,
-        elevation: 0,
-        foregroundColor: YekiColors.textDark,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18),
-          onPressed: () => Navigator.pop(context),
-        ),
-      ),
-      body: _initialLoading
-          ? const Center(
-              child: CircularProgressIndicator(color: YekiColors.primaryDark),
-            )
+      backgroundColor: YkColors.background(context),
+      appBar: AppBar(title: const Text('Trouver un répétiteur')),
+      body: _chargementInitial
+          ? Center(child: YkProgress(shape: YkProgressShape.circular))
           : Column(
               children: [
-                _buildFormulaire(),
-                _buildMatieresPopulaires(),
+                _formulaire(context),
+                _matieresPopulairesWidget(context),
                 Expanded(
                   child: _loading
-                      ? const Center(
-                          child: CircularProgressIndicator(color: YekiColors.primaryDark),
-                        )
-                      : _error != null && _repetiteurs.isEmpty
-                          ? _buildErrorState()
-                          : _repetiteurs.isEmpty && _selectedMatiere != null
-                              ? _buildEmptyState()
-                              : _buildResultsList(),
+                      ? Center(child: YkProgress(shape: YkProgressShape.circular))
+                      : _erreur != null && _repetiteurs.isEmpty
+                          ? _etatErreur(context)
+                          : _repetiteurs.isEmpty && _matiereSelectionnee != null
+                              ? _etatVide(context)
+                              : _listeResultats(context),
                 ),
               ],
             ),
     );
   }
 
-  Widget _buildFormulaire() {
+  Widget _formulaire(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: YekiColors.white,
-        border: Border(bottom: BorderSide(color: YekiColors.borderLight)),
-      ),
+      padding: EdgeInsets.all(YkSpacing.md),
+      decoration: BoxDecoration(color: YkColors.surface(context), border: Border(bottom: BorderSide(color: YkColors.border(context)))),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Rechercher un répétiteur',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: YekiColors.textDark,
-            ),
-          ),
-          const SizedBox(height: 12),
+          Text('Rechercher un répétiteur', style: YkTypography.label(context).copyWith(color: YkColors.textPrimary(context))),
+          SizedBox(height: YkSpacing.sm),
           Row(
             children: [
-              Expanded(
-                flex: 2,
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: YekiColors.backgroundLight,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: TextField(
-                    controller: _searchCtrl,
-                    style: const TextStyle(fontSize: 14, color: YekiColors.textDark),
-                    decoration: InputDecoration(
-                      hintText: 'Matière...',
-                      hintStyle: const TextStyle(fontSize: 13, color: YekiColors.textLight),
-                      prefixIcon: const Icon(Icons.search_rounded, color: YekiColors.textLight, size: 20),
-                      border: InputBorder.none,
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-                    ),
-                    onSubmitted: _rechercher,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: YekiColors.backgroundLight,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: TextField(
-                    controller: _niveauCtrl,
-                    style: const TextStyle(fontSize: 14, color: YekiColors.textDark),
-                    decoration: InputDecoration(
-                      hintText: 'Niveau...',
-                      hintStyle: const TextStyle(fontSize: 13, color: YekiColors.textLight),
-                      prefixIcon: const Icon(Icons.school_rounded, color: YekiColors.textLight, size: 18),
-                      border: InputBorder.none,
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-                    ),
-                  ),
-                ),
-              ),
+              Expanded(flex: 2, child: YkTextField(controller: _searchCtrl, type: YkTextFieldType.search, hint: 'Matière…', onSubmitted: _rechercher)),
+              SizedBox(width: YkSpacing.sm),
+              Expanded(child: YkTextField(controller: _niveauCtrl, hint: 'Niveau…')),
             ],
           ),
-          const SizedBox(height: 10),
+          SizedBox(height: YkSpacing.sm),
           Row(
             children: [
-              Expanded(
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: YekiColors.backgroundLight,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: TextField(
-                    controller: _villeCtrl,
-                    style: const TextStyle(fontSize: 14, color: YekiColors.textDark),
-                    decoration: InputDecoration(
-                      hintText: 'Ville...',
-                      hintStyle: const TextStyle(fontSize: 13, color: YekiColors.textLight),
-                      prefixIcon: const Icon(Icons.location_on_rounded, color: YekiColors.textLight, size: 18),
-                      border: InputBorder.none,
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              ElevatedButton(
-                onPressed: () => _rechercher(_searchCtrl.text),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: YekiColors.primaryDark,
-                  foregroundColor: YekiColors.white,
-                  elevation: 0,
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                child: const Text('Rechercher', style: TextStyle(fontWeight: FontWeight.bold)),
-              ),
+              Expanded(child: YkTextField(controller: _villeCtrl, hint: 'Ville…')),
+              SizedBox(width: YkSpacing.sm),
+              YkButton(label: 'Rechercher', onPressed: () => _rechercher(_searchCtrl.text)),
             ],
           ),
-          if (_profilCharged && _profil['ville'] != null && _profil['ville'].toString().isNotEmpty) ...[
-            const SizedBox(height: 6),
-            Row(
-              children: [
-                Icon(Icons.info_outline_rounded, size: 12, color: YekiColors.textLight),
-                const SizedBox(width: 4),
-                Text(
-                  'Ville pré-remplie depuis votre profil',
-                  style: TextStyle(fontSize: 11, color: YekiColors.textLight, fontStyle: FontStyle.italic),
-                ),
-              ],
-            ),
-          ],
         ],
       ),
     );
   }
 
-  Widget _buildMatieresPopulaires() {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+  Widget _matieresPopulairesWidget(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(YkSpacing.md, YkSpacing.sm, YkSpacing.md, YkSpacing.xs),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Matières populaires',
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: YekiColors.textLight,
-            ),
-          ),
-          const SizedBox(height: 10),
+          Text('Matières populaires', style: YkTypography.caption(context).copyWith(color: YkColors.textSecondary(context))),
+          SizedBox(height: YkSpacing.xs),
           Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: _matieresPopulaires.map((matiere) {
-              final isSelected = _selectedMatiere == matiere;
-              return GestureDetector(
-                onTap: () {
-                  _searchCtrl.text = matiere;
-                  _rechercher(matiere);
-                },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: isSelected 
-                        ? YekiColors.primaryDark.withValues(alpha: 0.1)
-                        : YekiColors.white,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: isSelected 
-                          ? YekiColors.primaryDark 
-                          : YekiColors.borderLight,
-                      width: isSelected ? 1.5 : 1,
-                    ),
-                  ),
-                  child: Text(
-                    matiere,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                      color: isSelected ? YekiColors.primaryDark : YekiColors.textMedium,
-                    ),
-                  ),
+            spacing: YkSpacing.xs,
+            runSpacing: YkSpacing.xs,
+            children: [
+              for (final matiere in _matieresPopulaires)
+                YkChip(
+                  label: matiere,
+                  variant: YkChipVariant.filter,
+                  selected: _matiereSelectionnee == matiere,
+                  onPressed: () {
+                    _searchCtrl.text = matiere;
+                    _rechercher(matiere);
+                  },
                 ),
-              );
-            }).toList(),
+            ],
           ),
         ],
       ),
     );
   }
 
-  Widget _buildResultsList() {
-    if (_repetiteurs.isEmpty) {
-      return const SizedBox.shrink();
-    }
-    
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
+  Widget _listeResultats(BuildContext context) {
+    if (_repetiteurs.isEmpty) return const SizedBox.shrink();
+    return ListView.separated(
+      padding: EdgeInsets.all(YkSpacing.md),
       itemCount: _repetiteurs.length,
-      itemBuilder: (context, index) {
-        final r = _repetiteurs[index];
-        final whatsapp = r['whatsapp'] ?? '';
-        
-        return Container(
-          margin: const EdgeInsets.only(bottom: 12),
-          decoration: BoxDecoration(
-            color: YekiColors.white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: YekiColors.borderLight),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.04),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+      separatorBuilder: (_, _) => SizedBox(height: YkSpacing.sm),
+      itemBuilder: (context, index) => _carteRepetiteur(context, _repetiteurs[index]),
+    );
+  }
+
+  Widget _carteRepetiteur(BuildContext context, Map<String, dynamic> r) {
+    final nom = r['nom'] as String? ?? 'Enseignant';
+    final matiere = r['matiere'] as String? ?? '';
+    final tarif = r['tarif'];
+    final aWhatsapp = (_whatsappServiceClient ?? '').isNotEmpty;
+
+    return YkCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              YkAvatar(imageUrl: r['avatar'] as String?, fallbackText: nom, size: YkAvatarSize.md),
+              SizedBox(width: YkSpacing.sm),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    CircleAvatar(
-                      radius: 24,
-                      backgroundColor: YekiColors.primaryDark.withValues(alpha: 0.1),
-                      backgroundImage: r['avatar'] != null && r['avatar'].toString().isNotEmpty
-                          ? NetworkImage(r['avatar'].toString())
-                          : null,
-                      child: r['avatar'] == null || r['avatar'].toString().isEmpty
-                          ? Text(
-                              (r['nom'] ?? '?')[0].toUpperCase(),
-                              style: const TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                                color: YekiColors.primaryDark,
-                              ),
-                            )
-                          : null,
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                    Text(nom, style: YkTypography.label(context).copyWith(color: YkColors.textPrimary(context))),
+                    if (r['username'] != null) Text('@${r['username']}', style: YkTypography.caption(context).copyWith(color: YkColors.textSecondary(context))),
+                    if ((r['ville'] as String?)?.isNotEmpty ?? false)
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text(
-                            r['nom'] ?? 'Enseignant',
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: YekiColors.textDark,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            '@${r['username'] ?? ''}',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: YekiColors.textLight,
-                            ),
-                          ),
-                          if (r['ville'] != null && r['ville'].toString().isNotEmpty)
-                            Text(
-                              '📍 ${r['ville']}',
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: YekiColors.textLight,
-                              ),
-                            ),
+                          Icon(Icons.location_on_rounded, size: 12, color: YkColors.textTertiary(context)),
+                          Text(r['ville'] as String, style: YkTypography.caption(context).copyWith(color: YkColors.textSecondary(context))),
                         ],
                       ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: YekiColors.gold.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: YekiColors.gold.withValues(alpha: 0.3)),
-                      ),
-                      child: Text(
-                        '${r['tarif'] ?? 5000} F/mois',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                          color: YekiColors.gold,
-                        ),
-                      ),
-                    ),
                   ],
                 ),
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 4,
-                  children: [
-                    _infoChip(Icons.school_rounded, r['matiere'] ?? ''),
-                    _infoChip(Icons.check_circle_rounded, 'Disponible', 
-                        color: YekiColors.success),
-                    if (whatsapp.isNotEmpty)
-                      _infoChip(Icons.chat_rounded, 'WhatsApp', 
-                        color: const Color(0xFF25D366)),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                _buildWhatsAppButton(whatsapp, r['nom'] ?? 'Enseignant', r['matiere'] ?? ''),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _infoChip(IconData icon, String label, {Color? color}) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: (color ?? YekiColors.primaryDark).withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 12, color: color ?? YekiColors.primaryDark),
-          const SizedBox(width: 4),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 11,
-              color: color ?? YekiColors.primaryDark,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildEmptyState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.person_search_rounded, size: 64, color: YekiColors.textLight),
-          const SizedBox(height: 16),
-          Text(
-            'Aucun répétiteur trouvé',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-              color: YekiColors.textMedium,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Essayez une autre matière ou vérifiez votre connexion.',
-            style: TextStyle(
-              fontSize: 13,
-              color: YekiColors.textLight,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildErrorState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.error_outline_rounded, size: 64, color: YekiColors.error),
-          const SizedBox(height: 16),
-          Text(_error!, style: TextStyle(fontSize: 14, color: YekiColors.textMedium)),
-          const SizedBox(height: 20),
-          ElevatedButton(
-            onPressed: () => _rechercher(_searchCtrl.text),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: YekiColors.primaryDark,
-              foregroundColor: YekiColors.white,
-              elevation: 0,
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
               ),
-            ),
-            child: const Text('Réessayer'),
+              if (tarif != null) YkBadge(variant: YkBadgeVariant.label, label: '$tarif F/mois', color: YkColors.warning),
+            ],
+          ),
+          SizedBox(height: YkSpacing.sm),
+          Wrap(
+            spacing: YkSpacing.xs,
+            children: [
+              YkBadge(variant: YkBadgeVariant.label, label: matiere, color: YkColors.accent(context)),
+              YkBadge(variant: YkBadgeVariant.label, label: 'Disponible', color: YkColors.success),
+            ],
+          ),
+          SizedBox(height: YkSpacing.md),
+          YkButton(
+            label: aWhatsapp ? 'Contacter le service client' : 'Numéro indisponible',
+            icon: Icons.chat_rounded,
+            onPressed: aWhatsapp ? () => _contacterServiceClient(nom, matiere, tarif) : null,
           ),
         ],
       ),
     );
   }
+
+  Widget _etatVide(BuildContext context) => YkEmptyState(
+        icon: Icons.person_search_rounded,
+        title: 'Aucun répétiteur trouvé',
+        message: 'Essayez une autre matière ou vérifiez votre connexion.',
+      );
+
+  Widget _etatErreur(BuildContext context) => YkEmptyState(
+        icon: Icons.error_outline_rounded,
+        title: 'Erreur',
+        message: _erreur ?? '',
+        actionLabel: 'Réessayer',
+        onAction: () => _rechercher(_searchCtrl.text),
+      );
 }

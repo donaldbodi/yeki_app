@@ -214,7 +214,11 @@ class _ConcoursDetailPageState extends State<ConcoursDetailPage> with SingleTick
                 ? () => context.pushNamed(
                     AppRoute.coursDetail,
                     pathParameters: {'coursId': dept.cours.first.id.toString()},
-                    queryParameters: {'titre': dept.cours.first.title, 'coursColor': accent.value.toString()},
+                    queryParameters: {
+                      'titre': dept.cours.first.title,
+                      'coursColor': accent.value.toString(),
+                      'isPremium': dept.estAccessible.toString(),
+                    },
                   )
                 : null,
           ),
@@ -450,7 +454,11 @@ class _TabCours extends StatelessWidget {
           onTap: () => context.pushNamed(
             AppRoute.coursDetail,
             pathParameters: {'coursId': c.id.toString()},
-            queryParameters: {'titre': c.title, 'coursColor': cardColor.value.toString()},
+            queryParameters: {
+              'titre': c.title,
+              'coursColor': cardColor.value.toString(),
+              'isPremium': dept.estAccessible.toString(),
+            },
           ),
           semanticLabel: 'Ouvrir le cours ${c.title}',
           child: Row(

@@ -1,15 +1,20 @@
 // lib/views/pages/enseignants/detail_cours_enseignant.dart
-// ═══════════════════════════════════════════════════════════════════════════
-// DÉTAIL COURS ENSEIGNANT — VERSION CORRIGÉE (DÉFILEMENT OPTIMISÉ)
-// ═══════════════════════════════════════════════════════════════════════════
+//
+// Refondu en P11.3 (rituel P5.0) : `YekiColors`/`TextStyle` en dur
+// remplacés par les tokens/composants `Yk*`. Séparation stricte déjà en
+// place (confirmé par grep exhaustif avant refonte : aucune référence à
+// `CoursDetailTabs`/`cours_detail_page.dart`, l'écran apprenant) —
+// vérifiée à nouveau après réécriture.
 
 import 'package:flutter/material.dart';
+
+import 'package:yeki/core/design/components/components.dart';
+import 'package:yeki/core/design/tokens/tokens.dart';
+import 'package:yeki/features/devoirs_cours/presentation/devoirs_cours_page.dart';
 import 'package:yeki/features/exercices_cours/presentation/exercices_cours_page.dart';
 import 'package:yeki/views/pages/apprenants/forum_page.dart';
 import 'package:yeki/views/pages/apprenants/lecons_cours.dart';
-import 'package:yeki/features/devoirs_cours/presentation/devoirs_cours_page.dart';
 import 'package:yeki/views/pages/enseignants/interface_enseignant_page.dart';
-import 'package:yeki/core/theme/app_theme.dart';
 
 class DetailCoursEnseignantPage extends StatefulWidget {
   final String coursId;
@@ -31,19 +36,14 @@ class DetailCoursEnseignantPage extends StatefulWidget {
   State<DetailCoursEnseignantPage> createState() => _DetailCoursEnseignantPageState();
 }
 
-class _DetailCoursEnseignantPageState extends State<DetailCoursEnseignantPage>
-    with TickerProviderStateMixin {
-  // ✅ CORRECTION : Utiliser un TabController pour les onglets
-  late TabController _tabController;
+class _DetailCoursEnseignantPageState extends State<DetailCoursEnseignantPage> with SingleTickerProviderStateMixin {
+  late final TabController _tabController;
 
   // Filtre de l'onglet Exercices, modifiable en place depuis l'onglet
   // Leçons (voir `_naviguerVersExercicesAvecFiltre`, P3.3 §6) — jamais une
   // navigation vers l'écran apprenant `CoursDetailTabs`.
   int? _exercicesModuleIdFiltre;
   int? _exercicesLeconIdFiltre;
-
-  Color get primaryColor => widget.courseColor;
-  Color get secondaryColor => widget.courseColor.withAlpha(178);
 
   @override
   void initState() {
@@ -68,164 +68,102 @@ class _DetailCoursEnseignantPageState extends State<DetailCoursEnseignantPage>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: YekiColors.backgroundLight,
-      // ✅ CORRECTION : Utiliser NestedScrollView avec un ScrollController
-      // Ne pas passer _tabController à NestedScrollView car il attend un ScrollController
+      backgroundColor: YkColors.background(context),
       body: NestedScrollView(
-        headerSliverBuilder: (context, innerBoxIsScrolled) {
-          return [
-            SliverOverlapAbsorber(
-              handle: NestedScrollView.sliverOverlapAbsorberHandleFor(context),
-              sliver: SliverAppBar(
-                expandedHeight: 200,
-                pinned: true,
-                floating: false,
-                elevation: 0,
-                backgroundColor: primaryColor,
-                leading: IconButton(
-                  icon: Container(
-                    padding: const EdgeInsets.all(6),
-                    decoration: BoxDecoration(
-                      color: YekiColors.black.withAlpha(66),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Icon(Icons.arrow_back_ios_new, color: YekiColors.white, size: 16),
-                  ),
-                  onPressed: () => Navigator.pop(context),
-                ),
-                flexibleSpace: FlexibleSpaceBar(
-                  background: Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [primaryColor, secondaryColor],
-                      ),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(25, 80, 25, 0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: YekiColors.white.withAlpha(51),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Text(
-                                  widget.estEnseignantPrincipal ? "Principal" : "Assistant",
-                                  style: const TextStyle(color: YekiColors.white, fontSize: 10, fontWeight: FontWeight.bold),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 10),
-                          Text(
-                            widget.titre,
-                            style: const TextStyle(
-                              color: YekiColors.white,
-                              fontSize: 22,
-                              fontWeight: FontWeight.bold,
-                            ),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                      ),
-                    ),
+        headerSliverBuilder: (_, _) => [
+          SliverAppBar(
+            expandedHeight: 160,
+            pinned: true,
+            backgroundColor: widget.courseColor,
+            foregroundColor: Colors.white,
+            flexibleSpace: FlexibleSpaceBar(
+              background: Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [widget.courseColor, widget.courseColor.withValues(alpha: 0.7)],
                   ),
                 ),
-                bottom: PreferredSize(
-                  preferredSize: const Size.fromHeight(60),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: YekiColors.white,
-                      borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-                    ),
-                    child: TabBar(
-                      controller: _tabController,
-                      indicatorColor: primaryColor,
-                      indicatorWeight: 3,
-                      labelColor: primaryColor,
-                      unselectedLabelColor: YekiColors.textLight,
-                      labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                      tabs: const [
-                        Tab(text: "Leçons"),
-                        Tab(text: "Exercices"),
-                        Tab(text: "Devoirs"),
-                        Tab(text: "Forum"),
+                child: SafeArea(
+                  child: Padding(
+                    padding: EdgeInsets.fromLTRB(YkSpacing.lg, YkSpacing.xl, YkSpacing.lg, YkSpacing.sm),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        YkBadge(
+                          variant: YkBadgeVariant.label,
+                          label: widget.estEnseignantPrincipal ? 'Principal' : 'Assistant',
+                          color: Colors.white,
+                        ),
+                        SizedBox(height: YkSpacing.sm),
+                        Text(
+                          widget.titre,
+                          style: YkTypography.h2(context).copyWith(color: Colors.white),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ],
                     ),
                   ),
                 ),
               ),
             ),
-          ];
-        },
+          ),
+          SliverPersistentHeader(
+            pinned: true,
+            delegate: YkPinnedHeader(
+              child: Container(
+                color: YkColors.background(context),
+                padding: EdgeInsets.symmetric(horizontal: YkSpacing.md, vertical: YkSpacing.xs),
+                child: YkTabs(
+                  controller: _tabController,
+                  tabs: const [
+                    YkTabItem(label: 'Leçons'),
+                    YkTabItem(label: 'Exercices'),
+                    YkTabItem(label: 'Devoirs'),
+                    YkTabItem(label: 'Forum'),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
         body: TabBarView(
           controller: _tabController,
           children: [
-            _buildTabContent(LeconsCoursPage(
+            LeconsCoursPage(
               coursId: widget.coursId,
               coursTitre: widget.titre,
               role: widget.role,
               tabController: _tabController,
               onNaviguerExercices: _naviguerVersExercicesAvecFiltre,
               isPremium: true,
-              courseColor: primaryColor,
-            )),
-            _buildTabContent(ExercicesCoursPage(
+              courseColor: widget.courseColor,
+            ),
+            ExercicesCoursPage(
               coursId: widget.coursId,
               role: widget.role,
               coursTitre: widget.titre,
-              courseColor: primaryColor,
+              courseColor: widget.courseColor,
               moduleId: _exercicesModuleIdFiltre,
               leconId: _exercicesLeconIdFiltre,
-            )),
-            _buildTabContent(DevoirsCoursPage(
+            ),
+            DevoirsCoursPage(
               coursId: widget.coursId,
               coursTitre: widget.titre,
               role: widget.role,
-              courseColor: primaryColor,
-            )),
-            _buildTabContent(ForumPage(
+              courseColor: widget.courseColor,
+            ),
+            ForumPage(
               preoccupationCoursId: int.tryParse(widget.coursId),
               preoccupationCoursTitre: widget.titre,
-            )),
+            ),
           ],
         ),
       ),
     );
   }
-
-  Widget _buildTabContent(Widget page) {
-    // ✅ CORRECTION : Utiliser Builder pour injecter le handle d'overlap
-    return Builder(
-      builder: (context) {
-        final handle = NestedScrollView.sliverOverlapAbsorberHandleFor(context);
-        
-        return CustomScrollView(
-          physics: const BouncingScrollPhysics(),
-          slivers: [
-            SliverOverlapInjector(
-              handle: handle,
-            ),
-            SliverPadding(
-              padding: const EdgeInsets.only(top: 8, bottom: 20),
-              sliver: SliverToBoxAdapter(
-                child: SizedBox(
-                  // Forcer une hauteur suffisante pour le contenu
-                  height: MediaQuery.of(context).size.height - kToolbarHeight - 60 - 100,
-                  child: page,
-                ),
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
 }
+

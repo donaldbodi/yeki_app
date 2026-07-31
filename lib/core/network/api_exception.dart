@@ -95,11 +95,18 @@ class ApiException implements Exception {
       // renvoient à la main `{"detail": "..."}` sur les erreurs 400, pas
       // l'enveloppe standard — générique plutôt que dupliqué par vue,
       // couvre aussi tout futur endpoint legacy au même format.
+      // P10.6 : les vues Yéki IA (`apps/ia/views.py`) renvoient ce même
+      // format légataire mais avec des champs supplémentaires au 402/503
+      // (`solde_actuel`, `minimum_requis`, `cout_estime_min`,
+      // `cout_estime_max`) — auparavant silencieusement perdus par ce
+      // repli (`fields: const {}`), alors qu'aucun appelant existant de
+      // cette branche ne lisait `.fields` (uniquement `.message`) :
+      // conserver les clés restantes est purement additif.
       if (envelope['detail'] is String) {
         return ApiException(
           code: ApiErrorCodes.validationError,
           message: envelope['detail'] as String,
-          fields: const {},
+          fields: Map<String, dynamic>.from(envelope)..remove('detail'),
           statusCode: statusCode,
         );
       }
@@ -155,7 +162,7 @@ class ApiException implements Exception {
 
   /// P8.3 : `InsufficientBalanceError` (backend) renvoie
   /// `fields: {solde_actuel, montant_requis}` — utilisé par
-  /// `YkManualPaymentFlow` pour proposer une recharge plutôt qu'un
+  /// `YkWalletDebitConfirmSheet` pour proposer une recharge plutôt qu'un
   /// message d'erreur générique.
   bool get isInsufficientBalance => code == ApiErrorCodes.insufficientBalance;
 

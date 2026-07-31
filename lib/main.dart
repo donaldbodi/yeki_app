@@ -12,12 +12,13 @@ import 'package:yeki/core/network/interceptors/auth_interceptor.dart';
 import 'package:yeki/core/providers/router_provider.dart';
 import 'package:yeki/core/providers/theme_provider.dart';
 import 'package:yeki/core/router/auth_state.dart';
-import 'package:yeki/core/design/theme/yeki_theme.dart' as design_tokens;
-import 'package:yeki/core/theme/app_theme.dart';
+import 'package:yeki/core/design/theme/yeki_theme.dart';
 import 'package:yeki/firebase_options.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:yeki/services/cache_manager.dart';
 import 'package:yeki/services/notification_service.dart';
 import 'package:yeki/services/offline_service.dart';
+import 'package:yeki/services/push_notification_service.dart';
 import 'package:yeki/services/sync_service.dart';
 import 'package:yeki/services/update_service.dart';
 
@@ -31,6 +32,8 @@ void main() async {
   await SystemChrome.setPreferredOrientations(
       [DeviceOrientation.portraitUp, DeviceOrientation.portraitDown]);
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  // Doit être enregistré tôt, une seule fois — SDK firebase_messaging.
+  FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
   await NotificationService().initialize();
   await UpdateService.initialize();
   // 401 → refreshListenable (GoRouter ↔ authState) redirige seul vers
@@ -51,7 +54,7 @@ class YekiApp extends ConsumerWidget {
       debugShowCheckedModeBanner: false,
       title: 'Yéki',
       // Bornage textScaler ×0,85–×1,60 (CDC_DESIGN §3.4) — voir P4.1.
-      builder: design_tokens.YekiTheme.clampedBuilder,
+      builder: YekiTheme.clampedBuilder,
       theme: YekiTheme.light(),
       darkTheme: YekiTheme.dark(),
       themeMode: ref.watch(themeProvider).valueOrNull ?? ThemeMode.system,

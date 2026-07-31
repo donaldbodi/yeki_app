@@ -1,16 +1,27 @@
 // lib/views/pages/apprenants/cours_detail_page.dart
-// ════════════════════════════════════════════════════════════════════════
-// DÉTAILS DU COURS — GLASSMORPHISM LIGHT EDITION
-// ════════════════════════════════════════════════════════════════════════
+//
+// Refondu en P11.3 (rituel P5.0) : le glassmorphism fait main et le
+// dégradé `YekiGradients.mainBackground` cèdent la place aux tokens `Yk*`.
+// Le verrou Premium (`_buildPremiumLock`) avait ses 2 prix figés en dur
+// (13000F/1500F, règle 3) — pas de prix fiable disponible ici, le verrou
+// affiche donc un message générique plutôt qu'en inventer un. `isPremium`
+// (en réalité `estAccessible`, dérivé de `DepartementItem.estAccessible`)
+// n'est plus figé à `true` partout depuis P11.4 : certains appelants
+// (`formation_detail_page.dart`, `concours_detail_page.dart`) transmettent
+// désormais une vraie valeur — ce verrou PEUT donc réellement s'afficher.
+// Bouton "Voir les répétiteurs" (P11.3) basculé sur `YkRepetiteurButton`
+// (P11.7).
 
-import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
+
+import 'package:yeki/core/design/components/components.dart';
+import 'package:yeki/core/design/tokens/tokens.dart';
+import 'package:yeki/core/router/route_names.dart';
 import 'package:yeki/features/devoirs_cours/presentation/devoirs_cours_page.dart';
+import 'package:yeki/features/exercices_cours/presentation/exercices_cours_page.dart';
 import 'package:yeki/views/pages/apprenants/forum_page.dart';
 import 'package:yeki/views/pages/apprenants/lecons_cours.dart';
-import 'package:yeki/features/exercices_cours/presentation/exercices_cours_page.dart';
-import 'package:yeki/core/theme/yeki_design_system.dart';
 
 class CoursDetailTabs extends StatefulWidget {
   final String coursId;
@@ -38,8 +49,7 @@ class CoursDetailTabs extends StatefulWidget {
   State<CoursDetailTabs> createState() => _CoursDetailTabsState();
 }
 
-class _CoursDetailTabsState extends State<CoursDetailTabs>
-    with SingleTickerProviderStateMixin {
+class _CoursDetailTabsState extends State<CoursDetailTabs> with SingleTickerProviderStateMixin {
   late TabController _tabController;
   late Color _courseColor;
 
@@ -65,15 +75,9 @@ class _CoursDetailTabsState extends State<CoursDetailTabs>
     _courseColor = Color(widget.coursColor);
     _exercicesModuleIdFiltre = widget.moduleId;
     _exercicesLeconIdFiltre = widget.leconId;
-    _tabController = TabController(
-      length: 4,
-      vsync: this,
-      initialIndex: widget.initialTab,
-    );
+    _tabController = TabController(length: 4, vsync: this, initialIndex: widget.initialTab);
     _tabController.addListener(() {
-      if (!_tabController.indexIsChanging) {
-        setState(() {});
-      }
+      if (!_tabController.indexIsChanging) setState(() {});
     });
   }
 
@@ -81,10 +85,6 @@ class _CoursDetailTabsState extends State<CoursDetailTabs>
   void dispose() {
     _tabController.dispose();
     super.dispose();
-  }
-
-  void _triggerHaptic() {
-    HapticFeedback.lightImpact();
   }
 
   void naviguerVersForumAvecQuestion(int questionId) {
@@ -129,208 +129,64 @@ class _CoursDetailTabsState extends State<CoursDetailTabs>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: YekiColors.bgLight,
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: YekiGradients.mainBackground,
-        ),
-        child: Stack(
-          children: [
-            // Sphères décoratives
-            Positioned(
-              top: -30,
-              right: -30,
-              child: Container(
-                width: 200,
-                height: 200,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: _courseColor.withValues(alpha: 0.08),
-                ),
-              ),
-            ),
-            Positioned(
-              bottom: 100,
-              left: -50,
-              child: Container(
-                width: 180,
-                height: 180,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: YekiColors.accent.withValues(alpha: 0.06),
-                ),
-              ),
-            ),
-            Positioned(
-              bottom: 50,
-              right: -20,
-              child: Container(
-                width: 120,
-                height: 120,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: YekiColors.gold.withValues(alpha: 0.05),
-                ),
-              ),
-            ),
-            // Le contenu des onglets
-            Positioned.fill(
-              child: Padding(
-                padding: const EdgeInsets.only(top: 130),
-                child: _buildTabViews(),
-              ),
-            ),
-            
-            // Header flouté (Glassmorphism) + TabBar
-            Positioned(
-              top: 0,
-              left: 0,
-              right: 0,
-              child: ClipRect(
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          YekiColors.white.withValues(alpha: 0.80),
-                          YekiColors.white.withValues(alpha: 0.60),
+      backgroundColor: YkColors.background(context),
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(96),
+        child: SafeArea(
+          child: Column(
+            children: [
+              Padding(
+                padding: EdgeInsets.fromLTRB(YkSpacing.xxs, YkSpacing.xxs, YkSpacing.md, 0),
+                child: Row(
+                  children: [
+                    IconButton(
+                      icon: Icon(Icons.arrow_back_ios_new_rounded, color: YkColors.textPrimary(context), size: 20),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            widget.titre,
+                            style: YkTypography.label(context).copyWith(color: YkColors.textPrimary(context)),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          Row(
+                            children: [
+                              Container(width: 7, height: 7, decoration: BoxDecoration(color: _courseColor, shape: BoxShape.circle)),
+                              SizedBox(width: YkSpacing.xxs),
+                              Text(
+                                "Espace d'apprentissage",
+                                style: YkTypography.caption(context).copyWith(color: YkColors.textSecondary(context)),
+                              ),
+                            ],
+                          ),
                         ],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      border: Border(
-                        bottom: BorderSide(
-                          color: YekiColors.white.withValues(alpha: 0.5),
-                          width: 1,
-                        ),
                       ),
                     ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        _buildHeader(),
-                        _buildTabBarCapsule(),
-                      ],
-                    ),
-                  ),
+                    YkRepetiteurButton(compact: true, onPressed: () => context.pushNamed(AppRoute.repetiteurs)),
+                  ],
                 ),
               ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildHeader() {
-    return SafeArea(
-      bottom: false,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(8, 8, 16, 4),
-        child: Row(
-          children: [
-            IconButton(
-              icon: const Icon(Icons.arrow_back_ios_new_rounded, color: YekiColors.textDark, size: 20),
-              onPressed: () {
-                _triggerHaptic();
-                Navigator.pop(context);
-              },
-              splashRadius: 22,
-            ),
-            const SizedBox(width: 4),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    widget.titre,
-                    style: const TextStyle(
-                      color: YekiColors.textDark,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: -0.4,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 2),
-                  Row(
-                    children: [
-                      Container(
-                        width: 7,
-                        height: 7,
-                        decoration: BoxDecoration(color: _courseColor, shape: BoxShape.circle),
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        "Espace d'apprentissage",
-                        style: TextStyle(color: YekiColors.textMedium, fontSize: 11, fontWeight: FontWeight.w600),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTabBarCapsule() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      child: Container(
-        height: 44,
-        padding: const EdgeInsets.all(4),
-        decoration: BoxDecoration(
-          color: YekiColors.white.withValues(alpha: 0.4),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: YekiColors.white.withValues(alpha: 0.6),
-            width: 1,
-          ),
-        ),
-        child: TabBar(
-          controller: _tabController,
-          onTap: (_) => _triggerHaptic(),
-          padding: EdgeInsets.zero,
-          labelPadding: const EdgeInsets.symmetric(horizontal: 4),
-          indicator: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [_courseColor, _courseColor.withValues(alpha: 0.8)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            borderRadius: BorderRadius.circular(10),
-            boxShadow: [
-              BoxShadow(
-                color: _courseColor.withValues(alpha: 0.25),
-                blurRadius: 8,
-                offset: const Offset(0, 3),
+              Padding(
+                padding: EdgeInsets.symmetric(horizontal: YkSpacing.md),
+                child: YkTabs(
+                  controller: _tabController,
+                  tabs: const [
+                    YkTabItem(label: 'Leçons'),
+                    YkTabItem(label: 'Exercices'),
+                    YkTabItem(label: 'Devoirs'),
+                    YkTabItem(label: 'Forum'),
+                  ],
+                ),
               ),
             ],
           ),
-          labelColor: YekiColors.white,
-          unselectedLabelColor: YekiColors.textMedium,
-          labelStyle: const TextStyle(
-            fontWeight: FontWeight.w800, 
-            fontSize: 11.5, 
-            letterSpacing: -0.2,
-          ),
-          unselectedLabelStyle: const TextStyle(
-            fontWeight: FontWeight.w600, 
-            fontSize: 11,
-          ),
-          tabs: const [
-            Tab(child: Center(child: Text('Leçons'))),
-            Tab(child: Center(child: Text('Exercices'))),
-            Tab(child: Center(child: Text('Devoirs'))),
-            Tab(child: Center(child: Text('Forum'))),
-          ],
         ),
       ),
+      body: _buildTabViews(),
     );
   }
 
@@ -356,7 +212,7 @@ class _CoursDetailTabsState extends State<CoursDetailTabs>
                 moduleId: _exercicesModuleIdFiltre,
                 leconId: _exercicesLeconIdFiltre,
               )
-            : _buildPremiumLock('exercices'),
+            : _buildPremiumLock(context),
         widget.isPremium
             ? DevoirsCoursPage(
                 coursId: widget.coursId,
@@ -364,7 +220,7 @@ class _CoursDetailTabsState extends State<CoursDetailTabs>
                 onNaviguerForum: naviguerVersForumAvecQuestion,
                 courseColor: _courseColor,
               )
-            : _buildPremiumLock('devoirs'),
+            : _buildPremiumLock(context),
         widget.isPremium
             ? ForumPage(
                 key: ValueKey('$_forumScrollToId$_forumPreoccupationContenu'),
@@ -381,252 +237,41 @@ class _CoursDetailTabsState extends State<CoursDetailTabs>
                 preoccupationDevoirTitre: _forumPreoccupationDevoirTitre,
                 coursColor: widget.coursColor,
               )
-            : _buildPremiumLock('forum'),
+            : _buildPremiumLock(context),
       ],
     );
   }
 
-  Widget _buildPremiumLock(String feature) {
-    return Container(
-      color: Colors.transparent,
-      child: Center(
-        child: SingleChildScrollView(
-          physics: const BouncingScrollPhysics(),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                // Visuel d'impact : Badge Couronne Lumineux
-                Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    Container(
-                      width: 110,
-                      height: 110,
-                      decoration: BoxDecoration(
-                        gradient: RadialGradient(
-                          colors: [YekiColors.gold.withValues(alpha: 0.15), YekiColors.gold.withValues(alpha: 0.0)],
-                        ),
-                      ),
-                    ),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(55),
-                      child: BackdropFilter(
-                        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                        child: Container(
-                          padding: const EdgeInsets.all(20),
-                          decoration: BoxDecoration(
-                            color: YekiColors.white.withValues(alpha: 0.5),
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: YekiColors.white.withValues(alpha: 0.8),
-                              width: 2,
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: YekiColors.gold.withValues(alpha: 0.15),
-                                blurRadius: 20,
-                                offset: const Offset(0, 8),
-                              ),
-                            ],
-                          ),
-                          child: const Icon(Icons.workspace_premium_rounded, color: YekiColors.gold, size: 42),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 20),
-                Text(
-                  'Débloquez tout le potentiel',
-                  style: YekiTextStyles.h2(context).copyWith(fontSize: 22),
-                ),
-                const SizedBox(height: 8),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  child: Text(
-                    'Rejoignez la communauté Premium pour accéder sans limite aux $feature, fiches de révision et corrections d\'experts.',
-                    textAlign: TextAlign.center,
-                    style: YekiTextStyles.body(context).copyWith(fontSize: 13.5, height: 1.45),
-                  ),
-                ),
-                const SizedBox(height: 32),
-                
-                // Formule Annuelle
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(16),
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
-                    child: Container(
-                      width: double.infinity,
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [
-                            YekiColors.white.withValues(alpha: 0.7),
-                            YekiColors.white.withValues(alpha: 0.4),
-                          ],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: YekiColors.primary.withValues(alpha: 0.3),
-                          width: 2,
-                        ),
-                      ),
-                      child: Stack(
-                        clipBehavior: Clip.none,
-                        children: [
-                          // Badge Économie
-                          Positioned(
-                            top: -12,
-                            right: 16,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  colors: [YekiColors.accent, YekiColors.accent.withValues(alpha: 0.8)],
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                ),
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                              child: const Text(
-                                '-26% ÉCONOMIE',
-                                style: TextStyle(color: YekiColors.white, fontSize: 9, fontWeight: FontWeight.w900, letterSpacing: 0.5),
-                              ),
-                            ),
-                          ),
-                          InkWell(
-                            onTap: () => _triggerHaptic(),
-                            borderRadius: BorderRadius.circular(16),
-                            child: Padding(
-                              padding: const EdgeInsets.all(18),
-                              child: Row(
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.all(8),
-                                    decoration: BoxDecoration(
-                                      color: YekiColors.primary.withValues(alpha: 0.1),
-                                      shape: BoxShape.circle,
-                                    ),
-                                    child: const Icon(Icons.flash_on_rounded, color: YekiColors.primary, size: 20),
-                                  ),
-                                  const SizedBox(width: 14),
-                                  const Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          'Formule Annuelle',
-                                          style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: YekiColors.textDark),
-                                        ),
-                                        SizedBox(height: 2),
-                                        Text(
-                                          'Accès total pendant 12 mois',
-                                          style: TextStyle(color: YekiColors.textMedium, fontSize: 11, fontWeight: FontWeight.w500),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  const Text(
-                                    '13 000 F',
-                                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: YekiColors.primary, letterSpacing: -0.5),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                
-                // Formule Mensuelle
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(16),
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
-                    child: Container(
-                      width: double.infinity,
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [
-                            YekiColors.white.withValues(alpha: 0.5),
-                            YekiColors.white.withValues(alpha: 0.3),
-                          ],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: YekiColors.white.withValues(alpha: 0.5),
-                          width: 1,
-                        ),
-                      ),
-                      child: InkWell(
-                        onTap: () => _triggerHaptic(),
-                        borderRadius: BorderRadius.circular(16),
-                        child: Padding(
-                          padding: const EdgeInsets.all(18),
-                          child: Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                  color: YekiColors.textMedium.withValues(alpha: 0.06),
-                                  shape: BoxShape.circle,
-                                ),
-                                child: const Icon(Icons.calendar_today_rounded, color: YekiColors.textMedium, size: 18),
-                              ),
-                              const SizedBox(width: 14),
-                              const Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      'Abonnement Mensuel',
-                                      style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: YekiColors.textDark),
-                                    ),
-                                    SizedBox(height: 2),
-                                    Text(
-                                      'Liberté totale, sans engagement',
-                                      style: TextStyle(color: YekiColors.textMedium, fontSize: 11),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const Text(
-                                '1 500 F',
-                                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: YekiColors.textDark, letterSpacing: -0.5),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 28),
-                
-                // Rassurance
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.verified_user_rounded, color: YekiColors.textMedium.withValues(alpha: 0.5), size: 14),
-                    const SizedBox(width: 4),
-                    Text(
-                      'Paiement Mobile Sécurisé • Annulable à tout moment',
-                      style: TextStyle(color: YekiColors.textMedium.withValues(alpha: 0.7), fontSize: 10, fontWeight: FontWeight.w600),
-                    ),
-                  ],
-                ),
-              ],
+  Widget _buildPremiumLock(BuildContext context) {
+    return Center(
+      child: SingleChildScrollView(
+        padding: EdgeInsets.all(YkSpacing.lg),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.workspace_premium_rounded, color: YkColors.warning, size: 64),
+            SizedBox(height: YkSpacing.md),
+            Text(
+              'Débloquez tout le potentiel',
+              textAlign: TextAlign.center,
+              style: YkTypography.h3(context).copyWith(color: YkColors.textPrimary(context)),
             ),
-          ),
+            SizedBox(height: YkSpacing.xs),
+            Text(
+              "Accédez sans limite aux exercices, devoirs et au forum de ce cours en découvrant nos offres.",
+              textAlign: TextAlign.center,
+              style: YkTypography.bodySm(context).copyWith(color: YkColors.textSecondary(context)),
+            ),
+            SizedBox(height: YkSpacing.lg),
+            YkButton(
+              label: 'Découvrir nos offres',
+              icon: Icons.workspace_premium_rounded,
+              // Aucun prix réel n'est disponible ici (voir commentaire
+              // d'en-tête) — `YkSnack.info` plutôt qu'une navigation vers
+              // `AppRoute.paiement` avec un montant inventé à 0.
+              onPressed: () => YkSnack.info(context, 'Nos offres seront bientôt disponibles depuis cet écran.'),
+            ),
+          ],
         ),
       ),
     );

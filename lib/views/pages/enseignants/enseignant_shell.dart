@@ -16,17 +16,108 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
-import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:convert';
 
-import 'package:yeki/core/constants/api_constants.dart';
+import 'package:yeki/core/design/tokens/tokens.dart';
 import 'package:yeki/core/router/auth_state.dart';
 import 'package:yeki/core/router/route_names.dart';
-import 'package:yeki/core/theme/yeki_design_system.dart';
-import 'package:yeki/core/theme/yeki_design_extension.dart';
+import 'package:yeki/repositories/auth_repository.dart';
 import 'package:yeki/views/pages/enseignants/interface_enseignant_page.dart'
     show RoleEnseignant, roleEnseignantFromBackend;
+
+/// P13.1 : migré hors de `yeki_design_system.dart`/`yeki_design_extension.dart`
+/// (anciens, retirés) — comportement/structure INCHANGÉS (migration minimale
+/// tokens seulement, arbitrage tranché avec l'utilisateur : une vraie refonte
+/// P5.0 de cette coquille reste un ticket à part). Seuils responsive
+/// reproduits ici à l'identique (600/1024) plutôt que mappés sur
+/// `YkBreakpoints` (dont les seuils 600/905/1240 diffèrent — un mappage par
+/// nom aurait décalé les points de bascule mobile/tablette/desktop).
+const double _kMobileMax = 600.0;
+const double _kTabletMax = 1024.0;
+bool _isMobile(BuildContext context) => MediaQuery.sizeOf(context).width <= _kMobileMax;
+bool _isTablet(BuildContext context) =>
+    MediaQuery.sizeOf(context).width > _kMobileMax && MediaQuery.sizeOf(context).width <= _kTabletMax;
+bool _isDesktop(BuildContext context) => MediaQuery.sizeOf(context).width > _kTabletMax;
+double _dynamicPadding(BuildContext context) {
+  final width = MediaQuery.sizeOf(context).width;
+  if (width > _kTabletMax) return 32.0;
+  if (width > _kMobileMax) return 24.0;
+  return 16.0;
+}
+
+/// Couleurs par rôle — aucune palette catégorielle équivalente n'existe dans
+/// les tokens `Yk*` (même gap déjà documenté en P11.8 pour
+/// `historique_page.dart`) : valeurs reprises telles quelles depuis l'ancien
+/// `YekiRoleColors`, pas inventées.
+const _kRoleColorAdmin = Color(0xFF7C3AED);
+const _kRoleColorCadre = Color(0xFF2884A0);
+const _kRoleColorPrincipal = Color(0xFFE2A84B);
+const _kRoleColorEnseignant = Color(0xFF10B981);
+
+const _kShadowStrong = [
+  BoxShadow(color: Color(0x1F000000), blurRadius: 30, offset: Offset(0, 12)),
+];
+
+/// Reproduction fidèle de l'ancien `YekiAvatar` (CircleAvatar simple).
+class _Avatar extends StatelessWidget {
+  const _Avatar({this.imageUrl, this.initials, this.backgroundColor, this.radius = 20, this.showBorder = false});
+
+  final String? imageUrl;
+  final String? initials;
+  final Color? backgroundColor;
+  final double radius;
+  final bool showBorder;
+
+  @override
+  Widget build(BuildContext context) {
+    final avatar = CircleAvatar(
+      radius: radius,
+      backgroundColor: backgroundColor ?? YkColors.accent(context).withValues(alpha: 0.1),
+      backgroundImage: imageUrl != null && imageUrl!.isNotEmpty ? NetworkImage(imageUrl!) : null,
+      child: imageUrl == null || imageUrl!.isEmpty
+          ? Text(
+              initials ?? '?',
+              style: TextStyle(color: YkColors.accent(context), fontWeight: FontWeight.bold, fontSize: radius * 0.7),
+            )
+          : null,
+    );
+    if (!showBorder) return avatar;
+    return Container(
+      decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 2)),
+      child: avatar,
+    );
+  }
+}
+
+/// Reproduction fidèle de l'ancien `YekiRoleBadge` — y compris son bug
+/// pré-existant découvert pendant cette migration (non corrigé ici, hors
+/// périmètre d'une migration de tokens à comportement inchangé) : le
+/// composant d'origine recevait un LIBELLÉ déjà traduit (« Cadre »,
+/// « Principal »...) alors que son switch interne de coloration attendait
+/// une clé brute en minuscules (« cadre », « principal »...) — aucune
+/// correspondance ne matchait jamais, donc le badge affichait toujours la
+/// même couleur par défaut quel que soit le rôle réel (contrairement à
+/// l'avatar, coloré correctement via `_getRoleColor` ailleurs dans ce
+/// fichier). Signalé dans la fiche d'écart, pas corrigé.
+class _RoleBadge extends StatelessWidget {
+  const _RoleBadge({required this.label, this.fontSize});
+
+  final String label;
+  final double? fontSize;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = YkColors.accent(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(YkRadius.xl),
+        border: Border.all(color: color.withValues(alpha: 0.2), width: 1),
+      ),
+      child: Text(label, style: TextStyle(color: color, fontSize: fontSize ?? 11, fontWeight: FontWeight.w600)),
+    );
+  }
+}
 
 class EnseignantShellPage extends StatefulWidget {
   final StatefulNavigationShell navigationShell;
@@ -49,18 +140,8 @@ class _EnseignantShellPageState extends State<EnseignantShellPage> {
 
   Future<void> _fetchProfil() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString('token');
-      if (token == null) return;
-
-      final res = await http.get(
-        Uri.parse(ApiConstants.profilMe),
-        headers: ApiHeaders.auth(token),
-      );
-      if (res.statusCode == 200 && mounted) {
-        final data = jsonDecode(res.body) as Map<String, dynamic>;
-        setState(() => _profil = data);
-      }
+      final data = await AuthRepository().getCurrentUserRaw();
+      if (mounted) setState(() => _profil = data);
     } catch (e) {
       debugPrint("Erreur chargement profil: $e");
     }
@@ -83,18 +164,18 @@ class _EnseignantShellPageState extends State<EnseignantShellPage> {
     }
   }
 
-  Color _getRoleColor(RoleEnseignant role) {
+  Color _getRoleColor(BuildContext context, RoleEnseignant role) {
     switch (role) {
       case RoleEnseignant.administrateurGeneral:
-        return YekiRoleColors.admin;
+        return _kRoleColorAdmin;
       case RoleEnseignant.enseignantAdministrateur:
-        return YekiRoleColors.enseignant;
+        return _kRoleColorEnseignant;
       case RoleEnseignant.enseignantCadre:
-        return YekiRoleColors.cadre;
+        return _kRoleColorCadre;
       case RoleEnseignant.enseignantPrincipal:
-        return YekiRoleColors.principal;
+        return _kRoleColorPrincipal;
       default:
-        return YekiColors.primaryLight;
+        return YkColors.accent(context);
     }
   }
 
@@ -121,23 +202,23 @@ class _EnseignantShellPageState extends State<EnseignantShellPage> {
 
   @override
   Widget build(BuildContext context) {
-    final isMobile = YekiResponsive.isMobile(context);
-    final isTablet = YekiResponsive.isTablet(context);
-    final isDesktop = YekiResponsive.isDesktop(context);
+    final isMobile = _isMobile(context);
+    final isTablet = _isTablet(context);
+    final isDesktop = _isDesktop(context);
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: isDesktop ? SystemUiOverlayStyle.dark : SystemUiOverlayStyle.light,
       child: Scaffold(
         extendBody: true,
-        backgroundColor: YekiColors.bgLight,
-        body: isDesktop ? _buildDesktopLayout() : _buildMobileLayout(),
-        bottomNavigationBar: isMobile || isTablet ? _buildFloatingNav() : null,
+        backgroundColor: YkColors.background(context),
+        body: isDesktop ? _buildDesktopLayout(context) : _buildMobileLayout(context),
+        bottomNavigationBar: isMobile || isTablet ? _buildFloatingNav(context) : null,
       ),
     );
   }
 
   // ─── LAYOUT DESKTOP ──────────────────────────────────────────────────────
-  Widget _buildDesktopLayout() {
+  Widget _buildDesktopLayout(BuildContext context) {
     final role = _role;
 
     return Row(
@@ -148,9 +229,9 @@ class _EnseignantShellPageState extends State<EnseignantShellPage> {
           height: double.infinity,
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
-            color: YekiColors.white,
+            color: YkColors.surface(context),
             border: Border(
-              right: BorderSide(color: YekiColors.borderLight, width: 1),
+              right: BorderSide(color: YkColors.border(context), width: 1),
             ),
           ),
           child: Column(
@@ -163,14 +244,14 @@ class _EnseignantShellPageState extends State<EnseignantShellPage> {
                     width: 40,
                     height: 40,
                     decoration: BoxDecoration(
-                      color: YekiColors.primary,
-                      borderRadius: YekiRadius.radiusSm,
+                      color: YkColors.accent(context),
+                      borderRadius: BorderRadius.circular(YkRadius.xs),
                     ),
-                    child: const Center(
+                    child: Center(
                       child: Text(
                         'Y',
                         style: TextStyle(
-                          color: YekiColors.white,
+                          color: YkColors.textOnPrimary,
                           fontSize: 20,
                           fontWeight: FontWeight.w900,
                         ),
@@ -178,12 +259,12 @@ class _EnseignantShellPageState extends State<EnseignantShellPage> {
                     ),
                   ),
                   const SizedBox(width: 12),
-                  const Text(
+                  Text(
                     'Yeki',
                     style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.w900,
-                      color: YekiColors.textDark,
+                      color: YkColors.textPrimary(context),
                     ),
                   ),
                 ],
@@ -192,11 +273,11 @@ class _EnseignantShellPageState extends State<EnseignantShellPage> {
               const SizedBox(height: 40),
 
               // ── Menu de navigation ────────────────────────────────────
-              _buildNavItem(0, Icons.grid_view_rounded, 'Accueil'),
+              _buildNavItem(context, 0, Icons.grid_view_rounded, 'Accueil'),
               const SizedBox(height: 8),
-              _buildNavItem(1, Icons.history_rounded, 'Historique'),
+              _buildNavItem(context, 1, Icons.history_rounded, 'Historique'),
               const SizedBox(height: 8),
-              _buildNavItem(2, Icons.person_rounded, 'Profil'),
+              _buildNavItem(context, 2, Icons.person_rounded, 'Profil'),
 
               const Spacer(),
 
@@ -204,17 +285,17 @@ class _EnseignantShellPageState extends State<EnseignantShellPage> {
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: YekiColors.bgLight,
-                  borderRadius: YekiRadius.radiusMd,
-                  border: Border.all(color: YekiColors.borderLight, width: 1),
+                  color: YkColors.background(context),
+                  borderRadius: BorderRadius.circular(YkRadius.md),
+                  border: Border.all(color: YkColors.border(context), width: 1),
                 ),
                 child: Row(
                   children: [
-                    YekiAvatar(
+                    _Avatar(
                       imageUrl: _avatarUrl,
                       initials: _initials,
                       radius: 24,
-                      backgroundColor: _getRoleColor(role).withValues(alpha: 0.3),
+                      backgroundColor: _getRoleColor(context, role).withValues(alpha: 0.3),
                       showBorder: true,
                     ),
                     const SizedBox(width: 12),
@@ -224,17 +305,17 @@ class _EnseignantShellPageState extends State<EnseignantShellPage> {
                         children: [
                           Text(
                             _nomAffiche,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.w700,
-                              color: YekiColors.textDark,
+                              color: YkColors.textPrimary(context),
                             ),
                           ),
                           Text(
                             _getRoleLabel(role),
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 11,
-                              color: YekiColors.textMedium,
+                              color: YkColors.textSecondary(context),
                             ),
                           ),
                         ],
@@ -257,8 +338,8 @@ class _EnseignantShellPageState extends State<EnseignantShellPage> {
                   label: const Text('Déconnexion'),
                   style: OutlinedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 12),
-                    side: const BorderSide(color: YekiColors.borderLight),
-                    foregroundColor: YekiColors.textMedium,
+                    side: BorderSide(color: YkColors.border(context)),
+                    foregroundColor: YkColors.textSecondary(context),
                   ),
                 ),
               ),
@@ -274,28 +355,28 @@ class _EnseignantShellPageState extends State<EnseignantShellPage> {
               Container(
                 padding: const EdgeInsets.fromLTRB(32, 20, 32, 12),
                 decoration: BoxDecoration(
-                  color: YekiColors.white,
+                  color: YkColors.surface(context),
                   border: Border(
-                    bottom: BorderSide(color: YekiColors.borderLight, width: 1),
+                    bottom: BorderSide(color: YkColors.border(context), width: 1),
                   ),
                 ),
                 child: Row(
                   children: [
                     Text(
                       _getPageTitle(widget.navigationShell.currentIndex),
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.w800,
-                        color: YekiColors.textDark,
+                        color: YkColors.textPrimary(context),
                       ),
                     ),
                     const Spacer(),
                     IconButton(
                       icon: Stack(
                         children: [
-                          const Icon(
+                          Icon(
                             Icons.notifications_outlined,
-                            color: YekiColors.textDark,
+                            color: YkColors.textPrimary(context),
                             size: 24,
                           ),
                           if (_nbNotifs > 0)
@@ -306,14 +387,14 @@ class _EnseignantShellPageState extends State<EnseignantShellPage> {
                                 width: 16,
                                 height: 16,
                                 decoration: const BoxDecoration(
-                                  color: YekiColors.error,
+                                  color: YkColors.error,
                                   shape: BoxShape.circle,
                                 ),
                                 child: Center(
                                   child: Text(
                                     '$_nbNotifs',
-                                    style: const TextStyle(
-                                      color: YekiColors.white,
+                                    style: TextStyle(
+                                      color: YkColors.textOnPrimary,
                                       fontSize: 9,
                                       fontWeight: FontWeight.bold,
                                     ),
@@ -339,24 +420,26 @@ class _EnseignantShellPageState extends State<EnseignantShellPage> {
   }
 
   // ─── ITEM DE NAVIGATION DESKTOP ──────────────────────────────────────────
-  Widget _buildNavItem(int index, IconData icon, String label) {
+  Widget _buildNavItem(BuildContext context, int index, IconData icon, String label) {
     final isSelected = widget.navigationShell.currentIndex == index;
+    final accent = YkColors.accent(context);
+    final secondary = YkColors.textSecondary(context);
 
     return InkWell(
       onTap: () => widget.navigationShell.goBranch(index),
-      borderRadius: YekiRadius.radiusMd,
+      borderRadius: BorderRadius.circular(YkRadius.md),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
-          color: isSelected ? YekiColors.primary.withValues(alpha: 0.1) : Colors.transparent,
-          borderRadius: YekiRadius.radiusMd,
-          border: isSelected ? Border.all(color: YekiColors.primary.withValues(alpha: 0.2), width: 1) : null,
+          color: isSelected ? accent.withValues(alpha: 0.1) : Colors.transparent,
+          borderRadius: BorderRadius.circular(YkRadius.md),
+          border: isSelected ? Border.all(color: accent.withValues(alpha: 0.2), width: 1) : null,
         ),
         child: Row(
           children: [
             Icon(
               icon,
-              color: isSelected ? YekiColors.primary : YekiColors.textMedium,
+              color: isSelected ? accent : secondary,
               size: 22,
             ),
             const SizedBox(width: 14),
@@ -365,7 +448,7 @@ class _EnseignantShellPageState extends State<EnseignantShellPage> {
               style: TextStyle(
                 fontSize: 15,
                 fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                color: isSelected ? YekiColors.primary : YekiColors.textMedium,
+                color: isSelected ? accent : secondary,
               ),
             ),
             if (isSelected) ...[
@@ -374,7 +457,7 @@ class _EnseignantShellPageState extends State<EnseignantShellPage> {
                 width: 6,
                 height: 6,
                 decoration: BoxDecoration(
-                  color: YekiColors.primary,
+                  color: accent,
                   shape: BoxShape.circle,
                 ),
               ),
@@ -400,7 +483,7 @@ class _EnseignantShellPageState extends State<EnseignantShellPage> {
   }
 
   // ─── LAYOUT MOBILE/TABLETTE ──────────────────────────────────────────────
-  Widget _buildMobileLayout() {
+  Widget _buildMobileLayout(BuildContext context) {
     return Stack(
       children: [
         // ── Fond décoratif ──────────────────────────────────────────────
@@ -411,17 +494,17 @@ class _EnseignantShellPageState extends State<EnseignantShellPage> {
           height: 240,
           child: Container(
             decoration: BoxDecoration(
-              gradient: LinearGradient(
+              gradient: const LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
-                  const Color(0xFF0D2A3A),
-                  YekiColors.primaryDark,
+                  Color(0xFF0D2A3A),
+                  YkColors.primary700,
                 ],
               ),
-              borderRadius: const BorderRadius.only(
-                bottomLeft: Radius.circular(YekiRadius.lg * 1.5),
-                bottomRight: Radius.circular(YekiRadius.lg * 1.5),
+              borderRadius: BorderRadius.only(
+                bottomLeft: Radius.circular(YkRadius.xl * 1.5),
+                bottomRight: Radius.circular(YkRadius.xl * 1.5),
               ),
             ),
           ),
@@ -431,7 +514,7 @@ class _EnseignantShellPageState extends State<EnseignantShellPage> {
         SafeArea(
           child: Column(
             children: [
-              _buildMobileHeader(),
+              _buildMobileHeader(context),
               Expanded(child: widget.navigationShell),
             ],
           ),
@@ -441,15 +524,15 @@ class _EnseignantShellPageState extends State<EnseignantShellPage> {
   }
 
   // ─── HEADER MOBILE ──────────────────────────────────────────────────────
-  Widget _buildMobileHeader() {
+  Widget _buildMobileHeader(BuildContext context) {
     final role = _role;
-    final roleColor = _getRoleColor(role);
+    final roleColor = _getRoleColor(context, role);
 
     return Padding(
       padding: EdgeInsets.fromLTRB(
-        YekiResponsive.dynamicPadding(context),
+        _dynamicPadding(context),
         12,
-        YekiResponsive.dynamicPadding(context),
+        _dynamicPadding(context),
         16,
       ),
       child: Row(
@@ -459,7 +542,7 @@ class _EnseignantShellPageState extends State<EnseignantShellPage> {
             onTap: () => widget.navigationShell.goBranch(2),
             child: Stack(
               children: [
-                YekiAvatar(
+                _Avatar(
                   imageUrl: _avatarUrl,
                   initials: _initials,
                   radius: 22,
@@ -472,13 +555,10 @@ class _EnseignantShellPageState extends State<EnseignantShellPage> {
                   child: Container(
                     width: 12,
                     height: 12,
-                    decoration: BoxDecoration(
-                      color: YekiColors.success,
+                    decoration: const BoxDecoration(
+                      color: YkColors.success,
                       shape: BoxShape.circle,
-                      border: Border.all(
-                        color: YekiColors.white,
-                        width: 1.5,
-                      ),
+                      border: Border.fromBorderSide(BorderSide(color: Colors.white, width: 1.5)),
                     ),
                   ),
                 ),
@@ -496,14 +576,14 @@ class _EnseignantShellPageState extends State<EnseignantShellPage> {
                 Text(
                   'Bonjour, $_nomAffiche 👋',
                   style: TextStyle(
-                    color: YekiColors.white,
-                    fontSize: YekiResponsive.isMobile(context) ? 14 : 16,
+                    color: YkColors.textOnPrimary,
+                    fontSize: _isMobile(context) ? 14 : 16,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
                 const SizedBox(height: 4),
-                YekiRoleBadge(
-                  role: _getRoleLabel(role),
+                _RoleBadge(
+                  label: _getRoleLabel(role),
                   fontSize: 10,
                 ),
               ],
@@ -521,12 +601,12 @@ class _EnseignantShellPageState extends State<EnseignantShellPage> {
                   width: 40,
                   height: 40,
                   decoration: BoxDecoration(
-                    color: YekiColors.white.withValues(alpha: 0.15),
+                    color: YkColors.textOnPrimary.withValues(alpha: 0.15),
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(
+                  child: Icon(
                     Icons.notifications_outlined,
-                    color: YekiColors.white,
+                    color: YkColors.textOnPrimary,
                     size: 20,
                   ),
                 ),
@@ -538,14 +618,14 @@ class _EnseignantShellPageState extends State<EnseignantShellPage> {
                       width: 16,
                       height: 16,
                       decoration: const BoxDecoration(
-                        color: YekiColors.error,
+                        color: YkColors.error,
                         shape: BoxShape.circle,
                       ),
                       child: Center(
                         child: Text(
                           '$_nbNotifs',
-                          style: const TextStyle(
-                            color: YekiColors.white,
+                          style: TextStyle(
+                            color: YkColors.textOnPrimary,
                             fontSize: 9,
                             fontWeight: FontWeight.bold,
                           ),
@@ -562,15 +642,16 @@ class _EnseignantShellPageState extends State<EnseignantShellPage> {
   }
 
   // ─── NAVIGATION FLOTTANTE MOBILE/TABLETTE ──────────────────────────────
-  Widget _buildFloatingNav() {
+  Widget _buildFloatingNav(BuildContext context) {
     final items = [
       (Icons.grid_view_rounded, Icons.grid_view_outlined, 'Accueil'),
       (Icons.history_rounded, Icons.history_outlined, 'Historique'),
       (Icons.person_rounded, Icons.person_outline_rounded, 'Profil'),
     ];
 
-    final isMobile = YekiResponsive.isMobile(context);
+    final isMobile = _isMobile(context);
     final currentIndex = widget.navigationShell.currentIndex;
+    final accent = YkColors.accent(context);
 
     return Padding(
       padding: EdgeInsets.fromLTRB(
@@ -582,13 +663,13 @@ class _EnseignantShellPageState extends State<EnseignantShellPage> {
       child: Container(
         height: isMobile ? 68 : 76,
         decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [YekiColors.textDark, Color(0xFF1A3A4A)],
+          gradient: LinearGradient(
+            colors: [YkColors.textPrimary(context), const Color(0xFF1A3A4A)],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
           borderRadius: BorderRadius.circular(32),
-          boxShadow: YekiShadowsExtension.shadowStrong,
+          boxShadow: _kShadowStrong,
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -607,9 +688,9 @@ class _EnseignantShellPageState extends State<EnseignantShellPage> {
                 ),
                 decoration: BoxDecoration(
                   color: isSelected
-                      ? YekiColors.primaryDark.withValues(alpha: 0.25)
+                      ? YkColors.primary700.withValues(alpha: 0.25)
                       : Colors.transparent,
-                  borderRadius: YekiRadius.radiusLg,
+                  borderRadius: BorderRadius.circular(YkRadius.xl),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
@@ -620,8 +701,8 @@ class _EnseignantShellPageState extends State<EnseignantShellPage> {
                         isSelected ? item.$1 : item.$2,
                         key: ValueKey(isSelected),
                         color: isSelected
-                            ? YekiColors.accent
-                            : YekiColors.white.withValues(alpha: 0.54),
+                            ? accent
+                            : YkColors.textOnPrimary.withValues(alpha: 0.54),
                         size: isSelected ? (isMobile ? 22 : 24) : (isMobile ? 20 : 22),
                       ),
                     ),
@@ -634,7 +715,7 @@ class _EnseignantShellPageState extends State<EnseignantShellPage> {
                               child: Text(
                                 item.$3,
                                 style: TextStyle(
-                                  color: YekiColors.accent,
+                                  color: accent,
                                   fontSize: isMobile ? 11 : 13,
                                   fontWeight: FontWeight.w800,
                                 ),

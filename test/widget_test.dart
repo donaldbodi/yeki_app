@@ -82,13 +82,13 @@ Future<String> _landingPathForRole(WidgetTester tester, String role) async {
 
 void main() {
   final cases = <String, String>{
-    'apprenant': '/dashboard/cursus',
+    'apprenant': '/dashboard/accueil',
     'admin': '/enseignant/admin',
     'enseignant_admin': '/enseignant/coordination',
     'enseignant_cadre': '/enseignant/cadre',
     'enseignant_principal': '/enseignant/principal',
     'enseignant': '/enseignant/secondaire',
-    'service_client': '/enseignant/secondaire',
+    'service_client': '/service-client',
   };
 
   for (final entry in cases.entries) {

@@ -4,18 +4,16 @@ import 'package:yeki/core/design/components/inputs/yk_file_upload.dart';
 import 'package:yeki/core/network/api_client.dart';
 import 'package:yeki/core/network/api_endpoints.dart';
 import 'package:yeki/models/devoir_models.dart';
-import 'package:yeki/views/pages/apprenants/devoir_models.dart' show DevoirModel;
+import 'package:yeki/views/pages/apprenants/devoir_models.dart' show DevoirItem;
 
-/// Devoirs. `listMine`/`soumettre` (tranche apprenant) réutilisent le
-/// modèle déjà écrit dans `views/pages/apprenants/devoir_models.dart`
-/// (`DevoirModel`, dashboard liste) — inchangé. `getDetail`/`demarrer`/
-/// `sortir`/`signalerFocusPerdu` (P7.5, écran de composition) utilisent
-/// `DevoirAComposer` (`lib/models/devoir_models.dart`) : l'ancien
-/// `DevoirDetail`/`QuestionDevoir` du même fichier apprenant lisait
-/// `j['texte']` pour l'énoncé d'une question au lieu du champ réel
-/// `enonce` — jamais consommé nulle part avant ce ticket (confirmé par
-/// recherche), corrigé en migrant vers un modèle neuf plutôt qu'en
-/// rafistolant les clés JSON d'un modèle par ailleurs inutilisé.
+/// Devoirs. `listMine` (P11.2) réutilise désormais `DevoirItem`
+/// (déménagé dans `views/pages/apprenants/devoir_models.dart`, pour que ce
+/// repository puisse l'importer sans dépendre de `devoirs_page.dart` —
+/// modèle réellement éprouvé en production (`statutApprenant`,
+/// `noteApprenant`, cache hors-ligne). L'ancien `DevoirModel`/
+/// `OlympiadeInfo` du même fichier étaient du code mort, retirés.
+/// `getDetail`/`demarrer`/`sortir`/`signalerFocusPerdu` (P7.5, écran de
+/// composition) utilisent `DevoirAComposer` (`lib/models/devoir_models.dart`).
 /// P7.4 complète avec la gestion enseignant (liste par cours,
 /// création/édition, duplication/publication, énoncés, questions,
 /// soumissions/correction), sur le patron de `ExerciceRepository` (P6.5).
@@ -24,12 +22,10 @@ class DevoirRepository {
 
   DevoirRepository({ApiClient? apiClient}) : _api = apiClient ?? ApiClient();
 
-  Future<List<DevoirModel>> listMine() async {
+  Future<List<DevoirItem>> listMine() async {
     final data = await _api.get(EvaluationEndpoints.devoirs);
     final list = data is List ? data : (data['results'] as List? ?? []);
-    return list
-        .map((e) => DevoirModel.fromJson(Map<String, dynamic>.from(e as Map)))
-        .toList();
+    return list.map((e) => DevoirItem.fromJson(Map<String, dynamic>.from(e as Map))).toList();
   }
 
   Future<DevoirAComposer> getDetail(int devoirId) async {

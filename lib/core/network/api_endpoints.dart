@@ -3,8 +3,8 @@
 // OpenAPI, volontairement non renommés — voir plus bas.)
 // GÉNÉRÉ — ne pas éditer à la main.
 // Régénérer : dart run tool/generate_endpoints.dart
-// Source : ../../yeki_backend/yeki_backend/schema_fresh.yaml
-// Généré le : 2026-07-24T00:01:06.138246
+// Source : C:\Users\BODI\Desktop\MesProjets\Projet_Yeki\yeki_backend\yeki_backend\schema_local.yaml
+// Généré le : 2026-07-28T07:38:38.712939
 //
 // Chemins RELATIFS uniquement — ApiClient porte seul la
 // base URL (ApiConstants.baseUrl) via Dio BaseOptions.
@@ -57,6 +57,8 @@ class EvaluationEndpoints {
   EvaluationEndpoints._();
 
   static String classementDepartement(int departement_id) => '/classement/departement/$departement_id/';
+  static String classementHistorique(int departement_id) => '/classement/departement/$departement_id/historique/';
+  static String classementPeriodes(int departement_id) => '/classement/departement/$departement_id/periodes/';
   static const String classementMonScore = '/classement/mon-score/';
   static const String classementRecalculer = '/classement/recalculer/';
   static const String classementVerifierProgression = '/classement/verifier-progression/';
@@ -129,9 +131,13 @@ class FormationEndpoints {
   static const String apprenantLecturesRecentes = '/apprenant/lectures-recentes/';
   static const String apprenantMarquerLecon = '/apprenant/marquer-lecon/';
   static const String apprenantPrepaConcours = '/apprenant/prepa-concours/';
+  static const String cours = '/cours/';
   static String coursAddEnseignant(int cours_id) => '/cours/$cours_id/add-enseignant/';
   static String coursChangerEnseignantPrincipal(int cours_id) => '/cours/$cours_id/changer-enseignant-principal/';
   static const String coursCreate = '/cours/create/';
+  static String coursSupplements(int cours_id) => '/cours/$cours_id/supplements/';
+  static String coursSupplementsCreer(int cours_id) => '/cours/$cours_id/supplements/creer/';
+  static String supplementsSupprimer(int supplement_id) => '/supplements/$supplement_id/supprimer/';
   static String coursLecons(int cours_id) => '/cours/$cours_id/lecons/';
   static String coursListeModules(int cours_id) => '/cours/$cours_id/liste-modules/';
   static String coursModules(int cours_id) => '/cours/$cours_id/modules/';
@@ -157,6 +163,7 @@ class FormationEndpoints {
   static String modulesModifier(int module_id) => '/modules/$module_id/modifier/';
   static String modulesSupprimer(int module_id) => '/modules/$module_id/supprimer/';
   static const String niveaux = '/niveaux/';
+  static const String niveauxFormation = '/niveaux-formation/';
   static const String parcours = '/parcours/';
   static String parcoursAssignAdmin(int id) => '/parcours/$id/assign-admin/';
   static const String parcoursCreer = '/parcours/creer/';
@@ -196,6 +203,8 @@ class NotificationsEndpoints {
   NotificationsEndpoints._();
 
   static const String notifications = '/notifications/';
+  static const String notificationsDeviceToken = '/notifications/device-token/';
+  static String notificationsDeviceTokenDetail(String token) => '/notifications/device-token/$token/';
   static String notificationsLire(int id) => '/notifications/$id/lire/';
   static const String notificationsNonLues = '/notifications/non-lues/';
   static const String notificationsToutLire = '/notifications/tout-lire/';
@@ -205,12 +214,24 @@ class PaiementEndpoints {
   PaiementEndpoints._();
 
   static const String abonnementStatut = '/abonnement/statut/';
+  static const String adminDashboardFinancier = '/admin/dashboard-financier/';
+  static const String adminTransactions = '/admin/transactions/';
   static const String paiementsCinetpayInitier = '/paiements/cinetpay/initier/';
   static const String paiementsCinetpayNotify = '/paiements/cinetpay/notify/';
   static String paiementsCinetpayVerifier(String reference) => '/paiements/cinetpay/verifier/$reference/';
   static const String paiementsHistorique = '/paiements/historique/';
+  static const String paiementsManuelMesDemandes = '/paiements/manuel/mes-demandes/';
   static const String paiementsManuelSoumettre = '/paiements/manuel/soumettre/';
+  static const String parametresPublics = '/parametres/publics/';
   static const String retraitsDemander = '/retraits/demander/';
+  static const String retraitsMesDemandes = '/retraits/mes-demandes/';
+  static const String serviceClientPaiements = '/service-client/paiements/';
+  static String serviceClientPaiementsRefuser(int id) => '/service-client/paiements/$id/refuser/';
+  static String serviceClientPaiementsValider(int id) => '/service-client/paiements/$id/valider/';
+  static const String serviceClientRetraits = '/service-client/retraits/';
+  static String serviceClientRetraitsRefuser(int id) => '/service-client/retraits/$id/refuser/';
+  static String serviceClientRetraitsValider(int id) => '/service-client/retraits/$id/valider/';
+  static const String serviceClientStatistiques = '/service-client/statistiques/';
   static const String walletPayer = '/wallet/payer/';
   static const String walletRecharger = '/wallet/recharger/';
   static const String walletSolde = '/wallet/solde/';
@@ -220,6 +241,10 @@ class PaiementEndpoints {
 class RepetiteursEndpoints {
   RepetiteursEndpoints._();
 
+  static const String repetiteursAdminCandidats = '/repetiteurs/admin/candidats/';
+  static const String repetiteursAdminFiches = '/repetiteurs/admin/fiches/';
+  static String repetiteursAdminFichesDetail(int id) => '/repetiteurs/admin/fiches/$id/';
+  static String repetiteursAdminToggle(int profile_id) => '/repetiteurs/admin/$profile_id/toggle/';
   static const String repetiteursSearch = '/repetiteurs/search/';
 }
 

@@ -11,6 +11,7 @@ class UserProfile {
   final String userType;
   final String? phone;
   final String? niveau;
+  final String? ville;
 
   const UserProfile({
     required this.id,
@@ -21,6 +22,7 @@ class UserProfile {
     required this.userType,
     this.phone,
     this.niveau,
+    this.ville,
   });
 
   factory UserProfile.fromJson(Map<String, dynamic> json) => UserProfile(
@@ -32,5 +34,6 @@ class UserProfile {
         userType: json['user_type'] as String? ?? '',
         phone: json['phone'] as String?,
         niveau: json['niveau'] as String?,
+        ville: json['ville'] as String?,
       );
 }

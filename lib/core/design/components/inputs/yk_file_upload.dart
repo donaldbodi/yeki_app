@@ -3,8 +3,6 @@ import 'dart:typed_data';
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'package:http_parser/http_parser.dart';
 import 'package:mime/mime.dart';
 
 import '../../tokens/tokens.dart';
@@ -56,12 +54,6 @@ class YkPickedFile {
   final String name;
   final String mimeType;
   final int size;
-
-  /// Envoi via `http.MultipartFile.fromBytes` — cohérent avec le reste du
-  /// projet (jamais `dio.MultipartFile`, aucun précédent pour ce cas
-  /// d'usage).
-  http.MultipartFile toMultipart(String field) =>
-      http.MultipartFile.fromBytes(field, bytes, filename: name, contentType: MediaType.parse(mimeType));
 }
 
 /// Téléversement de fichier portable — CDC_DESIGN §5.3.2/§5.5.2.

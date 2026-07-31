@@ -1,3 +1,6 @@
+import 'package:dio/dio.dart' show FormData, MultipartFile;
+
+import 'package:yeki/core/design/components/inputs/yk_file_upload.dart' show YkPickedFile;
 import 'package:yeki/core/network/api_client.dart';
 import 'package:yeki/core/network/api_endpoints.dart';
 import 'package:yeki/models/auth_result.dart';
@@ -95,5 +98,48 @@ class AuthRepository {
   Future<UserProfile> getCurrentUser() async {
     final data = await _api.get(AccountsEndpoints.profilMe);
     return UserProfile.fromJson(Map<String, dynamic>.from(data as Map));
+  }
+
+  /// Réponse brute de `GET /profil/me/` — `UserProfile` ne mirroir
+  /// délibérément pas tous les champs du serializer (voir son commentaire
+  /// de tête) ; `profil_page.dart` (P11.8) en affiche davantage
+  /// (whatsapp/cursus/filiere/bio/avatar) qu'il serait prématuré d'ajouter
+  /// à ce modèle partagé pour un seul écran.
+  Future<Map<String, dynamic>> getCurrentUserRaw() async {
+    final data = await _api.get(AccountsEndpoints.profilMe);
+    return Map<String, dynamic>.from(data as Map);
+  }
+
+  Future<Map<String, dynamic>> profilStats() async {
+    final data = await _api.get(AccountsEndpoints.profilStats);
+    return Map<String, dynamic>.from(data as Map);
+  }
+
+  /// [avatar] : fichier déjà lu en mémoire (voir `YkFileUpload`/`YkPickedFile`
+  /// — jamais un chemin `File`, portabilité web comprise).
+  Future<void> updateProfil(Map<String, dynamic> donnees, {YkPickedFile? avatar}) async {
+    if (avatar == null) {
+      await _api.patch(AccountsEndpoints.profilUpdate, data: donnees);
+      return;
+    }
+    await _api.patch(
+      AccountsEndpoints.profilUpdate,
+      data: FormData.fromMap({
+        ...donnees.map((k, v) => MapEntry(k, v.toString())),
+        'avatar': MultipartFile.fromBytes(avatar.bytes, filename: avatar.name),
+      }),
+    );
+  }
+
+  Future<void> deleteAccount() async {
+    await _api.delete(AccountsEndpoints.profilDelete);
+  }
+
+  Future<String?> changePassword({required String oldPassword, required String newPassword}) async {
+    final data = await _api.post(
+      AccountsEndpoints.authChangePassword,
+      data: {'old_password': oldPassword, 'new_password': newPassword},
+    );
+    return Map<String, dynamic>.from(data as Map)['token'] as String?;
   }
 }

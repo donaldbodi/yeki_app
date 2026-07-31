@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:yeki/core/network/api_exception.dart';
 import 'package:yeki/repositories/auth_repository.dart';
+import 'package:yeki/repositories/notification_repository.dart';
 
 /// Photographie de l'état d'authentification, lue synchroniquement par
 /// `guards.dart` à chaque navigation. `bootstrapped` distingue « pas
@@ -133,11 +134,30 @@ class AuthStateNotifier extends ValueNotifier<YekiAuthSnapshot> {
   /// (le serveur vient de dire que le token est invalide).
   Future<void> clearSession() async {
     final prefs = await SharedPreferences.getInstance();
+    // Désactivation OBLIGATOIRE du jeton push côté backend (P10.3/CDC §9.2)
+    // — sinon le prochain utilisateur de cet appareil reçoit les
+    // notifications du précédent. Best-effort : ne doit jamais bloquer la
+    // déconnexion si le réseau est indisponible.
+    final fcmToken = prefs.getString(_kFcmToken);
+    if (fcmToken != null && fcmToken.isNotEmpty) {
+      try {
+        await NotificationRepository().supprimerDeviceToken(fcmToken);
+      } catch (_) {}
+    }
     await _deleteSecureToken();
     await prefs.remove(_kToken);
     await prefs.remove(_kRole);
     await prefs.remove(_kFcmToken);
     value = value.copyWith(bootstrapped: true, token: null, role: null);
+  }
+
+  /// Mémorise localement le jeton FCM déjà enregistré côté backend par
+  /// [PushNotificationService] — nécessaire pour pouvoir le désactiver à
+  /// la déconnexion (voir [clearSession]) sans redemander le jeton au SDK
+  /// Firebase à ce moment-là.
+  Future<void> setFcmToken(String token) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_kFcmToken, token);
   }
 
   Future<void> finishOnboarding() async {

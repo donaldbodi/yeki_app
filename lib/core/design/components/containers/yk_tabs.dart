@@ -67,3 +67,28 @@ class YkTabs extends StatelessWidget implements PreferredSizeWidget {
     );
   }
 }
+
+/// Épingle un [child] à hauteur fixe dans le `headerSliverBuilder` d'un
+/// `NestedScrollView` — pensé pour y loger un [YkTabs] au-dessus d'un
+/// `TabBarView`. Extrait après 3 copies quasi identiques d'un
+/// `_TabsHeaderDelegate` privé (`formation_detail_page.dart`,
+/// `detail_departement_page.dart`, `detail_cours_enseignant.dart`, P11.2/
+/// P11.3) — remplace ces 3 copies plutôt que d'en ajouter une 4e (P11.5).
+class YkPinnedHeader extends SliverPersistentHeaderDelegate {
+  const YkPinnedHeader({required this.child, this.height = 64});
+
+  final Widget child;
+  final double height;
+
+  @override
+  double get minExtent => height;
+  @override
+  double get maxExtent => height;
+
+  @override
+  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) => child;
+
+  @override
+  bool shouldRebuild(covariant YkPinnedHeader oldDelegate) =>
+      oldDelegate.child != child || oldDelegate.height != height;
+}

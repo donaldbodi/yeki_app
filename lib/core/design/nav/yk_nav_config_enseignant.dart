@@ -123,22 +123,11 @@ const List<_Entry> _entries = [
   _Entry(
     'Administration',
     YkNavDestination(
-      label: 'Paiements à valider',
-      icon: Icons.payments_outlined,
-      selectedIcon: Icons.payments,
-      // TODO(nav): dashboard Service Client construit en P9.5 —
-      // §4.2.2, dest. 8.
-    ),
-    _serviceClient,
-  ),
-  _Entry(
-    'Administration',
-    YkNavDestination(
-      label: 'Gestion des répétiteurs',
+      label: 'Service Client',
       icon: Icons.support_agent_outlined,
       selectedIcon: Icons.support_agent,
-      // TODO(nav): dashboard Service Client construit en P9.5 — la route
-      // `repetiteurs` existante est la recherche apprenant, sans rapport.
+      routeName: AppRoute.serviceClientDashboard,
+      badgeKey: 'serviceClientDemandes',
     ),
     _serviceClient,
   ),

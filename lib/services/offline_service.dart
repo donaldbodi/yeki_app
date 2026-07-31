@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:yeki/core/network/api_client.dart';
 import 'package:yeki/core/network/api_exception.dart';
 import 'package:yeki/services/download_manager.dart';
+import 'package:yeki/services/offline_encryption_service.dart';
 
 // Modèles pour le stockage local
 @HiveType(typeId: 0)
@@ -116,20 +117,89 @@ class OfflineService {
     
     final dir = await getApplicationDocumentsDirectory();
     Hive.init(dir.path);
-    
+
     Hive.registerAdapter(CachedDevoirAdapter());
     Hive.registerAdapter(CachedQuestionAdapter());
     Hive.registerAdapter(PendingActionAdapter());
-    
-    _devoirsCache = await Hive.openBox<CachedDevoir>(_devoirsBox);
-    _questionsCache = await Hive.openBox<CachedQuestion>(_questionsBox);
-    _pendingActions = await Hive.openBox<PendingAction>(_pendingBox);
-    _settingsCache = await Hive.openBox(_settingsBox);
-    
+
+    // Chiffrement des boxes (P12.3) — même clé pour les 4, migration
+    // différenciée selon la sensibilité des données (règle 5, ne rien
+    // perdre là où ça compte) : `devoirs`/`questions` sont un pur cache
+    // resynchronisable, vidés sans risque si l'ancien format en clair ne
+    // se déchiffre pas ; `pending`/`settings` peuvent contenir du travail
+    // utilisateur non encore synchronisé (mutations en attente,
+    // brouillons de devoir/exercice) — migrés en préservant leur contenu.
+    final cipher = await OfflineEncryptionService.hiveCipher();
+    _devoirsCache = await _ouvrirBoxCachePur<CachedDevoir>(_devoirsBox, cipher);
+    _questionsCache = await _ouvrirBoxCachePur<CachedQuestion>(_questionsBox, cipher);
+    _pendingActions = await _ouvrirBoxEnPreservantLesDonnees<PendingAction>(_pendingBox, cipher);
+    _settingsCache = await _ouvrirSettingsBoxEnPreservantLesDonnees(_settingsBox, cipher);
+
     await _loadSettings();
     _startAutoSync();
-    
+
     _initialized = true;
+  }
+
+  /// Ouvre une box de pur cache serveur (règle 1, sans état côté client) :
+  /// si l'ancien format en clair (avant P12.3) ne se déchiffre pas avec la
+  /// nouvelle clé, la box est vidée et recréée chiffrée — resynchronisée
+  /// depuis le serveur au prochain appel, aucune perte réelle.
+  static Future<Box<T>> _ouvrirBoxCachePur<T>(String name, HiveAesCipher cipher) async {
+    try {
+      return await Hive.openBox<T>(name, encryptionCipher: cipher);
+    } catch (_) {
+      await Hive.deleteBoxFromDisk(name);
+      return await Hive.openBox<T>(name, encryptionCipher: cipher);
+    }
+  }
+
+  /// Ouvre une box pouvant contenir du travail utilisateur non synchronisé
+  /// (mutations en attente, brouillons) : si le nouveau chiffrement échoue
+  /// (ancien format en clair), relit l'ancienne box SANS chiffrement pour
+  /// récupérer son contenu avant de le recopier dans la box chiffrée.
+  static Future<Box<T>> _ouvrirBoxEnPreservantLesDonnees<T>(
+    String name,
+    HiveAesCipher cipher,
+  ) async {
+    try {
+      return await Hive.openBox<T>(name, encryptionCipher: cipher);
+    } catch (_) {
+      final ancienneBox = await Hive.openBox<T>(name);
+      final entrees = <dynamic, T>{
+        for (final cle in ancienneBox.keys) cle: ancienneBox.get(cle) as T,
+      };
+      await ancienneBox.close();
+      await Hive.deleteBoxFromDisk(name);
+      final nouvelleBox = await Hive.openBox<T>(name, encryptionCipher: cipher);
+      for (final entree in entrees.entries) {
+        await nouvelleBox.put(entree.key, entree.value);
+      }
+      return nouvelleBox;
+    }
+  }
+
+  /// Équivalent de [_ouvrirBoxEnPreservantLesDonnees] pour `offline_settings`
+  /// — box non typée (bool/Map selon la clé), pas de paramètre générique.
+  static Future<Box> _ouvrirSettingsBoxEnPreservantLesDonnees(
+    String name,
+    HiveAesCipher cipher,
+  ) async {
+    try {
+      return await Hive.openBox(name, encryptionCipher: cipher);
+    } catch (_) {
+      final ancienneBox = await Hive.openBox(name);
+      final entrees = <dynamic, dynamic>{
+        for (final cle in ancienneBox.keys) cle: ancienneBox.get(cle),
+      };
+      await ancienneBox.close();
+      await Hive.deleteBoxFromDisk(name);
+      final nouvelleBox = await Hive.openBox(name, encryptionCipher: cipher);
+      for (final entree in entrees.entries) {
+        await nouvelleBox.put(entree.key, entree.value);
+      }
+      return nouvelleBox;
+    }
   }
   
   static Future<void> _loadSettings() async {

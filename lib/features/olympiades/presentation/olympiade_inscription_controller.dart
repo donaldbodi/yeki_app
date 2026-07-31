@@ -5,8 +5,8 @@ import 'package:yeki/repositories/olympiade_repository.dart';
 /// État + logique de l'écran « inscription à une olympiade » (P8.3).
 /// `ChangeNotifier` plutôt que `setState` (interdit sous `lib/features/`,
 /// règle 7). Le paiement de participation lui-même est délégué à
-/// `YkManualPaymentFlow` (composant partagé) — ce contrôleur n'expose que
-/// les deux appels réseau bruts qu'il orchestre.
+/// `YkWalletDebitConfirmSheet` (composant partagé) — ce contrôleur n'expose
+/// que les deux appels réseau bruts qu'il orchestre.
 class OlympiadeInscriptionController extends ChangeNotifier {
   OlympiadeInscriptionController({required this.olympiadeId, OlympiadeRepository? repository})
     : _repo = repository ?? OlympiadeRepository();
@@ -24,7 +24,7 @@ class OlympiadeInscriptionController extends ChangeNotifier {
 
   /// Lève `ApiException` (code `PAYMENT_REQUIRED`, 402) si l'olympiade
   /// est payante et pas encore réglée — à l'appelant de proposer
-  /// `YkManualPaymentFlow.show(onPayer: payerParticipation)` puis de
+  /// `YkWalletDebitConfirmSheet.show(onPayer: payerParticipation)` puis de
   /// rappeler cette méthode.
   Future<void> inscrire() async {
     inscriptionEnCours = true;
