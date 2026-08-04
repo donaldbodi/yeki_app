@@ -29,6 +29,20 @@ import 'widgets/filtres_row.dart';
 import 'widgets/questions_sheet.dart';
 
 class ExercicesCoursPage extends StatefulWidget {
+  final String coursId;
+  final String coursTitre;
+  final RoleEnseignant? role;
+  final void Function(int questionId)? onNaviguerForum;
+  final Color courseColor;
+  final int? moduleId;
+  final int? leconId;
+
+  /// Espace réservé en haut du contenu défilable — voir
+  /// `LeconsCoursPage.topPadding` (même besoin, en-tête « verre dépoli »
+  /// de `CoursDetailTabs`). `0` par défaut (autres contextes d'usage,
+  /// ex. `DetailCoursEnseignantPage`, sans cet en-tête).
+  final double topPadding;
+
   const ExercicesCoursPage({
     super.key,
     required this.coursId,
@@ -38,15 +52,8 @@ class ExercicesCoursPage extends StatefulWidget {
     required this.courseColor,
     this.moduleId,
     this.leconId,
+    this.topPadding = 0,
   });
-
-  final String coursId;
-  final String coursTitre;
-  final RoleEnseignant? role;
-  final void Function(int questionId)? onNaviguerForum;
-  final Color courseColor;
-  final int? moduleId;
-  final int? leconId;
 
   @override
   State<ExercicesCoursPage> createState() => _ExercicesCoursPageState();
@@ -236,13 +243,16 @@ class _ExercicesCoursPageState extends State<ExercicesCoursPage> {
     switch (_controller.etat) {
       case ExercicesCoursEtat.chargement:
         return SingleChildScrollView(
-          padding: EdgeInsets.all(YkSpacing.md),
+          padding: EdgeInsets.fromLTRB(YkSpacing.md, YkSpacing.md + widget.topPadding, YkSpacing.md, YkSpacing.md),
           child: YkSkeleton.list(itemCount: 4, itemHeight: 140),
         );
       case ExercicesCoursEtat.erreur:
-        return YkErrorState(
-          message: _controller.erreurMessage ?? 'Une erreur est survenue.',
-          onRetry: () => _controller.charger(moduleId: _controller.moduleFiltre, leconId: _controller.leconFiltre),
+        return Padding(
+          padding: EdgeInsets.only(top: widget.topPadding),
+          child: YkErrorState(
+            message: _controller.erreurMessage ?? 'Une erreur est survenue.',
+            onRetry: () => _controller.charger(moduleId: _controller.moduleFiltre, leconId: _controller.leconFiltre),
+          ),
         );
       case ExercicesCoursEtat.pret:
         return _buildListe(context);
@@ -254,7 +264,7 @@ class _ExercicesCoursPageState extends State<ExercicesCoursPage> {
     return RefreshIndicator(
       onRefresh: () => _controller.charger(moduleId: _controller.moduleFiltre, leconId: _controller.leconFiltre),
       child: ListView(
-        padding: EdgeInsets.all(YkSpacing.md),
+        padding: EdgeInsets.fromLTRB(YkSpacing.md, YkSpacing.md + widget.topPadding, YkSpacing.md, YkSpacing.md),
         physics: const AlwaysScrollableScrollPhysics(),
         children: [
           Row(

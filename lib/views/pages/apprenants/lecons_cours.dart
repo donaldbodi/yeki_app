@@ -52,6 +52,13 @@ class LeconsCoursPage extends StatefulWidget {
   /// Utilisé uniquement côté apprenant (carte enseignant, bas de l'onglet).
   final String? enseignantNom;
 
+  /// Espace réservé en haut du contenu défilable — nécessaire quand le
+  /// parent (`CoursDetailTabs`) utilise `extendBodyBehindAppBar: true`
+  /// pour son en-tête « verre dépoli » (maquette « 09 · Détail cours »),
+  /// sans quoi le contenu apparaîtrait caché derrière. `0` par défaut
+  /// (usage hors de ce contexte précis, ex. non extension future).
+  final double topPadding;
+
   const LeconsCoursPage({
     super.key,
     required this.coursId,
@@ -63,6 +70,7 @@ class LeconsCoursPage extends StatefulWidget {
     this.isPremium = false,
     required this.courseColor,
     this.enseignantNom,
+    this.topPadding = 0,
   });
 
   @override
@@ -466,13 +474,16 @@ class _LeconsCoursPageState extends State<LeconsCoursPage> {
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return Center(child: YkProgress(shape: YkProgressShape.circular, color: widget.courseColor));
+      return Padding(
+        padding: EdgeInsets.only(top: widget.topPadding),
+        child: Center(child: YkProgress(shape: YkProgressShape.circular, color: widget.courseColor)),
+      );
     }
 
     return RefreshIndicator(
       onRefresh: _charger,
       child: ListView(
-        padding: EdgeInsets.all(YkSpacing.md),
+        padding: EdgeInsets.fromLTRB(YkSpacing.md, YkSpacing.md + widget.topPadding, YkSpacing.md, YkSpacing.md),
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,

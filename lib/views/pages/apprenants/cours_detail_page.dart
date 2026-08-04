@@ -21,6 +21,8 @@
 // pourcentage complété, calculés depuis `CoursRepository.modules()`
 // (mêmes données que `lecons_cours.dart` affiche déjà par leçon).
 
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 
 import 'package:yeki/core/design/components/components.dart';
@@ -183,76 +185,106 @@ class _CoursDetailTabsState extends State<CoursDetailTabs> with SingleTickerProv
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: YkColors.background(context),
+      // Le corps défile SOUS l'en-tête (nécessaire pour que
+      // `BackdropFilter` flOute réellement le contenu qui passe dessous,
+      // comme la maquette) — chaque onglet compense avec un padding haut
+      // égal à `_headerHeight` (voir plus bas).
+      extendBodyBehindAppBar: true,
       appBar: PreferredSize(
         preferredSize: const Size.fromHeight(96),
-        child: SafeArea(
-          child: Column(
-            children: [
-              Padding(
-                padding: EdgeInsets.fromLTRB(YkSpacing.xxs, YkSpacing.xxs, YkSpacing.md, 0),
-                child: Row(
+        // En-tête « verre dépoli » — maquette « 09 · Détail cours »
+        // (`background: var(--glass); backdrop-filter: blur(20px);
+        // border-bottom: 1px solid var(--border)`), jusqu'ici absent
+        // (fond opaque uni). Même recette de flou déjà établie par
+        // `YkCard(variant: glass)` (sigma 16 → 20 ici pour matcher le
+        // blur(20px) exact de la maquette), simplement appliquée à une
+        // barre pleine largeur (pas de coins arrondis/bordure complète,
+        // seul un liseré bas comme dans la maquette).
+        child: ClipRect(
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+            child: Container(
+              color: YkColors.surface(context).withValues(alpha: 0.75),
+              child: SafeArea(
+                child: Column(
                   children: [
-                    YkIconButton(
-                      icon: Icons.arrow_back_ios_new_rounded,
-                      label: 'Retour',
-                      variant: YkIconButtonVariant.outlined,
-                      iconSize: 18,
-                      onPressed: () => Navigator.pop(context),
-                    ),
-                    SizedBox(width: YkSpacing.xs),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                    Padding(
+                      padding: EdgeInsets.fromLTRB(YkSpacing.xxs, YkSpacing.xxs, YkSpacing.md, 0),
+                      child: Row(
                         children: [
-                          Text(
-                            widget.titre,
-                            style: YkTypography.label(context).copyWith(color: YkColors.textPrimary(context)),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                          YkIconButton(
+                            icon: Icons.arrow_back_ios_new_rounded,
+                            label: 'Retour',
+                            variant: YkIconButtonVariant.outlined,
+                            iconSize: 18,
+                            onPressed: () => Navigator.pop(context),
                           ),
-                          Row(
-                            children: [
-                              ClipOval(child: Container(width: 7, height: 7, color: _courseColor)),
-                              SizedBox(width: YkSpacing.xxs),
-                              Text(
-                                _sousTitre,
-                                style: YkTypography.caption(context).copyWith(color: YkColors.textSecondary(context)),
-                              ),
-                            ],
+                          SizedBox(width: YkSpacing.xs),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  widget.titre,
+                                  style: YkTypography.label(context).copyWith(color: YkColors.textPrimary(context)),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                Row(
+                                  children: [
+                                    ClipOval(child: Container(width: 7, height: 7, color: _courseColor)),
+                                    SizedBox(width: YkSpacing.xxs),
+                                    Text(
+                                      _sousTitre,
+                                      style: YkTypography.caption(
+                                        context,
+                                      ).copyWith(color: YkColors.textSecondary(context)),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                          SizedBox(width: YkSpacing.xs),
+                          YkIconButton(
+                            icon: _favori ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
+                            label: _favori ? 'Retirer des favoris' : 'Ajouter aux favoris',
+                            variant: _favori ? YkIconButtonVariant.tonal : YkIconButtonVariant.outlined,
+                            iconSize: 18,
+                            onPressed: () => setState(() => _favori = !_favori),
                           ),
                         ],
                       ),
                     ),
-                    SizedBox(width: YkSpacing.xs),
-                    YkIconButton(
-                      icon: _favori ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
-                      label: _favori ? 'Retirer des favoris' : 'Ajouter aux favoris',
-                      variant: _favori ? YkIconButtonVariant.tonal : YkIconButtonVariant.outlined,
-                      iconSize: 18,
-                      onPressed: () => setState(() => _favori = !_favori),
+                    Padding(
+                      padding: EdgeInsets.symmetric(horizontal: YkSpacing.md),
+                      child: YkTabs(
+                        controller: _tabController,
+                        tabs: const [
+                          YkTabItem(label: 'Leçons'),
+                          YkTabItem(label: 'Exercices'),
+                          YkTabItem(label: 'Devoirs'),
+                          YkTabItem(label: 'Forum'),
+                        ],
+                      ),
                     ),
+                    Container(height: 1, color: YkColors.border(context)),
                   ],
                 ),
               ),
-              Padding(
-                padding: EdgeInsets.symmetric(horizontal: YkSpacing.md),
-                child: YkTabs(
-                  controller: _tabController,
-                  tabs: const [
-                    YkTabItem(label: 'Leçons'),
-                    YkTabItem(label: 'Exercices'),
-                    YkTabItem(label: 'Devoirs'),
-                    YkTabItem(label: 'Forum'),
-                  ],
-                ),
-              ),
-            ],
+            ),
           ),
         ),
       ),
       body: _buildTabViews(),
     );
   }
+
+  /// Hauteur réelle de l'en-tête « verre dépoli » (96 + l'encoche système)
+  /// — le contenu défilable de chaque onglet en a besoin comme padding
+  /// haut, `Scaffold(extendBodyBehindAppBar: true)` ne le fait pas pour
+  /// eux automatiquement.
+  double get _headerHeight => MediaQuery.of(context).padding.top + 96;
 
   Widget _buildTabViews() {
     return TabBarView(
@@ -267,6 +299,7 @@ class _CoursDetailTabsState extends State<CoursDetailTabs> with SingleTickerProv
           isPremium: widget.isPremium,
           courseColor: _courseColor,
           enseignantNom: _enseignantNom,
+          topPadding: _headerHeight,
         ),
         widget.isPremium
             ? ExercicesCoursPage(
@@ -276,6 +309,7 @@ class _CoursDetailTabsState extends State<CoursDetailTabs> with SingleTickerProv
                 courseColor: _courseColor,
                 moduleId: _exercicesModuleIdFiltre,
                 leconId: _exercicesLeconIdFiltre,
+                topPadding: _headerHeight,
               )
             : _buildPremiumLock(context),
         widget.isPremium
@@ -284,6 +318,7 @@ class _CoursDetailTabsState extends State<CoursDetailTabs> with SingleTickerProv
                 coursTitre: widget.titre,
                 onNaviguerForum: naviguerVersForumAvecQuestion,
                 courseColor: _courseColor,
+                topPadding: _headerHeight,
               )
             : _buildPremiumLock(context),
         widget.isPremium
@@ -293,6 +328,7 @@ class _CoursDetailTabsState extends State<CoursDetailTabs> with SingleTickerProv
                 preoccupationContenu: _forumPreoccupationContenu,
                 preoccupationSource: _forumPreoccupationSource,
                 preoccupationLeconId: _forumPreoccupationLeconId,
+                topPadding: _headerHeight,
                 preoccupationLeconTitre: _forumPreoccupationLeconTitre,
                 preoccupationCoursId: int.tryParse(widget.coursId),
                 preoccupationCoursTitre: widget.titre,
@@ -308,9 +344,11 @@ class _CoursDetailTabsState extends State<CoursDetailTabs> with SingleTickerProv
   }
 
   Widget _buildPremiumLock(BuildContext context) {
-    return Center(
-      child: SingleChildScrollView(
-        padding: EdgeInsets.all(YkSpacing.lg),
+    return Padding(
+      padding: EdgeInsets.only(top: _headerHeight),
+      child: Center(
+        child: SingleChildScrollView(
+          padding: EdgeInsets.all(YkSpacing.lg),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -337,6 +375,7 @@ class _CoursDetailTabsState extends State<CoursDetailTabs> with SingleTickerProv
               onPressed: () => YkSnack.info(context, 'Nos offres seront bientôt disponibles depuis cet écran.'),
             ),
           ],
+          ),
         ),
       ),
     );

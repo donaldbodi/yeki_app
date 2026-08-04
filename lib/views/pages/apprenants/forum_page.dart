@@ -190,6 +190,12 @@ class ForumPage extends StatefulWidget {
   final String? preoccupationDevoirTitre;
   final int? coursColor;
 
+  /// Espace réservé en haut du contenu défilable — voir
+  /// `LeconsCoursPage.topPadding` (même besoin, en-tête « verre dépoli »
+  /// de `CoursDetailTabs`). `0` par défaut (usage standalone, ex. onglet
+  /// principal Forum, sans cet en-tête).
+  final double topPadding;
+
   const ForumPage({
     super.key,
     this.scrollToQuestionId,
@@ -204,6 +210,7 @@ class ForumPage extends StatefulWidget {
     this.preoccupationDevoirId,
     this.preoccupationDevoirTitre,
     this.coursColor,
+    this.topPadding = 0,
   });
 
   @override
@@ -466,6 +473,7 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin, Wi
     if (_loading) {
       return Container(
         color: YkColors.background(context),
+        padding: EdgeInsets.only(top: widget.topPadding),
         child: Center(child: YkProgress(shape: YkProgressShape.circular)),
       );
     }
@@ -474,6 +482,7 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin, Wi
     if (erreur != null) {
       return Container(
         color: YkColors.background(context),
+        padding: EdgeInsets.only(top: widget.topPadding),
         child: erreur == kMessagePremiumRequis
             ? YkPremiumRequired(message: erreur, onSubscribe: () => ouvrirAbonnementPremium(context))
             : YkErrorState(message: erreur, onRetry: () => _loadQuestions()),
@@ -491,7 +500,7 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin, Wi
         onRefresh: () => _loadQuestions(),
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
-          padding: const EdgeInsets.only(bottom: 100),
+          padding: EdgeInsets.only(top: widget.topPadding, bottom: 100),
           children: [
             SizedBox(height: YkSpacing.lg),
             _buildFilters(context),

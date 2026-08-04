@@ -30,6 +30,7 @@ class DevoirsCoursPage extends StatefulWidget {
     this.role,
     this.onNaviguerForum,
     required this.courseColor,
+    this.topPadding = 0,
   });
 
   final String coursId;
@@ -37,6 +38,11 @@ class DevoirsCoursPage extends StatefulWidget {
   final RoleEnseignant? role;
   final void Function(int questionId)? onNaviguerForum;
   final Color courseColor;
+
+  /// Espace réservé en haut du contenu défilable — voir
+  /// `LeconsCoursPage.topPadding` (même besoin, en-tête « verre dépoli »
+  /// de `CoursDetailTabs`).
+  final double topPadding;
 
   @override
   State<DevoirsCoursPage> createState() => _DevoirsCoursPageState();
@@ -160,15 +166,17 @@ class _DevoirsCoursPageState extends State<DevoirsCoursPage> {
     switch (_controller.etat) {
       case DevoirsCoursEtat.chargement:
         return SingleChildScrollView(
-          padding: EdgeInsets.all(YkSpacing.md),
+          padding: EdgeInsets.fromLTRB(YkSpacing.md, YkSpacing.md + widget.topPadding, YkSpacing.md, YkSpacing.md),
           child: YkSkeleton.list(itemCount: 4, itemHeight: 150),
         );
       case DevoirsCoursEtat.erreur:
         final message = _controller.erreurMessage ?? 'Une erreur est survenue.';
-        if (message == kMessagePremiumRequis) {
-          return YkPremiumRequired(message: message, onSubscribe: () => ouvrirAbonnementPremium(context));
-        }
-        return YkErrorState(message: message, onRetry: _controller.charger);
+        return Padding(
+          padding: EdgeInsets.only(top: widget.topPadding),
+          child: message == kMessagePremiumRequis
+              ? YkPremiumRequired(message: message, onSubscribe: () => ouvrirAbonnementPremium(context))
+              : YkErrorState(message: message, onRetry: _controller.charger),
+        );
       case DevoirsCoursEtat.pret:
         return _buildListe(context);
     }
@@ -179,7 +187,7 @@ class _DevoirsCoursPageState extends State<DevoirsCoursPage> {
     return RefreshIndicator(
       onRefresh: _controller.charger,
       child: ListView(
-        padding: EdgeInsets.all(YkSpacing.md),
+        padding: EdgeInsets.fromLTRB(YkSpacing.md, YkSpacing.md + widget.topPadding, YkSpacing.md, YkSpacing.md),
         physics: const AlwaysScrollableScrollPhysics(),
         children: [
           Row(
