@@ -7,6 +7,7 @@
 // tente un vrai appel réseau en test, échec toléré (géré par le
 // try/catch de `_loadParcours`, résultat : liste vide).
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -29,7 +30,20 @@ Widget _host() {
       ),
     ],
   );
-  return MaterialApp.router(routerConfig: router);
+  // Délégués de localisation requis pour piloter `YkDateTimePicker`
+  // (date de naissance, `showDatePicker` Material) dans les tests — sans
+  // eux, ouvrir le sélecteur lève une exception (mêmes délégués que
+  // `main.dart`).
+  return MaterialApp.router(
+    locale: const Locale('fr', 'CM'),
+    localizationsDelegates: const [
+      GlobalMaterialLocalizations.delegate,
+      GlobalWidgetsLocalizations.delegate,
+      GlobalCupertinoLocalizations.delegate,
+    ],
+    supportedLocales: const [Locale('fr', 'CM'), Locale('fr')],
+    routerConfig: router,
+  );
 }
 
 Future<void> _remplirIdentite(
@@ -37,15 +51,33 @@ Future<void> _remplirIdentite(
   String name = 'Aïcha Ndongo',
   String username = 'aicha_n',
   String email = 'aicha@yeki.test',
+  String phone = '690000000',
   String password = 'motdepasse123',
 }) async {
   final fields = find.byType(TextFormField);
   await tester.enterText(fields.at(0), name);
   await tester.enterText(fields.at(1), username);
   await tester.enterText(fields.at(2), email);
-  await tester.enterText(fields.at(3), password);
+  await tester.enterText(fields.at(3), phone);
   await tester.enterText(fields.at(4), password);
+  await tester.enterText(fields.at(5), password);
   await tester.pump();
+
+  // Date de naissance : `YkDateTimePicker` n'est pas un `TextFormField` —
+  // ouvre le sélecteur Material et confirme la date proposée par défaut
+  // (`initialDate: DateTime.now()`), suffisant pour satisfaire la
+  // validation "requis", peu importe la date exacte choisie en test.
+  // `ensureVisible` avant le tap (le champ peut être hors du viewport
+  // réduit du test) ; `pump(duration)` plutôt que `pumpAndSettle()` après
+  // ouverture du dialogue Material (son animation d'entrée ne "settle"
+  // jamais dans l'environnement de test, `pumpAndSettle` y expire).
+  final champDate = find.text('Choisir une date');
+  await tester.ensureVisible(champDate);
+  await tester.pump();
+  await tester.tap(champDate);
+  await tester.pump(const Duration(milliseconds: 500));
+  await tester.tap(find.text('OK'));
+  await tester.pump(const Duration(milliseconds: 500));
 }
 
 void main() {

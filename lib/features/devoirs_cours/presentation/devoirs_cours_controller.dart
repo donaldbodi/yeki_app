@@ -34,7 +34,8 @@ class DevoirsCoursController extends ChangeNotifier {
     } on ApiException catch (e) {
       erreurMessage = e.message;
       etat = DevoirsCoursEtat.erreur;
-    } catch (_) {
+    } catch (e) {
+      debugPrint('DevoirsCoursController.charger() — exception non-ApiException : ${e.runtimeType} : $e');
       erreurMessage = 'Impossible de charger les devoirs.';
       etat = DevoirsCoursEtat.erreur;
     }

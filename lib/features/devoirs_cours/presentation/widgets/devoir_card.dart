@@ -59,13 +59,15 @@ class DevoirCard extends StatelessWidget {
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  padding: EdgeInsets.all(YkSpacing.xs),
-                  decoration: BoxDecoration(
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(YkRadius.md),
+                  child: Container(
+                    width: 50,
+                    height: 50,
                     color: courseColor.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(YkRadius.sm),
+                    alignment: Alignment.center,
+                    child: Icon(Icons.assignment_outlined, color: courseColor, size: 24),
                   ),
-                  child: Icon(Icons.assignment_outlined, color: courseColor, size: 22),
                 ),
                 SizedBox(width: YkSpacing.sm),
                 Expanded(

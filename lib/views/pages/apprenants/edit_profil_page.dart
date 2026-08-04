@@ -6,26 +6,35 @@
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:yeki/core/design/components/components.dart';
 import 'package:yeki/core/design/tokens/tokens.dart';
 import 'package:yeki/core/network/api_exception.dart';
+import 'package:yeki/core/providers/current_user_provider.dart';
 import 'package:yeki/repositories/auth_repository.dart';
+import 'package:yeki/repositories/formation_repository.dart';
 
 /// Édition du profil de l'utilisateur CONNECTÉ — toujours « mon propre
 /// profil », jamais celui d'un tiers : autonome, fetch son propre profil
 /// via `/profil/me/` plutôt que de le recevoir en paramètre (P3.3,
 /// nécessaire pour une route déclarative go_router sans état
 /// pré-chargé transmis par le site d'appel).
-class EditProfilePage extends StatefulWidget {
+///
+/// Invalide `currentUserProvider` après sauvegarde (bug corrigé : la photo
+/// de profil ne se répercutait pas ailleurs dans l'app, ex.
+/// `enseignant_shell.dart`, qui la lit désormais depuis ce même provider
+/// partagé plutôt que via son propre fetch local figé au premier chargement).
+class EditProfilePage extends ConsumerStatefulWidget {
   const EditProfilePage({super.key});
 
   @override
-  State<EditProfilePage> createState() => _EditProfilePageState();
+  ConsumerState<EditProfilePage> createState() => _EditProfilePageState();
 }
 
-class _EditProfilePageState extends State<EditProfilePage> {
+class _EditProfilePageState extends ConsumerState<EditProfilePage> {
   final _repo = AuthRepository();
+  final _formationRepo = FormationRepository();
 
   final _firstNameCtrl = TextEditingController();
   final _lastNameCtrl = TextEditingController();
@@ -36,9 +45,16 @@ class _EditProfilePageState extends State<EditProfilePage> {
   final _villeCtrl = TextEditingController();
   final _whatsappCtrl = TextEditingController();
 
-  static const _cursusOptions = ['Secondaire - Francophone', 'Secondaire - Anglophone', 'Licence'];
+  // Bug corrigé : liste EN DUR (`['Secondaire - Francophone', ...]`) qui ne
+  // correspondait à aucun vrai `Parcours.nom` en base — un apprenant qui
+  // sauvegardait depuis cet écran cassait sa visibilité Cursus (`profile.
+  // cursus` doit correspondre exactement à un `Parcours.nom` réel, voir
+  // docs/ecarts/p2_inscription_cursus_root_cause.md). Chargée dynamiquement
+  // depuis la même source que l'inscription.
+  List<ParcoursOption> _cursusOptions = const [];
 
   String? _cursus;
+  DateTime? _dateNaissance;
   YkPickedFile? _avatar;
   bool _saving = false;
   bool _chargement = true;
@@ -47,13 +63,19 @@ class _EditProfilePageState extends State<EditProfilePage> {
   @override
   void initState() {
     super.initState();
-    _cursus = _cursusOptions.first;
     _charger();
   }
 
   Future<void> _charger() async {
     try {
       final profil = await _repo.getCurrentUserRaw();
+      List<ParcoursOption> cursusOptions = const [];
+      try {
+        cursusOptions = await _formationRepo.parcours(typeParcours: 'cursus');
+      } catch (_) {
+        // Best-effort : une erreur ici ne doit pas bloquer le chargement du
+        // profil, juste laisser le menu Cursus vide pour cette session.
+      }
       if (!mounted) return;
       setState(() {
         _profil = profil;
@@ -65,8 +87,13 @@ class _EditProfilePageState extends State<EditProfilePage> {
         _niveauCtrl.text = profil['niveau'] ?? '';
         _villeCtrl.text = profil['ville'] ?? '';
         _whatsappCtrl.text = profil['whatsapp'] ?? '';
+        _cursusOptions = cursusOptions;
         final cursusValue = profil['cursus'] as String?;
-        _cursus = (cursusValue?.isNotEmpty == true) ? cursusValue : _cursusOptions.first;
+        _cursus = (cursusValue != null && cursusOptions.any((c) => c.nom == cursusValue)) ? cursusValue : null;
+        final dateNaissanceValue = profil['date_naissance'] as String?;
+        _dateNaissance = (dateNaissanceValue != null && dateNaissanceValue.isNotEmpty)
+            ? DateTime.tryParse(dateNaissanceValue)
+            : null;
       });
     } catch (_) {
     } finally {
@@ -100,7 +127,9 @@ class _EditProfilePageState extends State<EditProfilePage> {
         'ville': _villeCtrl.text.trim(),
         'whatsapp': _whatsappCtrl.text.trim(),
         if (_cursus != null && _cursus!.isNotEmpty) 'cursus': _cursus!,
+        if (_dateNaissance != null) 'date_naissance': _dateNaissance!.toIso8601String().split('T').first,
       }, avatar: _avatar);
+      ref.invalidate(currentUserProvider);
       if (mounted) {
         YkSnack.success(context, 'Profil mis à jour avec succès !');
         Navigator.pop(context, true);
@@ -143,6 +172,15 @@ class _EditProfilePageState extends State<EditProfilePage> {
                     SizedBox(height: YkSpacing.sm),
                     YkTextField(controller: _lastNameCtrl, label: 'Nom'),
                     SizedBox(height: YkSpacing.sm),
+                    YkDateTimePicker(
+                      mode: YkDateTimePickerMode.date,
+                      label: 'Date de naissance',
+                      value: _dateNaissance,
+                      onChanged: (d) => setState(() => _dateNaissance = d),
+                      firstDate: DateTime.now().subtract(const Duration(days: 365 * 100)),
+                      lastDate: DateTime.now(),
+                    ),
+                    SizedBox(height: YkSpacing.sm),
                     YkTextField(controller: _bioCtrl, label: 'Bio / Résumé', type: YkTextFieldType.multiline, maxLines: 3),
                   ],
                 ),
@@ -157,7 +195,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
                     YkDropdown<String>(
                       label: 'Cursus actuel',
                       value: _cursus,
-                      items: [for (final c in _cursusOptions) YkDropdownItem(value: c, label: c)],
+                      items: [for (final c in _cursusOptions) YkDropdownItem(value: c.nom, label: c.nom)],
                       onChanged: (v) => setState(() => _cursus = v),
                     ),
                     SizedBox(height: YkSpacing.sm),

@@ -6,14 +6,18 @@ import 'yk_nav_destination.dart';
 /// Destinations de l'interface Apprenant — CDC_DESIGN §4.2.1, recopiées
 /// exactement (ordre, libellés, icônes).
 ///
-/// « En compact, seules les destinations 1, 2, 5, 7 et l'avatar sont dans
-/// la barre inférieure ; les autres sont accessibles depuis l'accueil et
-/// le menu de l'avatar. Aucune destination n'est perdue en petit écran —
-/// elles changent de porte d'entrée, pas d'existence. »
+/// Barre compacte (mobile) : Accueil, Cursus, Prépa Concours, Formations
+/// — Devoirs et Forum en sont retirés (Phase 2, refonte écran par écran) :
+/// tous deux restent pleinement fonctionnels comme onglets contextualisés
+/// PAR COURS dans `CoursDetailTabs` (`cours_detail_page.dart`), la
+/// destination globale ne faisait que dupliquer un point d'entrée déjà
+/// couvert. Aucune destination n'est perdue en petit écran — elles
+/// changent de porte d'entrée, pas d'existence (rail/navbar large + tiroir
+/// « Plus » en compact).
 ///
-/// Accueil, Forum et Yéki IA (en tant que destination autonome, hors
-/// contexte d'un cours) n'ont aujourd'hui aucune route globale — `null`,
-/// visibles mais non cliquables (voir P4.6, décision actée).
+/// Forum et Yéki IA (en tant que destination autonome, hors contexte d'un
+/// cours) n'ont aujourd'hui aucune route globale — `null`, visibles mais
+/// non cliquables (voir P4.6, décision actée).
 final List<YkNavGroup> apprenantNavGroups = [
   const YkNavGroup(
     destinations: [
@@ -41,12 +45,14 @@ final List<YkNavGroup> apprenantNavGroups = [
         icon: Icons.emoji_events_outlined,
         selectedIcon: Icons.emoji_events,
         routeName: AppRoute.dashboardConcours,
+        inCompactBar: true,
       ),
       YkNavDestination(
         label: 'Formations',
         icon: Icons.workspace_premium_outlined,
         selectedIcon: Icons.workspace_premium,
         routeName: AppRoute.dashboardFormations,
+        inCompactBar: true,
       ),
     ],
   ),
@@ -59,7 +65,6 @@ final List<YkNavGroup> apprenantNavGroups = [
         selectedIcon: Icons.assignment,
         routeName: AppRoute.dashboardDevoirs,
         badgeKey: 'devoirs',
-        inCompactBar: true,
       ),
       YkNavDestination(
         label: 'Olympiades',
@@ -73,7 +78,6 @@ final List<YkNavGroup> apprenantNavGroups = [
         icon: Icons.forum_outlined,
         selectedIcon: Icons.forum,
         badgeKey: 'forum',
-        inCompactBar: true,
         // TODO(nav): ForumPage n'existe qu'en widget embarqué par cours
         // aujourd'hui, jamais en destination globale — §4.2.1, dest. 7.
       ),

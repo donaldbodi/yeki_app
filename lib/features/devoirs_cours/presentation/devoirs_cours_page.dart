@@ -14,6 +14,7 @@ import 'package:go_router/go_router.dart';
 import 'package:yeki/core/design/components/components.dart';
 import 'package:yeki/core/design/tokens/tokens.dart';
 import 'package:yeki/core/router/route_names.dart';
+import 'package:yeki/features/paiement/presentation/ouvrir_abonnement.dart';
 import 'package:yeki/models/devoir_models.dart';
 import 'package:yeki/views/pages/enseignants/interface_enseignant_page.dart' show RoleEnseignant;
 
@@ -163,10 +164,11 @@ class _DevoirsCoursPageState extends State<DevoirsCoursPage> {
           child: YkSkeleton.list(itemCount: 4, itemHeight: 150),
         );
       case DevoirsCoursEtat.erreur:
-        return YkErrorState(
-          message: _controller.erreurMessage ?? 'Une erreur est survenue.',
-          onRetry: _controller.charger,
-        );
+        final message = _controller.erreurMessage ?? 'Une erreur est survenue.';
+        if (message == kMessagePremiumRequis) {
+          return YkPremiumRequired(message: message, onSubscribe: () => ouvrirAbonnementPremium(context));
+        }
+        return YkErrorState(message: message, onRetry: _controller.charger);
       case DevoirsCoursEtat.pret:
         return _buildListe(context);
     }

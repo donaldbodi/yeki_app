@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 import 'package:yeki/core/design/components/components.dart';
 import 'package:yeki/core/design/tokens/tokens.dart';
@@ -17,6 +18,8 @@ class EtapeConfirmation extends StatelessWidget {
     required this.nameCtrl,
     required this.usernameCtrl,
     required this.emailCtrl,
+    required this.phoneCtrl,
+    required this.dateNaissance,
     required this.userType,
     required this.selectedParcours,
     required this.selectedDepartement,
@@ -27,6 +30,8 @@ class EtapeConfirmation extends StatelessWidget {
   final TextEditingController nameCtrl;
   final TextEditingController usernameCtrl;
   final TextEditingController emailCtrl;
+  final TextEditingController phoneCtrl;
+  final ValueListenable<DateTime?> dateNaissance;
   final ValueListenable<String> userType;
   final ValueListenable<ParcoursOption?> selectedParcours;
   final ValueListenable<DepartementOption?> selectedDepartement;
@@ -57,13 +62,27 @@ class EtapeConfirmation extends StatelessWidget {
                     title: 'Identité',
                     onEdit: () => onEditStep(0),
                     child: AnimatedBuilder(
-                      animation: Listenable.merge([nameCtrl, usernameCtrl, emailCtrl, userType]),
+                      animation: Listenable.merge([
+                        nameCtrl,
+                        usernameCtrl,
+                        emailCtrl,
+                        phoneCtrl,
+                        dateNaissance,
+                        userType,
+                      ]),
                       builder: (context, _) => Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           YkKeyValue(label: 'Nom', value: nameCtrl.text),
                           YkKeyValue(label: "Nom d'utilisateur", value: usernameCtrl.text),
                           YkKeyValue(label: 'Email', value: emailCtrl.text),
+                          YkKeyValue(label: 'Téléphone', value: phoneCtrl.text),
+                          YkKeyValue(
+                            label: 'Date de naissance',
+                            value: dateNaissance.value != null
+                                ? DateFormat('dd/MM/yyyy').format(dateNaissance.value!)
+                                : '—',
+                          ),
                           YkKeyValue(
                             label: 'Rôle',
                             value: userType.value == 'apprenant' ? 'Apprenant' : 'Enseignant',

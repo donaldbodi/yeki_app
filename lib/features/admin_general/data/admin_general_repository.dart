@@ -40,7 +40,7 @@ class AdminGeneralRepository {
       AccountsEndpoints.adminGeneralEnseignantsSearch,
       query: query.isEmpty ? null : query,
     );
-    final results = Map<String, dynamic>.from(data as Map)['results'] as List? ?? [];
+    final results = data is List ? data : (data['results'] as List? ?? []);
     return results.map((e) => EnseignantAdmin.fromJson(Map<String, dynamic>.from(e as Map))).toList();
   }
 
@@ -81,13 +81,13 @@ class AdminGeneralRepository {
   /// changer l'administrateur » d'un parcours.
   Future<List<AdminEnseignantRef>> enseignantsAdmins() async {
     final data = await _api.get(AccountsEndpoints.enseignantsListe, query: {'role': 'admin'});
-    final results = Map<String, dynamic>.from(data as Map)['results'] as List? ?? [];
+    final results = data is List ? data : (data['results'] as List? ?? []);
     return results.map((e) => AdminEnseignantRef.fromJson(Map<String, dynamic>.from(e as Map))).toList();
   }
 
   Future<List<CoursAdmin>> tousLesCours() async {
     final data = await _api.get(FormationEndpoints.cours);
-    final results = Map<String, dynamic>.from(data as Map)['results'] as List? ?? [];
+    final results = data is List ? data : (data['results'] as List? ?? []);
     return results.map((e) => CoursAdmin.fromJson(Map<String, dynamic>.from(e as Map))).toList();
   }
 
@@ -106,7 +106,7 @@ class AdminGeneralRepository {
       if (statut != null && statut.isNotEmpty) 'statut': statut,
     };
     final data = await _api.get(PaiementEndpoints.adminTransactions, query: query.isEmpty ? null : query);
-    final results = Map<String, dynamic>.from(data as Map)['results'] as List? ?? [];
+    final results = data is List ? data : (data['results'] as List? ?? []);
     return results.map((e) => AdminTransaction.fromJson(Map<String, dynamic>.from(e as Map))).toList();
   }
 

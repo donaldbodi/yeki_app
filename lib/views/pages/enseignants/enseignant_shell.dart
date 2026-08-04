@@ -15,12 +15,13 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:yeki/core/design/tokens/tokens.dart';
+import 'package:yeki/core/providers/current_user_provider.dart';
 import 'package:yeki/core/router/auth_state.dart';
 import 'package:yeki/core/router/route_names.dart';
-import 'package:yeki/repositories/auth_repository.dart';
 import 'package:yeki/views/pages/enseignants/interface_enseignant_page.dart'
     show RoleEnseignant, roleEnseignantFromBackend;
 
@@ -43,15 +44,6 @@ double _dynamicPadding(BuildContext context) {
   if (width > _kMobileMax) return 24.0;
   return 16.0;
 }
-
-/// Couleurs par rôle — aucune palette catégorielle équivalente n'existe dans
-/// les tokens `Yk*` (même gap déjà documenté en P11.8 pour
-/// `historique_page.dart`) : valeurs reprises telles quelles depuis l'ancien
-/// `YekiRoleColors`, pas inventées.
-const _kRoleColorAdmin = Color(0xFF7C3AED);
-const _kRoleColorCadre = Color(0xFF2884A0);
-const _kRoleColorPrincipal = Color(0xFFE2A84B);
-const _kRoleColorEnseignant = Color(0xFF10B981);
 
 const _kShadowStrong = [
   BoxShadow(color: Color(0x1F000000), blurRadius: 30, offset: Offset(0, 12)),
@@ -119,33 +111,17 @@ class _RoleBadge extends StatelessWidget {
   }
 }
 
-class EnseignantShellPage extends StatefulWidget {
+class EnseignantShellPage extends ConsumerStatefulWidget {
   final StatefulNavigationShell navigationShell;
 
   const EnseignantShellPage({super.key, required this.navigationShell});
 
   @override
-  State<EnseignantShellPage> createState() => _EnseignantShellPageState();
+  ConsumerState<EnseignantShellPage> createState() => _EnseignantShellPageState();
 }
 
-class _EnseignantShellPageState extends State<EnseignantShellPage> {
-  Map<String, dynamic> _profil = {};
+class _EnseignantShellPageState extends ConsumerState<EnseignantShellPage> {
   final int _nbNotifs = 0;
-
-  @override
-  void initState() {
-    super.initState();
-    _fetchProfil();
-  }
-
-  Future<void> _fetchProfil() async {
-    try {
-      final data = await AuthRepository().getCurrentUserRaw();
-      if (mounted) setState(() => _profil = data);
-    } catch (e) {
-      debugPrint("Erreur chargement profil: $e");
-    }
-  }
 
   RoleEnseignant get _role => roleEnseignantFromBackend(authState.value.role);
 
@@ -164,31 +140,45 @@ class _EnseignantShellPageState extends State<EnseignantShellPage> {
     }
   }
 
+  // Couleurs de rôle alignées sur la maquette (`docs/maquette/YEKI Espace
+  // Enseignant.dc.html`, sélecteur de rôle) — la migration précédente (hors
+  // de l'ancien design system) avait conservé les valeurs ad hoc de
+  // l'ancien fichier telles quelles, dont le mapping était en réalité
+  // inversé par rapport à la maquette (vert sur Coordonnateur, or sur
+  // Principal) : corrigé ici en même temps que le passage aux tokens.
   Color _getRoleColor(BuildContext context, RoleEnseignant role) {
     switch (role) {
       case RoleEnseignant.administrateurGeneral:
-        return _kRoleColorAdmin;
+        return YkColors.violet;
       case RoleEnseignant.enseignantAdministrateur:
-        return _kRoleColorEnseignant;
-      case RoleEnseignant.enseignantCadre:
-        return _kRoleColorCadre;
-      case RoleEnseignant.enseignantPrincipal:
-        return _kRoleColorPrincipal;
-      default:
         return YkColors.accent(context);
+      case RoleEnseignant.enseignantCadre:
+        return YkColors.info;
+      case RoleEnseignant.enseignantPrincipal:
+        return YkColors.success;
+      default:
+        // Enseignant Secondaire.
+        return YkColors.gold(context);
     }
   }
 
+  // Lu depuis le provider partagé (`current_user_provider.dart`) plutôt
+  // que d'un fetch local propre à cette coquille — bug corrigé : la photo
+  // de profil ne se répercutait jamais ici après une édition ailleurs
+  // dans l'app (coquille persistante, jamais reconstruite par la
+  // navigation vers /profile/edit et retour).
   String get _nomAffiche {
-    final fn = _profil['first_name']?.toString() ?? '';
-    final ln = _profil['last_name']?.toString() ?? '';
+    final profil = ref.watch(currentUserProvider).valueOrNull;
+    if (profil == null) return 'Enseignant';
+    final fn = profil.firstName;
+    final ln = profil.lastName;
     if (fn.isNotEmpty && ln.isNotEmpty) return '$fn $ln';
     if (fn.isNotEmpty) return fn;
     if (ln.isNotEmpty) return ln;
     return 'Enseignant';
   }
 
-  String? get _avatarUrl => _profil['avatar']?.toString();
+  String? get _avatarUrl => ref.watch(currentUserProvider).valueOrNull?.avatar;
 
   String get _initials {
     final n = _nomAffiche;
@@ -278,6 +268,14 @@ class _EnseignantShellPageState extends State<EnseignantShellPage> {
               _buildNavItem(context, 1, Icons.history_rounded, 'Historique'),
               const SizedBox(height: 8),
               _buildNavItem(context, 2, Icons.person_rounded, 'Profil'),
+              // Cadre uniquement : `repartir_et_crediter()` (commissions
+              // formation/olympiade, apps/paiement/services.py) ne crédite
+              // QUE `departement.cadre` — un principal n'a structurellement
+              // rien à retirer (erreur de portée corrigée, ce ticket).
+              if (role == RoleEnseignant.enseignantCadre) ...[
+                const SizedBox(height: 8),
+                _buildRevenusNavItem(context),
+              ],
 
               const Spacer(),
 
@@ -416,6 +414,34 @@ class _EnseignantShellPageState extends State<EnseignantShellPage> {
           ),
         ),
       ],
+    );
+  }
+
+  // ─── ITEM « MES REVENUS » (desktop) ──────────────────────────────────────
+  // Bug corrigé (modèle économique non opérationnel) : `WalletPage`/
+  // `RetraitPage` sont déjà construites et fonctionnelles (elles créditent
+  // réellement le compte du cadre à chaque vente de formation, `apps/
+  // paiement/services.py::repartir_et_crediter`) mais aucun point d'entrée
+  // n'y menait côté enseignant — visible uniquement au cadre, seul rôle
+  // qui touche réellement une commission (`repartir_et_crediter` ne
+  // crédite que `departement.cadre`, jamais un principal).
+  // `context.pushNamed` (pas `goBranch` : ce n'est pas une branche du
+  // shell, une route poussée au-dessus, comme `/profile`).
+  Widget _buildRevenusNavItem(BuildContext context) {
+    final secondary = YkColors.textSecondary(context);
+    return InkWell(
+      onTap: () => context.pushNamed(AppRoute.wallet),
+      borderRadius: BorderRadius.circular(YkRadius.md),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
+          children: [
+            Icon(Icons.account_balance_wallet_outlined, color: secondary, size: 22),
+            const SizedBox(width: 14),
+            Text('Mes revenus', style: YkTypography.bodyMd(context).copyWith(color: secondary)),
+          ],
+        ),
+      ),
     );
   }
 
@@ -591,6 +617,29 @@ class _EnseignantShellPageState extends State<EnseignantShellPage> {
           ),
 
           const SizedBox(width: 8),
+
+          // ── Bouton « Mes revenus » (cadre uniquement) ──────────────────
+          // Même correctif que la navigation desktop (`_buildRevenusNavItem`)
+          // — un principal n'a structurellement rien à retirer.
+          if (role == RoleEnseignant.enseignantCadre) ...[
+            GestureDetector(
+              onTap: () => context.pushNamed(AppRoute.wallet),
+              child: ClipOval(
+                child: Container(
+                  width: 40,
+                  height: 40,
+                  color: YkColors.textOnPrimary.withValues(alpha: 0.15),
+                  alignment: Alignment.center,
+                  child: Icon(
+                    Icons.account_balance_wallet_outlined,
+                    color: YkColors.textOnPrimary,
+                    size: 20,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+          ],
 
           // ── Bouton notifications ──────────────────────────────────────
           GestureDetector(

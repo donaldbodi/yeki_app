@@ -34,8 +34,27 @@ String homePathForRole(String? role) {
   }
 }
 
+/// Vérifie qu'un chemin capturé par un ancien `?redirect=` reste autorisé
+/// pour [role] avant de lui faire confiance (bug corrigé : bascule de rôle
+/// par déconnexion/reconnexion, voir le commentaire dans [redirect]).
+/// Réutilise `RouteConfiguration.findMatch` (API publique de `go_router`,
+/// déjà exposée via `GoRouter.of(context).configuration`) pour retrouver
+/// le NOM de route correspondant au chemin, puis la même table d'accès que
+/// tout le reste de ce fichier — pas une nouvelle heuristique.
+bool _redirectAutorisePourRole(BuildContext context, String path, String? role) {
+  try {
+    final matchList = GoRouter.of(context).configuration.findMatch(Uri.parse(path));
+    if (matchList.isError) return false;
+    final route = matchList.lastOrNull?.route;
+    final name = route is GoRoute ? route.name : null;
+    final access = name != null ? routeAccessByName[name] : null;
+    return access != null && access.allows(role);
+  } catch (_) {
+    return false;
+  }
+}
+
 const Set<String> _authFlowRouteNames = {
-  AppRoute.splash,
   AppRoute.onboarding,
   AppRoute.login,
   AppRoute.register,
@@ -62,6 +81,22 @@ String? redirect(BuildContext context, GoRouterState state) {
     return state.matchedLocation == AppPath.splash ? null : AppPath.splash;
   }
 
+  // 1bis. Bootstrap terminé mais toujours sur /splash — bug corrigé
+  // (splash bloqué à l'infini) : contrairement à login/register/
+  // onboarding (dans `_authFlowRouteNames`, où rester est légitime pour
+  // un visiteur non connecté), /splash n'est JAMAIS une destination
+  // valide une fois le bootstrap fini. `AppRoute.splash` était
+  // auparavant inclus dans `_authFlowRouteNames` : pour un visiteur non
+  // authentifié, la branche « route publique » ci-dessous renvoyait
+  // `null` (« aucune redirection nécessaire ») — et comme on est déjà
+  // sur `/splash`, l'app y restait indéfiniment, sans jamais être
+  // poussée vers `/login`.
+  if (name == AppRoute.splash) {
+    if (!snapshot.isAuthenticated) return AppPath.login;
+    if (!snapshot.onboardingDone) return AppPath.onboarding;
+    return homePathForRole(snapshot.role);
+  }
+
   // /design-system : debug uniquement, jamais par rôle.
   if (name == AppRoute.designSystem) {
     return kDebugMode ? null : AppPath.notFound;
@@ -81,9 +116,18 @@ String? redirect(BuildContext context, GoRouterState state) {
       // Retour post-connexion : si /login a été atteint via l'étape 3
       // ci-dessous (redirection depuis une route protégée), on revient
       // exactement là où l'utilisateur voulait aller plutôt que sur
-      // l'accueil générique du rôle.
+      // l'accueil générique du rôle — SAUF si ce paramètre est périmé
+      // (bug corrigé : bascule de rôle par déconnexion/reconnexion). Ce
+      // `redirect` a été attaché à /login par la déconnexion FORCÉE de la
+      // session précédente (étape 3 ci-dessous) ; s'il est réutilisé tel
+      // quel après une connexion avec un rôle DIFFÉRENT, l'app charge la
+      // page de l'ancien compte au lieu de `homePathForRole` du nouveau —
+      // d'où la validation contre le rôle réellement connecté avant de
+      // lui faire confiance.
       final redirectTo = state.uri.queryParameters['redirect'];
-      if (redirectTo != null && redirectTo.isNotEmpty) {
+      if (redirectTo != null &&
+          redirectTo.isNotEmpty &&
+          _redirectAutorisePourRole(context, redirectTo, snapshot.role)) {
         return redirectTo;
       }
       return homePathForRole(snapshot.role);

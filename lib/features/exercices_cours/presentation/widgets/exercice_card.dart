@@ -51,16 +51,18 @@ class ExerciceCard extends StatelessWidget {
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  padding: EdgeInsets.all(YkSpacing.xs),
-                  decoration: BoxDecoration(
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(YkRadius.sm),
+                  child: Container(
+                    width: 38,
+                    height: 38,
                     color: courseColor.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(YkRadius.sm),
-                  ),
-                  child: Icon(
-                    exercice.estEpreuve ? Icons.assignment_rounded : Icons.assignment_outlined,
-                    color: courseColor,
-                    size: 22,
+                    alignment: Alignment.center,
+                    child: Icon(
+                      exercice.estEpreuve ? Icons.assignment_rounded : Icons.assignment_outlined,
+                      color: courseColor,
+                      size: 22,
+                    ),
                   ),
                 ),
                 SizedBox(width: YkSpacing.sm),

@@ -54,6 +54,10 @@ class _ComposerDevoirPageState extends State<ComposerDevoirPage>
   TabController? _tabController;
   int _tabControllerLength = -1;
 
+  /// Une clé par question (id unique tous énoncés confondus) — cible de
+  /// `Scrollable.ensureVisible` depuis `YkQuestionNavigator`.
+  final Map<int, GlobalKey> _questionKeys = {};
+
   @override
   void initState() {
     super.initState();
@@ -304,22 +308,52 @@ class _ComposerDevoirPageState extends State<ComposerDevoirPage>
     return ListView(
       padding: EdgeInsets.all(YkSpacing.md),
       children: [
+        YkQuestionNavigator(
+          etats: _etatsQuestions(enonce.questions),
+          onTap: (index) => _sauterVersQuestion(enonce.questions, index),
+        ),
+        SizedBox(height: YkSpacing.md),
         if (enonce.contenu.isNotEmpty) ...[
           YkCard(child: YkRichViewer(html: enonce.contenu)),
           SizedBox(height: YkSpacing.lg),
         ],
-        ...enonce.questions.asMap().entries.map(
-          (entry) => QuestionDevoirComposerCard(
-            key: ValueKey(entry.value.id),
+        ...enonce.questions.asMap().entries.map((entry) {
+          final key = _questionKeys.putIfAbsent(entry.value.id, () => GlobalKey());
+          return QuestionDevoirComposerCard(
+            key: key,
             question: entry.value,
             index: entry.key + 1,
             reponseActuelle: _controller.reponses[entry.value.id],
             onChanged: (valeur) => _controller.repondre(entry.value.id, valeur),
-          ),
-        ),
+          );
+        }),
         SizedBox(height: YkSpacing.xl),
       ],
     );
+  }
+
+  /// État de chaque question d'un énoncé pour `YkQuestionNavigator` — « en
+  /// cours » = la 1ʳᵉ question sans réponse de CET énoncé (pas un état
+  /// persisté, aide visuelle seulement).
+  List<YkQuestionEtat> _etatsQuestions(List<QuestionDevoirComposer> questions) {
+    final indexEnCours = questions.indexWhere((q) => !_controller.reponses.containsKey(q.id));
+    return [
+      for (var i = 0; i < questions.length; i++)
+        if (_controller.reponses.containsKey(questions[i].id))
+          YkQuestionEtat.repondue
+        else if (i == indexEnCours)
+          YkQuestionEtat.enCours
+        else
+          YkQuestionEtat.aVenir,
+    ];
+  }
+
+  void _sauterVersQuestion(List<QuestionDevoirComposer> questions, int index) {
+    final key = _questionKeys[questions[index].id];
+    final ctx = key?.currentContext;
+    if (ctx != null) {
+      Scrollable.ensureVisible(ctx, duration: YkMotion.normal, curve: YkMotion.brandCurve, alignment: 0.1);
+    }
   }
 
   Widget _buildBottomBar(BuildContext context) {

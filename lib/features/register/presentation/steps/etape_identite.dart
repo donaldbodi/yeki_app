@@ -15,6 +15,8 @@ class EtapeIdentite extends StatelessWidget {
     required this.emailCtrl,
     required this.pwdCtrl,
     required this.confirmPwdCtrl,
+    required this.phoneCtrl,
+    required this.dateNaissance,
     required this.userType,
   });
 
@@ -23,6 +25,8 @@ class EtapeIdentite extends StatelessWidget {
   final TextEditingController emailCtrl;
   final TextEditingController pwdCtrl;
   final TextEditingController confirmPwdCtrl;
+  final TextEditingController phoneCtrl;
+  final ValueNotifier<DateTime?> dateNaissance;
   final ValueNotifier<String> userType;
 
   @override
@@ -74,6 +78,26 @@ class EtapeIdentite extends StatelessWidget {
             label: 'Email',
             prefixIcon: Icons.mail_outline_rounded,
             validator: (v) => v != null && v.contains('@') ? null : 'Adresse email invalide.',
+          ),
+          SizedBox(height: YkSpacing.sm),
+          YkTextField(
+            controller: phoneCtrl,
+            name: 'phone',
+            required: true,
+            label: 'Numéro de téléphone',
+            prefixIcon: Icons.phone_outlined,
+          ),
+          SizedBox(height: YkSpacing.sm),
+          ValueListenableBuilder<DateTime?>(
+            valueListenable: dateNaissance,
+            builder: (context, value, _) => YkDateTimePicker(
+              mode: YkDateTimePickerMode.date,
+              label: 'Date de naissance',
+              value: value,
+              onChanged: (d) => dateNaissance.value = d,
+              firstDate: DateTime.now().subtract(const Duration(days: 365 * 100)),
+              lastDate: DateTime.now(),
+            ),
           ),
           SizedBox(height: YkSpacing.sm),
           YkTextField(

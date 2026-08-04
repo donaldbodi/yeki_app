@@ -1,7 +1,7 @@
 analyze_info=29
 analyze_warning=0
-boxdecoration_dur=102
-couleurs_dur=32
+boxdecoration_dur=83
+couleurs_dur=28
 dart_io=9
 http_direct=1
 imports_anciens_themes=5

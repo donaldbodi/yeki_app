@@ -9,6 +9,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'package:yeki/core/design/components/components.dart';
 import 'package:yeki/core/design/tokens/tokens.dart';
@@ -46,6 +47,11 @@ class LeconsCoursPage extends StatefulWidget {
   final bool isPremium;
   final Color courseColor;
 
+  /// Nom complet de l'enseignant principal — `null` si non chargé/absent
+  /// (voir `CoursDetailInfo`, `cours_detail_page.dart._chargerProgression`).
+  /// Utilisé uniquement côté apprenant (carte enseignant, bas de l'onglet).
+  final String? enseignantNom;
+
   const LeconsCoursPage({
     super.key,
     required this.coursId,
@@ -56,6 +62,7 @@ class LeconsCoursPage extends StatefulWidget {
     this.onNaviguerExercices,
     this.isPremium = false,
     required this.courseColor,
+    this.enseignantNom,
   });
 
   @override
@@ -67,7 +74,25 @@ class _LeconsCoursPageState extends State<LeconsCoursPage> {
   bool _loading = true;
   List<ModuleAvecLecons> _modules = [];
 
+  /// Un seul module ouvert à la fois (accordéon, maquette « 09 · Détail
+  /// cours »). Ouvert par défaut : le module de la leçon « en cours »
+  /// (voir [_leconCouranteId]).
+  int? _moduleOuvertId;
+
   bool get _canEdit => widget.role == RoleEnseignant.enseignantCadre || widget.role == RoleEnseignant.enseignantPrincipal;
+
+  /// Id de la 1ʳᵉ leçon non terminée, tous modules confondus, dans l'ordre
+  /// d'affichage — sert à distinguer « en cours » de « à venir » sur la
+  /// puce de statut (aucun verrou réel n'existe au niveau de la leçon
+  /// entière dans ce projet, voir `_buildLeconTile`).
+  int? get _leconCouranteId {
+    for (final module in _modules) {
+      for (final lecon in module.lecons) {
+        if (!lecon.estTerminee) return lecon.id;
+      }
+    }
+    return null;
+  }
 
   @override
   void initState() {
@@ -79,12 +104,24 @@ class _LeconsCoursPageState extends State<LeconsCoursPage> {
     setState(() => _loading = true);
     try {
       final modules = await _repo.modules(int.parse(widget.coursId));
-      if (mounted) setState(() => _modules = modules);
+      if (mounted) {
+        setState(() {
+          _modules = modules;
+          _moduleOuvertId ??= _moduleDeLaLeconCouranteOuPremier(modules);
+        });
+      }
     } catch (_) {
       if (mounted) YkSnack.error(context, 'Erreur de chargement.');
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  int? _moduleDeLaLeconCouranteOuPremier(List<ModuleAvecLecons> modules) {
+    for (final module in modules) {
+      if (module.lecons.any((l) => !l.estTerminee)) return module.id;
+    }
+    return modules.isEmpty ? null : modules.first.id;
   }
 
   void _ouvrirLecon(LeconItem lecon) {
@@ -447,9 +484,7 @@ class _LeconsCoursPageState extends State<LeconsCoursPage> {
                   icon: Icons.add,
                   size: YkButtonSize.sm,
                   onPressed: () => _showModuleSheet(),
-                )
-              else
-                YkRepetiteurButton(size: YkButtonSize.sm, onPressed: () => context.pushNamed(AppRoute.repetiteurs)),
+                ),
             ],
           ),
           SizedBox(height: YkSpacing.md),
@@ -463,12 +498,164 @@ class _LeconsCoursPageState extends State<LeconsCoursPage> {
             )
           else
             for (final module in _modules) _buildModuleBlock(module),
+          if (!_canEdit) ..._buildBasDePageApprenant(context),
         ],
       ),
     );
   }
 
+  /// Suppléments/enseignant/répétiteur — maquette « 09 · Détail cours »,
+  /// bas de l'onglet Leçons. Apprenant uniquement : l'enseignant gère déjà
+  /// les suppléments par leçon avec droits d'édition (menu existant), et
+  /// une carte « contactez-moi »/un CTA répétiteur n'a pas de sens pour
+  /// l'enseignant qui gère son propre cours.
+  List<Widget> _buildBasDePageApprenant(BuildContext context) {
+    return [
+      SizedBox(height: YkSpacing.sm),
+      SizedBox(
+        width: double.infinity,
+        child: YkButton(
+          label: 'Suppléments de cours',
+          icon: Icons.attach_file_rounded,
+          variant: YkButtonVariant.secondary,
+          onPressed: _voirSupplementsCours,
+        ),
+      ),
+      if (widget.enseignantNom != null) ...[
+        SizedBox(height: YkSpacing.sm),
+        _buildCarteEnseignant(context, widget.enseignantNom!),
+      ],
+      SizedBox(height: YkSpacing.sm),
+      SizedBox(
+        width: double.infinity,
+        child: YkRepetiteurButton(onPressed: () => context.pushNamed(AppRoute.repetiteurs)),
+      ),
+    ];
+  }
+
+  Widget _buildCarteEnseignant(BuildContext context, String nomComplet) {
+    final initiales = nomComplet
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((s) => s.isNotEmpty)
+        .take(2)
+        .map((s) => s[0].toUpperCase())
+        .join();
+    return YkCard(
+      child: Row(
+        children: [
+          ClipOval(
+            child: SizedBox(
+              width: 44,
+              height: 44,
+              child: YkGradientBackground(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [YkColors.primary700, YkColors.primary500],
+                ),
+                child: Center(
+                  child: Text(initiales, style: YkTypography.label(context).copyWith(color: YkColors.textOnPrimary)),
+                ),
+              ),
+            ),
+          ),
+          SizedBox(width: YkSpacing.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(nomComplet, style: YkTypography.label(context).copyWith(color: YkColors.textPrimary(context))),
+                Text(
+                  'Enseignant principal',
+                  style: YkTypography.caption(context).copyWith(color: YkColors.textSecondary(context)),
+                ),
+              ],
+            ),
+          ),
+          // Aucune messagerie directe n'existe dans ce projet (seul le
+          // Forum) — bascule sur l'onglet Forum plutôt que d'inventer un
+          // bouton mort.
+          YkIconButton(
+            icon: Icons.chat_bubble_outline_rounded,
+            label: 'Poser une question sur le forum',
+            variant: YkIconButtonVariant.tonal,
+            onPressed: () => widget.tabController.animateTo(3),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Suppléments de PORTÉE COURS ENTIÈRE, en lecture seule — apprenant.
+  /// Distinct de `_gererSupplements` (édition, enseignant, par leçon).
+  Future<void> _voirSupplementsCours() async {
+    List<SupplementCoursItem> supplements;
+    try {
+      supplements = await _repo.supplements(int.parse(widget.coursId));
+    } catch (_) {
+      if (mounted) YkSnack.error(context, 'Erreur de chargement.');
+      return;
+    }
+    if (!mounted) return;
+
+    await YkSheet.show<void>(
+      context: context,
+      title: 'Suppléments de cours',
+      bodyBuilder: (ctx) => supplements.isEmpty
+          ? Padding(
+              padding: EdgeInsets.symmetric(vertical: YkSpacing.lg),
+              child: Text(
+                'Aucun supplément disponible pour ce cours.',
+                style: YkTypography.bodySm(ctx).copyWith(color: YkColors.textSecondary(ctx)),
+              ),
+            )
+          : Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [for (final s in supplements) _supplementTile(ctx, s)],
+            ),
+    );
+  }
+
+  Widget _supplementTile(BuildContext ctx, SupplementCoursItem s, {VoidCallback? onDelete}) {
+    return Padding(
+      padding: EdgeInsets.only(bottom: YkSpacing.sm),
+      child: YkCard(
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(s.titre, style: YkTypography.label(ctx).copyWith(color: YkColors.textPrimary(ctx))),
+                  YkBadge(
+                    variant: YkBadgeVariant.label,
+                    label: s.leconId == null ? 'Tout le cours' : 'Cette leçon',
+                    color: YkColors.accent(ctx),
+                  ),
+                ],
+              ),
+            ),
+            if (onDelete != null)
+              YkIconButton(icon: Icons.delete_outline, label: 'Retirer', onPressed: onDelete)
+            else
+              YkIconButton(
+                icon: Icons.open_in_new_rounded,
+                label: 'Ouvrir',
+                onPressed: () {
+                  final lien = s.lienAOuvrir;
+                  if (lien != null) launchUrl(Uri.parse(lien), mode: LaunchMode.externalApplication);
+                },
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildModuleBlock(ModuleAvecLecons module) {
+    final ouvert = module.id == _moduleOuvertId;
     return Padding(
       padding: EdgeInsets.only(bottom: YkSpacing.md),
       child: YkCard(
@@ -476,69 +663,96 @@ class _LeconsCoursPageState extends State<LeconsCoursPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Container(
-                  padding: EdgeInsets.all(YkSpacing.xs),
-                  decoration: BoxDecoration(
-                    color: widget.courseColor.withValues(alpha: 0.1),
+            InkWell(
+              borderRadius: BorderRadius.circular(YkRadius.md),
+              onTap: () => setState(() => _moduleOuvertId = ouvert ? null : module.id),
+              child: Row(
+                children: [
+                  ClipRRect(
                     borderRadius: BorderRadius.circular(YkRadius.md),
+                    child: Container(
+                      width: 36,
+                      height: 36,
+                      color: ouvert ? widget.courseColor : YkColors.surfaceVariant(context),
+                      alignment: Alignment.center,
+                      child: Text(
+                        module.ordre.toString().padLeft(2, '0'),
+                        style: YkTypography.caption(
+                          context,
+                        ).copyWith(color: ouvert ? YkColors.textOnPrimary : YkColors.textSecondary(context), fontWeight: FontWeight.w800),
+                      ),
+                    ),
                   ),
-                  child: Icon(Icons.folder_rounded, color: widget.courseColor, size: 20),
-                ),
-                SizedBox(width: YkSpacing.sm),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(module.titre, style: YkTypography.label(context).copyWith(color: YkColors.textPrimary(context))),
-                      if (module.description.isNotEmpty)
-                        Text(
-                          module.description,
-                          style: YkTypography.caption(context).copyWith(color: YkColors.textSecondary(context)),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                    ],
+                  SizedBox(width: YkSpacing.sm),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(module.titre, style: YkTypography.label(context).copyWith(color: YkColors.textPrimary(context))),
+                        if (module.description.isNotEmpty)
+                          Text(
+                            module.description,
+                            style: YkTypography.caption(context).copyWith(color: YkColors.textSecondary(context)),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                      ],
+                    ),
                   ),
-                ),
-                YkBadge(
-                  variant: YkBadgeVariant.label,
-                  label: '${module.lecons.length} leçon${module.lecons.length > 1 ? 's' : ''}',
-                  color: widget.courseColor,
-                ),
-                if (_canEdit) ...[
-                  YkIconButton(
-                    icon: Icons.edit_outlined,
-                    label: 'Modifier le module',
-                    variant: YkIconButtonVariant.ghost,
-                    onPressed: () => _showModuleSheet(existant: module),
+                  YkBadge(
+                    variant: YkBadgeVariant.label,
+                    label: '${module.lecons.length} leçon${module.lecons.length > 1 ? 's' : ''}',
+                    color: widget.courseColor,
                   ),
-                  YkIconButton(
-                    icon: Icons.add_circle_outline,
-                    label: 'Ajouter une leçon',
-                    variant: YkIconButtonVariant.ghost,
-                    onPressed: () => _showLeconSheet(moduleId: module.id),
-                  ),
-                  YkIconButton(
-                    icon: Icons.delete_outline,
-                    label: 'Supprimer le module',
-                    variant: YkIconButtonVariant.ghost,
-                    onPressed: () => _supprimerModule(module.id),
+                  if (_canEdit) ...[
+                    YkIconButton(
+                      icon: Icons.edit_outlined,
+                      label: 'Modifier le module',
+                      variant: YkIconButtonVariant.ghost,
+                      onPressed: () => _showModuleSheet(existant: module),
+                    ),
+                    YkIconButton(
+                      icon: Icons.add_circle_outline,
+                      label: 'Ajouter une leçon',
+                      variant: YkIconButtonVariant.ghost,
+                      onPressed: () => _showLeconSheet(moduleId: module.id),
+                    ),
+                    YkIconButton(
+                      icon: Icons.delete_outline,
+                      label: 'Supprimer le module',
+                      variant: YkIconButtonVariant.ghost,
+                      onPressed: () => _supprimerModule(module.id),
+                    ),
+                  ],
+                  AnimatedRotation(
+                    turns: ouvert ? 0.5 : 0,
+                    duration: YkMotion.normal,
+                    curve: YkMotion.brandCurve,
+                    child: Icon(Icons.keyboard_arrow_down_rounded, color: YkColors.textTertiary(context)),
                   ),
                 ],
-              ],
+              ),
             ),
-            if (module.lecons.isEmpty)
-              Padding(
-                padding: EdgeInsets.symmetric(vertical: YkSpacing.md),
-                child: Text(
-                  'Aucune leçon dans ce module.',
-                  style: YkTypography.bodySm(context).copyWith(color: YkColors.textSecondary(context)),
-                ),
-              )
-            else
-              for (final lecon in module.lecons) _buildLeconTile(lecon, module.id),
+            AnimatedSize(
+              duration: YkMotion.normal,
+              curve: YkMotion.brandCurve,
+              child: !ouvert
+                  ? const SizedBox(width: double.infinity)
+                  : Padding(
+                      padding: EdgeInsets.only(top: YkSpacing.xxs),
+                      child: module.lecons.isEmpty
+                          ? Padding(
+                              padding: EdgeInsets.symmetric(vertical: YkSpacing.md),
+                              child: Text(
+                                'Aucune leçon dans ce module.',
+                                style: YkTypography.bodySm(context).copyWith(color: YkColors.textSecondary(context)),
+                              ),
+                            )
+                          : Column(
+                              children: [for (final lecon in module.lecons) _buildLeconTile(lecon, module.id)],
+                            ),
+                    ),
+            ),
           ],
         ),
       ),
@@ -546,6 +760,24 @@ class _LeconsCoursPageState extends State<LeconsCoursPage> {
   }
 
   Widget _buildLeconTile(LeconItem lecon, int moduleId) {
+    final estCourante = !lecon.estTerminee && lecon.id == _leconCouranteId;
+    final Color dotBg;
+    final Color dotFg;
+    final Widget dotChild;
+    if (lecon.estTerminee) {
+      dotBg = YkColors.success.withValues(alpha: 0.12);
+      dotFg = YkColors.success;
+      dotChild = Icon(Icons.check_rounded, color: dotFg, size: 16);
+    } else if (estCourante) {
+      dotBg = YkColors.accent(context);
+      dotFg = YkColors.textOnPrimary;
+      dotChild = Icon(Icons.play_arrow_rounded, color: dotFg, size: 16);
+    } else {
+      dotBg = YkColors.surfaceVariant(context);
+      dotFg = YkColors.textTertiary(context);
+      dotChild = Text('${lecon.numero}', style: TextStyle(color: dotFg, fontWeight: FontWeight.bold, fontSize: 12));
+    }
+
     return InkWell(
       onTap: () => _ouvrirLecon(lecon),
       borderRadius: BorderRadius.circular(YkRadius.md),
@@ -554,13 +786,7 @@ class _LeconsCoursPageState extends State<LeconsCoursPage> {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            CircleAvatar(
-              radius: 18,
-              backgroundColor: widget.courseColor.withValues(alpha: 0.1),
-              child: lecon.estTerminee
-                  ? Icon(Icons.check_rounded, color: widget.courseColor, size: 18)
-                  : Text('${lecon.numero}', style: TextStyle(color: widget.courseColor, fontWeight: FontWeight.bold)),
-            ),
+            CircleAvatar(radius: 13, backgroundColor: dotBg, child: dotChild),
             SizedBox(width: YkSpacing.sm),
             Expanded(
               child: Column(
@@ -575,13 +801,11 @@ class _LeconsCoursPageState extends State<LeconsCoursPage> {
                       overflow: TextOverflow.ellipsis,
                     ),
                   SizedBox(height: YkSpacing.xxs),
-                  Row(
+                  Wrap(
+                    spacing: YkSpacing.xxs,
                     children: [
-                      if (lecon.hasPdf) ...[
-                        Icon(Icons.picture_as_pdf_outlined, size: 14, color: YkColors.error),
-                        SizedBox(width: YkSpacing.xxs),
-                      ],
-                      if (lecon.hasVideo) Icon(Icons.videocam_outlined, size: 14, color: YkColors.info),
+                      if (lecon.hasPdf) YkBadge(variant: YkBadgeVariant.label, label: 'PDF', color: YkColors.error),
+                      if (lecon.hasVideo) YkBadge(variant: YkBadgeVariant.label, label: '▶ VIDÉO', color: YkColors.info),
                     ],
                   ),
                 ],

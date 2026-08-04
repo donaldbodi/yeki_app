@@ -13,6 +13,7 @@ import 'package:intl/intl.dart';
 
 import 'package:yeki/core/design/components/components.dart';
 import 'package:yeki/core/design/tokens/tokens.dart';
+import 'package:yeki/core/router/auth_state.dart';
 import 'package:yeki/core/router/route_names.dart';
 
 import 'wallet_controller.dart';
@@ -41,8 +42,19 @@ class _WalletPageState extends State<WalletPage> {
     super.dispose();
   }
 
+  // Bug corrigé (modèle économique incomplet) : `RetraitPage`/
+  // `RetraitController` étaient déjà entièrement construites et
+  // fonctionnelles mais aucun bouton nulle part n'y menait — un cadre
+  // n'avait aucun moyen d'initier un retrait de ses gains.
+  bool get _estCadre => authState.value.role == 'enseignant_cadre';
+
   Future<void> _recharger() async {
     final ok = await context.pushNamed<bool>(AppRoute.recharge);
+    if (ok == true && mounted) await _controller.charger();
+  }
+
+  Future<void> _retirer() async {
+    final ok = await context.pushNamed<bool>(AppRoute.retrait);
     if (ok == true && mounted) await _controller.charger();
   }
 
@@ -84,6 +96,15 @@ class _WalletPageState extends State<WalletPage> {
                 icon: Icons.add_circle_outline_rounded,
                 onPressed: _recharger,
               ),
+              if (_estCadre) ...[
+                SizedBox(height: YkSpacing.sm),
+                YkButton(
+                  label: 'Retirer mes gains',
+                  icon: Icons.account_balance_rounded,
+                  variant: YkButtonVariant.secondary,
+                  onPressed: _retirer,
+                ),
+              ],
               if (_controller.demandesEnAttente.isNotEmpty) ...[
                 SizedBox(height: YkSpacing.lg),
                 _buildDemandesEnAttente(context),
@@ -97,52 +118,85 @@ class _WalletPageState extends State<WalletPage> {
     );
   }
 
+  /// Carte héro dégradée — maquette Portefeuille
+  /// (`docs/maquette/YEKI App Apprenant.dc.html:757`, dégradé navy +
+  /// cercle décoratif translucide). Réutilise le motif déjà établi cette
+  /// session pour la carte héro d'Accueil
+  /// (`accueil_page.dart._buildHeroReprise`, `YkCard(gradient:
+  /// LinearGradient(colors: [primary700, primary500]))`), pas une
+  /// nouvelle recette.
   Widget _buildSoldeCard(BuildContext context) {
     return YkCard(
-      variant: YkCardVariant.filled,
-      accentColor: YkColors.accent(context),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      padding: EdgeInsets.zero,
+      gradient: LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [YkColors.primary700, YkColors.primary500],
+      ),
+      child: Stack(
+        clipBehavior: Clip.none,
         children: [
-          Row(
-            children: [
-              Icon(Icons.account_balance_wallet_rounded, color: YkColors.accent(context)),
-              SizedBox(width: YkSpacing.xs),
-              Text('Solde disponible', style: YkTypography.label(context).copyWith(color: YkColors.textSecondary(context))),
-            ],
+          Positioned(
+            top: -50,
+            right: -50,
+            child: ClipOval(
+              child: Container(width: 180, height: 180, color: YkColors.textOnPrimary.withValues(alpha: 0.07)),
+            ),
           ),
-          SizedBox(height: YkSpacing.xs),
-          Text(
-            '${_controller.solde} FCFA',
-            style: YkTypography.h2(context).copyWith(color: YkColors.textPrimary(context), fontWeight: FontWeight.w800),
-          ),
-          SizedBox(height: YkSpacing.md),
-          Row(
-            children: [
-              Expanded(child: _statBubble(context, 'Total rechargé', '${_controller.totalRecharge} FCFA', YkColors.success)),
-              SizedBox(width: YkSpacing.sm),
-              Expanded(child: _statBubble(context, 'Total dépensé', '${_controller.totalDepense} FCFA', YkColors.error)),
-            ],
+          Padding(
+            padding: EdgeInsets.all(YkSpacing.lg),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.account_balance_wallet_rounded, color: YkColors.textOnPrimary),
+                    SizedBox(width: YkSpacing.xs),
+                    Text(
+                      'Solde disponible',
+                      style: YkTypography.label(context).copyWith(color: YkColors.textOnPrimary.withValues(alpha: 0.8)),
+                    ),
+                  ],
+                ),
+                SizedBox(height: YkSpacing.xs),
+                Text(
+                  '${_controller.solde} FCFA',
+                  style: YkTypography.h2(context).copyWith(color: YkColors.textOnPrimary, fontWeight: FontWeight.w800),
+                ),
+                SizedBox(height: YkSpacing.md),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _statBubble(context, 'Total rechargé', '${_controller.totalRecharge} FCFA'),
+                    ),
+                    SizedBox(width: YkSpacing.sm),
+                    Expanded(
+                      child: _statBubble(context, 'Total dépensé', '${_controller.totalDepense} FCFA'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _statBubble(BuildContext context, String label, String valeur, Color couleur) {
-    return Container(
-      padding: EdgeInsets.symmetric(horizontal: YkSpacing.sm, vertical: YkSpacing.sm),
-      decoration: BoxDecoration(
-        color: YkColors.surfaceVariant(context),
-        borderRadius: BorderRadius.circular(YkRadius.md),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label, style: YkTypography.caption(context).copyWith(color: YkColors.textSecondary(context))),
-          SizedBox(height: YkSpacing.xxs),
-          Text(valeur, style: YkTypography.bodyMd(context).copyWith(color: couleur, fontWeight: FontWeight.w700)),
-        ],
+  Widget _statBubble(BuildContext context, String label, String valeur) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(YkRadius.md),
+      child: Container(
+        padding: EdgeInsets.symmetric(horizontal: YkSpacing.sm, vertical: YkSpacing.sm),
+        color: YkColors.textOnPrimary.withValues(alpha: 0.12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(label, style: YkTypography.caption(context).copyWith(color: YkColors.textOnPrimary.withValues(alpha: 0.8))),
+            SizedBox(height: YkSpacing.xxs),
+            Text(valeur, style: YkTypography.bodyMd(context).copyWith(color: YkColors.textOnPrimary, fontWeight: FontWeight.w700)),
+          ],
+        ),
       ),
     );
   }
@@ -225,10 +279,14 @@ class _WalletPageState extends State<WalletPage> {
 
     return Row(
       children: [
-        Container(
-          padding: EdgeInsets.all(YkSpacing.xs),
-          decoration: BoxDecoration(color: couleur.withValues(alpha: 0.12), shape: BoxShape.circle),
-          child: Icon(estCredit ? Icons.add_rounded : Icons.remove_rounded, color: couleur, size: 18),
+        ClipOval(
+          child: Container(
+            width: 34,
+            height: 34,
+            color: couleur.withValues(alpha: 0.12),
+            alignment: Alignment.center,
+            child: Icon(estCredit ? Icons.add_rounded : Icons.remove_rounded, color: couleur, size: 18),
+          ),
         ),
         SizedBox(width: YkSpacing.sm),
         Expanded(

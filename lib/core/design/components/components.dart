@@ -12,6 +12,7 @@ export 'actions/yk_chip.dart';
 export 'actions/yk_fab.dart';
 export 'actions/yk_icon_button.dart';
 export 'actions/yk_link.dart';
+export 'actions/yk_question_navigator.dart';
 export 'actions/yk_segmented.dart';
 
 // ── Saisie ───────────────────────────────────────────────────────
@@ -68,6 +69,7 @@ export 'feedback/yk_confirm_sheet.dart';
 export 'feedback/yk_empty_state.dart';
 export 'feedback/yk_glow.dart';
 export 'feedback/yk_error_state.dart';
+export 'feedback/yk_premium_required.dart';
 export 'feedback/yk_offline_banner.dart';
 export 'feedback/yk_skeleton.dart';
 export 'feedback/yk_snack.dart';

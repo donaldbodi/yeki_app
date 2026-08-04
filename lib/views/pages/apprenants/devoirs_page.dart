@@ -531,19 +531,19 @@ class _DevoirsPageState extends State<DevoirsPage> {
               ),
             ],
             SizedBox(height: YkSpacing.sm),
-            Container(
-              padding: EdgeInsets.symmetric(horizontal: YkSpacing.sm, vertical: YkSpacing.xs),
-              decoration: BoxDecoration(
+            ClipRRect(
+              borderRadius: BorderRadius.circular(YkRadius.sm),
+              child: Container(
+                padding: EdgeInsets.symmetric(horizontal: YkSpacing.sm, vertical: YkSpacing.xs),
                 color: YkColors.surfaceVariant(context),
-                borderRadius: BorderRadius.circular(YkRadius.sm),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  _infoIcone(context, Icons.layers_outlined, '${d.matiere} • ${d.niveau}'),
-                  _infoIcone(context, Icons.quiz_rounded, '${d.nbQuestions} questions'),
-                  _infoIcone(context, Icons.timer_rounded, '${d.dureeMinutes} min'),
-                ],
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    _infoIcone(context, Icons.layers_outlined, '${d.matiere} • ${d.niveau}'),
+                    _infoIcone(context, Icons.quiz_rounded, '${d.nbQuestions} questions'),
+                    _infoIcone(context, Icons.timer_rounded, '${d.dureeMinutes} min'),
+                  ],
+                ),
               ),
             ),
             if (d.estCorrige && d.noteApprenant != null) ...[

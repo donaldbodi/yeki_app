@@ -144,8 +144,15 @@ class _ChangerAdminBody extends StatefulWidget {
 }
 
 class _ChangerAdminState extends ChangeNotifier {
+  _ChangerAdminState(this._controller) {
+    future = _controller.chargerEnseignantsAdmins();
+  }
+
+  final AdminGeneralController _controller;
+
   int? selected;
   bool enCours = false;
+  late Future<List<AdminEnseignantRef>> future;
 
   void setSelected(int? v) {
     selected = v;
@@ -156,11 +163,15 @@ class _ChangerAdminState extends ChangeNotifier {
     enCours = v;
     notifyListeners();
   }
+
+  void recharger() {
+    future = _controller.chargerEnseignantsAdmins();
+    notifyListeners();
+  }
 }
 
 class _ChangerAdminBodyState extends State<_ChangerAdminBody> {
-  late final Future<List<AdminEnseignantRef>> _future = widget.controller.chargerEnseignantsAdmins();
-  final _state = _ChangerAdminState();
+  late final _state = _ChangerAdminState(widget.controller);
 
   @override
   void dispose() {
@@ -198,10 +209,19 @@ class _ChangerAdminBodyState extends State<_ChangerAdminBody> {
             ),
             SizedBox(height: YkSpacing.md),
             FutureBuilder<List<AdminEnseignantRef>>(
-              future: _future,
+              future: _state.future,
               builder: (context, snapshot) {
                 if (snapshot.connectionState != ConnectionState.done) {
                   return const YkSkeleton.list(itemCount: 3);
+                }
+                if (snapshot.hasError) {
+                  return YkEmptyState(
+                    icon: Icons.error_outline_rounded,
+                    title: 'Erreur de chargement',
+                    message: "Impossible de charger la liste des enseignants administrateurs.",
+                    actionLabel: 'Réessayer',
+                    onAction: _state.recharger,
+                  );
                 }
                 final candidats = snapshot.data ?? const [];
                 if (candidats.isEmpty) {

@@ -107,7 +107,7 @@ class DevoirRepository {
 
   Future<List<DevoirListItem>> listerParCours(int coursId) async {
     final data = await _api.get(EvaluationEndpoints.coursDevoirs(coursId));
-    final results = Map<String, dynamic>.from(data as Map)['results'] as List? ?? [];
+    final results = data is List ? data : (data['results'] as List? ?? []);
     return results
         .map((d) => DevoirListItem.fromJson(Map<String, dynamic>.from(d as Map)))
         .toList();
@@ -259,7 +259,7 @@ class DevoirRepository {
   /// `DevoirDetailController`).
   Future<List<QuestionDevoirItem>> listerQuestions(int devoirId) async {
     final data = await _api.get(EvaluationEndpoints.devoirsQuestions(devoirId));
-    final results = Map<String, dynamic>.from(data as Map)['results'] as List? ?? [];
+    final results = data is List ? data : (data['results'] as List? ?? []);
     return results
         .map((q) => QuestionDevoirItem.fromJson(Map<String, dynamic>.from(q as Map)))
         .toList();
@@ -319,7 +319,7 @@ class DevoirRepository {
 
   Future<List<SoumissionDevoirItem>> listerSoumissions(int devoirId) async {
     final data = await _api.get(EvaluationEndpoints.devoirsSoumissions(devoirId));
-    final results = Map<String, dynamic>.from(data as Map)['results'] as List? ?? [];
+    final results = data is List ? data : (data['results'] as List? ?? []);
     return results
         .map((s) => SoumissionDevoirItem.fromJson(Map<String, dynamic>.from(s as Map)))
         .toList();

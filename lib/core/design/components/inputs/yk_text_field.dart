@@ -161,7 +161,11 @@ class _YkTextFieldState extends State<YkTextField> {
 
   @override
   Widget build(BuildContext context) {
-    final radius = BorderRadius.circular(YkRadius.sm);
+    // Pilule + fond blanc + ombre douce pour le type `search` (maquette :
+    // barre de recherche toujours en `--surface`, rayon plein, `shadow-sm`)
+    // — les autres types restent rectangulaires (`YkRadius.sm`, fond
+    // `surfaceVariant`), c'est le standard pour un champ de formulaire.
+    final radius = BorderRadius.circular(_isSearch ? YkRadius.full : YkRadius.sm);
     final border = OutlineInputBorder(
       borderRadius: radius,
       borderSide: BorderSide(color: YkColors.border(context)),
@@ -194,7 +198,7 @@ class _YkTextFieldState extends State<YkTextField> {
       suffix = Icon(widget.suffixIcon, color: YkColors.textSecondary(context));
     }
 
-    return Semantics(
+    final field = Semantics(
       label: widget.semanticLabel ?? widget.label ?? widget.hint,
       textField: true,
       child: TextFormField(
@@ -223,7 +227,7 @@ class _YkTextFieldState extends State<YkTextField> {
           prefixIcon: prefix,
           suffixIcon: suffix,
           filled: true,
-          fillColor: YkColors.surfaceVariant(context),
+          fillColor: _isSearch ? YkColors.surface(context) : YkColors.surfaceVariant(context),
           border: border,
           enabledBorder: border,
           disabledBorder: border.copyWith(
@@ -240,6 +244,16 @@ class _YkTextFieldState extends State<YkTextField> {
           ),
         ),
       ),
+    );
+
+    if (!_isSearch) return field;
+
+    // Ombre douce portée par un conteneur transparent autour du champ —
+    // `InputDecoration` ne supporte pas nativement `boxShadow` pour son
+    // fond `filled`.
+    return Container(
+      decoration: BoxDecoration(borderRadius: radius, boxShadow: YkElevation.e1),
+      child: field,
     );
   }
 }

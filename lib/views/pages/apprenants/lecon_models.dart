@@ -19,6 +19,7 @@ class LeconItem {
     required this.pdfUrl,
     required this.hasVideo,
     required this.videoUrl,
+    required this.videoVerrouille,
     required this.estTerminee,
   });
 
@@ -39,6 +40,11 @@ class LeconItem {
   final String? pdfUrl;
   final bool hasVideo;
   final String? videoUrl;
+
+  /// `true` si la leçon a réellement une vidéo mais qu'elle est cachée par
+  /// le palier gratuit (`video_verrouille`, backend) — distinct de
+  /// `!hasVideo` qui peut aussi signifier « pas de vidéo du tout ».
+  final bool videoVerrouille;
   final bool estTerminee;
 
   factory LeconItem.fromJson(Map<String, dynamic> json, {required int moduleId, required String moduleTitre}) {
@@ -57,6 +63,7 @@ class LeconItem {
       pdfUrl: pdf,
       hasVideo: video != null && video.isNotEmpty,
       videoUrl: video,
+      videoVerrouille: json['video_verrouille'] as bool? ?? false,
       estTerminee: json['est_terminee'] as bool? ?? false,
     );
   }
@@ -74,6 +81,7 @@ class LeconItem {
     pdfUrl: pdfUrl,
     hasVideo: hasVideo,
     videoUrl: videoUrl,
+    videoVerrouille: videoVerrouille,
     estTerminee: estTerminee ?? this.estTerminee,
   );
 }
@@ -150,6 +158,35 @@ class SupplementCoursItem {
     url: json['url'] as String?,
     ordre: (json['ordre'] as num?)?.toInt() ?? 1,
   );
+}
+
+/// Métadonnées du cours (niveau, enseignant principal) — `GET
+/// /cours/{id}/update/` (`CoursUpdateView`, déjà en production,
+/// accessible à tout utilisateur authentifié en lecture). Utilisé pour
+/// compléter l'en-tête de `cours_detail_page.dart` et la carte
+/// enseignant de `lecons_cours.dart` (Phase 2, refonte identique
+/// maquette).
+class CoursDetailInfo {
+  const CoursDetailInfo({required this.niveau, required this.enseignantNom});
+
+  final String niveau;
+
+  /// `"{prénom} {nom}"` — `null` si aucun enseignant principal assigné.
+  /// Pas de civilité (« M. »/« Mme ») : aucune donnée de genre disponible
+  /// sur `User`/`Profile`, non fabriquée.
+  final String? enseignantNom;
+
+  factory CoursDetailInfo.fromJson(Map<String, dynamic> json) {
+    final principal = json['enseignant_principal'] as Map?;
+    final user = principal?['user'] as Map?;
+    final prenom = user?['first_name']?.toString().trim() ?? '';
+    final nom = user?['last_name']?.toString().trim() ?? '';
+    final nomComplet = '$prenom $nom'.trim();
+    return CoursDetailInfo(
+      niveau: json['niveau']?.toString() ?? '',
+      enseignantNom: nomComplet.isEmpty ? null : nomComplet,
+    );
+  }
 }
 
 /// Vue à plat, numérotée, de toutes les leçons d'un cours — pratique pour

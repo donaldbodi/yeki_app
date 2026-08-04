@@ -13,6 +13,8 @@
 import 'package:flutter/foundation.dart' show immutable;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:yeki/core/providers/current_user_provider.dart';
+import 'package:yeki/core/providers/notifications_provider.dart';
 import 'package:yeki/core/router/auth_state.dart';
 import 'package:yeki/models/user_profile.dart';
 import 'package:yeki/repositories/auth_repository.dart';
@@ -38,6 +40,13 @@ class AuthController extends AsyncNotifier<AuthUser?> {
 
   void _onAuthStateChanged() {
     state = const AsyncValue<AuthUser?>.loading();
+    // Invalide les profils/compteurs mis en cache par compte — sans ça,
+    // une bascule de compte en cours de session (déconnexion + reconnexion
+    // avec un AUTRE compte) peut brièvement réafficher le nom/compteur de
+    // l'ancien compte même une fois la bonne route chargée (bug corrigé,
+    // contributeur secondaire de la bascule de rôle).
+    ref.invalidate(currentUserProvider);
+    ref.invalidate(notificationsProvider);
     _toAuthUser(authState.value).then((user) {
       state = AsyncValue.data(user);
     });

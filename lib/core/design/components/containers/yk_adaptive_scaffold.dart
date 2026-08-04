@@ -1,3 +1,5 @@
+import 'dart:ui' show ImageFilter;
+
 import 'package:flutter/material.dart';
 
 import '../../nav/yk_nav_destination.dart';
@@ -105,6 +107,12 @@ class _YkAdaptiveScaffoldState extends State<YkAdaptiveScaffold> {
   Widget _buildCompact(BuildContext context) {
     final compactDestinations = _flat.where((d) => d.inCompactBar).toList();
     return Scaffold(
+      // `extendBody: true` : le contenu défile SOUS la barre flottante
+      // (maquette — barre en pilule, flottante, effet de verre) plutôt que
+      // de s'arrêter au-dessus d'une barre pleine largeur opaque —
+      // nécessaire pour que le flou de `_YkBottomBar` ait un contenu réel
+      // à flouter derrière elle.
+      extendBody: true,
       body: widget.body,
       bottomNavigationBar: _YkBottomBar(
         destinations: compactDestinations,
@@ -320,29 +328,47 @@ class _YkBottomBar extends StatelessWidget implements PreferredSizeWidget {
   final VoidCallback onMore;
 
   @override
-  Size get preferredSize => const Size.fromHeight(64);
+  Size get preferredSize => const Size.fromHeight(64 + 2 * 12 + 12);
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: YkColors.surface(context),
-      child: SafeArea(
-        top: false,
-        child: SizedBox(
-          height: 64,
-          child: Row(
-            children: [
-              for (final d in destinations)
-                Expanded(child: _BottomBarItem(destination: d, selected: isSelected(d), badge: badgeFor(d), onTap: () => onTap(d))),
-              Expanded(
-                child: _BottomBarItem(
-                  destination: const YkNavDestination(label: 'Plus', icon: Icons.more_horiz),
-                  selected: false,
-                  badge: null,
-                  onTap: onMore,
-                ),
+    // Barre flottante en pilule, effet de verre (maquette) — même recette
+    // de flou que `YkCard(variant: glass)` (sigma 16, surface à 60 %
+    // d'opacité, bordure à 30 %, ombre `e2`) : pas de nouvelle valeur
+    // inventée, réutilisation directe.
+    final radius = BorderRadius.circular(YkRadius.xl);
+    return SafeArea(
+      top: false,
+      minimum: EdgeInsets.only(bottom: YkSpacing.xs),
+      child: Padding(
+        padding: EdgeInsets.symmetric(horizontal: YkSpacing.md),
+        child: ClipRRect(
+          borderRadius: radius,
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+            child: Container(
+              height: 64,
+              decoration: BoxDecoration(
+                color: YkColors.surface(context).withValues(alpha: 0.6),
+                borderRadius: radius,
+                border: Border.all(color: YkColors.surface(context).withValues(alpha: 0.3)),
+                boxShadow: YkElevation.e2,
               ),
-            ],
+              child: Row(
+                children: [
+                  for (final d in destinations)
+                    Expanded(child: _BottomBarItem(destination: d, selected: isSelected(d), badge: badgeFor(d), onTap: () => onTap(d))),
+                  Expanded(
+                    child: _BottomBarItem(
+                      destination: const YkNavDestination(label: 'Plus', icon: Icons.more_horiz),
+                      selected: false,
+                      badge: null,
+                      onTap: onMore,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
       ),
@@ -369,6 +395,9 @@ class _BottomBarItem extends StatelessWidget {
     final icon = Icon(selected ? (destination.selectedIcon ?? destination.icon) : destination.icon, color: color, size: 22);
     final badged = (badge != null && badge! > 0) ? Badge(label: Text('$badge'), child: icon) : icon;
 
+    // Bug corrigé (conforme à la maquette) : le fond coloré de l'onglet
+    // sélectionné n'enveloppe QUE l'icône (pastille pilule) — le libellé
+    // reste un texte simple sans fond, coloré seulement.
     return Semantics(
       button: true,
       selected: selected,
@@ -376,25 +405,25 @@ class _BottomBarItem extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         child: Center(
-          child: AnimatedContainer(
-            duration: YkMotion.fast,
-            padding: EdgeInsets.symmetric(horizontal: YkSpacing.sm, vertical: YkSpacing.xxs),
-            decoration: BoxDecoration(
-              color: selected ? YkColors.accent(context).withValues(alpha: 0.12) : Colors.transparent,
-              borderRadius: BorderRadius.circular(YkRadius.full),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                badged,
-                SizedBox(height: 2),
-                Text(
-                  destination.label,
-                  style: YkTypography.caption(context).copyWith(color: color),
-                  overflow: TextOverflow.ellipsis,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AnimatedContainer(
+                duration: YkMotion.fast,
+                padding: EdgeInsets.symmetric(horizontal: YkSpacing.sm, vertical: YkSpacing.xxs),
+                decoration: BoxDecoration(
+                  color: selected ? YkColors.accent(context).withValues(alpha: 0.12) : Colors.transparent,
+                  borderRadius: BorderRadius.circular(YkRadius.full),
                 ),
-              ],
-            ),
+                child: badged,
+              ),
+              SizedBox(height: 2),
+              Text(
+                destination.label,
+                style: YkTypography.caption(context).copyWith(color: color),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
           ),
         ),
       ),

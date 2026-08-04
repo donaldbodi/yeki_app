@@ -42,11 +42,23 @@ class PasserExercicePage extends StatefulWidget {
 class _PasserExercicePageState extends State<PasserExercicePage> {
   late final PasserExerciceController _controller;
 
+  /// Une clé par question (indexée par id) — sert de cible à
+  /// `Scrollable.ensureVisible` depuis `YkQuestionNavigator`.
+  final Map<int, GlobalKey> _questionKeys = {};
+
   @override
   void initState() {
     super.initState();
     _controller = PasserExerciceController(exerciceId: widget.exerciceId);
     _controller.charger();
+  }
+
+  void _sauterVersQuestion(List<QuestionAPasser> questions, int index) {
+    final key = _questionKeys[questions[index].id];
+    final ctx = key?.currentContext;
+    if (ctx != null) {
+      Scrollable.ensureVisible(ctx, duration: YkMotion.normal, curve: YkMotion.brandCurve, alignment: 0.1);
+    }
   }
 
   @override
@@ -259,6 +271,14 @@ class _PasserExercicePageState extends State<PasserExercicePage> {
       ),
       body: Column(
         children: [
+          Padding(
+            padding: EdgeInsets.fromLTRB(YkSpacing.md, YkSpacing.sm, YkSpacing.md, 0),
+            child: YkQuestionNavigator(
+              etats: _etatsQuestions(questions),
+              onTap: (index) => _sauterVersQuestion(questions, index),
+            ),
+          ),
+          SizedBox(height: YkSpacing.sm),
           YkProgress(value: progress),
           Expanded(
             child: ListView(
@@ -266,16 +286,17 @@ class _PasserExercicePageState extends State<PasserExercicePage> {
               children: [
                 _buildEnonce(context, exercice),
                 SizedBox(height: YkSpacing.lg),
-                ...questions.asMap().entries.map(
-                      (entry) => QuestionCard(
-                        key: ValueKey(entry.value.id),
-                        question: entry.value,
-                        index: entry.key + 1,
-                        reponseActuelle: _controller.reponses[entry.value.id],
-                        tentativesEpuisees: _controller.tentativesEpuisees,
-                        onChanged: (valeur) => _controller.repondre(entry.value.id, valeur),
-                      ),
-                    ),
+                ...questions.asMap().entries.map((entry) {
+                  final key = _questionKeys.putIfAbsent(entry.value.id, () => GlobalKey());
+                  return QuestionCard(
+                    key: key,
+                    question: entry.value,
+                    index: entry.key + 1,
+                    reponseActuelle: _controller.reponses[entry.value.id],
+                    tentativesEpuisees: _controller.tentativesEpuisees,
+                    onChanged: (valeur) => _controller.repondre(entry.value.id, valeur),
+                  );
+                }),
                 SizedBox(height: YkSpacing.lg),
                 _buildBoutonBas(context),
                 SizedBox(height: YkSpacing.xl),
@@ -285,6 +306,22 @@ class _PasserExercicePageState extends State<PasserExercicePage> {
         ],
       ),
     );
+  }
+
+  /// État de chaque question pour `YkQuestionNavigator` — « en cours » =
+  /// la 1ʳᵉ question sans réponse (pas un état persisté, aide visuelle
+  /// seulement).
+  List<YkQuestionEtat> _etatsQuestions(List<QuestionAPasser> questions) {
+    final indexEnCours = questions.indexWhere((q) => !_controller.reponses.containsKey(q.id));
+    return [
+      for (var i = 0; i < questions.length; i++)
+        if (_controller.reponses.containsKey(questions[i].id))
+          YkQuestionEtat.repondue
+        else if (i == indexEnCours)
+          YkQuestionEtat.enCours
+        else
+          YkQuestionEtat.aVenir,
+    ];
   }
 
   Widget _buildEnonce(BuildContext context, exercice) {

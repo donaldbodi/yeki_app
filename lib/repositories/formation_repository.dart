@@ -90,8 +90,16 @@ class FormationRepository {
     return list.map((e) => fromJson(Map<String, dynamic>.from(e as Map))).toList();
   }
 
-  Future<List<ParcoursOption>> parcours() async {
-    final data = await _api.get(FormationEndpoints.parcours);
+  /// [typeParcours] optionnel (ex. `'cursus'`) — l'inscription apprenant
+  /// ne doit proposer que les parcours de type Cursus, Formations/Prépa
+  /// Concours étant des contenus « haut de gamme » accessibles séparément
+  /// après coup via une demande d'accès (bug corrigé : le menu déroulant
+  /// d'inscription mélangeait jusqu'ici les 4 types sans distinction).
+  Future<List<ParcoursOption>> parcours({String? typeParcours}) async {
+    final data = await _api.get(
+      FormationEndpoints.parcours,
+      query: typeParcours != null ? {'type_parcours': typeParcours} : null,
+    );
     return _asList(data, ParcoursOption.fromJson);
   }
 

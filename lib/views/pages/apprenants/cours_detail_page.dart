@@ -9,18 +9,27 @@
 // n'est plus figé à `true` partout depuis P11.4 : certains appelants
 // (`formation_detail_page.dart`, `concours_detail_page.dart`) transmettent
 // désormais une vraie valeur — ce verrou PEUT donc réellement s'afficher.
-// Bouton "Voir les répétiteurs" (P11.3) basculé sur `YkRepetiteurButton`
-// (P11.7).
+//
+// Phase 2 (refonte écran 4/N, `docs/ecarts/p2_cours_detail_entete.md`) :
+// en-tête restylé sur la maquette (« 09 · Détail cours », qui attribue
+// explicitement cet en-tête à ce fichier). Le bouton répétiteur a quitté
+// l'en-tête (doublon avec celui déjà posé au bas de l'onglet Leçons,
+// P11.7 — seul emplacement de cette action dans la maquette) au profit
+// d'un bouton favori local à la session (même précédent déjà écrit dans
+// `detail_lecon_page.dart._onFavorite`, aucun favori persistant côté
+// backend). Le sous-titre affiche désormais le nombre de leçons et le
+// pourcentage complété, calculés depuis `CoursRepository.modules()`
+// (mêmes données que `lecons_cours.dart` affiche déjà par leçon).
 
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 
 import 'package:yeki/core/design/components/components.dart';
 import 'package:yeki/core/design/tokens/tokens.dart';
-import 'package:yeki/core/router/route_names.dart';
 import 'package:yeki/features/devoirs_cours/presentation/devoirs_cours_page.dart';
 import 'package:yeki/features/exercices_cours/presentation/exercices_cours_page.dart';
+import 'package:yeki/repositories/cours_repository.dart';
 import 'package:yeki/views/pages/apprenants/forum_page.dart';
+import 'package:yeki/views/pages/apprenants/lecon_models.dart';
 import 'package:yeki/views/pages/apprenants/lecons_cours.dart';
 
 class CoursDetailTabs extends StatefulWidget {
@@ -52,6 +61,19 @@ class CoursDetailTabs extends StatefulWidget {
 class _CoursDetailTabsState extends State<CoursDetailTabs> with SingleTickerProviderStateMixin {
   late TabController _tabController;
   late Color _courseColor;
+  final _coursRepo = CoursRepository();
+
+  // Favori local à la session — aucun favori persistant côté backend
+  // (précédent déjà établi dans `detail_lecon_page.dart._onFavorite`,
+  // règle 3 : pas de fonctionnalité persistée qui n'existe pas).
+  bool _favori = false;
+
+  // Sous-titre d'en-tête — `null` tant que non chargé, repli sur le
+  // texte générique dans ce cas (voir `_sousTitre`).
+  int? _totalLecons;
+  int? _leconsCompletees;
+  String? _niveau;
+  String? _enseignantNom;
 
   int? _forumScrollToId;
   String? _forumPreoccupationContenu;
@@ -79,6 +101,37 @@ class _CoursDetailTabsState extends State<CoursDetailTabs> with SingleTickerProv
     _tabController.addListener(() {
       if (!_tabController.indexIsChanging) setState(() {});
     });
+    _chargerProgression();
+  }
+
+  Future<void> _chargerProgression() async {
+    try {
+      final coursId = int.parse(widget.coursId);
+      final resultats = await Future.wait([_coursRepo.modules(coursId), _coursRepo.detail(coursId)]);
+      final modules = resultats[0] as List<ModuleAvecLecons>;
+      final detail = resultats[1] as CoursDetailInfo;
+      final lecons = modules.expand((m) => m.lecons).toList();
+      if (!mounted) return;
+      setState(() {
+        _totalLecons = lecons.length;
+        _leconsCompletees = lecons.where((l) => l.estTerminee).length;
+        _niveau = detail.niveau;
+        _enseignantNom = detail.enseignantNom;
+      });
+    } catch (_) {
+      // Échec silencieux — repli sur le texte générique (`_sousTitre`),
+      // aucune valeur inventée affichée à la place.
+    }
+  }
+
+  String get _sousTitre {
+    final total = _totalLecons;
+    final completees = _leconsCompletees;
+    if (total == null || total == 0) return "Espace d'apprentissage";
+    final pourcentage = (completees! / total * 100).round();
+    final niveau = _niveau;
+    if (niveau != null && niveau.isNotEmpty) return '$niveau · $total leçons · $pourcentage% complété';
+    return '$total leçons · $pourcentage% complété';
   }
 
   @override
@@ -139,10 +192,14 @@ class _CoursDetailTabsState extends State<CoursDetailTabs> with SingleTickerProv
                 padding: EdgeInsets.fromLTRB(YkSpacing.xxs, YkSpacing.xxs, YkSpacing.md, 0),
                 child: Row(
                   children: [
-                    IconButton(
-                      icon: Icon(Icons.arrow_back_ios_new_rounded, color: YkColors.textPrimary(context), size: 20),
+                    YkIconButton(
+                      icon: Icons.arrow_back_ios_new_rounded,
+                      label: 'Retour',
+                      variant: YkIconButtonVariant.outlined,
+                      iconSize: 18,
                       onPressed: () => Navigator.pop(context),
                     ),
+                    SizedBox(width: YkSpacing.xs),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -155,10 +212,10 @@ class _CoursDetailTabsState extends State<CoursDetailTabs> with SingleTickerProv
                           ),
                           Row(
                             children: [
-                              Container(width: 7, height: 7, decoration: BoxDecoration(color: _courseColor, shape: BoxShape.circle)),
+                              ClipOval(child: Container(width: 7, height: 7, color: _courseColor)),
                               SizedBox(width: YkSpacing.xxs),
                               Text(
-                                "Espace d'apprentissage",
+                                _sousTitre,
                                 style: YkTypography.caption(context).copyWith(color: YkColors.textSecondary(context)),
                               ),
                             ],
@@ -166,7 +223,14 @@ class _CoursDetailTabsState extends State<CoursDetailTabs> with SingleTickerProv
                         ],
                       ),
                     ),
-                    YkRepetiteurButton(compact: true, onPressed: () => context.pushNamed(AppRoute.repetiteurs)),
+                    SizedBox(width: YkSpacing.xs),
+                    YkIconButton(
+                      icon: _favori ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
+                      label: _favori ? 'Retirer des favoris' : 'Ajouter aux favoris',
+                      variant: _favori ? YkIconButtonVariant.tonal : YkIconButtonVariant.outlined,
+                      iconSize: 18,
+                      onPressed: () => setState(() => _favori = !_favori),
+                    ),
                   ],
                 ),
               ),
@@ -202,6 +266,7 @@ class _CoursDetailTabsState extends State<CoursDetailTabs> with SingleTickerProv
           onNaviguerExercices: _naviguerVersExercicesAvecFiltre,
           isPremium: widget.isPremium,
           courseColor: _courseColor,
+          enseignantNom: _enseignantNom,
         ),
         widget.isPremium
             ? ExercicesCoursPage(

@@ -39,6 +39,15 @@ class PaiementRepository {
     return ParametresPublics.fromJson(Map<String, dynamic>.from(data as Map));
   }
 
+  /// Statut de l'abonnement Premium de l'apprenant connecté + tarifs réels
+  /// (`AbonnementPremium.TARIFS` côté backend) — endpoint déjà existant
+  /// mais jamais appelé jusqu'ici (bug corrigé : aucune vitrine Premium
+  /// dans l'app malgré un moteur backend complet).
+  Future<Map<String, dynamic>> statutAbonnement() async {
+    final data = await _api.get(PaiementEndpoints.abonnementStatut);
+    return Map<String, dynamic>.from(data as Map);
+  }
+
   /// Soumission d'une demande de paiement manuel — `payload` porte à la
   /// fois les champs génériques du flux (`operateur`/`id_transaction`/
   /// `montant`/`numero_emetteur`, fournis par `YkManualPaymentFlow`) et
@@ -58,7 +67,7 @@ class PaiementRepository {
       PaiementEndpoints.paiementsManuelMesDemandes,
       query: statut != null ? {'statut': statut} : null,
     );
-    final results = Map<String, dynamic>.from(data as Map)['results'] as List? ?? [];
+    final results = data is List ? data : (data['results'] as List? ?? []);
     return results
         .map((e) => DemandePaiementManuel.fromJson(Map<String, dynamic>.from(e as Map)))
         .toList();
@@ -80,7 +89,7 @@ class PaiementRepository {
       PaiementEndpoints.serviceClientPaiements,
       query: statut != null ? {'statut': statut} : null,
     );
-    final results = Map<String, dynamic>.from(data as Map)['results'] as List? ?? [];
+    final results = data is List ? data : (data['results'] as List? ?? []);
     return results
         .map((e) => DemandePaiementManuel.fromJson(Map<String, dynamic>.from(e as Map)))
         .toList();
@@ -109,7 +118,7 @@ class PaiementRepository {
       PaiementEndpoints.serviceClientRetraits,
       query: statut != null ? {'statut': statut} : null,
     );
-    final results = Map<String, dynamic>.from(data as Map)['results'] as List? ?? [];
+    final results = data is List ? data : (data['results'] as List? ?? []);
     return results.map((e) => DemandeRetrait.fromJson(Map<String, dynamic>.from(e as Map))).toList();
   }
 

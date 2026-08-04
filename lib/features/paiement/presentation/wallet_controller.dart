@@ -46,7 +46,8 @@ class WalletController extends ChangeNotifier {
             },
           )
           .toList();
-    } catch (_) {
+    } catch (e) {
+      debugPrint('WalletController.charger() — exception non-ApiException : ${e.runtimeType} : $e');
       enErreur = true;
     } finally {
       chargement = false;

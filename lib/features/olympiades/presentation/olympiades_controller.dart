@@ -43,7 +43,8 @@ class OlympiadesController extends ChangeNotifier {
     } on ApiException catch (e) {
       erreurMessage = e.message;
       etat = OlympiadesEtat.erreur;
-    } catch (_) {
+    } catch (e) {
+      debugPrint('OlympiadesController.charger() — exception non-ApiException : ${e.runtimeType} : $e');
       erreurMessage = 'Impossible de charger les olympiades. Vérifiez votre connexion.';
       etat = OlympiadesEtat.erreur;
     }

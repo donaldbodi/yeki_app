@@ -5,13 +5,17 @@
 // à la Yéki », CDC_DESIGN §5.3.5 — composant prêt mais jamais câblé avant
 // ce ticket, voir `lib/core/design/components/media/yk_lesson_feed.dart`).
 //
-// Gating gratuit/premium : `estAccessible` (dérivé par l'appelant de
-// `DepartementItem.estAccessible`, PAS un abonnement séparé — décision
-// utilisateur explicite du 2026-07-29, aucun autre signal d'accès réel
-// n'existe côté backend). Accessible → vidéo ; non accessible → pas de
-// vidéo, le bouton "Support PDF" (toujours visible si la leçon a un PDF)
-// reste l'unique façon de consulter le contenu, via `LectureLeconPage` et
-// son filigrane dynamique.
+// Gating gratuit/premium : DEUX signaux distincts, pas un seul (correction
+// d'un commentaire précédent qui n'en connaissait qu'un). `estAccessible`
+// (dérivé par l'appelant de `DepartementItem.estAccessible`) gate l'accès
+// au DÉPARTEMENT/cours lui-même. Indépendamment, `LeconItem.
+// videoVerrouille` (backend : `AccesService.peut_voir_video_lecon`,
+// CDC_BACKEND §6.2) gate spécifiquement la VIDÉO d'une leçon par abonnement
+// Premium personnel — un cours peut être accessible (ex. Cursus, toujours
+// débloqué) tout en ayant sa vidéo cachée faute d'abonnement. Le bouton
+// "Support PDF" (toujours visible si la leçon a un PDF) reste l'unique
+// façon de consulter le contenu dans les deux cas de verrouillage, via
+// `LectureLeconPage` et son filigrane dynamique.
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -22,6 +26,7 @@ import 'package:yeki/core/constants/api_constants.dart';
 import 'package:yeki/core/design/components/components.dart';
 import 'package:yeki/core/design/tokens/tokens.dart';
 import 'package:yeki/core/router/route_names.dart';
+import 'package:yeki/features/paiement/presentation/ouvrir_abonnement.dart';
 import 'package:yeki/repositories/cours_repository.dart';
 import 'package:yeki/services/download_manager.dart';
 import 'package:yeki/views/pages/apprenants/lecon_models.dart';
@@ -422,6 +427,23 @@ class _LeconFeedCard extends StatelessWidget {
   }
 
   Widget _buildPlaceholder(BuildContext context) {
+    // Vidéo verrouillée par abonnement (existe mais cachée par le palier
+    // gratuit) — distinct de « pas de vidéo du tout » et du verrou
+    // département (`!estAccessible`), voir commentaire de tête du fichier.
+    final videoVerrouilleeParAbonnement = estAccessible && lecon.videoVerrouille;
+    final String message;
+    final IconData icone;
+    if (!estAccessible) {
+      message = 'Accédez à cette formation pour la vidéo';
+      icone = Icons.lock_outline_rounded;
+    } else if (videoVerrouilleeParAbonnement) {
+      message = 'Cette vidéo est réservée aux abonnés Premium';
+      icone = Icons.lock_outline_rounded;
+    } else {
+      message = 'Pas de vidéo pour cette leçon';
+      icone = Icons.menu_book_rounded;
+    }
+
     return Container(
       margin: EdgeInsets.symmetric(horizontal: YkSpacing.md),
       decoration: BoxDecoration(
@@ -436,17 +458,21 @@ class _LeconFeedCard extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              !estAccessible ? Icons.lock_outline_rounded : Icons.menu_book_rounded,
-              size: 56,
-              color: Colors.white.withValues(alpha: 0.6),
-            ),
+            Icon(icone, size: 56, color: Colors.white.withValues(alpha: 0.6)),
             SizedBox(height: YkSpacing.sm),
             Text(
-              !estAccessible ? 'Accédez à cette formation pour la vidéo' : 'Pas de vidéo pour cette leçon',
+              message,
               textAlign: TextAlign.center,
               style: YkTypography.bodySm(context).copyWith(color: Colors.white70),
             ),
+            if (videoVerrouilleeParAbonnement) ...[
+              SizedBox(height: YkSpacing.md),
+              YkButton(
+                label: "S'abonner",
+                icon: Icons.workspace_premium_rounded,
+                onPressed: () => ouvrirAbonnementPremium(context),
+              ),
+            ],
           ],
         ),
       ),

@@ -36,7 +36,7 @@ class OlympiadeRepository {
   /// par niveau côté serveur nativement (`OlympiadesPourMoiView`).
   Future<List<OlympiadeApprenant>> pourMoi() async {
     final data = await _api.get(EvaluationEndpoints.olympiadesPourMoi);
-    final results = Map<String, dynamic>.from(data as Map)['results'] as List? ?? [];
+    final results = data is List ? data : (data['results'] as List? ?? []);
     return results
         .map((o) => OlympiadeApprenant.fromJson(Map<String, dynamic>.from(o as Map)))
         .toList();
@@ -69,7 +69,7 @@ class OlympiadeRepository {
   /// tableau brut (corrigé ici).
   Future<List<ClassementOlympiadeEntry>> classement(int olympiadeId) async {
     final data = await _api.get(EvaluationEndpoints.olympiadesClassement(olympiadeId));
-    final results = Map<String, dynamic>.from(data as Map)['results'] as List? ?? [];
+    final results = data is List ? data : (data['results'] as List? ?? []);
     return results
         .map((e) => ClassementOlympiadeEntry.fromJson(Map<String, dynamic>.from(e as Map)))
         .toList();

@@ -100,6 +100,7 @@ class _DetailQuestionForumPageState extends State<DetailQuestionForumPage> {
       setState(() => _loading = false);
       if (mounted) ErrorHandler.showError(context, e.message);
     } catch (e) {
+      debugPrint('DetailsQuestionForum._loadQuestion() — exception non-ApiException : ${e.runtimeType} : $e');
       setState(() => _loading = false);
       if (mounted) ErrorHandler.showError(context, 'Erreur de chargement: $e');
     }
@@ -518,10 +519,7 @@ class _DetailQuestionForumPageState extends State<DetailQuestionForumPage> {
   Widget _buildReponseInput(BuildContext context) {
     return Container(
       padding: EdgeInsets.fromLTRB(YkSpacing.md, YkSpacing.sm, YkSpacing.md, YkSpacing.lg),
-      decoration: BoxDecoration(
-        color: YkColors.surface(context),
-        border: Border(top: BorderSide(color: YkColors.border(context))),
-      ),
+      color: YkColors.surface(context),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
@@ -584,14 +582,8 @@ class _DetailQuestionForumPageState extends State<DetailQuestionForumPage> {
           Positioned(
             right: 0,
             bottom: 0,
-            child: Container(
-              width: radius * 0.4,
-              height: radius * 0.4,
-              decoration: BoxDecoration(
-                color: accent,
-                shape: BoxShape.circle,
-                border: Border.all(color: YkColors.surface(context), width: 1.5),
-              ),
+            child: ClipOval(
+              child: Container(width: radius * 0.4, height: radius * 0.4, color: accent),
             ),
           ),
       ],

@@ -196,6 +196,20 @@ class _OlympiadesPageState extends State<OlympiadesPage> {
             SizedBox(height: YkSpacing.sm),
             _ligneDate(context, Icons.how_to_reg_rounded, 'Fin des inscriptions', o.dateClotureInscription),
             _ligneDate(context, Icons.play_circle_rounded, "Début de l'épreuve", o.dateDebutOlympiade),
+            _ligneTexte(
+              context,
+              Icons.groups_rounded,
+              'Participants',
+              '${o.nbInscrits} inscrit${o.nbInscrits > 1 ? 's' : ''}',
+            ),
+            _ligneTexte(
+              context,
+              Icons.payments_rounded,
+              "Frais d'inscription",
+              o.prixParticipation > 0 ? '${o.prixParticipation} FCFA' : 'Gratuit',
+            ),
+            if (o.recompense.isNotEmpty)
+              _ligneTexte(context, Icons.emoji_events_rounded, 'Récompense', o.recompense),
             if (inscriptionOuverteEtAVenir) ...[
               SizedBox(height: YkSpacing.sm),
               YkCountdown(
@@ -251,6 +265,30 @@ class _OlympiadesPageState extends State<OlympiadesPage> {
             child: Text(
               _dateFmt.format(valeur),
               style: YkTypography.bodySm(context).copyWith(fontWeight: FontWeight.w600),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Même motif visuel que [_ligneDate], pour une valeur déjà textuelle
+  /// (participants, frais, récompense) — champs réels du modèle,
+  /// chargés mais jamais affichés jusqu'ici.
+  Widget _ligneTexte(BuildContext context, IconData icon, String label, String valeur) {
+    return Padding(
+      padding: EdgeInsets.only(top: YkSpacing.xxs),
+      child: Row(
+        children: [
+          Icon(icon, size: 14, color: YkColors.textTertiary(context)),
+          SizedBox(width: YkSpacing.xs),
+          Text('$label : ', style: YkTypography.bodySm(context).copyWith(color: YkColors.textSecondary(context))),
+          Expanded(
+            child: Text(
+              valeur,
+              style: YkTypography.bodySm(context).copyWith(fontWeight: FontWeight.w600),
+              maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
           ),

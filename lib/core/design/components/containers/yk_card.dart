@@ -22,6 +22,7 @@ class YkCard extends StatelessWidget {
     this.padding,
     this.accentColor,
     this.semanticLabel,
+    this.gradient,
   });
 
   final Widget child;
@@ -35,9 +36,19 @@ class YkCard extends StatelessWidget {
   /// Libellé Semantics si la carte est cliquable ; sans objet sinon.
   final String? semanticLabel;
 
+  /// Remplissage en dégradé (carte « héro », ex. reprise de lecture mise en
+  /// avant) — uniquement pris en compte pour [YkCardVariant.elevated].
+  /// Toujours construit à partir de tokens `YkColors` par l'appelant,
+  /// jamais une valeur inventée.
+  final Gradient? gradient;
+
   @override
   Widget build(BuildContext context) {
-    final radius = BorderRadius.circular(YkRadius.md);
+    // `YkRadius.lg` (20) — le rayon que le token lui-même documente pour
+    // « grande carte » (`radius.dart`), pas `.md` (16, plutôt bouton/tuile
+    // interne) : ce contraste de rayon entre la carte et son contenu
+    // (icône, avatar) est ce que la maquette utilise systématiquement.
+    final radius = BorderRadius.circular(YkRadius.lg);
     final content = Padding(
       padding: padding ?? EdgeInsets.all(YkSpacing.md),
       child: child,
@@ -47,11 +58,17 @@ class YkCard extends StatelessWidget {
     switch (variant) {
       case YkCardVariant.elevated:
         card = Container(
+          clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
-            color: YkColors.surface(context),
+            color: gradient == null ? YkColors.surface(context) : null,
+            gradient: gradient,
             borderRadius: radius,
             boxShadow: YkElevation.e1,
-            border: accentColor != null ? Border.all(color: accentColor!, width: 1) : null,
+            // Bordure neutre systématique (maquette : la couleur du cours
+            // reste confinée à la tuile d'icône/badge/barre de progression,
+            // jamais à la bordure de la carte elle-même) — `accentColor`
+            // n'affecte plus ce variant, seulement `filled`/`outlined`/`glass`.
+            border: Border.all(color: YkColors.border(context), width: 1),
           ),
           child: content,
         );

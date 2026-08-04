@@ -34,6 +34,11 @@ class YkColors {
   static const error = Color(0xFFB6332B);
   static const info = Color(0xFF2F8CB1);
 
+  // Rôle "Administrateur Général" (badge de rôle enseignant) — pas de
+  // variante sombre documentée dans la maquette, cohérent avec success/
+  // warning/error/info ci-dessus qui n'en ont pas non plus.
+  static const violet = Color(0xFF7C3AED);
+
   // Neutres — légèrement teintés en 203,5° (un gris pur à côté d'un
   // bleu-pétrole paraît sale).
   static const neutral0 = Color(0xFFFCFDFD);
@@ -108,6 +113,21 @@ class YkColors {
   /// `primary`).
   static Color onAccent(BuildContext context) =>
       isDark(context) ? primary900 : textOnPrimary;
+
+  // ── Or/XP (gamification) ─────────────────────────────────────────────
+  // Réservé exclusivement à la gamification (XP, séries, badges,
+  // classement) — jamais utilisé comme couleur de marque/action, pour
+  // garder son poids sémantique distinct de la primaire.
+  static const _goldLight = Color(0xFFC98F35);
+  static const _goldDark = Color(0xFFE2A84B);
+  static const _goldSoftLight = Color(0xFFFAF0DE);
+  static const _goldSoftDark = Color(0xFF33291A);
+
+  static Color gold(BuildContext context) =>
+      isDark(context) ? _goldDark : _goldLight;
+
+  static Color goldSoft(BuildContext context) =>
+      isDark(context) ? _goldSoftDark : _goldSoftLight;
 
   // ── Splash (P5.1) ────────────────────────────────────────────────────
   // Identité visuelle propre à l'écran Splash (maquette, écran 19) — PAS

@@ -27,10 +27,16 @@ class YkMotion {
   static const Duration slow = Duration(milliseconds: 400);
   static const Duration celebrate = Duration(milliseconds: 700);
 
+  /// Courbe signature — CDC_DESIGN (maquette), reprise à l'identique pour
+  /// CHAQUE transition dans les 5 fichiers de la maquette
+  /// (`cubic-bezier(0.33,1,0.68,1)`, un ease-out-cubic précis, distinct des
+  /// courbes génériques Flutter `easeOutCubic`/`easeInOutCubic`).
+  static const Curve brandCurve = Cubic(0.33, 1.0, 0.68, 1.0);
+
   static const Curve instantCurve = Curves.easeOut;
-  static const Curve fastCurve = Curves.easeOutCubic;
-  static const Curve normalCurve = Curves.easeInOutCubic;
-  static const Curve slowCurve = Curves.easeInOutCubic;
+  static const Curve fastCurve = brandCurve;
+  static const Curve normalCurve = brandCurve;
+  static const Curve slowCurve = brandCurve;
   static const Curve celebrateCurve = Curves.elasticOut;
 
   static Duration _base(YkMotionSpeed speed) {

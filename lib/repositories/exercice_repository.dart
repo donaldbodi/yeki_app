@@ -58,7 +58,7 @@ class ExerciceRepository {
   /// objets au même format que `ResultatExercice.historique`.
   Future<List<TentativeHistorique>> historique(int exerciceId) async {
     final data = await _api.get(EvaluationEndpoints.evaluationsExerciceHistorique(exerciceId));
-    final results = Map<String, dynamic>.from(data as Map)['results'] as List? ?? [];
+    final results = data is List ? data : (data['results'] as List? ?? []);
     return results
         .map((t) => TentativeHistorique.fromJson(Map<String, dynamic>.from(t as Map)))
         .toList();
@@ -89,8 +89,17 @@ class ExerciceRepository {
 
   /// Modules (et leurs leçons) d'un cours — alimente les dropdowns de
   /// filtre et de ciblage d'exercice.
+  ///
+  /// Bug corrigé : appelait `FormationEndpoints.coursModules`
+  /// (`/cours/{id}/modules/`), une route qui n'accepte que `POST` côté
+  /// backend (`ModuleCreateView`) — un `GET` y renvoyait systématiquement
+  /// 405, faisant échouer TOUT chargement de l'onglet Exercices. Le bon
+  /// endpoint (`coursListeModules`, `/cours/{id}/liste-modules/`) est
+  /// déjà celui utilisé par `CoursRepository.modules()` pour l'onglet
+  /// Leçons — même forme de réponse (id/titre/lecons), compatible avec
+  /// `ModuleOption`/`LeconOption` ci-dessous.
   Future<List<ModuleOption>> listerModules(int coursId) async {
-    final data = await _api.get(FormationEndpoints.coursModules(coursId));
+    final data = await _api.get(FormationEndpoints.coursListeModules(coursId));
     final list = data as List;
     return list.map((m) => ModuleOption.fromJson(Map<String, dynamic>.from(m as Map))).toList();
   }

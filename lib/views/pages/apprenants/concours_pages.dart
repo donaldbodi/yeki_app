@@ -229,10 +229,15 @@ class _ConcoursPageState extends State<ConcoursPage> {
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                CircleAvatar(
-                  radius: 20,
-                  backgroundColor: couleur.withValues(alpha: 0.12),
-                  child: Icon(_iconePourConcours(titre), color: couleur, size: 20),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(YkRadius.md),
+                  child: Container(
+                    width: 50,
+                    height: 50,
+                    color: couleur.withValues(alpha: 0.12),
+                    alignment: Alignment.center,
+                    child: Icon(_iconePourConcours(titre), color: couleur, size: 24),
+                  ),
                 ),
                 SizedBox(width: YkSpacing.sm),
                 Expanded(
@@ -278,24 +283,24 @@ class _ConcoursPageState extends State<ConcoursPage> {
               ),
             ],
             SizedBox(height: YkSpacing.sm),
-            Container(
-              padding: EdgeInsets.symmetric(horizontal: YkSpacing.sm, vertical: YkSpacing.xs),
-              decoration: BoxDecoration(
+            ClipRRect(
+              borderRadius: BorderRadius.circular(YkRadius.sm),
+              child: Container(
+                padding: EdgeInsets.symmetric(horizontal: YkSpacing.sm, vertical: YkSpacing.xs),
                 color: YkColors.surfaceVariant(context),
-                borderRadius: BorderRadius.circular(YkRadius.sm),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  _infoIcone(
-                    context,
-                    Icons.calendar_month_rounded,
-                    dept.dateExamen?.toString().substring(0, 10) ?? 'À définir',
-                  ),
-                  if (dept.placesDisponibles != null)
-                    _infoIcone(context, Icons.event_seat_rounded, '${dept.placesDisponibles} pl.'),
-                  _infoIcone(context, Icons.layers_rounded, '${dept.nbCours} mod.'),
-                ],
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    _infoIcone(
+                      context,
+                      Icons.calendar_month_rounded,
+                      dept.dateExamen?.toString().substring(0, 10) ?? 'À définir',
+                    ),
+                    if (dept.placesDisponibles != null)
+                      _infoIcone(context, Icons.event_seat_rounded, '${dept.placesDisponibles} pl.'),
+                    _infoIcone(context, Icons.layers_rounded, '${dept.nbCours} mod.'),
+                  ],
+                ),
               ),
             ),
             SizedBox(height: YkSpacing.sm),

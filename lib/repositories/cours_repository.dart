@@ -4,7 +4,8 @@ import 'package:yeki/core/design/components/inputs/yk_file_upload.dart' show YkP
 import 'package:yeki/core/network/api_client.dart';
 import 'package:yeki/core/network/api_endpoints.dart';
 import 'package:yeki/views/pages/apprenants/formations_models.dart' show CoursItem;
-import 'package:yeki/views/pages/apprenants/lecon_models.dart' show ModuleAvecLecons, SupplementCoursItem;
+import 'package:yeki/views/pages/apprenants/lecon_models.dart'
+    show CoursDetailInfo, ModuleAvecLecons, SupplementCoursItem;
 
 /// Cours — modules/leçons ajoutés en P11.4 (migration de `lecons_cours.dart`,
 /// `detail_lecon_page.dart`, `lecture_lecon_page.dart`, qui appelaient
@@ -20,6 +21,14 @@ class CoursRepository {
     return list
         .map((e) => CoursItem.fromJson(Map<String, dynamic>.from(e as Map)))
         .toList();
+  }
+
+  /// Niveau + enseignant principal — `GET coursUpdate` (déjà utilisé en
+  /// PATCH ; `CoursUpdateView` sert aussi le GET, `IsAuthenticated` sans
+  /// restriction de rôle).
+  Future<CoursDetailInfo> detail(int coursId) async {
+    final data = await _api.get(FormationEndpoints.coursUpdate(coursId));
+    return CoursDetailInfo.fromJson(Map<String, dynamic>.from(data as Map));
   }
 
   Future<List<ModuleAvecLecons>> modules(int coursId) async {

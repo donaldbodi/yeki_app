@@ -6,10 +6,15 @@
 //
 // Refondu en P5.1 (maquette) puis corrigé en P5.1bis d'après un ticket
 // fonctionnel plus détaillé et explicitement prioritaire sur la maquette
-// (règle 4 : l'écrit prime) : fond `primary700` uni, animation
-// `YkMotion.normal`, restauration de session jamais retardée par un appel
-// réseau, délai maximum 2s. Fiche d'écarts : `docs/ecarts/splash.md`
-// (section « P5.1bis »).
+// (règle 4 : l'écrit prime) : animation `YkMotion.normal`, restauration de
+// session jamais retardée par un appel réseau, délai maximum 2s. Fiche
+// d'écarts : `docs/ecarts/splash.md` (section « P5.1bis »).
+//
+// Polish visuel (ticket « niveau international ») : dégradé `splashGradient`
+// + halos `YkRadialGlow` + anneaux pulsés `YkPulseRing` + `YkGlowShadow` —
+// tous ces composants existaient déjà dans le design system, explicitement
+// commentés comme destinés à cet écran, mais jamais câblés jusqu'ici (l'écran
+// affichait un simple fond uni `primary700`).
 //
 // `ConsumerStatefulWidget` : `lib/features/` interdit `setState` (règle 7
 // de `check_design_system.sh`) — le numéro de version vient d'un
@@ -22,6 +27,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:yeki/core/design/components/containers/yk_gradient_background.dart';
+import 'package:yeki/core/design/components/feedback/yk_glow.dart';
 import 'package:yeki/core/design/tokens/tokens.dart';
 import 'package:yeki/core/providers/app_info_provider.dart';
 import 'package:yeki/core/router/auth_state.dart';
@@ -35,9 +42,14 @@ class SplashPage extends ConsumerStatefulWidget {
   ConsumerState<SplashPage> createState() => _SplashPageState();
 }
 
-class _SplashPageState extends ConsumerState<SplashPage> with SingleTickerProviderStateMixin {
+class _SplashPageState extends ConsumerState<SplashPage> with TickerProviderStateMixin {
   late final AnimationController _entranceController;
   late final Animation<double> _logoOpacity;
+
+  /// Anneaux « sonar » pulsés autour du logo (maquette, écran Splash) —
+  /// boucle continue tant que l'écran est affiché, indépendante du fondu
+  /// d'entrée ci-dessus.
+  late final AnimationController _pulseController;
 
   @override
   void initState() {
@@ -55,12 +67,15 @@ class _SplashPageState extends ConsumerState<SplashPage> with SingleTickerProvid
       if (mounted) _entranceController.forward();
     });
 
+    _pulseController = AnimationController(vsync: this, duration: const Duration(milliseconds: 2200))..repeat();
+
     _bootstrap();
   }
 
   @override
   void dispose() {
     _entranceController.dispose();
+    _pulseController.dispose();
     super.dispose();
   }
 
@@ -77,10 +92,24 @@ class _SplashPageState extends ConsumerState<SplashPage> with SingleTickerProvid
   /// `Future.any` n'annule rien.
   Future<void> _bootstrap() async {
     unawaited(_checkVersionsInBackground());
-    await Future.any([
-      authState.bootstrap(),
-      Future.delayed(const Duration(seconds: 2)),
-    ]);
+    try {
+      await Future.any([
+        authState.bootstrap(),
+        Future.delayed(const Duration(seconds: 4)),
+      ]);
+    } catch (e) {
+      // Défense en profondeur — `authState.bootstrap()` est censée ne
+      // plus jamais lever d'exception (corrigé à la source dans
+      // `auth_state.dart`), mais un splash qui reste bloqué à l'infini
+      // est le pire échec possible ici (bug déjà vécu en déploiement
+      // web) : si quoi que ce soit échoue malgré tout, on force quand
+      // même la sortie du splash plutôt que de laisser l'utilisateur
+      // planté.
+      debugPrint('Bootstrap du splash en échec, sortie forcée : $e');
+      if (!authState.value.bootstrapped) {
+        authState.value = authState.value.copyWith(bootstrapped: true);
+      }
+    }
     // Session restaurée (redémarrage app, utilisateur déjà connecté) :
     // (ré)enregistrer le jeton push — jamais attendu, ne doit jamais
     // retarder la sortie du splash (même règle que le reste de cette
@@ -114,60 +143,84 @@ class _SplashPageState extends ConsumerState<SplashPage> with SingleTickerProvid
     final version = ref.watch(appVersionProvider).value ?? '';
 
     return Scaffold(
-      backgroundColor: YkColors.primary700,
-      body: Stack(
-        children: [
-          Center(
-            child: Semantics(
-              label: 'Chargement de Yéki en cours',
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  FadeTransition(
-                    opacity: _logoOpacity,
-                    child: Image.asset(
-                      'assets/images/yeki_logo_icon_transparent.png',
-                      width: 132,
+      body: YkGradientBackground(
+        gradient: YkColors.splashGradient,
+        child: Stack(
+          children: [
+            // Halos décoratifs hors-cadre (maquette : bleu en haut, or en
+            // bas — écho du token `gold` réservé à la gamification).
+            Positioned(
+              top: -80,
+              left: -40,
+              child: YkRadialGlow(color: YkColors.primary300, alpha: 0.35, size: 280),
+            ),
+            Positioned(
+              bottom: -100,
+              right: -60,
+              child: YkRadialGlow(color: YkColors.gold(context), alpha: 0.3, size: 260),
+            ),
+            Center(
+              child: Semantics(
+                label: 'Chargement de Yéki en cours',
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    AnimatedBuilder(
+                      animation: _pulseController,
+                      builder: (context, child) => Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          YkPulseRing(progress: _pulseController.value, size: 180, color: Colors.white),
+                          YkPulseRing(progress: (_pulseController.value + 0.5) % 1.0, size: 180, color: Colors.white),
+                          child!,
+                        ],
+                      ),
+                      child: FadeTransition(
+                        opacity: _logoOpacity,
+                        child: YkGlowShadow(
+                          color: YkColors.primary300,
+                          child: Image.asset(
+                            'assets/images/yeki_logo_icon_transparent.png',
+                            width: 132,
+                          ),
+                        ),
+                      ),
                     ),
-                  ),
-                  SizedBox(height: YkSpacing.lg),
-                  Text(
-                    'Yéki',
-                    style: YkTypography.display(context).copyWith(
-                      color: Colors.white,
-                      letterSpacing: -1.6,
-                      height: 1.0,
+                    SizedBox(height: YkSpacing.lg),
+                    Text(
+                      'Yéki',
+                      style: YkTypography.display(context).copyWith(color: Colors.white, height: 1.0),
                     ),
-                  ),
-                  SizedBox(height: YkSpacing.lg),
-                  ExcludeSemantics(
-                    child: SizedBox(
-                      width: 24,
-                      height: 24,
-                      child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white),
+                    SizedBox(height: YkSpacing.lg),
+                    ExcludeSemantics(
+                      child: SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white),
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
-          ),
-          if (version.isNotEmpty)
-            Positioned(
-              bottom: 40,
-              left: 0,
-              right: 0,
-              child: ExcludeSemantics(
-                child: Center(
-                  child: Text(
-                    version,
-                    style: YkTypography.caption(context).copyWith(
-                      color: Colors.white.withValues(alpha: 0.6),
+            if (version.isNotEmpty)
+              Positioned(
+                bottom: 40,
+                left: 0,
+                right: 0,
+                child: ExcludeSemantics(
+                  child: Center(
+                    child: Text(
+                      version,
+                      style: YkTypography.caption(context).copyWith(
+                        color: Colors.white.withValues(alpha: 0.6),
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }

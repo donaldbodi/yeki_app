@@ -13,8 +13,10 @@ import 'package:go_router/go_router.dart';
 import 'package:yeki/core/design/components/components.dart';
 import 'package:yeki/core/design/tokens/tokens.dart';
 import 'package:yeki/core/router/route_names.dart';
+import 'package:yeki/features/paiement/presentation/ouvrir_abonnement.dart';
 import 'package:yeki/repositories/auth_repository.dart';
 import 'package:yeki/repositories/classement_repository.dart';
+import 'package:yeki/repositories/paiement_repository.dart';
 
 class ProfilPage extends StatefulWidget {
   const ProfilPage({super.key});
@@ -28,6 +30,7 @@ class _ProfilPageState extends State<ProfilPage> with SingleTickerProviderStateM
   Map<String, dynamic> _profil = {};
   Map<String, dynamic> _stats = {};
   Map<String, dynamic> _classement = {};
+  Map<String, dynamic> _abonnement = {};
   String _userType = '';
 
   late final _animCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 600));
@@ -55,6 +58,11 @@ class _ProfilPageState extends State<ProfilPage> with SingleTickerProviderStateM
       final resultats = await Future.wait([
         AuthRepository().profilStats(),
         if (!estEnseignant) ClassementRepository().monScore() else Future.value(<String, dynamic>{}),
+        // Bug corrigé (modèle économique non opérationnel) : la vitrine
+        // Premium n'existait nulle part hors des écrans réactifs déjà
+        // verrouillés (Devoirs/Forum) — statut récupéré ici pour la
+        // bannière « Devenir Premium » (_banniérePremium).
+        if (!estEnseignant) PaiementRepository().statutAbonnement() else Future.value(<String, dynamic>{}),
       ]);
 
       if (!mounted) return;
@@ -63,6 +71,7 @@ class _ProfilPageState extends State<ProfilPage> with SingleTickerProviderStateM
         _userType = userType;
         _stats = resultats[0];
         _classement = resultats[1];
+        _abonnement = resultats[2];
       });
       _animCtrl.forward();
     } catch (_) {
@@ -72,6 +81,8 @@ class _ProfilPageState extends State<ProfilPage> with SingleTickerProviderStateM
   }
 
   bool get _isEnseignant => _userType.contains('enseignant') || _userType == 'admin';
+
+  bool get _estPremium => _abonnement['actif'] == true;
 
   String get _nomComplet {
     final fn = _profil['first_name']?.toString() ?? '';
@@ -181,6 +192,10 @@ class _ProfilPageState extends State<ProfilPage> with SingleTickerProviderStateM
         children: [
           SizedBox(height: YkSpacing.lg),
           _stats_(context),
+          if (!_isEnseignant && !_estPremium) ...[
+            SizedBox(height: YkSpacing.md),
+            _bannierePremium(context),
+          ],
           SizedBox(height: YkSpacing.lg),
           _infosPerso(context),
           SizedBox(height: YkSpacing.md),
@@ -219,6 +234,42 @@ class _ProfilPageState extends State<ProfilPage> with SingleTickerProviderStateM
             Expanded(child: YkStatCard(icon: items[i].$1, label: items[i].$2, value: items[i].$3)),
           ],
         ],
+      ),
+    );
+  }
+
+  /// Bannière « Devenir Premium » — bug corrigé (modèle économique non
+  /// opérationnel) : aucun point de découverte proactif n'existait hors
+  /// des écrans réactifs déjà verrouillés (Devoirs/Forum), un apprenant
+  /// qui n'y tombait jamais ignorait que Premium existe. Masquée si déjà
+  /// abonné (`_estPremium`, `PaiementRepository.statutAbonnement()`).
+  Widget _bannierePremium(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: YkSpacing.md),
+      child: YkCard(
+        onTap: () => ouvrirAbonnementPremium(context),
+        child: Row(
+          children: [
+            Icon(Icons.workspace_premium_rounded, color: YkColors.accent(context), size: 28),
+            SizedBox(width: YkSpacing.sm),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Devenir Premium',
+                    style: YkTypography.label(context).copyWith(color: YkColors.textPrimary(context)),
+                  ),
+                  Text(
+                    'Vidéos, devoirs, forum et Yéki IA sans limite.',
+                    style: YkTypography.bodySm(context).copyWith(color: YkColors.textSecondary(context)),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right_rounded, color: YkColors.textSecondary(context)),
+          ],
+        ),
       ),
     );
   }

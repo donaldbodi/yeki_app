@@ -44,7 +44,12 @@ class PasserExerciceController extends ChangeNotifier {
       try {
         demarrage = await _repo.demarrer(exerciceId);
       } on ApiException catch (e) {
-        if (e.statusCode == 403) {
+        // 403 recouvre 2 cas distincts côté backend : tentatives épuisées
+        // (corps `{tentatives_epuisees: true, ...}`, hors enveloppe
+        // standard) et accès Premium refusé (`AccesMatricePermission`,
+        // aucune clé `tentatives_epuisees`) — ne pas les confondre, sinon
+        // un apprenant non-Premium voit à tort « tentatives épuisées ».
+        if (e.statusCode == 403 && e.fields['tentatives_epuisees'] == true) {
           tentativesEpuisees = true;
         } else {
           rethrow;
@@ -71,7 +76,8 @@ class PasserExerciceController extends ChangeNotifier {
     } on ApiException catch (e) {
       erreurMessage = e.message;
       etat = PasserExerciceEtat.erreur;
-    } catch (_) {
+    } catch (e) {
+      debugPrint('PasserExerciceController.charger() — exception non-ApiException : ${e.runtimeType} : $e');
       erreurMessage = "Impossible de charger l'exercice. Vérifiez votre connexion.";
       etat = PasserExerciceEtat.erreur;
     }

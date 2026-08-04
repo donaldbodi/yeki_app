@@ -22,6 +22,7 @@ import 'package:intl/intl.dart';
 import 'package:yeki/core/design/components/components.dart';
 import 'package:yeki/core/design/tokens/tokens.dart';
 import 'package:yeki/core/router/route_names.dart';
+import 'package:yeki/features/paiement/presentation/paiement_page.dart' show PaiementType;
 import 'package:yeki/views/pages/apprenants/formations_models.dart' show DepartementItem;
 
 import 'concours_detail_controller.dart';
@@ -384,33 +385,59 @@ class _TabInfos extends StatelessWidget {
           child: YkCard(
             variant: YkCardVariant.filled,
             accentColor: dept.prix == 0 ? YkColors.success : YkColors.warning,
-            child: Row(
+            child: Column(
               children: [
-                Icon(
-                  dept.prix == 0 ? Icons.lock_open_outlined : Icons.lock_outline,
-                  color: dept.prix == 0 ? YkColors.success : YkColors.warning,
-                  size: 28,
+                Row(
+                  children: [
+                    Icon(
+                      dept.prix == 0 ? Icons.lock_open_outlined : Icons.lock_outline,
+                      color: dept.prix == 0 ? YkColors.success : YkColors.warning,
+                      size: 28,
+                    ),
+                    SizedBox(width: YkSpacing.sm),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            dept.prix == 0 ? 'Accès gratuit' : '${dept.prix} FCFA',
+                            style: YkTypography.h4(
+                              context,
+                            ).copyWith(color: dept.prix == 0 ? YkColors.success : YkColors.warning),
+                          ),
+                          Text(
+                            dept.prix == 0
+                                ? 'Cette préparation est entièrement gratuite'
+                                : (dept.estAccessible
+                                    ? 'Accès déjà débloqué'
+                                    : 'Paiement unique pour accéder à tous les cours'),
+                            style: YkTypography.bodySm(context).copyWith(color: YkColors.textSecondary(context)),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-                SizedBox(width: YkSpacing.sm),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        dept.prix == 0 ? 'Accès gratuit' : '${dept.prix} FCFA',
-                        style: YkTypography.h4(
-                          context,
-                        ).copyWith(color: dept.prix == 0 ? YkColors.success : YkColors.warning),
-                      ),
-                      Text(
-                        dept.prix == 0
-                            ? 'Cette préparation est entièrement gratuite'
-                            : 'Paiement unique pour accéder à tous les cours',
-                        style: YkTypography.bodySm(context).copyWith(color: YkColors.textSecondary(context)),
-                      ),
-                    ],
+                // Bug corrigé (modèle économique non opérationnel) : `dept.
+                // prix` n'était utilisé qu'à l'affichage, aucun bouton ne
+                // menait réellement à `PaiementPage(type: accesDepartement)`,
+                // pourtant déjà entièrement construite.
+                if (dept.prix > 0 && !dept.estAccessible) ...[
+                  SizedBox(height: YkSpacing.sm),
+                  YkButton(
+                    label: 'Payer maintenant',
+                    icon: Icons.lock_open_rounded,
+                    onPressed: () => context.pushNamed(
+                      AppRoute.paiement,
+                      queryParameters: {
+                        'type': PaiementType.accesDepartement.name,
+                        'departementId': dept.id.toString(),
+                        'titre': dept.nom,
+                        'montant': dept.prix.toString(),
+                      },
+                    ),
                   ),
-                ),
+                ],
               ],
             ),
           ),

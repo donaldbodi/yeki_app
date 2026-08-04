@@ -25,12 +25,14 @@ class YkTypography {
     required double desktop,
     required FontWeight weight,
     required double height,
+    double? letterSpacing,
   }) {
     return TextStyle(
       fontFamily: 'Plus Jakarta Sans',
       fontSize: fluidSize(width, mobile, desktop),
       fontWeight: weight,
       height: height,
+      letterSpacing: letterSpacing,
     );
   }
 
@@ -41,6 +43,7 @@ class YkTypography {
     desktop: 44,
     weight: FontWeight.w800,
     height: 1.15,
+    letterSpacing: -1,
   );
 
   /// Titre d'écran.
@@ -48,8 +51,9 @@ class YkTypography {
     width: MediaQuery.sizeOf(context).width,
     mobile: 26,
     desktop: 34,
-    weight: FontWeight.w700,
+    weight: FontWeight.w800,
     height: 1.20,
+    letterSpacing: -0.6,
   );
 
   /// Titre de section.
@@ -57,8 +61,9 @@ class YkTypography {
     width: MediaQuery.sizeOf(context).width,
     mobile: 22,
     desktop: 27,
-    weight: FontWeight.w700,
+    weight: FontWeight.w800,
     height: 1.25,
+    letterSpacing: -0.3,
   );
 
   /// Titre de carte.
@@ -66,7 +71,7 @@ class YkTypography {
     width: MediaQuery.sizeOf(context).width,
     mobile: 19,
     desktop: 22,
-    weight: FontWeight.w600,
+    weight: FontWeight.w700,
     height: 1.30,
   );
 
@@ -75,7 +80,7 @@ class YkTypography {
     width: MediaQuery.sizeOf(context).width,
     mobile: 17,
     desktop: 19,
-    weight: FontWeight.w600,
+    weight: FontWeight.w700,
     height: 1.35,
   );
 
@@ -111,7 +116,7 @@ class YkTypography {
     width: MediaQuery.sizeOf(context).width,
     mobile: 14,
     desktop: 14,
-    weight: FontWeight.w600,
+    weight: FontWeight.w700,
     height: 1.20,
   );
 
@@ -120,7 +125,7 @@ class YkTypography {
     width: MediaQuery.sizeOf(context).width,
     mobile: 12,
     desktop: 12,
-    weight: FontWeight.w500,
+    weight: FontWeight.w700,
     height: 1.35,
   );
 
@@ -131,6 +136,7 @@ class YkTypography {
     desktop: 11,
     weight: FontWeight.w700,
     height: 1.20,
+    letterSpacing: 0.8,
   );
 
   /// Code, référence de transaction, ID.

@@ -32,7 +32,9 @@ import 'package:timeago/timeago.dart' as timeago;
 import 'package:yeki/core/constants/api_constants.dart';
 import 'package:yeki/core/design/components/components.dart';
 import 'package:yeki/core/design/tokens/tokens.dart';
+import 'package:yeki/core/network/api_exception.dart';
 import 'package:yeki/core/router/route_names.dart';
+import 'package:yeki/features/paiement/presentation/ouvrir_abonnement.dart';
 import 'package:yeki/repositories/forum_repository.dart';
 import 'package:yeki/utils/error_handler.dart';
 import 'package:yeki/widgets/forum_audio_player.dart';
@@ -211,6 +213,13 @@ class ForumPage extends StatefulWidget {
 class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin, WidgetsBindingObserver {
   final _repo = ForumRepository();
   bool _loading = true;
+
+  /// Bug corrigé : une erreur de chargement (le plus souvent le 403
+  /// « réservé aux abonnés Premium », `AccesMatricePermission` côté
+  /// backend) était avalée en silence (`debugPrint` seul) — l'écran
+  /// retombait sur `_buildEmptyState()`, indiscernable d'un forum
+  /// réellement vide. `null` = pas d'erreur.
+  String? _erreurMessage;
   List<QForum> _questions = [];
   String _sourceFiltre = 'tous';
   String _searchText = '';
@@ -313,11 +322,26 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin, Wi
       if (!mounted) return;
       setState(() {
         _questions = data.map((j) => QForum.fromJson(j)).toList();
+        _erreurMessage = null;
         _loading = false;
       });
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      if (!silent) {
+        setState(() {
+          _erreurMessage = e.message;
+          _loading = false;
+        });
+      }
     } catch (e) {
-      if (!silent && mounted) setState(() => _loading = false);
-      if (!silent) debugPrint('Erreur chargement questions: $e');
+      if (!mounted) return;
+      if (!silent) {
+        setState(() {
+          _erreurMessage = 'Impossible de charger le forum.';
+          _loading = false;
+        });
+        debugPrint('Erreur chargement questions: $e');
+      }
     }
   }
 
@@ -443,6 +467,16 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin, Wi
       return Container(
         color: YkColors.background(context),
         child: Center(child: YkProgress(shape: YkProgressShape.circular)),
+      );
+    }
+
+    final erreur = _erreurMessage;
+    if (erreur != null) {
+      return Container(
+        color: YkColors.background(context),
+        child: erreur == kMessagePremiumRequis
+            ? YkPremiumRequired(message: erreur, onSubscribe: () => ouvrirAbonnementPremium(context))
+            : YkErrorState(message: erreur, onRetry: () => _loadQuestions()),
       );
     }
 
@@ -650,13 +684,9 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin, Wi
           ),
           if (_selectedImageBytes != null) ...[
             SizedBox(height: YkSpacing.xs),
-            Container(
+            SizedBox(
               height: 80,
               width: double.infinity,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(YkRadius.sm),
-                border: Border.all(color: YkColors.border(context)),
-              ),
               child: Stack(
                 children: [
                   ClipRRect(
@@ -673,13 +703,12 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin, Wi
                     right: 4,
                     child: GestureDetector(
                       onTap: _removeImage,
-                      child: Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: BoxDecoration(
+                      child: ClipOval(
+                        child: Container(
+                          padding: const EdgeInsets.all(4),
                           color: Colors.black54,
-                          borderRadius: BorderRadius.circular(YkRadius.full),
+                          child: const Icon(Icons.close_rounded, size: 16, color: Colors.white),
                         ),
-                        child: const Icon(Icons.close_rounded, size: 16, color: Colors.white),
                       ),
                     ),
                   ),
@@ -689,28 +718,28 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin, Wi
           ],
           if (_selectedAudioBytes != null) ...[
             SizedBox(height: YkSpacing.xs),
-            Container(
-              padding: EdgeInsets.symmetric(horizontal: YkSpacing.sm, vertical: YkSpacing.xs),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(YkRadius.sm),
-                border: Border.all(color: YkColors.border(context)),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.audiotrack_rounded, color: YkColors.accent(context), size: 18),
-                  SizedBox(width: YkSpacing.sm),
-                  Expanded(
-                    child: Text(
-                      _selectedAudioNom ?? 'Audio sélectionné',
-                      style: YkTypography.bodySm(
-                        context,
-                      ).copyWith(color: YkColors.textSecondary(context)),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+            ClipRRect(
+              borderRadius: BorderRadius.circular(YkRadius.sm),
+              child: Container(
+                padding: EdgeInsets.symmetric(horizontal: YkSpacing.sm, vertical: YkSpacing.xs),
+                color: YkColors.surfaceVariant(context),
+                child: Row(
+                  children: [
+                    Icon(Icons.audiotrack_rounded, color: YkColors.accent(context), size: 18),
+                    SizedBox(width: YkSpacing.sm),
+                    Expanded(
+                      child: Text(
+                        _selectedAudioNom ?? 'Audio sélectionné',
+                        style: YkTypography.bodySm(
+                          context,
+                        ).copyWith(color: YkColors.textSecondary(context)),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
-                  ),
-                  GestureDetector(onTap: _removeAudio, child: const Icon(Icons.close_rounded, size: 18)),
-                ],
+                    GestureDetector(onTap: _removeAudio, child: const Icon(Icons.close_rounded, size: 18)),
+                  ],
+                ),
               ),
             ),
           ],
@@ -735,20 +764,19 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin, Wi
   }) {
     return GestureDetector(
       onTap: onTap,
-      child: Container(
-        padding: EdgeInsets.symmetric(vertical: YkSpacing.xs),
-        decoration: BoxDecoration(
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(YkRadius.sm),
+        child: Container(
+          padding: EdgeInsets.symmetric(vertical: YkSpacing.xs),
           color: color.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(YkRadius.sm),
-          border: Border.all(color: color.withValues(alpha: 0.2), width: 1),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 14, color: color),
-            SizedBox(width: YkSpacing.xxs),
-            Text(label, style: YkTypography.bodySm(context).copyWith(color: color)),
-          ],
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 14, color: color),
+              SizedBox(width: YkSpacing.xxs),
+              Text(label, style: YkTypography.bodySm(context).copyWith(color: color)),
+            ],
+          ),
         ),
       ),
     );
@@ -757,26 +785,25 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin, Wi
   Widget _buildContextBadge(BuildContext context, {required String source, required String contextLabel}) {
     final color = sourcePreoccupationCouleur(context, source);
     final icon = sourcePreoccupationIcone(source);
-    return Container(
-      padding: EdgeInsets.symmetric(horizontal: YkSpacing.sm, vertical: YkSpacing.xxs),
-      decoration: BoxDecoration(
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(YkRadius.sm),
+      child: Container(
+        padding: EdgeInsets.symmetric(horizontal: YkSpacing.sm, vertical: YkSpacing.xxs),
         color: color.withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(YkRadius.sm),
-        border: Border.all(color: color.withValues(alpha: 0.2)),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, size: 12, color: color),
-          SizedBox(width: YkSpacing.xs),
-          Expanded(
-            child: Text(
-              '${sourceLabelCourt(source)} : $contextLabel',
-              style: YkTypography.caption(context).copyWith(color: color, fontWeight: FontWeight.w600),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+        child: Row(
+          children: [
+            Icon(icon, size: 12, color: color),
+            SizedBox(width: YkSpacing.xs),
+            Expanded(
+              child: Text(
+                '${sourceLabelCourt(source)} : $contextLabel',
+                style: YkTypography.caption(context).copyWith(color: color, fontWeight: FontWeight.w600),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -857,14 +884,13 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin, Wi
             ],
             if (q.audioUrl != null && q.audioUrl!.isNotEmpty) ...[
               SizedBox(height: YkSpacing.xs),
-              Container(
-                padding: EdgeInsets.symmetric(horizontal: YkSpacing.sm, vertical: YkSpacing.xs),
-                decoration: BoxDecoration(
+              ClipRRect(
+                borderRadius: BorderRadius.circular(YkRadius.sm),
+                child: Container(
+                  padding: EdgeInsets.symmetric(horizontal: YkSpacing.sm, vertical: YkSpacing.xs),
                   color: YkColors.surfaceVariant(context),
-                  borderRadius: BorderRadius.circular(YkRadius.sm),
-                  border: Border.all(color: YkColors.border(context)),
+                  child: ForumAudioPlayer(audioUrl: q.audioUrl!),
                 ),
-                child: ForumAudioPlayer(audioUrl: q.audioUrl!),
               ),
             ],
             SizedBox(height: YkSpacing.xs),
@@ -939,14 +965,8 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin, Wi
           Positioned(
             right: 0,
             bottom: 0,
-            child: Container(
-              width: radius * 0.35,
-              height: radius * 0.35,
-              decoration: BoxDecoration(
-                color: accent,
-                shape: BoxShape.circle,
-                border: Border.all(color: YkColors.surface(context), width: 1),
-              ),
+            child: ClipOval(
+              child: Container(width: radius * 0.35, height: radius * 0.35, color: accent),
             ),
           ),
       ],

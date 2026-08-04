@@ -17,6 +17,7 @@ import 'package:yeki/core/design/components/components.dart';
 import 'package:yeki/core/design/tokens/tokens.dart';
 import 'package:yeki/core/network/api_exception.dart';
 import 'package:yeki/core/router/route_names.dart';
+import 'package:yeki/features/paiement/presentation/paiement_page.dart' show PaiementType;
 import 'package:yeki/repositories/formation_repository.dart';
 import 'package:yeki/views/pages/apprenants/formations_models.dart';
 
@@ -135,6 +136,31 @@ class _FormationsPageState extends State<FormationsPage> with SingleTickerProvid
   }
 
   Future<void> _ouvrirFormation(DepartementItem dept) async {
+    if (dept.estAccessible) {
+      await context
+          .pushNamed(AppRoute.formationDetail, pathParameters: {'formationId': dept.id.toString()}, extra: dept)
+          .then((_) => _charger());
+      return;
+    }
+    // Bug corrigé (modèle économique non opérationnel) : `dept.prix`
+    // n'était jusqu'ici utilisé qu'à l'affichage — aucun chemin ne menait
+    // réellement à `PaiementPage(type: accesDepartement)`, pourtant déjà
+    // entièrement construite. Une formation payante non encore débloquée
+    // va directement au paiement ; seule une formation GRATUITE mais à
+    // accès restreint (`accesRestreint`) passe par le flux de demande
+    // d'approbation admin ci-dessous (cas réel et distinct).
+    if (dept.prix > 0) {
+      context.pushNamed(
+        AppRoute.paiement,
+        queryParameters: {
+          'type': PaiementType.accesDepartement.name,
+          'departementId': dept.id.toString(),
+          'titre': dept.nom,
+          'montant': dept.prix.toString(),
+        },
+      );
+      return;
+    }
     if (dept.accesRestreint != true) {
       await context
           .pushNamed(AppRoute.formationDetail, pathParameters: {'formationId': dept.id.toString()}, extra: dept)
@@ -362,10 +388,15 @@ class _FormationsPageState extends State<FormationsPage> with SingleTickerProvid
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                CircleAvatar(
-                  radius: 20,
-                  backgroundColor: couleur.withValues(alpha: 0.12),
-                  child: Icon(_iconePourFormation(dept), color: couleur, size: 20),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(YkRadius.md),
+                  child: Container(
+                    width: 50,
+                    height: 50,
+                    color: couleur.withValues(alpha: 0.12),
+                    alignment: Alignment.center,
+                    child: Icon(_iconePourFormation(dept), color: couleur, size: 24),
+                  ),
                 ),
                 SizedBox(width: YkSpacing.sm),
                 Expanded(
@@ -434,18 +465,18 @@ class _FormationsPageState extends State<FormationsPage> with SingleTickerProvid
               ],
             ),
             SizedBox(height: YkSpacing.sm),
-            Container(
-              padding: EdgeInsets.symmetric(horizontal: YkSpacing.sm, vertical: YkSpacing.xs),
-              decoration: BoxDecoration(
+            ClipRRect(
+              borderRadius: BorderRadius.circular(YkRadius.sm),
+              child: Container(
+                padding: EdgeInsets.symmetric(horizontal: YkSpacing.sm, vertical: YkSpacing.xs),
                 color: YkColors.surfaceVariant(context),
-                borderRadius: BorderRadius.circular(YkRadius.sm),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  _infoIcone(context, Icons.layers_rounded, '${dept.nbCours} modules'),
-                  if (dept.dureeFormation.isNotEmpty) _infoIcone(context, Icons.timer_rounded, dept.dureeFormation),
-                ],
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    _infoIcone(context, Icons.layers_rounded, '${dept.nbCours} modules'),
+                    if (dept.dureeFormation.isNotEmpty) _infoIcone(context, Icons.timer_rounded, dept.dureeFormation),
+                  ],
+                ),
               ),
             ),
             SizedBox(height: YkSpacing.sm),
@@ -500,19 +531,19 @@ class _FormationsPageState extends State<FormationsPage> with SingleTickerProvid
   }
 
   Widget _infoChip(BuildContext context, IconData icon, String label, Color couleur) {
-    return Container(
-      padding: EdgeInsets.symmetric(horizontal: YkSpacing.xs, vertical: 3),
-      decoration: BoxDecoration(
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(YkRadius.sm),
+      child: Container(
+        padding: EdgeInsets.symmetric(horizontal: YkSpacing.xs, vertical: YkSpacing.xxs),
         color: couleur.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(YkRadius.sm),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 12, color: couleur),
-          SizedBox(width: YkSpacing.xxs),
-          Text(label, style: YkTypography.caption(context).copyWith(color: couleur, fontWeight: FontWeight.bold)),
-        ],
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 12, color: couleur),
+            SizedBox(width: YkSpacing.xxs),
+            Text(label, style: YkTypography.caption(context).copyWith(color: couleur, fontWeight: FontWeight.bold)),
+          ],
+        ),
       ),
     );
   }

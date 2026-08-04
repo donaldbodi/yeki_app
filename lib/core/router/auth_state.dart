@@ -86,15 +86,31 @@ class AuthStateNotifier extends ValueNotifier<YekiAuthSnapshot> {
   /// `SharedPreferences` pour les sessions ouvertes avant cette migration
   /// — voir `docs/ecarts/login.md` §5 (double-écriture transitoire, 45+
   /// fichiers dont `AuthInterceptor` lisent encore `SharedPreferences`).
+  ///
+  /// Bug corrigé (splash infini en déploiement web) : `SharedPreferences.
+  /// getInstance()` n'était PAS protégée par un try/catch, contrairement
+  /// à la lecture `flutter_secure_storage` juste en dessous — si elle
+  /// échoue (accès au stockage navigateur refusé/indisponible dans
+  /// certains contextes de déploiement web), l'exception remontait à
+  /// travers `Future.any(...)` dans `splash_page.dart`, non rattrapée là
+  /// non plus, et `bootstrapped` ne passait jamais à `true` : le
+  /// `redirect` de `guards.dart` renvoyait alors indéfiniment vers
+  /// `/splash`. `bootstrap()` doit TOUJOURS finir par marquer
+  /// `bootstrapped: true`, quoi qu'il arrive.
   Future<void> bootstrap() async {
-    final prefs = await SharedPreferences.getInstance();
-    final secureToken = await _readSecureToken();
-    value = YekiAuthSnapshot(
-      bootstrapped: true,
-      token: secureToken ?? prefs.getString(_kToken),
-      role: prefs.getString(_kRole),
-      onboardingDone: prefs.getBool(_kOnboarding) ?? false,
-    );
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final secureToken = await _readSecureToken();
+      value = YekiAuthSnapshot(
+        bootstrapped: true,
+        token: secureToken ?? prefs.getString(_kToken),
+        role: prefs.getString(_kRole),
+        onboardingDone: prefs.getBool(_kOnboarding) ?? false,
+      );
+    } catch (e) {
+      debugPrint('AuthStateNotifier.bootstrap() a échoué, session traitée comme déconnectée : $e');
+      value = value.copyWith(bootstrapped: true);
+    }
   }
 
   Future<void> login({required String token, required String role}) async {
@@ -148,7 +164,19 @@ class AuthStateNotifier extends ValueNotifier<YekiAuthSnapshot> {
     await prefs.remove(_kToken);
     await prefs.remove(_kRole);
     await prefs.remove(_kFcmToken);
-    value = value.copyWith(bootstrapped: true, token: null, role: null);
+    // Bug corrigé (déconnexion ne redirigeait jamais vers /login) :
+    // `copyWith` utilise le motif `param ?? this.field`, qui ne peut pas
+    // distinguer « non fourni » de « remise à null volontaire » —
+    // `copyWith(token: null)` renvoyait donc l'ANCIEN token, jamais
+    // effacé de `authState.value` malgré le stockage bien vidé
+    // ci-dessus. `snapshot.isAuthenticated` restait `true` pour
+    // toujours, empêchant `guards.dart` de détecter la déconnexion.
+    // Construction directe plutôt que `copyWith` : `token`/`role`
+    // prennent leurs valeurs par défaut (`null`), `onboardingDone` est
+    // explicitement préservé (indicateur au niveau de l'appareil, pas
+    // de la session — la préférence `_kOnboarding` n'est pas supprimée
+    // ci-dessus non plus).
+    value = YekiAuthSnapshot(bootstrapped: true, onboardingDone: value.onboardingDone);
   }
 
   /// Mémorise localement le jeton FCM déjà enregistré côté backend par

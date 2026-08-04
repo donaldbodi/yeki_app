@@ -50,6 +50,8 @@ class _RegisterPageState extends State<RegisterPage> {
   final _emailCtrl = TextEditingController();
   final _pwdCtrl = TextEditingController();
   final _confirmPwdCtrl = TextEditingController();
+  final _phoneCtrl = TextEditingController();
+  final ValueNotifier<DateTime?> _dateNaissance = ValueNotifier(null);
 
   final ValueNotifier<ParcoursOption?> _selectedParcours = ValueNotifier(null);
   final ValueNotifier<DepartementOption?> _selectedDepartement = ValueNotifier(null);
@@ -73,7 +75,12 @@ class _RegisterPageState extends State<RegisterPage> {
   Future<void> _loadParcours() async {
     List<ParcoursOption> list;
     try {
-      list = await _formationRepo.parcours();
+      // Bug corrigé : le menu déroulant proposait tous les types de
+      // parcours pêle-mêle (Cursus/Prépa Concours/Formations/Autre).
+      // Formations/Prépa Concours sont un contenu payant « haut de
+      // gamme » accessible séparément après coup (demande d'accès), pas
+      // à l'inscription — seul le Cursus (le tronc commun) a sa place ici.
+      list = await _formationRepo.parcours(typeParcours: 'cursus');
     } catch (_) {
       list = const [];
     }
@@ -136,7 +143,9 @@ class _RegisterPageState extends State<RegisterPage> {
   bool _canAdvanceFromCurrentStep() {
     switch (_currentStep.value) {
       case _kIdentiteStep:
-        return _formController.canSubmit;
+        // `_dateNaissance` n'est pas un `YkTextField` (YkDateTimePicker,
+        // pas d'intégration YkFormController) — vérifié séparément.
+        return _formController.canSubmit && _dateNaissance.value != null;
       case _kParcoursStep:
         return _selectedParcours.value != null;
       case _kDepartementStep:
@@ -150,6 +159,7 @@ class _RegisterPageState extends State<RegisterPage> {
 
   bool _canSubmitFinal() {
     if (!_formController.canSubmit) return false;
+    if (_dateNaissance.value == null) return false;
     if (!_isApprenant) return true;
     return _selectedParcours.value != null &&
         _selectedDepartement.value != null &&
@@ -163,6 +173,8 @@ class _RegisterPageState extends State<RegisterPage> {
       email: _emailCtrl.text.trim(),
       password: _pwdCtrl.text,
       userType: _userType.value,
+      phone: _phoneCtrl.text.trim(),
+      dateNaissance: _dateNaissance.value!,
       parcoursId: _isApprenant ? _selectedParcours.value?.id : null,
       departementId: _isApprenant ? _selectedDepartement.value?.id : null,
       niveau: _isApprenant ? _selectedNiveau.value : null,
@@ -184,6 +196,8 @@ class _RegisterPageState extends State<RegisterPage> {
     _emailCtrl.dispose();
     _pwdCtrl.dispose();
     _confirmPwdCtrl.dispose();
+    _phoneCtrl.dispose();
+    _dateNaissance.dispose();
     _selectedParcours.dispose();
     _selectedDepartement.dispose();
     _selectedNiveau.dispose();
@@ -204,6 +218,8 @@ class _RegisterPageState extends State<RegisterPage> {
           emailCtrl: _emailCtrl,
           pwdCtrl: _pwdCtrl,
           confirmPwdCtrl: _confirmPwdCtrl,
+          phoneCtrl: _phoneCtrl,
+          dateNaissance: _dateNaissance,
           userType: _userType,
         ),
         EtapeParcours(
@@ -225,6 +241,8 @@ class _RegisterPageState extends State<RegisterPage> {
           nameCtrl: _nameCtrl,
           usernameCtrl: _usernameCtrl,
           emailCtrl: _emailCtrl,
+          phoneCtrl: _phoneCtrl,
+          dateNaissance: _dateNaissance,
           userType: _userType,
           selectedParcours: _selectedParcours,
           selectedDepartement: _selectedDepartement,
@@ -294,6 +312,7 @@ class _RegisterPageState extends State<RegisterPage> {
                 selectedParcours: _selectedParcours,
                 selectedDepartement: _selectedDepartement,
                 selectedNiveau: _selectedNiveau,
+                dateNaissance: _dateNaissance,
                 canAdvance: _canAdvanceFromCurrentStep,
                 canSubmitFinal: _canSubmitFinal,
                 onBack: _goBack,
@@ -351,6 +370,7 @@ class _NavigationBar extends StatelessWidget {
     required this.selectedParcours,
     required this.selectedDepartement,
     required this.selectedNiveau,
+    required this.dateNaissance,
     required this.canAdvance,
     required this.canSubmitFinal,
     required this.onBack,
@@ -364,6 +384,7 @@ class _NavigationBar extends StatelessWidget {
   final ValueNotifier<ParcoursOption?> selectedParcours;
   final ValueNotifier<DepartementOption?> selectedDepartement;
   final ValueNotifier<String?> selectedNiveau;
+  final ValueNotifier<DateTime?> dateNaissance;
   final bool Function() canAdvance;
   final bool Function() canSubmitFinal;
   final VoidCallback onBack;
@@ -380,6 +401,7 @@ class _NavigationBar extends StatelessWidget {
         selectedParcours,
         selectedDepartement,
         selectedNiveau,
+        dateNaissance,
       ]),
       builder: (context, _) {
         final isFirst = currentStep.value == _kIdentiteStep;

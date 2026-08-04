@@ -89,6 +89,15 @@ class _CursusPageState extends State<CursusPage> {
     return Icons.menu_book_rounded;
   }
 
+  /// 2 initiales de repli pour l'avatar de l'enseignant principal (même
+  /// motif que l'avatar de l'app bar Accueil — dégradé + initiales).
+  String _initialesEnseignant(String nom) {
+    final mots = nom.trim().split(RegExp(r'\s+')).where((m) => m.isNotEmpty).toList();
+    if (mots.isEmpty) return '?';
+    if (mots.length == 1) return mots.first.substring(0, 1).toUpperCase();
+    return (mots.first.substring(0, 1) + mots.last.substring(0, 1)).toUpperCase();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -169,85 +178,95 @@ class _CursusPageState extends State<CursusPage> {
             'isPremium': 'true',
           },
         ),
-        child: Column(
+        child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Column(
+            ClipRRect(
+              borderRadius: BorderRadius.circular(YkRadius.md),
+              child: Container(
+                width: 50,
+                height: 50,
+                color: couleur.withValues(alpha: 0.12),
+                alignment: Alignment.center,
+                child: Icon(_iconePourMatiere(cours.title), color: couleur, size: 24),
+              ),
+            ),
+            SizedBox(width: YkSpacing.sm),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      YkBadge(
-                        variant: YkBadgeVariant.label,
-                        label: '${cours.lessons} modules académiques',
-                        color: couleur,
+                      Expanded(
+                        child: Text(
+                          cours.title,
+                          style: YkTypography.label(context).copyWith(color: YkColors.textPrimary(context)),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
-                      SizedBox(height: YkSpacing.xs),
-                      Text(
-                        cours.title,
-                        style: YkTypography.h4(context).copyWith(color: YkColors.textPrimary(context)),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
+                      SizedBox(width: YkSpacing.xs),
+                      _buildBadgeProgression(context, cours.progression),
+                    ],
+                  ),
+                  if (cours.description.isNotEmpty) ...[
+                    SizedBox(height: YkSpacing.xxs),
+                    Text(
+                      cours.description,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: YkTypography.caption(context).copyWith(color: YkColors.textSecondary(context)),
+                    ),
+                  ],
+                  SizedBox(height: YkSpacing.xs),
+                  Row(
+                    children: [
+                      ClipOval(
+                        child: SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: YkGradientBackground(
+                            gradient: LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [couleur, couleur.withValues(alpha: 0.7)],
+                            ),
+                            child: Center(
+                              child: Text(
+                                _initialesEnseignant(cours.enseignantPrincipal),
+                                style: YkTypography.caption(
+                                  context,
+                                ).copyWith(color: Colors.white, fontSize: 8, fontWeight: FontWeight.w800),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      SizedBox(width: YkSpacing.xs),
+                      Expanded(
+                        child: Text(
+                          '${cours.enseignantPrincipal} · ${cours.lessons} leçons · '
+                          '${cours.progression.toStringAsFixed(0)}%',
+                          style: YkTypography.caption(context).copyWith(color: YkColors.textTertiary(context)),
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
                     ],
                   ),
-                ),
-                SizedBox(width: YkSpacing.sm),
-                CircleAvatar(
-                  radius: 20,
-                  backgroundColor: couleur.withValues(alpha: 0.12),
-                  child: Icon(_iconePourMatiere(cours.title), color: couleur, size: 20),
-                ),
-              ],
-            ),
-            if (cours.description.isNotEmpty) ...[
-              SizedBox(height: YkSpacing.xs),
-              Text(
-                cours.description,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: YkTypography.bodySm(context).copyWith(color: YkColors.textSecondary(context)),
+                  SizedBox(height: YkSpacing.xs),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(YkRadius.full),
+                    child: LinearProgressIndicator(
+                      value: cours.progression / 100,
+                      minHeight: 6,
+                      backgroundColor: YkColors.border(context),
+                      valueColor: AlwaysStoppedAnimation(couleur),
+                    ),
+                  ),
+                ],
               ),
-            ],
-            SizedBox(height: YkSpacing.sm),
-            Divider(color: YkColors.border(context)),
-            SizedBox(height: YkSpacing.xs),
-            Row(
-              children: [
-                CircleAvatar(
-                  radius: 11,
-                  backgroundColor: couleur.withValues(alpha: 0.12),
-                  child: Icon(Icons.person_rounded, size: 12, color: couleur),
-                ),
-                SizedBox(width: YkSpacing.xs),
-                Expanded(
-                  child: Text(
-                    cours.enseignantPrincipal,
-                    style: YkTypography.bodySm(context).copyWith(color: YkColors.textPrimary(context)),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                SizedBox(width: YkSpacing.sm),
-                _buildBadgeProgression(context, cours.progression),
-                SizedBox(width: YkSpacing.sm),
-                SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(
-                    value: cours.progression / 100,
-                    strokeWidth: 2.2,
-                    backgroundColor: YkColors.border(context),
-                    valueColor: AlwaysStoppedAnimation(couleur),
-                  ),
-                ),
-                SizedBox(width: YkSpacing.xxs),
-                Text(
-                  '${cours.progression.toStringAsFixed(0)}%',
-                  style: YkTypography.caption(context).copyWith(color: YkColors.textPrimary(context)),
-                ),
-              ],
             ),
           ],
         ),
