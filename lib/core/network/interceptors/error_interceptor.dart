@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart' show debugPrint;
 
 import '../api_exception.dart';
 
@@ -8,29 +9,49 @@ import '../api_exception.dart';
 class ErrorInterceptor extends Interceptor {
   @override
   void onError(DioException err, ErrorInterceptorHandler handler) {
-    final ApiException apiException;
+    handler.reject(err.copyWith(error: _toApiException(err)));
+  }
 
-    final response = err.response;
-    if (response != null) {
-      final data = response.data;
-      apiException = data is Map
-          ? ApiException.fromEnvelope(
-              Map<String, dynamic>.from(data),
-              statusCode: response.statusCode ?? 0,
-            )
-          : ApiException(
-              code: ApiErrorCodes.serverError,
-              message: 'Erreur serveur (${response.statusCode}).',
-              fields: const {},
-              statusCode: response.statusCode,
-            );
-    } else if (err.type == DioExceptionType.cancel) {
-      apiException = ApiException.cancelled();
-    } else {
+  ApiException _toApiException(DioException err) {
+    try {
+      final response = err.response;
+      if (response != null) {
+        final data = response.data;
+        return data is Map
+            ? ApiException.fromEnvelope(
+                Map<String, dynamic>.from(data),
+                statusCode: response.statusCode ?? 0,
+              )
+            : ApiException(
+                code: ApiErrorCodes.serverError,
+                message: 'Erreur serveur (${response.statusCode}).',
+                fields: const {},
+                statusCode: response.statusCode,
+              );
+      }
+      if (err.type == DioExceptionType.cancel) return ApiException.cancelled();
       // Aucune réponse du tout : timeout, pas de réseau, DNS...
-      apiException = ApiException.network(err.message);
+      return ApiException.network(err.message);
+    } catch (e) {
+      // Filet de sécurité absolu : quelle que soit la forme réelle de la
+      // réponse serveur (corps inattendu, page d'erreur d'un proxy, cas
+      // non prévu par `ApiException.fromEnvelope`), CETTE méthode ne doit
+      // JAMAIS laisser fuir une exception brute (ex. `TypeError` de cast)
+      // vers l'appelant — l'app entière repose sur la garantie « toute
+      // erreur réseau devient une ApiException », documentée en tête de
+      // `ApiClient`. Un échec de conversion devient lui-même une
+      // ApiException plutôt que de casser cette garantie.
+      debugPrint(
+        'ErrorInterceptor — échec de conversion en ApiException : '
+        '${e.runtimeType} : $e | statusCode=${err.response?.statusCode} '
+        '| dataType=${err.response?.data.runtimeType} | data=${err.response?.data}',
+      );
+      return ApiException(
+        code: ApiErrorCodes.serverError,
+        message: 'Erreur serveur (${err.response?.statusCode ?? 0}).',
+        fields: const {},
+        statusCode: err.response?.statusCode,
+      );
     }
-
-    handler.reject(err.copyWith(error: apiException));
   }
 }
