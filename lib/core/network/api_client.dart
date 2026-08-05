@@ -5,7 +5,7 @@
 // directement migreront progressivement, à la refonte de leur écran.
 
 import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart' show kDebugMode;
+import 'package:flutter/foundation.dart' show kDebugMode, debugPrint;
 
 import '../constants/api_constants.dart';
 import 'api_exception.dart';
@@ -63,6 +63,16 @@ class ApiClient {
       final response = await call();
       return response.data;
     } on DioException catch (e) {
+      // Diagnostic temporaire (bug en cours d'investigation, un TypeError
+      // brut "String→Map" atteint l'appelant malgré une chaîne
+      // d'intercepteurs qui ne devrait jamais laisser fuir autre chose
+      // qu'une ApiException) — capture l'état RÉEL au tout premier point
+      // d'interception, avant toute logique de conversion.
+      debugPrint(
+        'ApiClient._send() — DioException reçue : e.error.runtimeType=${e.error.runtimeType} '
+        '| e.error=${e.error} | e.type=${e.type} | statusCode=${e.response?.statusCode} '
+        '| responseDataType=${e.response?.data.runtimeType} | responseData=${e.response?.data}',
+      );
       if (e.error is ApiException) throw e.error as ApiException;
       throw ApiException.network(e.message);
     }
