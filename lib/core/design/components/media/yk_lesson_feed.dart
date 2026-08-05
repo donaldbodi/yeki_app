@@ -38,6 +38,7 @@ class YkLessonFeed extends StatefulWidget {
     required this.onDownload,
     this.onSupplements,
     this.onPageChanged,
+    this.initialIndex = 0,
   });
 
   final List<YkLessonFeedItem> items;
@@ -49,13 +50,19 @@ class YkLessonFeed extends StatefulWidget {
   final ValueChanged<String>? onSupplements;
   final ValueChanged<int>? onPageChanged;
 
+  /// Page affichée à l'ouverture — l'appelant connaît déjà la leçon
+  /// exacte demandée (ex. clic sur une leçon précise dans le sommaire du
+  /// cours) ; `0` par défaut (comportement inchangé pour tout appelant
+  /// qui n'a pas de leçon précise à cibler).
+  final int initialIndex;
+
   @override
   State<YkLessonFeed> createState() => _YkLessonFeedState();
 }
 
 class _YkLessonFeedState extends State<YkLessonFeed> {
-  final PageController _controller = PageController();
-  int _index = 0;
+  late final PageController _controller = PageController(initialPage: widget.initialIndex);
+  late int _index = widget.initialIndex;
 
   @override
   void dispose() {

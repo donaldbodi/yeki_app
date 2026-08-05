@@ -73,9 +73,16 @@ class _DetailQuestionForumPageState extends State<DetailQuestionForumPage> {
   void initState() {
     super.initState();
     timeago.setLocaleMessages('fr', timeago.FrMessages());
+    // Bug corrigé : `widget.question` (passé par `forum_page.dart` en
+    // `extra`) vient de `QuestionForumListSerializer`, qui n'inclut PAS
+    // `reponses` (seul `QuestionForumDetailSerializer` le fait) — utilisé
+    // ici uniquement comme affichage transitoire le temps du chargement
+    // réel (évite un écran vide), JAMAIS comme donnée finale : sans ce
+    // rechargement, les réponses n'apparaissaient jamais à l'ouverture.
     if (widget.question != null) {
       _question = widget.question;
       _loading = false;
+      _loadQuestion(silent: true);
     } else {
       _loadQuestion();
     }
@@ -87,8 +94,12 @@ class _DetailQuestionForumPageState extends State<DetailQuestionForumPage> {
     super.dispose();
   }
 
-  Future<void> _loadQuestion() async {
-    setState(() => _loading = true);
+  /// [silent] : `true` quand un aperçu transitoire (`widget.question`,
+  /// sans réponses) est déjà affiché — évite de reclignoter un état de
+  /// chargement plein écran, `_question` est simplement remplacé dès que
+  /// les données fraîches (avec réponses) arrivent.
+  Future<void> _loadQuestion({bool silent = false}) async {
+    if (!silent) setState(() => _loading = true);
     try {
       final data = await _repo.getQuestion(widget.questionId);
       if (!mounted) return;
@@ -97,12 +108,16 @@ class _DetailQuestionForumPageState extends State<DetailQuestionForumPage> {
         _loading = false;
       });
     } on ApiException catch (e) {
-      setState(() => _loading = false);
-      if (mounted) ErrorHandler.showError(context, e.message);
+      if (!silent) {
+        setState(() => _loading = false);
+        if (mounted) ErrorHandler.showError(context, e.message);
+      }
     } catch (e) {
       debugPrint('DetailsQuestionForum._loadQuestion() — exception non-ApiException : ${e.runtimeType} : $e');
-      setState(() => _loading = false);
-      if (mounted) ErrorHandler.showError(context, 'Erreur de chargement: $e');
+      if (!silent) {
+        setState(() => _loading = false);
+        if (mounted) ErrorHandler.showError(context, 'Erreur de chargement: $e');
+      }
     }
   }
 

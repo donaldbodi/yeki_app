@@ -58,29 +58,46 @@ class YkIconButton extends StatelessWidget {
     final background = enabled ? colors.background : colors.background.withValues(alpha: 0.4);
     final foreground = enabled ? colors.foreground : colors.foreground.withValues(alpha: 0.4);
 
+    // `outlined` (retour/favori type maquette « 09 · Détail cours ») :
+    // carré arrondi compact 34×34 (rayon 12, bordure fine), pas un
+    // cercle 48×48 — la cible tactile 48×48 reste garantie (§6
+    // accessibilité, l'`InkWell` couvre toujours la `SizedBox` externe
+    // entière), seul le rendu VISUEL (fond+bordure) se recentre à 34×34
+    // dans une `Material` imbriquée, transparente pour le tap.
+    final isCompactOutline = variant == YkIconButtonVariant.outlined;
+    final ShapeBorder shape = isCompactOutline
+        ? RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(YkRadius.md),
+            side: BorderSide(color: YkColors.border(context)),
+          )
+        : const CircleBorder();
+
+    final visual = Center(
+      child: SizedBox(
+        width: isCompactOutline ? 34 : _tapTarget,
+        height: isCompactOutline ? 34 : _tapTarget,
+        child: Material(
+          color: background,
+          shape: shape,
+          child: Center(child: Icon(icon, size: iconSize, color: foreground)),
+        ),
+      ),
+    );
+
     return Semantics(
       button: true,
       enabled: enabled,
       label: label,
       excludeSemantics: true,
       child: Material(
-        color: background,
-        shape: CircleBorder(
-          side: variant == YkIconButtonVariant.outlined
-              ? BorderSide(color: foreground, width: 1.5)
-              : BorderSide.none,
-        ),
+        color: Colors.transparent,
         child: InkWell(
           onTap: enabled ? onPressed : null,
-          customBorder: const CircleBorder(),
+          customBorder: shape,
           focusColor: colors.foreground.withValues(alpha: 0.12),
           hoverColor: colors.foreground.withValues(alpha: 0.08),
           highlightColor: colors.foreground.withValues(alpha: 0.16),
-          child: SizedBox(
-            width: _tapTarget,
-            height: _tapTarget,
-            child: Icon(icon, size: iconSize, color: foreground),
-          ),
+          child: SizedBox(width: _tapTarget, height: _tapTarget, child: visual),
         ),
       ),
     );

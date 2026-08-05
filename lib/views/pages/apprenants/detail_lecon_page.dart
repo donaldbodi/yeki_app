@@ -318,6 +318,11 @@ class _DetailLeconPageState extends State<DetailLeconPage> {
             onDownload: _onDownload,
             onSupplements: _onSupplements,
             onPageChanged: (i) => _repo.marquerLecon(_lecons[i].id, 10),
+            // Bug corrigé : `_indexInitial` était déjà correctement calculé
+            // (recherche par id de la leçon réellement cliquée) mais
+            // jamais transmis — l'écran s'ouvrait toujours sur la 1ʳᵉ
+            // leçon du cours.
+            initialIndex: _indexInitial,
           ),
           Positioned(
             top: YkSpacing.md,

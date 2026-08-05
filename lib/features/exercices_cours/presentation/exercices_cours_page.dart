@@ -88,11 +88,15 @@ class _ExercicesCoursPageState extends State<ExercicesCoursPage> {
     super.dispose();
   }
 
-  void _ouvrirExercice(ExerciceListItem exercice) {
+  /// Prend directement l'id (pas un `ExerciceListItem` complet) : appelé
+  /// à la fois pour un exercice normal et pour un composant d'épreuve
+  /// choisi depuis `_voirEpreuve` (qui n'a qu'un `id`/`titre`/`nb_questions`
+  /// bruts, pas un `ExerciceListItem` complet).
+  void _ouvrirExercice(int exerciceId) {
     context
         .pushNamed(
           AppRoute.exercicePasser,
-          pathParameters: {'exerciceId': exercice.id.toString()},
+          pathParameters: {'exerciceId': exerciceId.toString()},
           queryParameters: {
             if (int.tryParse(widget.coursId) != null) 'coursId': widget.coursId,
             'coursTitre': widget.coursTitre,
@@ -185,6 +189,15 @@ class _ExercicesCoursPageState extends State<ExercicesCoursPage> {
     );
   }
 
+  /// Bug corrigé : « Traiter » sur une épreuve envoyait tout droit vers
+  /// `PasserExercicePage` avec l'id de l'ÉPREUVE elle-même — une épreuve
+  /// n'a structurellement AUCUNE question propre (décision déjà actée en
+  /// P6.3 : la note d'une épreuve est la SOMME de ses exercices composés,
+  /// corrigés séparément, voir `_corriger_epreuve_composee` côté backend)
+  /// — l'écran s'ouvrait donc toujours avec 0 question. Cette feuille
+  /// sert maintenant de sélecteur réel : chaque exercice composé est
+  /// cliquable (côté apprenant) et ouvre CE composant précis dans
+  /// `PasserExercicePage`, qui a lui de vraies questions.
   Future<void> _voirEpreuve(ExerciceListItem epreuve) async {
     await YkSheet.show(
       context: context,
@@ -198,6 +211,13 @@ class _ExercicesCoursPageState extends State<ExercicesCoursPage> {
               padding: EdgeInsets.only(bottom: YkSpacing.xs),
               child: YkCard(
                 variant: YkCardVariant.outlined,
+                onTap: _canEdit
+                    ? null
+                    : () {
+                        Navigator.of(ctx).pop();
+                        final composantId = entry.value['id'] as int?;
+                        if (composantId != null) _ouvrirExercice(composantId);
+                      },
                 child: Row(
                   children: [
                     Text('${entry.key + 1}. ', style: YkTypography.label(context)),
@@ -211,6 +231,10 @@ class _ExercicesCoursPageState extends State<ExercicesCoursPage> {
                       '${entry.value['nb_questions'] ?? 0} questions',
                       style: YkTypography.bodySm(context).copyWith(color: YkColors.textSecondary(context)),
                     ),
+                    if (!_canEdit) ...[
+                      SizedBox(width: YkSpacing.xs),
+                      Icon(Icons.chevron_right_rounded, color: YkColors.textTertiary(context)),
+                    ],
                   ],
                 ),
               ),
@@ -310,7 +334,7 @@ class _ExercicesCoursPageState extends State<ExercicesCoursPage> {
                 exercice: exercice,
                 courseColor: widget.courseColor,
                 canEdit: _canEdit,
-                onTraiter: () => _ouvrirExercice(exercice),
+                onTraiter: exercice.estEpreuve ? () => _voirEpreuve(exercice) : () => _ouvrirExercice(exercice.id),
                 onEdit: _canEdit ? () => _ouvrirFormulaire(existant: exercice) : null,
                 onQuestions: _canEdit ? () => _ouvrirQuestions(exercice) : null,
                 onViewEpreuve: exercice.estEpreuve ? () => _voirEpreuve(exercice) : null,

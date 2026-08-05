@@ -34,7 +34,14 @@ class YkTabs extends StatelessWidget implements PreferredSizeWidget {
       child: TabBar(
         controller: controller,
         isScrollable: tabs.length > 4,
-        indicatorColor: YkColors.accent(context),
+        // Maquette « 09 · Détail cours » : simple soulignement net sous
+        // le LABEL (border-bottom 2.5px), pas l'indicateur Material 3
+        // par défaut (remplissage arrondi pleine cellule) — indicateur
+        // explicite pour un rendu identique.
+        indicator: UnderlineTabIndicator(
+          borderSide: BorderSide(width: 2.5, color: YkColors.accent(context)),
+        ),
+        indicatorSize: TabBarIndicatorSize.label,
         labelColor: YkColors.accent(context),
         unselectedLabelColor: YkColors.textSecondary(context),
         labelStyle: YkTypography.label(context),
