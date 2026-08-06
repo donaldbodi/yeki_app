@@ -1,7 +1,9 @@
 // lib/main.dart — point d'entrée. Démarrage réel : core/router/guards.dart
 // et features/splash/presentation/splash_page.dart.
+import 'dart:async';
+
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_quill/flutter_quill.dart' show FlutterQuillLocalizations;
@@ -22,8 +24,29 @@ import 'package:yeki/services/push_notification_service.dart';
 import 'package:yeki/services/sync_service.dart';
 import 'package:yeki/services/update_service.dart';
 
-void main() async {
+void main() {
+  // Diagnostic global (aucune exception applicative connue ne devrait
+  // jamais l'atteindre — `ApiClient`/`ErrorInterceptor` garantissent déjà
+  // que toute erreur réseau devient une `ApiException` proprement
+  // attrapée) : plusieurs TypeError bruts ("String" casté en "Map") ont
+  // été rapportés en production (passer un exercice) sans qu'aucun des
+  // `debugPrint` déjà posés dans la chaîne réseau ne s'affiche — signe
+  // qu'ils échappent à TOUT `try/catch` existant, probablement dans un
+  // `Future` non attendu quelque part. `runZonedGuarded` +
+  // `FlutterError.onError` sont le seul filet qui peut encore les
+  // intercepter et en logguer le type/message/pile d'appel réels, plutôt
+  // que de continuer à deviner à l'aveugle.
+  runZonedGuarded(_bootstrap, (error, stack) {
+    debugPrint('main() — exception non interceptée (zone racine) : $error\n$stack');
+  });
+}
+
+void _bootstrap() async {
   WidgetsFlutterBinding.ensureInitialized();
+  FlutterError.onError = (details) {
+    FlutterError.presentError(details);
+    debugPrint('main() — FlutterError.onError : ${details.exceptionAsString()}\n${details.stack}');
+  };
   // Aucune init de locale n'existait auparavant (dates formatées en
   // anglais par défaut) — requis par YkDateTimePicker, voir P4.7.
   await initializeDateFormatting('fr_FR');
