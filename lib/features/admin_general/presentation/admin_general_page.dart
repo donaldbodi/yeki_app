@@ -8,14 +8,20 @@
 // de bord financier + liste filtrable, `apps/paiement/views.py::
 // AdminTransactionsView`/`AdminDashboardFinancierView`).
 //
-// Reste nichée dans `EnseignantShellPage` (route `AppRoute.enseignantAdmin`,
-// pas de route racine) — contrairement à P9.5, le ticket ne mandate PAS
-// `YkAdaptiveScaffold` ici.
+// Navbar identique à la maquette (ticket ultérieur) : `YkAdaptiveScaffold`
+// construit désormais son propre chrome complet (barre de nav en pilule
+// verre) — route racine autonome (`AppRoute.enseignantAdmin`,
+// `app_router.dart`), plus nichée dans `EnseignantShellPage` (legacy).
+// Même patron que le premier vrai consommateur en production,
+// `service_client_dashboard_page.dart` (P9.5).
 
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import 'package:yeki/core/design/components/components.dart';
 import 'package:yeki/core/design/tokens/tokens.dart';
+import 'package:yeki/core/router/auth_state.dart';
+import 'package:yeki/core/router/route_names.dart';
 
 import 'admin_general_controller.dart';
 import 'widgets/departements_tab.dart';
@@ -59,33 +65,42 @@ class _AdminGeneralPageState extends State<AdminGeneralPage> with SingleTickerPr
     return AnimatedBuilder(
       animation: Listenable.merge([_controller, _tabController]),
       builder: (context, _) {
-        return Scaffold(
-          backgroundColor: YkColors.background(context),
-          body: Column(
-            children: [
-              YkTabs(controller: _tabController, tabs: [for (final o in _onglets) YkTabItem(label: o)]),
-              Expanded(
-                child: TabBarView(
-                  controller: _tabController,
-                  children: [
-                    ParcoursTab(controller: _controller),
-                    DepartementsTab(controller: _controller),
-                    VueGlobaleTab(controller: _controller),
-                    EnseignantsTab(controller: _controller),
-                    TousCoursTab(controller: _controller),
-                    TransactionsTab(controller: _controller),
-                  ],
+        return YkAdaptiveScaffold(
+          groups: YkNavConfig.forRole('admin'),
+          selectedRouteName: AppRoute.enseignantAdmin,
+          onDestinationTap: (routeName) => context.goNamed(routeName),
+          userName: _controller.userName,
+          userRole: 'Administrateur Général',
+          onSettings: () => context.pushNamed(AppRoute.profile),
+          onLogout: () => authState.clearSession(),
+          body: Scaffold(
+            backgroundColor: YkColors.background(context),
+            body: Column(
+              children: [
+                YkTabs(controller: _tabController, tabs: [for (final o in _onglets) YkTabItem(label: o)]),
+                Expanded(
+                  child: TabBarView(
+                    controller: _tabController,
+                    children: [
+                      ParcoursTab(controller: _controller),
+                      DepartementsTab(controller: _controller),
+                      VueGlobaleTab(controller: _controller),
+                      EnseignantsTab(controller: _controller),
+                      TousCoursTab(controller: _controller),
+                      TransactionsTab(controller: _controller),
+                    ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
+            floatingActionButton: _tabController.index == 0
+                ? FloatingActionButton(
+                    onPressed: () => showCreerParcoursSheet(context, _controller),
+                    backgroundColor: YkColors.accent(context),
+                    child: Icon(Icons.add, color: YkColors.onAccent(context)),
+                  )
+                : null,
           ),
-          floatingActionButton: _tabController.index == 0
-              ? FloatingActionButton(
-                  onPressed: () => showCreerParcoursSheet(context, _controller),
-                  backgroundColor: YkColors.accent(context),
-                  child: Icon(Icons.add, color: YkColors.onAccent(context)),
-                )
-              : null,
         );
       },
     );

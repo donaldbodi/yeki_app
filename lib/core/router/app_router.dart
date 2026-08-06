@@ -470,11 +470,6 @@ final GoRouter appRouter = GoRouter(
           navigatorKey: _enseignantShellKey,
           routes: [
             GoRoute(
-              path: AppPath.enseignantAdmin,
-              name: AppRoute.enseignantAdmin,
-              builder: (context, state) => const AdminGeneralPage(),
-            ),
-            GoRoute(
               path: AppPath.enseignantCoordination,
               name: AppRoute.enseignantCoordination,
               builder: (context, state) => const EnseignantAdminDashboardPage(),
@@ -607,6 +602,17 @@ final GoRouter appRouter = GoRouter(
       name: AppRoute.serviceClientDashboard,
       parentNavigatorKey: rootNavigatorKey,
       builder: (context, state) => const ServiceClientDashboardPage(),
+    ),
+    // Route racine autonome (pas nichée dans EnseignantShellPage, legacy) —
+    // même patron que serviceClientDashboard ci-dessus : YkAdaptiveScaffold
+    // construit son propre chrome complet (barre de nav en pilule verre,
+    // conforme à la maquette), l'imbriquer dans un second chrome créerait
+    // une double navigation cassée.
+    GoRoute(
+      path: AppPath.enseignantAdmin,
+      name: AppRoute.enseignantAdmin,
+      parentNavigatorKey: rootNavigatorKey,
+      builder: (context, state) => const AdminGeneralPage(),
     ),
   ],
 );

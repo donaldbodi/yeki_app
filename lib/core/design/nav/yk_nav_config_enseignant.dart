@@ -11,6 +11,21 @@ const Set<String> _tousLesGrades = {
   'enseignant_principal',
   'enseignant',
 };
+// Même liste, sans `admin` — utilisée pour « Tableau de bord » seulement.
+// Pour ce rôle, `AppRoute.enseignantDashboard` (alias de redirection vers
+// homePathForRole()) pointe déjà vers `AppRoute.enseignantAdmin` (la même
+// page que « Administration générale ») : 2 entrées de nav distinctes
+// pour la même destination créerait une confusion de sélection (laquelle
+// des deux s'affiche "active" ?) sans rien apporter. L'admin garde 3
+// destinations pertinentes (Administration générale/Historique/Forum),
+// au plus proche des 3 items de la maquette (Accueil/Historique/Profil).
+const Set<String> _tousLesGradesSaufAdmin = {
+  'service_client',
+  'enseignant_admin',
+  'enseignant_cadre',
+  'enseignant_principal',
+  'enseignant',
+};
 const Set<String> _enseignantPrincipal = {'enseignant', 'enseignant_principal'};
 const Set<String> _cadre = {'enseignant_cadre'};
 const Set<String> _enseignantAdmin = {'enseignant_admin'};
@@ -52,7 +67,7 @@ const List<_Entry> _entries = [
       selectedIcon: Icons.dashboard,
       routeName: AppRoute.enseignantDashboard,
     ),
-    _tousLesGrades,
+    _tousLesGradesSaufAdmin,
   ),
   _Entry(
     'Enseignement',

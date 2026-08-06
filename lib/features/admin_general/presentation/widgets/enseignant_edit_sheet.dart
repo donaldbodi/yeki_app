@@ -11,6 +11,11 @@ const _typesEnseignant = [
   YkDropdownItem(value: 'enseignant_principal', label: 'Enseignant Principal'),
   YkDropdownItem(value: 'enseignant_cadre', label: 'Enseignant Cadre'),
   YkDropdownItem(value: 'enseignant_admin', label: 'Enseignant Administrateur'),
+  // Bug corrigé : absent d'ici alors que la recherche de cet onglet
+  // (AdminGeneralSearchEnseignantsView) rend ces comptes trouvables —
+  // `_state.type` valait 'service_client' sans item correspondant dans
+  // ce dropdown pour un tel compte (valeur orpheline).
+  YkDropdownItem(value: 'service_client', label: 'Service Client'),
 ];
 
 Future<void> showModifierEnseignantSheet(BuildContext context, AdminGeneralController controller, EnseignantAdmin enseignant) {

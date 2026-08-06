@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
 
+import 'package:yeki/repositories/auth_repository.dart';
+
 import '../data/admin_general_models.dart';
 import '../data/admin_general_repository.dart';
 
@@ -8,9 +10,27 @@ import '../data/admin_general_repository.dart';
 /// cours/transactions). `ChangeNotifier` plutôt que `setState` (interdit
 /// sous `lib/features/`, règle 7).
 class AdminGeneralController extends ChangeNotifier {
-  AdminGeneralController({AdminGeneralRepository? repository}) : _repo = repository ?? AdminGeneralRepository();
+  AdminGeneralController({AdminGeneralRepository? repository, AuthRepository? authRepository})
+    : _repo = repository ?? AdminGeneralRepository(),
+      _authRepo = authRepository ?? AuthRepository();
 
   final AdminGeneralRepository _repo;
+  final AuthRepository _authRepo;
+
+  // ── Profil connecté (nom affiché dans le chrome YkAdaptiveScaffold,
+  // même motif que ServiceClientController.chargerProfil) ──────────────
+  String userName = 'Administrateur Général';
+
+  Future<void> chargerProfil() async {
+    try {
+      final profil = await _authRepo.getCurrentUser();
+      final nom = '${profil.firstName} ${profil.lastName}'.trim();
+      userName = nom.isNotEmpty ? nom : profil.username;
+      notifyListeners();
+    } catch (_) {
+      // Non bloquant — le chrome affiche "Administrateur Général" par défaut.
+    }
+  }
 
   // ── Dashboard (parcours/départements/stats/top enseignants) ────────
   bool chargementDashboard = true;
@@ -50,6 +70,7 @@ class AdminGeneralController extends ChangeNotifier {
     chargerTousLesCours(),
     chargerTransactions(),
     chargerFinancier(),
+    chargerProfil(),
   ]);
 
   Future<void> chargerDashboard() async {

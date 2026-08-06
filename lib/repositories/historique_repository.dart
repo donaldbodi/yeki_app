@@ -38,7 +38,11 @@ class HistoriqueRepository {
       query: {
         if (categorie != null && categorie.isNotEmpty) 'category': categorie,
         if (depuis != null) 'depuis': depuis.toIso8601String().split('T').first,
-        'limit': limit.toString(),
+        // Bug corrigé : la pagination DRF (YekiPageNumberPagination) ne
+        // reconnaît que `page_size`, jamais `limit` — chaque appel
+        // retombait silencieusement sur la page par défaut (20 lignes,
+        // max_page_size=100), sans aucun moyen de voir plus.
+        'page_size': limit.toString(),
       },
     );
     final list = data is List ? data : (data['results'] as List? ?? []);
