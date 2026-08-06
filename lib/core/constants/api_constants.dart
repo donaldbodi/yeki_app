@@ -4,8 +4,13 @@
 // ═══════════════════════════════════════════════════════════════════════════
 
 class ApiConstants {
-  // URL de base
-  static const String baseUrl = 'https://yeki.pythonanywhere.com/api';
+  // URL de base — migration hébergement backend PythonAnywhere → Railway
+  // (2026-08-06) : PythonAnywhere ne servait que du WSGI (aucun WebSocket
+  // possible) et a atteint son quota disque. Ancienne valeur conservée en
+  // commentaire, PythonAnywhere restant actif quelques jours en secours
+  // avant décommissionnement complet (voir plan de migration).
+  // static const String baseUrl = 'https://yeki.pythonanywhere.com/api';
+  static const String baseUrl = 'https://yekibackend-production.up.railway.app/api';
   
   // ── Endpoints Auth ────────────────────────────────────────────────────────
   static const String login = '$baseUrl/auth/login/';
