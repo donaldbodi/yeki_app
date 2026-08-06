@@ -154,7 +154,13 @@ class _LectureLeconPageState extends State<LectureLeconPage> {
       await sink.close();
       await _repo.marquerLecon(_lecon.id, 10);
       if (mounted) setState(() { _pdfPath = file.path; _pdfLoading = false; });
-    } catch (_) {
+    } catch (e) {
+      // Diagnostic (pattern déjà établi cette session) : suspect probable
+      // — contenu mixte (l'URL PDF générée par le backend est `http://`
+      // alors que ce frontend tourne en `https://`, cf. correctif backend
+      // `SECURE_PROXY_SSL_HEADER`) — mais on ne l'affirme pas sans preuve
+      // (règle 7). Le type/texte réel de l'exception tranchera.
+      debugPrint('LectureLeconPage._chargerPdf() — exception : ${e.runtimeType} : $e');
       if (mounted) setState(() { _pdfError = 'Impossible de charger le PDF.'; _pdfLoading = false; });
     }
   }
