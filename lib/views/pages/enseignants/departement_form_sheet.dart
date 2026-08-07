@@ -278,12 +278,10 @@ void ouvrirDepartementForm({
           ),
           SizedBox(height: YkSpacing.sm),
           YkDropdown<int>(
-            items: const [
-              YkDropdownItem(value: 1, label: '1 mois'),
-              YkDropdownItem(value: 3, label: '3 mois'),
-              YkDropdownItem(value: 6, label: '6 mois'),
-              YkDropdownItem(value: 12, label: '12 mois'),
-            ],
+            // Tous les mois (1-12), pas seulement 1/3/6/12 — demande
+            // explicite de l'utilisateur : une durée de période est une
+            // vraie donnée métier par département, pas un choix à limiter.
+            items: [for (var m = 1; m <= 12; m++) YkDropdownItem(value: m, label: m == 1 ? '1 mois' : '$m mois')],
             value: periode,
             label: 'Période de classement *',
             onChanged: (v) => setS(() => periode = v ?? periode),

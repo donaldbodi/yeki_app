@@ -13,6 +13,8 @@
 // concrets y est actuellement affiché.
 // ═══════════════════════════════════════════════════════════════════════════
 
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -520,13 +522,13 @@ class _EnseignantShellPageState extends ConsumerState<EnseignantShellPage> {
           height: 240,
           child: Container(
             decoration: BoxDecoration(
-              gradient: const LinearGradient(
+              // Dégradé 3 tons déjà établi cette session pour les en-têtes/
+              // bannières héro (Admin Général/Historique/Notifications) —
+              // habillage de la maquette, structure du fond inchangée.
+              gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-                colors: [
-                  Color(0xFF0D2A3A),
-                  YkColors.primary700,
-                ],
+                colors: [YkColors.primary800, YkColors.primary700, YkColors.primary500],
               ),
               borderRadius: BorderRadius.only(
                 bottomLeft: Radius.circular(YkRadius.xl * 1.5),
@@ -709,74 +711,80 @@ class _EnseignantShellPageState extends ConsumerState<EnseignantShellPage> {
         isMobile ? 16 : 24,
         isMobile ? 16 : 24,
       ),
-      child: Container(
-        height: isMobile ? 68 : 76,
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [YkColors.textPrimary(context), const Color(0xFF1A3A4A)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          borderRadius: BorderRadius.circular(32),
-          boxShadow: _kShadowStrong,
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: List.generate(items.length, (i) {
-            final item = items[i];
-            final isSelected = currentIndex == i;
+      // Pilule en verre dépoli (maquette : `background: var(--glass);
+      // backdrop-filter: blur(20px)`) — même recette déjà établie cette
+      // session (`cours_detail_page.dart`/`YkAdaptiveScaffold`), remplace
+      // le dégradé sombre plein d'origine. Même forme/position/enfants.
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(32),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+          child: Container(
+            height: isMobile ? 68 : 76,
+            decoration: BoxDecoration(
+              color: YkColors.textPrimary(context).withValues(alpha: 0.65),
+              borderRadius: BorderRadius.circular(32),
+              boxShadow: _kShadowStrong,
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: List.generate(items.length, (i) {
+                final item = items[i];
+                final isSelected = currentIndex == i;
 
-            return GestureDetector(
-              onTap: () => widget.navigationShell.goBranch(i),
-              behavior: HitTestBehavior.opaque,
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 250),
-                padding: EdgeInsets.symmetric(
-                  horizontal: isSelected ? (isMobile ? 16 : 20) : 12,
-                  vertical: 8,
-                ),
-                decoration: BoxDecoration(
-                  color: isSelected
-                      ? YkColors.primary700.withValues(alpha: 0.25)
-                      : Colors.transparent,
-                  borderRadius: BorderRadius.circular(YkRadius.xl),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 200),
-                      child: Icon(
-                        isSelected ? item.$1 : item.$2,
-                        key: ValueKey(isSelected),
-                        color: isSelected
-                            ? accent
-                            : YkColors.textOnPrimary.withValues(alpha: 0.54),
-                        size: isSelected ? (isMobile ? 22 : 24) : (isMobile ? 20 : 22),
-                      ),
+                return GestureDetector(
+                  onTap: () => widget.navigationShell.goBranch(i),
+                  behavior: HitTestBehavior.opaque,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 250),
+                    padding: EdgeInsets.symmetric(
+                      horizontal: isSelected ? (isMobile ? 16 : 20) : 12,
+                      vertical: 8,
                     ),
-                    AnimatedSize(
-                      duration: const Duration(milliseconds: 250),
-                      curve: Curves.easeOutCubic,
-                      child: isSelected
-                          ? Padding(
-                              padding: EdgeInsets.only(left: isMobile ? 6 : 8),
-                              child: Text(
-                                item.$3,
-                                style: TextStyle(
-                                  color: accent,
-                                  fontSize: isMobile ? 11 : 13,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                            )
-                          : const SizedBox.shrink(),
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? YkColors.primary700.withValues(alpha: 0.25)
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(YkRadius.xl),
                     ),
-                  ],
-                ),
-              ),
-            );
-          }),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 200),
+                          child: Icon(
+                            isSelected ? item.$1 : item.$2,
+                            key: ValueKey(isSelected),
+                            color: isSelected
+                                ? accent
+                                : YkColors.textOnPrimary.withValues(alpha: 0.54),
+                            size: isSelected ? (isMobile ? 22 : 24) : (isMobile ? 20 : 22),
+                          ),
+                        ),
+                        AnimatedSize(
+                          duration: const Duration(milliseconds: 250),
+                          curve: Curves.easeOutCubic,
+                          child: isSelected
+                              ? Padding(
+                                  padding: EdgeInsets.only(left: isMobile ? 6 : 8),
+                                  child: Text(
+                                    item.$3,
+                                    style: TextStyle(
+                                      color: accent,
+                                      fontSize: isMobile ? 11 : 13,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                )
+                              : const SizedBox.shrink(),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }),
+            ),
+          ),
         ),
       ),
     );

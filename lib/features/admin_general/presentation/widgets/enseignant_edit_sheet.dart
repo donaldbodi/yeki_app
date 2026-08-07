@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'package:yeki/core/design/components/components.dart';
 import 'package:yeki/core/design/tokens/tokens.dart';
+import 'package:yeki/core/network/api_exception.dart';
 import 'package:yeki/features/admin_general/data/admin_general_models.dart';
 
 import '../admin_general_controller.dart';
@@ -97,10 +98,17 @@ class _FormulaireEnseignantState extends State<_FormulaireEnseignant> {
           YkSnack.success(widget.outerContext, 'Enseignant modifié avec succès.');
         }
       }
-    } catch (_) {
+    } catch (e) {
       if (mounted) {
         _state.setEnCours(false);
-        YkSnack.error(context, 'Une erreur est survenue. Réessayez.');
+        // Bug corrigé : le vrai motif backend (ex. "Aucune modification
+        // spécifiée.") était systématiquement jeté au profit d'un message
+        // générique — donnant l'impression d'un échec alors que le backend
+        // avait déjà validé (ou refusé pour une raison précise). `ApiException
+        // .fromEnvelope` sait déjà dériver ce message, y compris depuis le
+        // format legacy `{"detail": "..."}` renvoyé par cette vue.
+        final message = e is ApiException ? e.message : 'Une erreur est survenue. Réessayez.';
+        YkSnack.error(context, message);
       }
     }
   }

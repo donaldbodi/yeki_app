@@ -24,17 +24,11 @@
 // dans `subtitle` (lignes "Clé : valeur").
 
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import 'package:yeki/core/design/components/components.dart';
 import 'package:yeki/core/design/tokens/tokens.dart';
-import 'package:yeki/core/router/auth_state.dart';
-import 'package:yeki/core/router/route_names.dart';
-import 'package:yeki/repositories/auth_repository.dart';
 import 'package:yeki/repositories/historique_repository.dart';
-
-import 'interface_enseignant_page.dart';
 
 class _CategorieMeta {
   const _CategorieMeta({required this.key, required this.label, required this.icon});
@@ -102,7 +96,6 @@ class HistoriquePage extends StatefulWidget {
 
 class _HistoriquePageState extends State<HistoriquePage> {
   final _repo = HistoriqueRepository();
-  final _authRepo = AuthRepository();
 
   bool _loading = true;
   bool _chargementStats = true;
@@ -114,39 +107,10 @@ class _HistoriquePageState extends State<HistoriquePage> {
   String _categorieSelectionnee = '';
   String _periodeSelectionnee = '';
 
-  // ── Identité pour le chrome YkAdaptiveScaffold (overflow/sidebar) ──────
-  String _userName = '';
-
-  String get _roleLabel {
-    switch (roleEnseignantFromBackend(authState.value.role)) {
-      case RoleEnseignant.administrateurGeneral:
-        return 'Administrateur Général';
-      case RoleEnseignant.enseignantAdministrateur:
-        return 'Coordonnateur';
-      case RoleEnseignant.enseignantCadre:
-        return 'Cadre';
-      case RoleEnseignant.enseignantPrincipal:
-        return 'Principal';
-      case RoleEnseignant.enseignantSecondaire:
-        return 'Enseignant';
-    }
-  }
-
-  Future<void> _chargerProfil() async {
-    try {
-      final profil = await _authRepo.getCurrentUser();
-      final nom = '${profil.firstName} ${profil.lastName}'.trim();
-      if (mounted) setState(() => _userName = nom.isEmpty ? profil.username : nom);
-    } catch (_) {
-      // Non bloquant — l'identité affichée dans le chrome reste vide.
-    }
-  }
-
   @override
   void initState() {
     super.initState();
     _chargerTout();
-    _chargerProfil();
   }
 
   Future<void> _chargerTout() => Future.wait([_chargerActivites(), _chargerStats()]);
@@ -223,39 +187,29 @@ class _HistoriquePageState extends State<HistoriquePage> {
 
   @override
   Widget build(BuildContext context) {
-    // Route racine autonome (app_router.dart) — YkAdaptiveScaffold construit
-    // son propre chrome (barre de nav en pilule verre), plus nichée dans
-    // EnseignantShellPage (legacy). Rôle lu dynamiquement : cet écran est
-    // partagé par TOUS les rôles enseignant, pas seulement admin.
-    return YkAdaptiveScaffold(
-      groups: YkNavConfig.forRole(authState.value.role ?? ''),
-      selectedRouteName: AppRoute.enseignantHistorique,
-      onDestinationTap: (routeName) => context.goNamed(routeName),
-      userName: _userName.isEmpty ? _roleLabel : _userName,
-      userRole: _roleLabel,
-      onSettings: () => context.pushNamed(AppRoute.profile),
-      onLogout: () => authState.clearSession(),
-      body: Scaffold(
-        backgroundColor: YkColors.background(context),
-        body: _loading
-            ? Padding(padding: EdgeInsets.all(YkSpacing.md), child: YkSkeleton.list(itemCount: 6))
-            : _erreur != null
-                ? YkEmptyState(icon: Icons.cloud_off_rounded, title: 'Erreur', message: _erreur!, actionLabel: 'Réessayer', onAction: _chargerTout)
-                : _activites.isEmpty
-                    ? _etatVide(context)
-                    : RefreshIndicator(
-                        onRefresh: _chargerTout,
-                        child: ListView(
-                          padding: EdgeInsets.only(bottom: YkSpacing.xl),
-                          children: [
-                            _entete(context),
-                            _filtres(context),
-                            if (_stats.isNotEmpty && _categorieSelectionnee.isEmpty) _repartitionCategories(context),
-                            ..._timelineGroupee(context),
-                          ],
-                        ),
+    // Nichée dans EnseignantShellPage (nav + header déjà fournis par ce
+    // shell partagé, communs à tous les rôles enseignant) — voir
+    // enseignant_shell.dart pour le seul habillage visuel autorisé ici.
+    return Scaffold(
+      backgroundColor: YkColors.background(context),
+      body: _loading
+          ? Padding(padding: EdgeInsets.all(YkSpacing.md), child: YkSkeleton.list(itemCount: 6))
+          : _erreur != null
+              ? YkEmptyState(icon: Icons.cloud_off_rounded, title: 'Erreur', message: _erreur!, actionLabel: 'Réessayer', onAction: _chargerTout)
+              : _activites.isEmpty
+                  ? _etatVide(context)
+                  : RefreshIndicator(
+                      onRefresh: _chargerTout,
+                      child: ListView(
+                        padding: EdgeInsets.only(bottom: YkSpacing.xl),
+                        children: [
+                          _entete(context),
+                          _filtres(context),
+                          if (_stats.isNotEmpty && _categorieSelectionnee.isEmpty) _repartitionCategories(context),
+                          ..._timelineGroupee(context),
+                        ],
                       ),
-      ),
+                    ),
     );
   }
 
