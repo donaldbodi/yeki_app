@@ -24,11 +24,17 @@
 // dans `subtitle` (lignes "Clé : valeur").
 
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import 'package:yeki/core/design/components/components.dart';
 import 'package:yeki/core/design/tokens/tokens.dart';
+import 'package:yeki/core/router/auth_state.dart';
+import 'package:yeki/core/router/route_names.dart';
+import 'package:yeki/repositories/auth_repository.dart';
 import 'package:yeki/repositories/historique_repository.dart';
+
+import 'interface_enseignant_page.dart';
 
 class _CategorieMeta {
   const _CategorieMeta({required this.key, required this.label, required this.icon});
@@ -96,6 +102,7 @@ class HistoriquePage extends StatefulWidget {
 
 class _HistoriquePageState extends State<HistoriquePage> {
   final _repo = HistoriqueRepository();
+  final _authRepo = AuthRepository();
 
   bool _loading = true;
   bool _chargementStats = true;
@@ -107,10 +114,39 @@ class _HistoriquePageState extends State<HistoriquePage> {
   String _categorieSelectionnee = '';
   String _periodeSelectionnee = '';
 
+  // ── Identité pour le chrome YkAdaptiveScaffold (overflow/sidebar) ──────
+  String _userName = '';
+
+  String get _roleLabel {
+    switch (roleEnseignantFromBackend(authState.value.role)) {
+      case RoleEnseignant.administrateurGeneral:
+        return 'Administrateur Général';
+      case RoleEnseignant.enseignantAdministrateur:
+        return 'Coordonnateur';
+      case RoleEnseignant.enseignantCadre:
+        return 'Cadre';
+      case RoleEnseignant.enseignantPrincipal:
+        return 'Principal';
+      case RoleEnseignant.enseignantSecondaire:
+        return 'Enseignant';
+    }
+  }
+
+  Future<void> _chargerProfil() async {
+    try {
+      final profil = await _authRepo.getCurrentUser();
+      final nom = '${profil.firstName} ${profil.lastName}'.trim();
+      if (mounted) setState(() => _userName = nom.isEmpty ? profil.username : nom);
+    } catch (_) {
+      // Non bloquant — l'identité affichée dans le chrome reste vide.
+    }
+  }
+
   @override
   void initState() {
     super.initState();
     _chargerTout();
+    _chargerProfil();
   }
 
   Future<void> _chargerTout() => Future.wait([_chargerActivites(), _chargerStats()]);
@@ -187,35 +223,56 @@ class _HistoriquePageState extends State<HistoriquePage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: YkColors.background(context),
-      body: _loading
-          ? Padding(padding: EdgeInsets.all(YkSpacing.md), child: YkSkeleton.list(itemCount: 6))
-          : _erreur != null
-              ? YkEmptyState(icon: Icons.cloud_off_rounded, title: 'Erreur', message: _erreur!, actionLabel: 'Réessayer', onAction: _chargerTout)
-              : _activites.isEmpty
-                  ? _etatVide(context)
-                  : RefreshIndicator(
-                      onRefresh: _chargerTout,
-                      child: ListView(
-                        padding: EdgeInsets.only(bottom: YkSpacing.xl),
-                        children: [
-                          _entete(context),
-                          _filtres(context),
-                          if (_stats.isNotEmpty && _categorieSelectionnee.isEmpty) _repartitionCategories(context),
-                          ..._timelineGroupee(context),
-                        ],
+    // Route racine autonome (app_router.dart) — YkAdaptiveScaffold construit
+    // son propre chrome (barre de nav en pilule verre), plus nichée dans
+    // EnseignantShellPage (legacy). Rôle lu dynamiquement : cet écran est
+    // partagé par TOUS les rôles enseignant, pas seulement admin.
+    return YkAdaptiveScaffold(
+      groups: YkNavConfig.forRole(authState.value.role ?? ''),
+      selectedRouteName: AppRoute.enseignantHistorique,
+      onDestinationTap: (routeName) => context.goNamed(routeName),
+      userName: _userName.isEmpty ? _roleLabel : _userName,
+      userRole: _roleLabel,
+      onSettings: () => context.pushNamed(AppRoute.profile),
+      onLogout: () => authState.clearSession(),
+      body: Scaffold(
+        backgroundColor: YkColors.background(context),
+        body: _loading
+            ? Padding(padding: EdgeInsets.all(YkSpacing.md), child: YkSkeleton.list(itemCount: 6))
+            : _erreur != null
+                ? YkEmptyState(icon: Icons.cloud_off_rounded, title: 'Erreur', message: _erreur!, actionLabel: 'Réessayer', onAction: _chargerTout)
+                : _activites.isEmpty
+                    ? _etatVide(context)
+                    : RefreshIndicator(
+                        onRefresh: _chargerTout,
+                        child: ListView(
+                          padding: EdgeInsets.only(bottom: YkSpacing.xl),
+                          children: [
+                            _entete(context),
+                            _filtres(context),
+                            if (_stats.isNotEmpty && _categorieSelectionnee.isEmpty) _repartitionCategories(context),
+                            ..._timelineGroupee(context),
+                          ],
+                        ),
                       ),
-                    ),
+      ),
     );
   }
 
+  // Dégradé déjà établi cette session pour les en-têtes/bannières héro
+  // (Admin Général/Vue globale) — remplace le bloc plein `YkColors.accent`
+  // + `Colors.white`/`Colors.white70` en dur, pour rester harmonieux avec
+  // le reste de l'app plutôt qu'un traitement isolé propre à cet écran.
   Widget _entete(BuildContext context) {
     return Container(
       width: double.infinity,
       padding: EdgeInsets.fromLTRB(YkSpacing.lg, YkSpacing.md, YkSpacing.lg, YkSpacing.md),
       decoration: BoxDecoration(
-        color: YkColors.accent(context),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [YkColors.primary800, YkColors.primary700, YkColors.primary500],
+        ),
         borderRadius: BorderRadius.vertical(bottom: Radius.circular(YkRadius.xl)),
       ),
       child: Column(
@@ -223,17 +280,20 @@ class _HistoriquePageState extends State<HistoriquePage> {
         children: [
           Row(
             children: [
-              Icon(Icons.history_outlined, color: Colors.white70, size: 16),
+              Icon(Icons.history_outlined, color: YkColors.textOnPrimary.withValues(alpha: 0.7), size: 16),
               SizedBox(width: YkSpacing.xxs),
-              Text('HISTORIQUE', style: YkTypography.caption(context).copyWith(color: Colors.white70, letterSpacing: 2)),
+              Text(
+                'HISTORIQUE',
+                style: YkTypography.caption(context).copyWith(color: YkColors.textOnPrimary.withValues(alpha: 0.7), letterSpacing: 2),
+              ),
               const Spacer(),
-              IconButton(icon: const Icon(Icons.refresh, color: Colors.white), onPressed: _chargerTout),
+              IconButton(icon: Icon(Icons.refresh, color: YkColors.textOnPrimary), onPressed: _chargerTout),
             ],
           ),
-          Text('Mes activités', style: YkTypography.h2(context).copyWith(color: Colors.white)),
+          Text('Mes activités', style: YkTypography.h2(context).copyWith(color: YkColors.textOnPrimary)),
           SizedBox(height: YkSpacing.sm),
           _chargementStats
-              ? SizedBox(height: 28, child: Center(child: YkProgress(shape: YkProgressShape.circular, size: 18, color: Colors.white)))
+              ? SizedBox(height: 28, child: Center(child: YkProgress(shape: YkProgressShape.circular, size: 18, color: YkColors.textOnPrimary)))
               : Row(
                   children: [
                     _statBadge(context, '${_stats['total'] ?? 0}', 'au total', Icons.timeline),
@@ -249,16 +309,19 @@ class _HistoriquePageState extends State<HistoriquePage> {
   }
 
   Widget _statBadge(BuildContext context, String count, String label, IconData icon) {
-    return Container(
-      padding: EdgeInsets.symmetric(horizontal: YkSpacing.sm, vertical: YkSpacing.xxs),
-      decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(YkRadius.full)),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, color: Colors.white, size: 12),
-          SizedBox(width: YkSpacing.xxs),
-          Text('$count $label', style: YkTypography.caption(context).copyWith(color: Colors.white, fontWeight: FontWeight.w600)),
-        ],
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(YkRadius.full),
+      child: Container(
+        padding: EdgeInsets.symmetric(horizontal: YkSpacing.sm, vertical: YkSpacing.xxs),
+        color: YkColors.textOnPrimary.withValues(alpha: 0.15),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: YkColors.textOnPrimary, size: 12),
+            SizedBox(width: YkSpacing.xxs),
+            Text('$count $label', style: YkTypography.caption(context).copyWith(color: YkColors.textOnPrimary, fontWeight: FontWeight.w600)),
+          ],
+        ),
       ),
     );
   }

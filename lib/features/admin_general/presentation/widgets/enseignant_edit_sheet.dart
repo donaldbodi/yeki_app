@@ -22,13 +22,19 @@ Future<void> showModifierEnseignantSheet(BuildContext context, AdminGeneralContr
   return YkSheet.show<void>(
     context: context,
     title: 'Modifier ${enseignant.nom}',
-    bodyBuilder: (ctx) => _FormulaireEnseignant(controller: controller, enseignant: enseignant),
+    // `outerContext` distinct du `context` du sheet lui-même — même motif
+    // que `departement_form_sheet.dart` (`context` capturé vs `ctx` local) :
+    // afficher le snackbar de succès APRÈS avoir fermé le sheet exige un
+    // contexte qui reste monté, pas celui du widget qu'on vient de retirer
+    // de l'arbre.
+    bodyBuilder: (ctx) => _FormulaireEnseignant(outerContext: context, controller: controller, enseignant: enseignant),
   );
 }
 
 class _FormulaireEnseignant extends StatefulWidget {
-  const _FormulaireEnseignant({required this.controller, required this.enseignant});
+  const _FormulaireEnseignant({required this.outerContext, required this.controller, required this.enseignant});
 
+  final BuildContext outerContext;
   final AdminGeneralController controller;
   final EnseignantAdmin enseignant;
 
@@ -78,7 +84,19 @@ class _FormulaireEnseignantState extends State<_FormulaireEnseignant> {
     _state.setEnCours(true);
     try {
       await widget.controller.modifierEnseignant(widget.enseignant.id, userType: _state.type, isActive: _state.actif);
-      if (mounted) Navigator.of(context).pop();
+      if (mounted) {
+        Navigator.of(context).pop();
+        // Bug corrigé : aucune confirmation n'était affichée — la liste se
+        // recharge avec le MÊME filtre "État" encore actif, donc un compte
+        // qu'on vient d'activer (filtré sur "Non autorisé") disparaît
+        // simplement de la liste au lieu d'apparaître coché "Autorisé",
+        // donnant l'impression que la modification n'a pas fonctionné.
+        // `widget.outerContext` (pas `context`, sur le point d'être retiré
+        // de l'arbre par le pop ci-dessus).
+        if (widget.outerContext.mounted) {
+          YkSnack.success(widget.outerContext, 'Enseignant modifié avec succès.');
+        }
+      }
     } catch (_) {
       if (mounted) {
         _state.setEnCours(false);

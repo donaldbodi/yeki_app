@@ -56,6 +56,12 @@ void ouvrirDepartementForm({
   var accesRestreint = d['acces_restreint'] as bool? ?? false;
   var estCertifiante = d['est_certifiante'] as bool? ?? false;
   var mode = d['mode'] as String? ?? 'hybride';
+  // Bug corrigé : `periode` (CDC §6.4/§7.4) est exigé sans exception par
+  // `CreerDepartementView` — absent de ce formulaire jusqu'ici, la création
+  // échouait TOUJOURS avec « La période de classement (periode) est
+  // obligatoire ». 6 mois = pré-sélection pratique (pas un défaut caché
+  // côté serveur, l'admin peut la changer avant de soumettre).
+  var periode = d['periode'] as int? ?? 6;
   var niveauFormation = d['niveau_formation'] as String? ?? 'debutant';
   var niveauxDisponibles = <String>[];
   var niveauxFormationDisponibles = <NiveauFormation>[];
@@ -83,6 +89,7 @@ void ouvrirDepartementForm({
       'niveaux_accessibles': niveauxSelectionnes,
       'acces_restreint': accesRestreint,
       'mode': mode,
+      'periode': periode,
       if (!estModification) 'parcours_id': idParcours,
       if (!estModification) 'est_prepa_concours': typeParcours == 'prepa',
     };
@@ -268,6 +275,18 @@ void ouvrirDepartementForm({
             title: const Text('Accès restreint'),
             subtitle: const Text("Les apprenants doivent demander l'accès"),
             contentPadding: EdgeInsets.zero,
+          ),
+          SizedBox(height: YkSpacing.sm),
+          YkDropdown<int>(
+            items: const [
+              YkDropdownItem(value: 1, label: '1 mois'),
+              YkDropdownItem(value: 3, label: '3 mois'),
+              YkDropdownItem(value: 6, label: '6 mois'),
+              YkDropdownItem(value: 12, label: '12 mois'),
+            ],
+            value: periode,
+            label: 'Période de classement *',
+            onChanged: (v) => setS(() => periode = v ?? periode),
           ),
           if (typeParcours == 'prepa') ...champsPrepa(ctx),
           if (typeParcours == 'formation') ...champsFormation(ctx, setS),

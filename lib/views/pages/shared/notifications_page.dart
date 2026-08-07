@@ -65,7 +65,23 @@ class _NotificationsPageState extends State<NotificationsPage> {
       builder: (context, _) {
         return Scaffold(
           backgroundColor: YkColors.background(context),
+          // Dégradé de la même famille que les en-têtes Admin Général/
+          // Historique (harmonieux avec le reste de l'app) — remplace
+          // l'AppBar Material par défaut, sans en changer le comportement
+          // (bouton retour/actions inchangés, juste re-habillé).
           appBar: AppBar(
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            foregroundColor: YkColors.textOnPrimary,
+            flexibleSpace: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [YkColors.primary800, YkColors.primary700, YkColors.primary500],
+                ),
+              ),
+            ),
             title: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -79,7 +95,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
             actions: [
               TextButton(
                 onPressed: _controller.nonLuesCount > 0 ? _controller.marquerToutesLues : null,
-                child: const Text('Tout lire'),
+                child: Text('Tout lire', style: YkTypography.label(context).copyWith(color: YkColors.textOnPrimary)),
               ),
               IconButton(
                 icon: const Icon(Icons.refresh_rounded),
@@ -192,14 +208,14 @@ class _NotificationsPageState extends State<NotificationsPage> {
         await _controller.marquerLue(n.id);
         return false;
       },
-      background: Container(
-        alignment: Alignment.centerRight,
-        padding: EdgeInsets.symmetric(horizontal: YkSpacing.lg),
-        decoration: BoxDecoration(
+      background: ClipRRect(
+        borderRadius: BorderRadius.circular(YkRadius.md),
+        child: Container(
+          alignment: Alignment.centerRight,
+          padding: EdgeInsets.symmetric(horizontal: YkSpacing.lg),
           color: YkColors.success.withValues(alpha: 0.12),
-          borderRadius: BorderRadius.circular(YkRadius.md),
+          child: Icon(Icons.done_rounded, color: YkColors.success),
         ),
-        child: Icon(Icons.done_rounded, color: YkColors.success),
       ),
       child: YkCard(
         variant: n.estLue ? YkCardVariant.outlined : YkCardVariant.filled,

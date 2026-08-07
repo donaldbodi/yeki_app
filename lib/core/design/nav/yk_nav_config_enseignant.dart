@@ -166,18 +166,11 @@ const List<_Entry> _entries = [
     ),
     _tousLesGrades,
   ),
-  _Entry(
-    null,
-    YkNavDestination(
-      label: 'Forum',
-      icon: Icons.forum_outlined,
-      selectedIcon: Icons.forum,
-      badgeKey: 'forum',
-      // TODO(nav): pas de destination Forum globale enseignant
-      // aujourd'hui (même constat que côté apprenant) — §4.2.2, dest. 12.
-    ),
-    _tousLesGrades,
-  ),
+  // « Forum » retiré (règle 4, demande explicite) : cette destination
+  // n'a jamais été câblée (routeName absent, TODO ci-dessus resté sans
+  // suite) et n'a sa place nulle part côté enseignant — le forum reste
+  // un onglet contextualisé par cours (`cours_detail_page.dart`), jamais
+  // une destination globale de ce rôle.
 ];
 
 /// Construit les groupes de destinations visibles pour [role] — seule

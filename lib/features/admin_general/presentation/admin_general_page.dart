@@ -45,6 +45,25 @@ class _AdminGeneralPageState extends State<AdminGeneralPage> with SingleTickerPr
 
   static const _onglets = ['Parcours', 'Départements', 'Vue globale', 'Enseignants', 'Tous les cours', 'Transactions'];
 
+  /// 2 initiales depuis `_controller.userName` — même motif que
+  /// `accueil_page.dart._initiales`, adapté à un nom complet unique
+  /// (« Prénom Nom ») plutôt que 2 champs séparés.
+  String get _initiales {
+    final mots = _controller.userName.trim().split(RegExp(r'\s+')).where((m) => m.isNotEmpty).toList();
+    if (mots.isEmpty) return '?';
+    final premiere = mots.first[0].toUpperCase();
+    final derniere = mots.length > 1 ? mots.last[0].toUpperCase() : '';
+    return '$premiere$derniere';
+  }
+
+  /// Même motif que `accueil_page.dart._salutation`.
+  String get _salutation {
+    final heure = DateTime.now().hour;
+    if (heure < 12) return 'Bonjour';
+    if (heure < 18) return 'Bon après-midi';
+    return 'Bonsoir';
+  }
+
   @override
   void initState() {
     super.initState();
@@ -77,6 +96,10 @@ class _AdminGeneralPageState extends State<AdminGeneralPage> with SingleTickerPr
             backgroundColor: YkColors.background(context),
             body: Column(
               children: [
+                Padding(
+                  padding: EdgeInsets.fromLTRB(YkSpacing.md, YkSpacing.md, YkSpacing.md, YkSpacing.sm),
+                  child: _buildHeader(context),
+                ),
                 YkTabs(controller: _tabController, tabs: [for (final o in _onglets) YkTabItem(label: o)]),
                 Expanded(
                   child: TabBarView(
@@ -103,6 +126,47 @@ class _AdminGeneralPageState extends State<AdminGeneralPage> with SingleTickerPr
           ),
         );
       },
+    );
+  }
+
+  /// Header (nom + salutation) — `AdminGeneralPage` n'en avait plus depuis
+  /// le passage à `YkAdaptiveScaffold` (nav seulement, pas de barre
+  /// supérieure). Même patron que `accueil_page.dart._buildAppBar`
+  /// (100% tokens : `YkGradientBackground`/`YkTypography`/`YkColors`) —
+  /// pas celui de l'ancien `enseignant_shell.dart._buildMobileHeader`
+  /// (dégradé en dur, composants privés), pour rester harmonieux avec le
+  /// reste de cette page déjà entièrement sur tokens.
+  Widget _buildHeader(BuildContext context) {
+    return Row(
+      children: [
+        ClipOval(
+          child: SizedBox(
+            width: 44,
+            height: 44,
+            child: YkGradientBackground(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [YkColors.primary700, YkColors.primary500],
+              ),
+              child: Center(
+                child: Text(_initiales, style: YkTypography.label(context).copyWith(color: YkColors.textOnPrimary)),
+              ),
+            ),
+          ),
+        ),
+        SizedBox(width: YkSpacing.sm),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('$_salutation 👋', style: YkTypography.caption(context).copyWith(color: YkColors.textSecondary(context))),
+              Text(_controller.userName, style: YkTypography.h4(context).copyWith(color: YkColors.textPrimary(context))),
+            ],
+          ),
+        ),
+        YkBadge(variant: YkBadgeVariant.label, label: 'ADMIN GÉNÉRAL', color: YkColors.violet),
+      ],
     );
   }
 }

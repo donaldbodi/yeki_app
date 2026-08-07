@@ -493,13 +493,6 @@ final GoRouter appRouter = GoRouter(
         ),
         StatefulShellBranch(routes: [
           GoRoute(
-            path: AppPath.enseignantHistorique,
-            name: AppRoute.enseignantHistorique,
-            builder: (context, state) => const HistoriquePage(),
-          ),
-        ]),
-        StatefulShellBranch(routes: [
-          GoRoute(
             path: AppPath.enseignantProfil,
             name: AppRoute.enseignantProfil,
             builder: (context, state) => const ProfilPage(),
@@ -613,6 +606,17 @@ final GoRouter appRouter = GoRouter(
       name: AppRoute.enseignantAdmin,
       parentNavigatorKey: rootNavigatorKey,
       builder: (context, state) => const AdminGeneralPage(),
+    ),
+    // Même raisonnement : retirée de la StatefulShellRoute ci-dessus (bug
+    // corrigé — taper "Historique" depuis le nouveau chrome AdminGeneralPage
+    // faisait basculer dans l'ancien shell EnseignantShellPage, une
+    // navigation incohérente puisque cet écran est partagé par TOUS les
+    // rôles enseignant, pas seulement admin).
+    GoRoute(
+      path: AppPath.enseignantHistorique,
+      name: AppRoute.enseignantHistorique,
+      parentNavigatorKey: rootNavigatorKey,
+      builder: (context, state) => const HistoriquePage(),
     ),
   ],
 );

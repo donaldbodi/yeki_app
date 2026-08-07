@@ -1,6 +1,6 @@
 analyze_info=29
 analyze_warning=0
-boxdecoration_dur=83
+boxdecoration_dur=82
 couleurs_dur=28
 dart_io=9
 http_direct=1
