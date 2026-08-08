@@ -1,33 +1,27 @@
 // lib/features/service_client/presentation/service_client_dashboard_page.dart
 //
-// Dashboard Service Client (P9.5) — nouveau, au même niveau que les autres
-// interfaces de rôle (`YkAdaptiveScaffold`, comme demandé explicitement
-// par le ticket). Premier VRAI consommateur en production de
-// `YkAdaptiveScaffold`/`YkDataTable` (confirmé : zéro usage hors showcase
-// avant ce ticket) — on suit le ticket tel qu'écrit malgré l'absence d'un
-// "autre" dashboard déjà migré à imiter.
+// Dashboard Service Client — nichée dans `EnseignantShellPage` (même
+// header/bottom nav que les 5 autres rôles enseignant, demande explicite :
+// « toute l'interface service client doit être identique aux autres
+// interfaces enseignants »). Reconstruite sur `EnseignantDashboardSkeleton`
+// (`dashboard_skeleton.dart`), déjà partagé par Coordonnateur/Cadre/
+// Principal/Secondaire — mêmes `Scaffold`/`NestedScrollView`/`YkTabs`
+// épinglés/`TabBarView`, aucun nouveau composant.
 //
-// Route racine (`parentNavigatorKey: rootNavigatorKey`), PAS nichée dans
-// `EnseignantShellPage` (legacy, chrome à onglets Accueil/Historique/
-// Profil) : `YkAdaptiveScaffold` construit son propre chrome complet
-// (barre du bas/rail/navbar) — l'imbriquer dans un second chrome créerait
-// une double navigation cassée. `service_client` bascule directement ici
-// via `homePathForRole()`.
+// Auparavant route racine autonome (`YkAdaptiveScaffold`, chrome propre,
+// P9.5 — premier vrai consommateur de ce composant en prod). Ce chrome
+// séparé n'était qu'un choix de l'époque, pas une contrainte technique —
+// annulé ici au profit de la structure partagée.
 //
-// Notification : push explicitement HORS PÉRIMÈTRE (voir
-// docs/ecarts/wallet.md-like note ci-dessous) — `lib/services/
-// push_notification_service.dart` a une clé VAPID placeholder littérale et
-// aucun endpoint backend d'enregistrement de token n'existe. Seul le badge
-// in-app (compteur de demandes en attente, `notifyListeners` du
-// contrôleur) est branché ici.
+// Chaque onglet gère toujours son propre chargement/erreur/état vide
+// (`controller.chargementX`/`enErreurX`, inchangé) — le skeleton n'est
+// donc jamais gaté au niveau page (`loading`/`errorMessage` toujours
+// désactivés), pour ne rien perdre de cette granularité (ex. consulter
+// "Répétiteurs" pendant que "Paiements" charge encore).
 
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 
-import 'package:yeki/core/design/components/components.dart';
-import 'package:yeki/core/design/tokens/tokens.dart';
-import 'package:yeki/core/router/auth_state.dart';
-import 'package:yeki/core/router/route_names.dart';
+import 'package:yeki/views/pages/enseignants/dashboard_skeleton.dart' show EnseignantDashboardSkeleton, YkDashboardTab;
 
 import 'service_client_controller.dart';
 import 'widgets/paiements_a_valider_tab.dart';
@@ -47,13 +41,13 @@ class _ServiceClientDashboardPageState extends State<ServiceClientDashboardPage>
   late final ServiceClientController _controller;
   late final TabController _tabController;
 
-  static const _onglets = ['Paiements', 'Retraits', 'Répétiteurs', 'Statistiques'];
+  static const _nbOnglets = 4;
 
   @override
   void initState() {
     super.initState();
     _controller = ServiceClientController();
-    _tabController = TabController(length: _onglets.length, vsync: this);
+    _tabController = TabController(length: _nbOnglets, vsync: this);
     _controller.chargerTout();
   }
 
@@ -69,35 +63,23 @@ class _ServiceClientDashboardPageState extends State<ServiceClientDashboardPage>
     return AnimatedBuilder(
       animation: _controller,
       builder: (context, _) {
-        return YkAdaptiveScaffold(
-          groups: YkNavConfig.forRole('service_client'),
-          selectedRouteName: AppRoute.serviceClientDashboard,
-          onDestinationTap: (routeName) => context.goNamed(routeName),
-          userName: _controller.userName,
-          userRole: 'Service Client',
-          onSettings: () => context.pushNamed(AppRoute.profile),
-          onLogout: () => authState.clearSession(),
-          badges: {'serviceClientDemandes': _controller.demandesEnAttenteTotal},
-          body: Scaffold(
-            backgroundColor: YkColors.background(context),
-            appBar: AppBar(
-              title: const Text('Service Client'),
-              bottom: TabBar(
-                controller: _tabController,
-                isScrollable: true,
-                tabs: [for (final onglet in _onglets) Tab(text: onglet)],
-              ),
+        return EnseignantDashboardSkeleton(
+          loading: false,
+          tabController: _tabController,
+          tabs: [
+            YkDashboardTab(
+              label: 'Paiements',
+              badge: _controller.paiementsEnAttente > 0 ? _controller.paiementsEnAttente : null,
+              body: PaiementsAValiderTab(controller: _controller),
             ),
-            body: TabBarView(
-              controller: _tabController,
-              children: [
-                PaiementsAValiderTab(controller: _controller),
-                RetraitsAValiderTab(controller: _controller),
-                RepetiteursTab(controller: _controller),
-                StatistiquesTab(controller: _controller),
-              ],
+            YkDashboardTab(
+              label: 'Retraits',
+              badge: _controller.retraitsEnAttente > 0 ? _controller.retraitsEnAttente : null,
+              body: RetraitsAValiderTab(controller: _controller),
             ),
-          ),
+            YkDashboardTab(label: 'Répétiteurs', body: RepetiteursTab(controller: _controller)),
+            YkDashboardTab(label: 'Statistiques', body: StatistiquesTab(controller: _controller)),
+          ],
         );
       },
     );

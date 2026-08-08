@@ -22,13 +22,14 @@ enum RoleEnseignant {
   enseignantCadre,
   enseignantPrincipal,
   enseignantSecondaire,
+  serviceClient,
 }
 
 /// Convertit le rôle backend brut (`Profile.USER_TYPES`) en
 /// `RoleEnseignant`. Tout rôle non explicitement reconnu (`enseignant`
-/// nu, `service_client`, ou une valeur future inconnue) tombe dans le
-/// seau de repli `enseignantSecondaire` — même logique que
-/// `homePathForRole` dans `guards.dart`, à garder synchronisée avec elle.
+/// nu, ou une valeur future inconnue) tombe dans le seau de repli
+/// `enseignantSecondaire` — même logique que `homePathForRole` dans
+/// `guards.dart`, à garder synchronisée avec elle.
 RoleEnseignant roleEnseignantFromBackend(String? role) {
   switch (role) {
     case 'admin':
@@ -39,6 +40,8 @@ RoleEnseignant roleEnseignantFromBackend(String? role) {
       return RoleEnseignant.enseignantCadre;
     case 'enseignant_principal':
       return RoleEnseignant.enseignantPrincipal;
+    case 'service_client':
+      return RoleEnseignant.serviceClient;
     default:
       return RoleEnseignant.enseignantSecondaire;
   }

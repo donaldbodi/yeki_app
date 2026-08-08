@@ -2,40 +2,26 @@ import 'package:flutter/foundation.dart';
 
 import 'package:yeki/models/paiement_models.dart';
 import 'package:yeki/models/repetiteur_models.dart';
-import 'package:yeki/repositories/auth_repository.dart';
 import 'package:yeki/repositories/paiement_repository.dart';
 import 'package:yeki/repositories/repetiteur_repository.dart';
 
-/// État + logique du dashboard Service Client (P9.5) — un seul contrôleur
+/// État + logique du dashboard Service Client — un seul contrôleur
 /// pour les 4 onglets (paiements/retraits/répétiteurs/statistiques), même
 /// écran. `ChangeNotifier` plutôt que `setState` (interdit sous
 /// `lib/features/`, règle 7).
+///
+/// Nichée dans `EnseignantShellPage` (même structure que les autres rôles
+/// enseignant) — le nom affiché dans le header vient désormais du
+/// `current_user_provider` partagé (`enseignant_shell.dart._nomAffiche`),
+/// plus d'un fetch de profil dupliqué ici (aucun des autres contrôleurs de
+/// dashboard n'en a un).
 class ServiceClientController extends ChangeNotifier {
-  ServiceClientController({
-    PaiementRepository? paiementRepository,
-    RepetiteurRepository? repetiteurRepository,
-    AuthRepository? authRepository,
-  }) : _paiementRepo = paiementRepository ?? PaiementRepository(),
-       _repetiteurRepo = repetiteurRepository ?? RepetiteurRepository(),
-       _authRepo = authRepository ?? AuthRepository();
+  ServiceClientController({PaiementRepository? paiementRepository, RepetiteurRepository? repetiteurRepository})
+    : _paiementRepo = paiementRepository ?? PaiementRepository(),
+      _repetiteurRepo = repetiteurRepository ?? RepetiteurRepository();
 
   final PaiementRepository _paiementRepo;
   final RepetiteurRepository _repetiteurRepo;
-  final AuthRepository _authRepo;
-
-  // ── Profil connecté (nom affiché dans le chrome YkAdaptiveScaffold) ──
-  String userName = 'Service Client';
-
-  Future<void> chargerProfil() async {
-    try {
-      final profil = await _authRepo.getCurrentUser();
-      final nom = '${profil.firstName} ${profil.lastName}'.trim();
-      userName = nom.isNotEmpty ? nom : profil.username;
-      notifyListeners();
-    } catch (_) {
-      // Non bloquant — le chrome affiche "Service Client" par défaut.
-    }
-  }
 
   // ── Paiements ────────────────────────────────────────────────────
   bool chargementPaiements = true;
@@ -58,7 +44,6 @@ class ServiceClientController extends ChangeNotifier {
   ServiceClientStatistiques? statistiques;
 
   Future<void> chargerTout() => Future.wait([
-    chargerProfil(),
     chargerPaiements(),
     chargerRetraits(),
     chargerRepetiteurs(),
@@ -121,11 +106,16 @@ class ServiceClientController extends ChangeNotifier {
     }
   }
 
-  /// Nombre total de demandes en attente (paiements + retraits) — pour le
-  /// badge de la destination de navigation.
-  int get demandesEnAttenteTotal =>
-      paiements.where((d) => d.statut == 'en_attente').length +
-      retraits.where((d) => d.statut == 'en_attente').length;
+  /// Nombre de paiements en attente — badge de l'onglet "Paiements"
+  /// (`YkDashboardTab.badge`, même idiome que `CadreDashboardPage` pour
+  /// son onglet Olympiades).
+  int get paiementsEnAttente => paiements.where((d) => d.statut == 'en_attente').length;
+
+  /// Nombre de retraits en attente — badge de l'onglet "Retraits".
+  int get retraitsEnAttente => retraits.where((d) => d.statut == 'en_attente').length;
+
+  /// Nombre total de demandes en attente (paiements + retraits).
+  int get demandesEnAttenteTotal => paiementsEnAttente + retraitsEnAttente;
 
   Future<void> validerPaiement(int id, {int? montantConstate}) async {
     await _paiementRepo.validerPaiement(id, montantConstate: montantConstate);

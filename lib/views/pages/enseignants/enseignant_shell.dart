@@ -137,6 +137,8 @@ class _EnseignantShellPageState extends ConsumerState<EnseignantShellPage> {
         return 'Cadre';
       case RoleEnseignant.enseignantPrincipal:
         return 'Principal';
+      case RoleEnseignant.serviceClient:
+        return 'Service Client';
       default:
         return 'Enseignant';
     }
@@ -158,6 +160,8 @@ class _EnseignantShellPageState extends ConsumerState<EnseignantShellPage> {
         return YkColors.info;
       case RoleEnseignant.enseignantPrincipal:
         return YkColors.success;
+      case RoleEnseignant.serviceClient:
+        return YkColors.error;
       default:
         // Enseignant Secondaire.
         return YkColors.gold(context);

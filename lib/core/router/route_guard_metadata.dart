@@ -2,9 +2,11 @@ import 'route_names.dart';
 
 /// Les 6 rôles backend qui ne sont pas `apprenant` (`Profile.USER_TYPES`,
 /// `apps/accounts/models.py`). `service_client` a son propre dashboard
-/// depuis P9.5 (`AppRoute.serviceClientDashboard`, voir `guards.dart` —
-/// `homePathForRole`) mais reste dans ce set : il garde accès aux routes
-/// `enseignantAny` partagées (profil, historique...) au cas où.
+/// (`AppRoute.serviceClientDashboard`, voir `guards.dart` —
+/// `homePathForRole`) nichée dans le même `EnseignantShellPage` que les
+/// autres rôles de ce set — il utilise donc réellement les routes
+/// `enseignantAny` partagées (profil, historique...), pas seulement "au
+/// cas où".
 const Set<String> kEnseignantRoles = {
   'admin',
   'service_client',

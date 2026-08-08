@@ -494,6 +494,15 @@ final GoRouter appRouter = GoRouter(
               name: AppRoute.enseignantSecondaire,
               builder: (context, state) => const SecondaireDashboardPage(),
             ),
+            // Nichée ici comme les 5 autres rôles (même chrome partagé,
+            // demande explicite) — nom/chemin de route inchangés,
+            // `homePathForRole('service_client')` continue de fonctionner
+            // à l'identique.
+            GoRoute(
+              path: AppPath.serviceClientDashboard,
+              name: AppRoute.serviceClientDashboard,
+              builder: (context, state) => const ServiceClientDashboardPage(),
+            ),
           ],
         ),
         StatefulShellBranch(routes: [
@@ -601,12 +610,6 @@ final GoRouter appRouter = GoRouter(
         departementId: _int(state.pathParameters['departementId']),
         departementNom: _str(state.uri.queryParameters['departementNom']),
       ),
-    ),
-    GoRoute(
-      path: AppPath.serviceClientDashboard,
-      name: AppRoute.serviceClientDashboard,
-      parentNavigatorKey: rootNavigatorKey,
-      builder: (context, state) => const ServiceClientDashboardPage(),
     ),
   ],
 );
