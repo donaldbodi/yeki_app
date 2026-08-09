@@ -113,7 +113,8 @@ class OlympiadeRepository {
     'une_seule_session': uneSeuleSession,
   };
 
-  /// Création — gratuite, publication immédiate (P8.1). Renvoie l'id créé.
+  /// Création — gratuite, en attente de validation par le coordonnateur
+  /// (rétablie). Renvoie l'id créé.
   Future<int> creer({
     required int departementId,
     required String titre,
@@ -161,10 +162,10 @@ class OlympiadeRepository {
   }
 
   /// Modification — n'est permise par le serveur que tant que l'olympiade
-  /// n'a pas de devoir lié ni n'est validée (`CadreModifierOlympiadeView`).
-  /// Envoie l'état complet du formulaire plutôt qu'un diff : le serveur
-  /// n'applique que les clés présentes, envoyer l'état courant en entier
-  /// reste correct et plus simple.
+  /// n'est pas validée (`CadreModifierOlympiadeView`). Envoie l'état
+  /// complet du formulaire plutôt qu'un diff : le serveur n'applique que
+  /// les clés présentes, envoyer l'état courant en entier reste correct
+  /// et plus simple.
   Future<void> modifier(
     int olympiadeId, {
     required String titre,
@@ -205,5 +206,23 @@ class OlympiadeRepository {
         uneSeuleSession: uneSeuleSession,
       ),
     );
+  }
+
+  // ── Validation admin (coordonnateur, `enseignant_admin`) — rétablie ──
+
+  /// Olympiades en attente + refusées, scopées au parcours du
+  /// coordonnateur connecté (`AdminOlympiadesAValiderView`).
+  Future<List<Map<String, dynamic>>> aValiderAdmin() async {
+    final data = await _api.get(EvaluationEndpoints.adminOlympiadesAValider);
+    final results = data is List ? data : (data['results'] as List? ?? []);
+    return results.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  }
+
+  Future<void> validerAdmin(int olympiadeId) async {
+    await _api.post(EvaluationEndpoints.adminOlympiadesValider(olympiadeId));
+  }
+
+  Future<void> refuserAdmin(int olympiadeId, String motif) async {
+    await _api.post(EvaluationEndpoints.adminOlympiadesRefuser(olympiadeId), data: {'motif': motif});
   }
 }

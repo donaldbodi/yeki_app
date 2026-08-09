@@ -11,6 +11,7 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:yeki/core/network/interceptors/auth_interceptor.dart';
+import 'package:yeki/core/providers/auth_provider.dart';
 import 'package:yeki/core/providers/router_provider.dart';
 import 'package:yeki/core/providers/theme_provider.dart';
 import 'package:yeki/core/router/auth_state.dart';
@@ -73,6 +74,14 @@ class YekiApp extends ConsumerWidget {
   const YekiApp({super.key});
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Bug corrigé : `authProvider` (auth_provider.dart) contient déjà
+    // l'invalidation de `currentUserProvider`/`notificationsProvider` à
+    // chaque bascule de compte — mais un `AsyncNotifierProvider` est lazy,
+    // son `build()` (qui attache le listener sur `authState`) ne
+    // s'exécutait jamais faute d'être observé nulle part. `ref.listen`
+    // (pas `ref.watch`, pour ne pas reconstruire toute l'app à chaque
+    // connexion/déconnexion) le maintient vivant dès le démarrage.
+    ref.listen(authProvider, (_, _) {});
     return MaterialApp.router(
       debugShowCheckedModeBanner: false,
       title: 'Yéki',

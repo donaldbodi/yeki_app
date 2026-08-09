@@ -49,7 +49,12 @@ class _CreerCoursSheetState extends State<CreerCoursSheet> {
   final _descCtrl = TextEditingController();
 
   String? _niveau;
-  String _colorCode = '#008080';
+  // Bug corrigé : '#008080' n'appartient à aucune palette backend — le
+  // sélecteur n'affichait donc aucun swatch pré-coché, ET la validation
+  // du champ échouait systématiquement si l'utilisateur ne touchait
+  // jamais au sélecteur. Repli sur la 1ère couleur réelle de
+  // `YkCourseColors.palette` (Azur), désormais synchronisée côté backend.
+  String _colorCode = '#2E7CAD';
   String _iconName = 'school';
   int? _enseignantPrincipalId;
 
@@ -105,7 +110,13 @@ class _CreerCoursSheetState extends State<CreerCoursSheet> {
         widget.onSuccess();
       }
     } on ApiException catch (e) {
-      if (mounted) YkSnack.error(context, e.message);
+      // Le backend renvoie un message générique ("Le formulaire contient
+      // des erreurs.") pour toute erreur de validation par champ — le
+      // détail exploitable est dans `e.fields`, jamais affiché jusqu'ici.
+      // Filet de sécurité pour diagnostiquer immédiatement un futur échec
+      // sans deviner (règle 7).
+      final details = e.fields.isNotEmpty ? ' (${e.fields.keys.join(", ")})' : '';
+      if (mounted) YkSnack.error(context, '${e.message}$details');
     } catch (e) {
       // Root cause non certaine à 100% (règle 7) — filet de diagnostic.
       debugPrint('CreerCoursSheet._soumettre() — exception inattendue : ${e.runtimeType} : $e');

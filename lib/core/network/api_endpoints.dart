@@ -3,8 +3,8 @@
 // OpenAPI, volontairement non renommés — voir plus bas.)
 // GÉNÉRÉ — ne pas éditer à la main.
 // Régénérer : dart run tool/generate_endpoints.dart
-// Source : C:\Users\BODI\Desktop\MesProjets\Projet_Yeki\yeki_backend\yeki_backend\schema_local.yaml
-// Généré le : 2026-07-28T07:38:38.712939
+// Source : ../../yeki_backend/yeki_backend/schema_local.yaml
+// Généré le : 2026-08-09T11:31:43.525223
 //
 // Chemins RELATIFS uniquement — ApiClient porte seul la
 // base URL (ApiConstants.baseUrl) via Dio BaseOptions.
@@ -47,6 +47,7 @@ class CoreEndpoints {
 
   static const String adminVersions = '/admin/versions/';
   static const String adminVersionsList = '/admin/versions/list/';
+  static const String appVersion = '/app/version/';
   static const String checkUpdate = '/check-update/';
   static const String historique = '/historique/';
   static const String historiqueStats = '/historique/stats/';
@@ -56,9 +57,12 @@ class CoreEndpoints {
 class EvaluationEndpoints {
   EvaluationEndpoints._();
 
+  static const String adminOlympiadesAValider = '/admin/olympiades/a-valider/';
+  static String adminOlympiadesRefuser(int id) => '/admin/olympiades/$id/refuser/';
+  static String adminOlympiadesValider(int id) => '/admin/olympiades/$id/valider/';
   static String classementDepartement(int departement_id) => '/classement/departement/$departement_id/';
-  static String classementHistorique(int departement_id) => '/classement/departement/$departement_id/historique/';
-  static String classementPeriodes(int departement_id) => '/classement/departement/$departement_id/periodes/';
+  static String classementDepartementHistorique(int departement_id) => '/classement/departement/$departement_id/historique/';
+  static String classementDepartementPeriodes(int departement_id) => '/classement/departement/$departement_id/periodes/';
   static const String classementMonScore = '/classement/mon-score/';
   static const String classementRecalculer = '/classement/recalculer/';
   static const String classementVerifierProgression = '/classement/verifier-progression/';
@@ -135,14 +139,13 @@ class FormationEndpoints {
   static String coursAddEnseignant(int cours_id) => '/cours/$cours_id/add-enseignant/';
   static String coursChangerEnseignantPrincipal(int cours_id) => '/cours/$cours_id/changer-enseignant-principal/';
   static const String coursCreate = '/cours/create/';
-  static String coursSupplements(int cours_id) => '/cours/$cours_id/supplements/';
-  static String coursSupplementsCreer(int cours_id) => '/cours/$cours_id/supplements/creer/';
-  static String supplementsSupprimer(int supplement_id) => '/supplements/$supplement_id/supprimer/';
   static String coursLecons(int cours_id) => '/cours/$cours_id/lecons/';
   static String coursListeModules(int cours_id) => '/cours/$cours_id/liste-modules/';
   static String coursModules(int cours_id) => '/cours/$cours_id/modules/';
   static const String coursPaletteCouleurs = '/cours/palette-couleurs/';
   static String coursRemoveEnseignant(int cours_id) => '/cours/$cours_id/remove-enseignant/';
+  static String coursSupplements(int cours_id) => '/cours/$cours_id/supplements/';
+  static String coursSupplementsCreer(int cours_id) => '/cours/$cours_id/supplements/creer/';
   static String coursUpdate(int cours_id) => '/cours/$cours_id/update/';
   static const String departements = '/departements/';
   static String departementsApprenants(int departement_id) => '/departements/$departement_id/apprenants/';
@@ -177,6 +180,7 @@ class FormationEndpoints {
   static const String principalRendusDevoirs = '/principal/rendus_devoirs/';
   static const String statistiquesGlobales = '/statistiques-globales/';
   static String statsEnseignantAdmin(int id) => '/stats/enseignant-admin/$id/';
+  static String supplementsSupprimer(int supplement_id) => '/supplements/$supplement_id/supprimer/';
 }
 
 class ForumEndpoints {

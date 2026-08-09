@@ -44,11 +44,17 @@ class AdminGeneralRepository {
     return results.map((e) => EnseignantAdmin.fromJson(Map<String, dynamic>.from(e as Map))).toList();
   }
 
-  Future<void> modifierEnseignant(int profileId, {required String userType, required bool isActive}) async {
-    await _api.patch(
+  /// Renvoie les champs confirmés par le backend (`user_type`/`is_active`,
+  /// déjà présents dans la réponse 200, jusqu'ici ignorés) — permet une
+  /// mise à jour immédiate de la liste sans dépendre du refetch en
+  /// arrière-plan (`rechercherEnseignants`/`chargerDashboard`), qui avale
+  /// ses propres erreurs en silence.
+  Future<Map<String, dynamic>> modifierEnseignant(int profileId, {required String userType, required bool isActive}) async {
+    final data = await _api.patch(
       AccountsEndpoints.adminGeneralEnseignantsModifier(profileId),
       data: {'user_type': userType, 'is_active': isActive},
     );
+    return Map<String, dynamic>.from(data as Map);
   }
 
   Future<void> creerParcours({required String nom, required String description, required String typeParcours}) async {

@@ -32,7 +32,9 @@ class _ModifierCoursSheetState extends State<ModifierCoursSheet> {
   late final _descCtrl = TextEditingController(text: widget.cours['description_brief'] ?? '');
 
   late String _iconeSelectionnee = widget.cours['icon_name'] ?? 'school';
-  late Color _couleurSelectionnee = couleurDepuisHex(widget.cours['color_code'] as String?, const Color(0xFF008080));
+  // Repli sur la 1ère couleur de `YkCourseColors.palette` (Azur), pas
+  // '#008080' (hors palette backend — voir creer_cours_sheet.dart).
+  late Color _couleurSelectionnee = couleurDepuisHex(widget.cours['color_code'] as String?, const Color(0xFF2E7CAD));
 
   @override
   void dispose() {
@@ -60,7 +62,10 @@ class _ModifierCoursSheetState extends State<ModifierCoursSheet> {
         YkSnack.success(context, 'Cours modifié avec succès !');
       }
     } on ApiException catch (e) {
-      if (mounted) YkSnack.error(context, e.message);
+      // Même filet que creer_cours_sheet.dart : le message générique du
+      // backend masque le champ réellement en cause.
+      final details = e.fields.isNotEmpty ? ' (${e.fields.keys.join(", ")})' : '';
+      if (mounted) YkSnack.error(context, '${e.message}$details');
     } catch (_) {
       if (mounted) YkSnack.error(context, 'Erreur réseau.');
     } finally {

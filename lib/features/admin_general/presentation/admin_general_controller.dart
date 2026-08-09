@@ -156,7 +156,22 @@ class AdminGeneralController extends ChangeNotifier {
   }
 
   Future<void> modifierEnseignant(int profileId, {required String userType, required bool isActive}) async {
-    await _repo.modifierEnseignant(profileId, userType: userType, isActive: isActive);
+    final confirme = await _repo.modifierEnseignant(profileId, userType: userType, isActive: isActive);
+    // Bug corrigé : `rechercherEnseignants()`/`chargerDashboard()` avalent
+    // leurs propres exceptions en silence (`catch (_) { enErreurX = true;
+    // }`, jamais de rethrow) — si ce rafraîchissement échoue ou est en
+    // retard, la liste restait silencieusement périmée après un succès
+    // pourtant confirmé par le backend, donnant l'impression que la
+    // modification n'avait pas fonctionné. On applique donc d'abord la
+    // confirmation reçue directement du serveur, sans attendre le refetch.
+    final nouveauType = confirme['user_type'] as String? ?? userType;
+    final nouveauActif = confirme['is_active'] as bool? ?? isActive;
+    final index = enseignants.indexWhere((e) => e.id == profileId);
+    if (index != -1) {
+      enseignants = List.of(enseignants)
+        ..[index] = enseignants[index].copyWith(userType: nouveauType, isActive: nouveauActif);
+      notifyListeners();
+    }
     await Future.wait([rechercherEnseignants(), chargerDashboard()]);
   }
 }

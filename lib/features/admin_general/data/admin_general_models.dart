@@ -172,6 +172,23 @@ class EnseignantAdmin {
     phone: json['phone'] as String? ?? '',
     avatarUrl: json['avatar'] as String?,
   );
+
+  /// Mise à jour immédiate de la liste après une modification réussie —
+  /// sans attendre (ni dépendre) du refetch en arrière-plan, qui avale ses
+  /// propres erreurs en silence (`AdminGeneralController.
+  /// rechercherEnseignants/chargerDashboard`).
+  EnseignantAdmin copyWith({String? userType, bool? isActive}) => EnseignantAdmin(
+    id: id,
+    username: username,
+    email: email,
+    nom: nom,
+    userType: userType ?? this.userType,
+    isActive: isActive ?? this.isActive,
+    dateJoined: dateJoined,
+    bio: bio,
+    phone: phone,
+    avatarUrl: avatarUrl,
+  );
 }
 
 class AdminGeneralDashboard {

@@ -67,6 +67,13 @@ class _CreerOlympiadeController extends ChangeNotifier {
     } else if (niveaux is String && niveaux.isNotEmpty) {
       niveauxSelectionnes = niveaux.split(',').map((n) => n.trim()).where((n) => n.isNotEmpty).toSet();
     }
+    // Bug corrigé : la tuile "Fin de l'olympiade (calculée)" ne se
+    // rafraîchissait pas à la frappe dans "Durée" — `dureeCtrl` n'avait
+    // aucun listener, seul un rebuild déclenché par un AUTRE champ (date,
+    // switch) la mettait à jour par ricochet. `dateFin` reste un getter
+    // calculé, jamais modifiable ni envoyé au serveur (qui la recalcule
+    // identiquement) — seule la réactivité de l'AFFICHAGE est corrigée.
+    dureeCtrl.addListener(notifyListeners);
   }
 
   static DateTime? _parseDate(dynamic value) {

@@ -89,14 +89,14 @@ class ClassementRepository {
   }
 
   Future<List<PeriodeArchivee>> periodesArchivees(int departementId) async {
-    final data = await _api.get(EvaluationEndpoints.classementPeriodes(departementId));
+    final data = await _api.get(EvaluationEndpoints.classementDepartementPeriodes(departementId));
     final list = data is List ? data : (data['results'] as List? ?? []);
     return list.map((e) => PeriodeArchivee.fromJson(Map<String, dynamic>.from(e as Map))).toList();
   }
 
   Future<List<ClassementLigne>> classementArchive(int departementId, DateTime periodeDebut) async {
     final data = await _api.get(
-      EvaluationEndpoints.classementHistorique(departementId),
+      EvaluationEndpoints.classementDepartementHistorique(departementId),
       query: {'periode_debut': periodeDebut.toIso8601String()},
     );
     final classement = Map<String, dynamic>.from(data as Map)['classement'] as List? ?? [];
