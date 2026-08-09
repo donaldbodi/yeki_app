@@ -10,25 +10,7 @@ import 'package:yeki/core/design/tokens/tokens.dart';
 import 'package:yeki/core/network/api_exception.dart';
 import 'package:yeki/repositories/cours_repository.dart';
 import 'package:yeki/utils/color_utils.dart';
-
-const List<Map<String, dynamic>> _iconesCours = [
-  {'nom': 'school', 'icon': Icons.school},
-  {'nom': 'book', 'icon': Icons.book},
-  {'nom': 'science', 'icon': Icons.science},
-  {'nom': 'calculate', 'icon': Icons.calculate},
-  {'nom': 'history_edu', 'icon': Icons.history_edu},
-  {'nom': 'language', 'icon': Icons.language},
-  {'nom': 'biotech', 'icon': Icons.biotech},
-  {'nom': 'computer', 'icon': Icons.computer},
-  {'nom': 'architecture', 'icon': Icons.architecture},
-  {'nom': 'psychology', 'icon': Icons.psychology},
-  {'nom': 'palette', 'icon': Icons.palette},
-  {'nom': 'music_note', 'icon': Icons.music_note},
-  {'nom': 'sports_soccer', 'icon': Icons.sports_soccer},
-  {'nom': 'medical_services', 'icon': Icons.medical_services},
-  {'nom': 'engineering', 'icon': Icons.engineering},
-  {'nom': 'eco', 'icon': Icons.eco},
-];
+import 'package:yeki/utils/cours_icons.dart';
 
 class ModifierCoursSheet extends StatefulWidget {
   final Map cours;
@@ -132,7 +114,7 @@ class _ModifierCoursSheetState extends State<ModifierCoursSheet> {
   }
 
   Widget _apercu(BuildContext context) {
-    final icone = _iconesCours.firstWhere((i) => i['nom'] == _iconeSelectionnee, orElse: () => {'icon': Icons.school})['icon'] as IconData;
+    final icone = iconePourNom(_iconeSelectionnee);
     return YkCard(
       accentColor: _couleurSelectionnee,
       child: Row(
@@ -162,19 +144,19 @@ class _ModifierCoursSheetState extends State<ModifierCoursSheet> {
       spacing: YkSpacing.xs,
       runSpacing: YkSpacing.xs,
       children: [
-        for (final item in _iconesCours)
+        for (final item in coursIcons)
           GestureDetector(
-            onTap: () => setState(() => _iconeSelectionnee = item['nom'] as String),
+            onTap: () => setState(() => _iconeSelectionnee = item.name),
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 200),
               width: 46,
               height: 46,
               decoration: BoxDecoration(
-                color: _iconeSelectionnee == item['nom'] ? _couleurSelectionnee : _couleurSelectionnee.withValues(alpha: 0.08),
+                color: _iconeSelectionnee == item.name ? _couleurSelectionnee : _couleurSelectionnee.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(YkRadius.md),
-                border: _iconeSelectionnee == item['nom'] ? null : Border.all(color: _couleurSelectionnee.withValues(alpha: 0.2)),
+                border: _iconeSelectionnee == item.name ? null : Border.all(color: _couleurSelectionnee.withValues(alpha: 0.2)),
               ),
-              child: Icon(item['icon'] as IconData, color: _iconeSelectionnee == item['nom'] ? Colors.white : _couleurSelectionnee, size: 22),
+              child: Icon(item.icon, color: _iconeSelectionnee == item.name ? Colors.white : _couleurSelectionnee, size: 22),
             ),
           ),
       ],

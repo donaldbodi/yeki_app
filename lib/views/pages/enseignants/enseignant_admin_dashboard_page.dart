@@ -188,6 +188,14 @@ class _EnseignantAdminDashboardPageState extends State<EnseignantAdminDashboardP
       loading: _loading,
       errorMessage: _error,
       onRetry: _charger,
+      heroCard: YkDashboardHeroBanner(
+        title: _nomParcours.isEmpty ? 'Mon parcours' : _nomParcours,
+        stats: [
+          ('${_stats['nb_departements'] ?? _departements.length}', 'Départements'),
+          ('${_stats['nb_cours'] ?? 0}', 'Cours'),
+          ('${_stats['nb_apprenants'] ?? 0}', 'Inscrits'),
+        ],
+      ),
       tabController: _tabCtrl,
       fab: _nomParcours.isEmpty ? null : YkFab(icon: Icons.add_rounded, label: 'Département', onPressed: _creerDepartement),
       tabs: [

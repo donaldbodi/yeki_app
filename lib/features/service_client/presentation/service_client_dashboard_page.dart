@@ -21,7 +21,8 @@
 
 import 'package:flutter/material.dart';
 
-import 'package:yeki/views/pages/enseignants/dashboard_skeleton.dart' show EnseignantDashboardSkeleton, YkDashboardTab;
+import 'package:yeki/views/pages/enseignants/dashboard_skeleton.dart'
+    show EnseignantDashboardSkeleton, YkDashboardHeroBanner, YkDashboardTab;
 
 import 'service_client_controller.dart';
 import 'widgets/paiements_a_valider_tab.dart';
@@ -63,8 +64,19 @@ class _ServiceClientDashboardPageState extends State<ServiceClientDashboardPage>
     return AnimatedBuilder(
       animation: _controller,
       builder: (context, _) {
+        final stats = _controller.statistiques;
         return EnseignantDashboardSkeleton(
           loading: false,
+          heroCard: stats == null
+              ? null
+              : YkDashboardHeroBanner(
+                  title: 'Demandes en attente',
+                  stats: [
+                    ('${stats.demandesEnAttentePaiement + stats.demandesEnAttenteRetrait}', 'En attente'),
+                    (StatistiquesTab.formatDelai(stats.delaiMoyenMinutesPaiement), 'Délai moyen'),
+                    (StatistiquesTab.formatTaux(stats.tauxRefusPaiement), 'Taux de refus'),
+                  ],
+                ),
           tabController: _tabController,
           tabs: [
             YkDashboardTab(

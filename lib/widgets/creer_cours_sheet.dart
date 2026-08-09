@@ -2,8 +2,17 @@
 //
 // Refondu en P11.6 (rituel P5.0) : bascule vers `CoursRepository`/
 // `DashboardRepository` (plus de `http`/`SharedPreferences` bruts) et les
-// tokens/composants `Yk*` (`YkFileUpload` remplace le sélecteur d'image
-// fait main).
+// tokens/composants `Yk*`.
+//
+// Simplifié (demande explicite) : « Matière » (le titre du cours joue déjà
+// ce rôle — confirmé non lu nulle part ailleurs), « Concours lié » (jamais
+// lu nulle part) et « Image de couverture » (confirmé NO-OP côté serveur —
+// `Cours` n'a aucun champ image, `CoursCreateSerializer` ignorait déjà ce
+// champ silencieusement) retirés. Sélecteur d'icône corrigé (bug réel :
+// `YkChip(variant: filter)` écoute `onSelected`, pas `onPressed` — le tap
+// ne faisait donc rien) et migré vers `coursIcons` (`cours_icons.dart`),
+// source unique désormais partagée avec `modifier_cours_sheet.dart` et
+// `secondaire_dashboard_page.dart`.
 
 import 'package:flutter/material.dart';
 
@@ -13,38 +22,13 @@ import 'package:yeki/core/network/api_exception.dart';
 import 'package:yeki/repositories/cours_repository.dart';
 import 'package:yeki/repositories/dashboard_repository.dart';
 import 'package:yeki/utils/color_utils.dart';
+import 'package:yeki/utils/cours_icons.dart';
 
 const List<String> _niveaux = [
   'Terminale', '1ère', '2nde', '3ème',
   'Licence 1', 'Licence 2', 'Licence 3',
   'Master 1', 'Master 2', 'Autre',
 ];
-
-const List<String> _matieres = [
-  'Mathématiques', 'Physique', 'Chimie', 'SVT',
-  'Informatique', 'Français', 'Anglais',
-  'Histoire-Géo', 'Philosophie', 'Économie', 'Autre',
-];
-
-const List<Map<String, dynamic>> _icones = [
-  {'name': 'school', 'icon': Icons.school, 'label': 'École'},
-  {'name': 'book', 'icon': Icons.book, 'label': 'Livre'},
-  {'name': 'calculate', 'icon': Icons.calculate, 'label': 'Maths'},
-  {'name': 'science', 'icon': Icons.science, 'label': 'Sciences'},
-  {'name': 'language', 'icon': Icons.language, 'label': 'Langue'},
-  {'name': 'computer', 'icon': Icons.computer, 'label': 'Info'},
-  {'name': 'history_edu', 'icon': Icons.history_edu, 'label': 'Histoire'},
-  {'name': 'psychology', 'icon': Icons.psychology, 'label': 'Philo'},
-  {'name': 'bar_chart', 'icon': Icons.bar_chart, 'label': 'Stats'},
-  {'name': 'biotech', 'icon': Icons.biotech, 'label': 'Bio'},
-  {'name': 'music_note', 'icon': Icons.music_note, 'label': 'Musique'},
-  {'name': 'sports_soccer', 'icon': Icons.sports_soccer, 'label': 'Sport'},
-  {'name': 'palette', 'icon': Icons.palette, 'label': 'Art'},
-  {'name': 'engineering', 'icon': Icons.engineering, 'label': 'Ingé'},
-  {'name': 'medical_services', 'icon': Icons.medical_services, 'label': 'Médecine'},
-];
-
-const _imageConstraint = YkFileConstraint(allowedExtensions: ['jpg', 'jpeg', 'png'], maxSizeBytes: 5 * 1024 * 1024);
 
 class CreerCoursSheet extends StatefulWidget {
   final int departementId;
@@ -63,14 +47,11 @@ class _CreerCoursSheetState extends State<CreerCoursSheet> {
 
   final _titreCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
-  final _concoursCtrl = TextEditingController();
 
   String? _niveau;
-  String? _matiere;
   String _colorCode = '#008080';
   String _iconName = 'school';
   int? _enseignantPrincipalId;
-  YkPickedFile? _image;
 
   bool _envoi = false;
   List<Map<String, dynamic>> _enseignants = [];
@@ -86,7 +67,6 @@ class _CreerCoursSheetState extends State<CreerCoursSheet> {
   void dispose() {
     _titreCtrl.dispose();
     _descCtrl.dispose();
-    _concoursCtrl.dispose();
     super.dispose();
   }
 
@@ -117,11 +97,8 @@ class _CreerCoursSheetState extends State<CreerCoursSheet> {
         niveau: _niveau!,
         colorCode: _colorCode,
         iconName: _iconName,
-        matiere: _matiere,
-        concours: _concoursCtrl.text.trim(),
         descriptionBrief: _descCtrl.text.trim(),
         enseignantPrincipalId: _enseignantPrincipalId,
-        image: _image,
       );
       if (mounted) {
         Navigator.pop(context);
@@ -129,7 +106,9 @@ class _CreerCoursSheetState extends State<CreerCoursSheet> {
       }
     } on ApiException catch (e) {
       if (mounted) YkSnack.error(context, e.message);
-    } catch (_) {
+    } catch (e) {
+      // Root cause non certaine à 100% (règle 7) — filet de diagnostic.
+      debugPrint('CreerCoursSheet._soumettre() — exception inattendue : ${e.runtimeType} : $e');
       if (mounted) YkSnack.error(context, 'Erreur réseau.');
     } finally {
       if (mounted) setState(() => _envoi = false);
@@ -162,16 +141,7 @@ class _CreerCoursSheetState extends State<CreerCoursSheet> {
               onChanged: (v) => setState(() => _niveau = v),
             ),
             SizedBox(height: YkSpacing.sm),
-            YkDropdown<String>(
-              label: 'Matière',
-              value: _matiere,
-              items: [for (final m in _matieres) YkDropdownItem(value: m, label: m)],
-              onChanged: (v) => setState(() => _matiere = v),
-            ),
-            SizedBox(height: YkSpacing.sm),
             YkTextField(controller: _descCtrl, label: 'Description brève', hint: 'Objectifs et contenu du cours', type: YkTextFieldType.multiline, maxLines: 3),
-            SizedBox(height: YkSpacing.sm),
-            YkTextField(controller: _concoursCtrl, label: 'Concours lié (optionnel)', hint: 'Ex : BEPC, BAC, ENS…'),
 
             SizedBox(height: YkSpacing.lg),
             Text('Apparence', style: YkTypography.label(context).copyWith(color: YkColors.textPrimary(context))),
@@ -184,11 +154,6 @@ class _CreerCoursSheetState extends State<CreerCoursSheet> {
             Text('Enseignant principal', style: YkTypography.label(context).copyWith(color: YkColors.textPrimary(context))),
             SizedBox(height: YkSpacing.sm),
             _selecteurEP(context),
-
-            SizedBox(height: YkSpacing.lg),
-            Text('Image de couverture', style: YkTypography.label(context).copyWith(color: YkColors.textPrimary(context))),
-            SizedBox(height: YkSpacing.sm),
-            YkFileUpload(constraint: _imageConstraint, picked: _image, onChanged: (f) => setState(() => _image = f)),
 
             SizedBox(height: YkSpacing.lg),
             YkButton(label: 'Créer le cours', isLoading: _envoi, onPressed: _envoi ? null : _soumettre),
@@ -204,13 +169,17 @@ class _CreerCoursSheetState extends State<CreerCoursSheet> {
       spacing: YkSpacing.xs,
       runSpacing: YkSpacing.xs,
       children: [
-        for (final item in _icones)
+        for (final item in coursIcons)
           YkChip(
-            label: item['label'] as String,
-            avatar: Icon(item['icon'] as IconData, size: 16, color: _iconName == item['name'] ? Colors.white : couleur),
+            label: item.label,
+            avatar: Icon(item.icon, size: 16, color: _iconName == item.name ? Colors.white : couleur),
             variant: YkChipVariant.filter,
-            selected: _iconName == item['name'],
-            onPressed: () => setState(() => _iconName = item['name'] as String),
+            selected: _iconName == item.name,
+            // Bug corrigé : `YkChip(variant: filter)` route vers un
+            // `FilterChip`, qui écoute `onSelected` — `onPressed` (utilisé
+            // avant) n'est lu par aucune variante `filter`, le tap ne
+            // faisait donc jamais rien.
+            onSelected: (_) => setState(() => _iconName = item.name),
           ),
       ],
     );

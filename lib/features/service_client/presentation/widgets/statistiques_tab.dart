@@ -13,13 +13,15 @@ class StatistiquesTab extends StatelessWidget {
 
   final ServiceClientController controller;
 
-  String _formatDelai(double? minutes) {
+  // Statiques (pas privées) : réutilisées par `service_client_dashboard_page.
+  // dart` pour la bannière héro, même formatage, une seule source de vérité.
+  static String formatDelai(double? minutes) {
     if (minutes == null) return '—';
     if (minutes < 60) return '${minutes.round()} min';
     return '${(minutes / 60).toStringAsFixed(1)} h';
   }
 
-  String _formatTaux(double? pourcent) => pourcent == null ? '—' : '${pourcent.toStringAsFixed(1)} %';
+  static String formatTaux(double? pourcent) => pourcent == null ? '—' : '${pourcent.toStringAsFixed(1)} %';
 
   @override
   Widget build(BuildContext context) {
@@ -56,22 +58,22 @@ class StatistiquesTab extends StatelessWidget {
             icon: Icons.account_balance_wallet_outlined,
           ),
           YkStatCard(
-            value: _formatDelai(stats.delaiMoyenMinutesPaiement),
+            value: formatDelai(stats.delaiMoyenMinutesPaiement),
             label: 'Délai moyen — paiements',
             icon: Icons.timer_outlined,
           ),
           YkStatCard(
-            value: _formatDelai(stats.delaiMoyenMinutesRetrait),
+            value: formatDelai(stats.delaiMoyenMinutesRetrait),
             label: 'Délai moyen — retraits',
             icon: Icons.timer_outlined,
           ),
           YkStatCard(
-            value: _formatTaux(stats.tauxRefusPaiement),
+            value: formatTaux(stats.tauxRefusPaiement),
             label: 'Taux de refus — paiements',
             icon: Icons.block_outlined,
           ),
           YkStatCard(
-            value: _formatTaux(stats.tauxRefusRetrait),
+            value: formatTaux(stats.tauxRefusRetrait),
             label: 'Taux de refus — retraits',
             icon: Icons.block_outlined,
           ),

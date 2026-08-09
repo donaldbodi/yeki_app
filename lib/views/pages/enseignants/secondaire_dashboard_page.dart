@@ -12,6 +12,7 @@ import 'package:yeki/core/design/components/components.dart';
 import 'package:yeki/core/design/tokens/tokens.dart';
 import 'package:yeki/core/router/route_names.dart';
 import 'package:yeki/repositories/dashboard_repository.dart';
+import 'package:yeki/utils/cours_icons.dart';
 import 'package:yeki/views/pages/enseignants/dashboard_skeleton.dart';
 
 class SecondaireCours {
@@ -119,37 +120,20 @@ class _SecondaireDashboardPageState extends State<SecondaireDashboardPage> with 
     );
   }
 
-  IconData _iconePourCours(String iconName) {
-    switch (iconName.toLowerCase()) {
-      case 'school':
-        return Icons.school_rounded;
-      case 'book':
-        return Icons.book_rounded;
-      case 'science':
-        return Icons.science_rounded;
-      case 'history':
-        return Icons.history_rounded;
-      case 'math':
-        return Icons.calculate_rounded;
-      case 'language':
-        return Icons.translate_rounded;
-      case 'computer':
-        return Icons.computer_rounded;
-      case 'art':
-        return Icons.art_track_rounded;
-      case 'music':
-        return Icons.music_note_rounded;
-      default:
-        return Icons.book_rounded;
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return EnseignantDashboardSkeleton(
       loading: _loading,
       errorMessage: _error,
       onRetry: _charger,
+      heroCard: YkDashboardHeroBanner(
+        title: 'Mes cours',
+        stats: [
+          ('${_stats['nb_cours'] ?? _cours.length}', 'Cours'),
+          ('${_stats['nb_apprenants'] ?? 0}', 'Apprenants'),
+          ('${_stats['nb_lecons'] ?? 0}', 'Leçons'),
+        ],
+      ),
       tabController: _tabCtrl,
       tabs: [
         YkDashboardTab(label: 'Mes cours', body: _tabCours(context)),
@@ -190,7 +174,7 @@ class _SecondaireDashboardPageState extends State<SecondaireDashboardPage> with 
               Container(
                 padding: EdgeInsets.all(YkSpacing.xs),
                 decoration: BoxDecoration(color: couleur.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(YkRadius.md)),
-                child: Icon(_iconePourCours(cours.iconName), color: couleur, size: 22),
+                child: Icon(iconePourNom(cours.iconName), color: couleur, size: 22),
               ),
               SizedBox(width: YkSpacing.sm),
               Expanded(

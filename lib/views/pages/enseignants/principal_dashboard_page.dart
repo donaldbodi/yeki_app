@@ -288,10 +288,21 @@ class _DashboardPrincipalPageState extends State<DashboardPrincipalPage> with Si
 
   @override
   Widget build(BuildContext context) {
+    final stats = _stats;
     return EnseignantDashboardSkeleton(
       loading: _loading,
       errorMessage: _error,
       onRetry: _charger,
+      heroCard: stats == null
+          ? null
+          : YkDashboardHeroBanner(
+              title: 'Mes cours',
+              stats: [
+                ('${stats.nbCours}', 'Cours'),
+                ('${stats.nbApprenants}', 'Apprenants'),
+                ('${stats.nbLecons}', 'Leçons'),
+              ],
+            ),
       tabController: _tabCtrl,
       tabs: [
         YkDashboardTab(label: 'Mes cours', body: _tabCours(context)),

@@ -44,9 +44,15 @@ class _ParcoursDetailPageState extends State<ParcoursDetailPage> {
 
     try {
       final data = await ApiClient().get('/parcours/${widget.parcoursId}/departements/');
+      // Bug corrigé : cet endpoint est paginé côté backend (`{count, next,
+      // previous, results}`), pas un tableau brut — `data as List` levait
+      // un TypeError avalé silencieusement ci-dessous, laissant
+      // `_departements` vide en permanence (le clic « Parcours » n'affichait
+      // donc plus jamais le détail des départements).
+      final resultats = data is List ? data : (data as Map)['results'] as List? ?? [];
       if (mounted) {
         setState(() {
-          _departements = List<Map<String, dynamic>>.from(data as List);
+          _departements = List<Map<String, dynamic>>.from(resultats);
           // CORRECTION: utiliser fold<double> puis convertir en int
           _stats = {
             'nb_departements': _departements.length,

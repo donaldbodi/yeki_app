@@ -12,6 +12,7 @@ import 'package:go_router/go_router.dart';
 
 import 'package:yeki/core/design/components/components.dart';
 import 'package:yeki/core/design/tokens/tokens.dart';
+import 'package:yeki/core/router/route_guard_metadata.dart' show kEnseignantRoles;
 import 'package:yeki/core/router/route_names.dart';
 import 'package:yeki/features/paiement/presentation/ouvrir_abonnement.dart';
 import 'package:yeki/repositories/auth_repository.dart';
@@ -53,7 +54,12 @@ class _ProfilPageState extends State<ProfilPage> with SingleTickerProviderStateM
     try {
       final profil = await AuthRepository().getCurrentUserRaw();
       final userType = profil['user_type']?.toString() ?? '';
-      final estEnseignant = userType.contains('enseignant') || userType == 'admin';
+      // Bug corrigé : le test ad hoc `contains('enseignant') || == 'admin'`
+      // ne connaissait pas 'service_client' — cette page l'appelait donc
+      // comme un apprenant (mon-score/statut abonnement), un endpoint qui
+      // rejette explicitement tout non-apprenant (403), avalé en silence
+      // ci-dessous. `kEnseignantRoles` est déjà la table de vérité unique.
+      final estEnseignant = kEnseignantRoles.contains(userType);
 
       final resultats = await Future.wait([
         AuthRepository().profilStats(),
@@ -80,7 +86,7 @@ class _ProfilPageState extends State<ProfilPage> with SingleTickerProviderStateM
     }
   }
 
-  bool get _isEnseignant => _userType.contains('enseignant') || _userType == 'admin';
+  bool get _isEnseignant => kEnseignantRoles.contains(_userType);
 
   bool get _estPremium => _abonnement['actif'] == true;
 
@@ -105,6 +111,8 @@ class _ProfilPageState extends State<ProfilPage> with SingleTickerProviderStateM
         return 'Coordonnateur';
       case 'admin':
         return 'Administrateur';
+      case 'service_client':
+        return 'Service Client';
       default:
         return 'Utilisateur';
     }

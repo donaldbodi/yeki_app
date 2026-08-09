@@ -111,17 +111,19 @@ class CoursRepository {
   );
 
   /// Création d'un cours (P11.6, migre `creer_cours_sheet.dart`).
+  ///
+  /// Simplifié (demande explicite) : "matière"/"concours"/"image de
+  /// couverture" retirés — non lus nulle part ailleurs (matière/concours)
+  /// ou confirmés NO-OP côté serveur (`Cours` n'a aucun champ image,
+  /// `CoursCreateSerializer` ne le déclare pas).
   Future<void> creerCours({
     required int departementId,
     required String titre,
     required String niveau,
     required String colorCode,
     required String iconName,
-    String? matiere,
-    String? concours,
     String? descriptionBrief,
     int? enseignantPrincipalId,
-    YkPickedFile? image,
   }) => _api.post(
     FormationEndpoints.coursCreate,
     data: FormData.fromMap({
@@ -130,11 +132,8 @@ class CoursRepository {
       'departement': departementId.toString(),
       'color_code': colorCode,
       'icon_name': iconName,
-      if (matiere != null && matiere.isNotEmpty) 'matiere': matiere,
-      if (concours != null && concours.isNotEmpty) 'concours': concours,
       if (descriptionBrief != null && descriptionBrief.isNotEmpty) 'description_brief': descriptionBrief,
       if (enseignantPrincipalId != null) 'enseignant_principal': enseignantPrincipalId.toString(),
-      if (image != null) 'image': MultipartFile.fromBytes(image.bytes, filename: image.name),
     }),
   );
 
