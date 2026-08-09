@@ -22,7 +22,6 @@ import 'package:yeki/core/router/route_names.dart';
 import 'package:yeki/features/olympiades/presentation/widgets/creer_olympiade_sheet.dart';
 import 'package:yeki/repositories/dashboard_repository.dart';
 import 'package:yeki/views/pages/enseignants/dashboard_skeleton.dart';
-import 'package:yeki/views/pages/enseignants/departement_form_sheet.dart';
 import 'package:yeki/widgets/creer_cours_sheet.dart';
 
 class CadreDashboardPage extends StatefulWidget {
@@ -117,29 +116,6 @@ class _CadreDashboardPageState extends State<CadreDashboardPage> with SingleTick
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (_) => CreerCoursSheet(departementId: dept['id'] as int, departementNom: dept['nom'] as String? ?? '', onSuccess: _charger),
-    );
-  }
-
-  /// Demande explicite : le cadre n'avait jusqu'ici aucun moyen de
-  /// modifier son propre département (capacité auparavant réservée au
-  /// coordonnateur, `enseignant_admin_dashboard_page.dart._modifierDepartement`,
-  /// même formulaire réutilisé tel quel). `typeParcours` dérivé des
-  /// mêmes booléens déjà présents dans `dept` (`est_prepa_concours`/
-  /// `est_formation_metier`/`est_formation_classique`) et déjà relus par
-  /// `departement_form_sheet.dart` en mode modification — pas une
-  /// supposition. `idParcours` n'est utilisé par ce formulaire qu'en
-  /// création, jamais en modification : valeur de repli sans risque.
-  void _modifierDepartement(Map<String, dynamic> dept) {
-    final estPrepa = dept['est_prepa_concours'] as bool? ?? false;
-    final estFormation = (dept['est_formation_metier'] as bool? ?? false) || (dept['est_formation_classique'] as bool? ?? false);
-    final typeParcours = estPrepa ? 'prepa' : (estFormation ? 'formation' : 'cursus');
-    ouvrirDepartementForm(
-      context: context,
-      typeParcours: typeParcours,
-      idParcours: dept['parcours_id'] as int? ?? 0,
-      nomParcours: dept['parcours'] as String? ?? '',
-      existant: dept,
-      onSuccess: _charger,
     );
   }
 
@@ -356,12 +332,6 @@ class _CadreDashboardPageState extends State<CadreDashboardPage> with SingleTick
                 ),
               ),
               YkBadge(variant: YkBadgeVariant.label, label: '${dept['nb_cours'] ?? 0} cours', color: couleur),
-              YkIconButton(
-                icon: Icons.edit_outlined,
-                label: 'Modifier le département',
-                variant: YkIconButtonVariant.ghost,
-                onPressed: () => _modifierDepartement(dept),
-              ),
             ],
           ),
           if ((dept['description'] as String?)?.isNotEmpty == true) ...[

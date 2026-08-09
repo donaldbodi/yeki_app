@@ -87,7 +87,16 @@ class _LeconsCoursPageState extends State<LeconsCoursPage> {
   /// (voir [_leconCouranteId]).
   int? _moduleOuvertId;
 
-  bool get _canEdit => widget.role == RoleEnseignant.enseignantCadre || widget.role == RoleEnseignant.enseignantPrincipal;
+  /// Réservé au seul enseignant principal (décision explicite, non
+  /// négociable) : un cadre ne peut plus ajouter/gérer les leçons.
+  bool get _canEdit => widget.role == RoleEnseignant.enseignantPrincipal;
+
+  /// `role == null` est la convention déjà établie pour ce widget partagé
+  /// : c'est le contexte apprenant (les rôles enseignant passent toujours
+  /// une valeur non nulle). Distinct de `!_canEdit` — un enseignant cadre
+  /// n'est ni éditeur ni apprenant, il ne doit voir ni le bloc d'édition
+  /// ni le bloc réservé à l'apprenant en bas de page.
+  bool get _estApprenant => widget.role == null;
 
   /// Id de la 1ʳᵉ leçon non terminée, tous modules confondus, dans l'ordre
   /// d'affichage — sert à distinguer « en cours » de « à venir » sur la
@@ -336,10 +345,9 @@ class _LeconsCoursPageState extends State<LeconsCoursPage> {
     );
   }
 
-  /// Gestion des suppléments (P11.9) — réservée à l'enseignant PRINCIPAL
-  /// du cours (vérifié côté backend, 403 sinon) ; visible ici à tout
-  /// `_canEdit` (cadre inclus) pour rester cohérent avec le reste du menu
-  /// — l'erreur 403 est affichée si le vérificateur backend refuse.
+  /// Gestion des suppléments — réservée à l'enseignant PRINCIPAL du cours
+  /// (vérifié côté backend, 403 sinon, et désormais aussi côté frontend :
+  /// `_canEdit` ne couvre plus que ce rôle).
   Future<void> _gererSupplements(LeconItem lecon) async {
     List<SupplementCoursItem> supplements;
     try {
@@ -509,7 +517,7 @@ class _LeconsCoursPageState extends State<LeconsCoursPage> {
             )
           else
             for (final module in _modules) _buildModuleBlock(module),
-          if (!_canEdit) ..._buildBasDePageApprenant(context),
+          if (_estApprenant) ..._buildBasDePageApprenant(context),
         ],
       ),
     );

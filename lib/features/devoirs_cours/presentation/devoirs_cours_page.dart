@@ -51,8 +51,9 @@ class DevoirsCoursPage extends StatefulWidget {
 class _DevoirsCoursPageState extends State<DevoirsCoursPage> {
   late final DevoirsCoursController _controller;
 
-  bool get _canEdit =>
-      widget.role == RoleEnseignant.enseignantPrincipal || widget.role == RoleEnseignant.enseignantCadre;
+  /// Réservé au seul enseignant principal (décision explicite, non
+  /// négociable) : un cadre ne peut plus créer de devoirs.
+  bool get _canEdit => widget.role == RoleEnseignant.enseignantPrincipal;
 
   @override
   void initState() {

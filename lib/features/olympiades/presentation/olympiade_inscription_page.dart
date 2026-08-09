@@ -84,7 +84,7 @@ class _OlympiadeInscriptionPageState extends State<OlympiadeInscriptionPage> {
               'Cette olympiade demande un paiement de participation de '
               '${widget.prixParticipation} FCFA, prélevé sur votre portefeuille Yéki.',
           chargerSolde: () => WalletRepository().solde(),
-          onPayer: () => _controller.payerParticipation(widget.prixParticipation),
+          onPayer: () => _controller.payerParticipation(),
           onRecharger: () => context.pushNamed(AppRoute.recharge),
         );
         if (paye && mounted) await _tenterInscription();

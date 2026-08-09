@@ -37,5 +37,5 @@ class OlympiadeInscriptionController extends ChangeNotifier {
     }
   }
 
-  Future<void> payerParticipation(int montant) => _repo.payerParticipation(olympiadeId, montant);
+  Future<void> payerParticipation() => _repo.payerParticipation(olympiadeId);
 }

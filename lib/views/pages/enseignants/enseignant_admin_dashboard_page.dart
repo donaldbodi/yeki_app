@@ -18,10 +18,8 @@ import 'package:yeki/core/design/components/components.dart';
 import 'package:yeki/core/design/tokens/tokens.dart';
 import 'package:yeki/core/router/route_names.dart';
 import 'package:yeki/repositories/dashboard_repository.dart';
-import 'package:yeki/repositories/olympiade_repository.dart';
 import 'package:yeki/views/pages/enseignants/dashboard_skeleton.dart';
 import 'package:yeki/views/pages/enseignants/departement_form_sheet.dart';
-import 'package:yeki/views/pages/enseignants/olympiades_a_valider_tab.dart';
 
 Color _couleurTypeDept(BuildContext context, String type) {
   switch (type) {
@@ -59,7 +57,6 @@ class EnseignantAdminDashboardPage extends StatefulWidget {
 
 class _EnseignantAdminDashboardPageState extends State<EnseignantAdminDashboardPage> with SingleTickerProviderStateMixin {
   final _repo = DashboardRepository();
-  final _olympiadeRepo = OlympiadeRepository();
   late final TabController _tabCtrl;
 
   bool _loading = true;
@@ -70,12 +67,11 @@ class _EnseignantAdminDashboardPageState extends State<EnseignantAdminDashboardP
   String _nomParcours = '';
   int _idParcours = 0;
   String _typeParcours = 'cursus';
-  int _nbOlympiadesEnAttente = 0;
 
   @override
   void initState() {
     super.initState();
-    _tabCtrl = TabController(length: 5, vsync: this);
+    _tabCtrl = TabController(length: 4, vsync: this);
     _charger();
   }
 
@@ -104,18 +100,6 @@ class _EnseignantAdminDashboardPageState extends State<EnseignantAdminDashboardP
     } finally {
       if (mounted) setState(() => _loading = false);
     }
-    _chargerNbOlympiadesEnAttente();
-  }
-
-  /// Compteur pour le badge de l'onglet — même motif que
-  /// `cadre_dashboard_page.dart._nbOlympiadesEnAttente`. Non bloquant :
-  /// un échec laisse simplement le badge à 0 plutôt que de gêner le
-  /// chargement du reste du dashboard.
-  Future<void> _chargerNbOlympiadesEnAttente() async {
-    try {
-      final liste = await _olympiadeRepo.aValiderAdmin();
-      if (mounted) setState(() => _nbOlympiadesEnAttente = liste.where((o) => o['statut_validation'] == 'attente').length);
-    } catch (_) {}
   }
 
   Future<List<Map<String, dynamic>>> _chargerTousLesCours() async {
@@ -219,12 +203,6 @@ class _EnseignantAdminDashboardPageState extends State<EnseignantAdminDashboardP
         YkDashboardTab(label: 'Cadres', body: _tabCadres(context)),
         YkDashboardTab(label: 'Statistiques', body: _tabStats(context)),
         YkDashboardTab(label: 'Tous les cours', body: _tabTousCours(context)),
-        // Validation admin des olympiades — rétablie (demande explicite).
-        YkDashboardTab(
-          label: 'Olympiades',
-          badge: _nbOlympiadesEnAttente > 0 ? _nbOlympiadesEnAttente : null,
-          body: OlympiadesAValiderTab(onChanged: _chargerNbOlympiadesEnAttente),
-        ),
       ],
     );
   }

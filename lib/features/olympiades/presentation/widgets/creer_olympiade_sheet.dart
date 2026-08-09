@@ -41,9 +41,6 @@ class _CreerOlympiadeController extends ChangeNotifier {
     : titreCtrl = TextEditingController(text: olympiade?['titre'] as String? ?? ''),
       descCtrl = TextEditingController(text: olympiade?['description'] as String? ?? ''),
       editionCtrl = TextEditingController(text: olympiade?['edition'] as String? ?? ''),
-      prixCtrl = TextEditingController(
-        text: ((olympiade?['prix_participation'] as num?) ?? 100).toInt().toString(),
-      ),
       dureeCtrl = TextEditingController(
         text: ((olympiade?['duree_minutes'] as num?) ?? 120).toInt().toString(),
       ),
@@ -54,7 +51,6 @@ class _CreerOlympiadeController extends ChangeNotifier {
         text: ((olympiade?['max_focus_perdu'] as num?) ?? 3).toInt().toString(),
       ),
       recompenseHtml = olympiade?['recompense'] as String? ?? '',
-      demandePaiementParticipants = olympiade?['demande_paiement_participants'] as bool? ?? true,
       melangerQuestions = olympiade?['melanger_questions'] as bool? ?? true,
       melangerChoix = olympiade?['melanger_choix'] as bool? ?? true,
       uneSeuleSession = olympiade?['une_seule_session'] as bool? ?? true,
@@ -84,13 +80,11 @@ class _CreerOlympiadeController extends ChangeNotifier {
   final TextEditingController titreCtrl;
   final TextEditingController descCtrl;
   final TextEditingController editionCtrl;
-  final TextEditingController prixCtrl;
   final TextEditingController dureeCtrl;
   final TextEditingController nbQuestionsCtrl;
   final TextEditingController maxFocusCtrl;
 
   String recompenseHtml;
-  bool demandePaiementParticipants;
   bool melangerQuestions;
   bool melangerChoix;
   bool uneSeuleSession;
@@ -143,11 +137,6 @@ class _CreerOlympiadeController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void toggleDemandePaiement(bool v) {
-    demandePaiementParticipants = v;
-    notifyListeners();
-  }
-
   void toggleMelangerQuestions(bool v) {
     melangerQuestions = v;
     notifyListeners();
@@ -182,7 +171,6 @@ class _CreerOlympiadeController extends ChangeNotifier {
     titreCtrl.dispose();
     descCtrl.dispose();
     editionCtrl.dispose();
-    prixCtrl.dispose();
     dureeCtrl.dispose();
     nbQuestionsCtrl.dispose();
     maxFocusCtrl.dispose();
@@ -251,8 +239,6 @@ Future<void> ouvrirCreerOlympiade(
               description: controller.descCtrl.text.trim(),
               edition: controller.editionCtrl.text.trim(),
               recompense: controller.recompenseHtml.trim(),
-              prixParticipation: int.tryParse(controller.prixCtrl.text.trim()) ?? 100,
-              demandePaiementParticipants: controller.demandePaiementParticipants,
               niveauxAccessibles: controller.niveauxSelectionnes.toList(),
               dateOuvertureInscription: controller.dateOuvertureInscription!,
               dateClotureInscription: controller.dateClotureInscription!,
@@ -271,8 +257,6 @@ Future<void> ouvrirCreerOlympiade(
               description: controller.descCtrl.text.trim(),
               edition: controller.editionCtrl.text.trim(),
               recompense: controller.recompenseHtml.trim(),
-              prixParticipation: int.tryParse(controller.prixCtrl.text.trim()) ?? 100,
-              demandePaiementParticipants: controller.demandePaiementParticipants,
               niveauxAccessibles: controller.niveauxSelectionnes.toList(),
               dateOuvertureInscription: controller.dateOuvertureInscription!,
               dateClotureInscription: controller.dateClotureInscription!,
@@ -369,31 +353,10 @@ class _CreerOlympiadeFields extends StatelessWidget {
               ),
             ],
             SizedBox(height: YkSpacing.md),
-            YkCard(
-              child: SwitchListTile(
-                value: controller.demandePaiementParticipants,
-                onChanged: controller.toggleDemandePaiement,
-                activeColor: YkColors.accent(context),
-                dense: true,
-                contentPadding: EdgeInsets.zero,
-                title: Text(
-                  'Demander un paiement aux participants',
-                  style: YkTypography.bodyMd(context).copyWith(fontWeight: FontWeight.w600),
-                ),
-                subtitle: Text(
-                  '100 FCFA par défaut — répartis entre Yéki et vous',
-                  style: YkTypography.bodySm(context).copyWith(color: YkColors.textSecondary(context)),
-                ),
-              ),
-            ),
-            SizedBox(height: YkSpacing.sm),
-            YkTextField(
-              name: 'prix_participation',
-              required: true,
-              controller: controller.prixCtrl,
-              type: YkTextFieldType.number,
-              label: 'Prix de participation (FCFA)',
-              hint: '100',
+            _MessageBanner(
+              icon: Icons.payments_outlined,
+              color: YkColors.info,
+              message: 'Prix de participation : 100 FCFA, fixe et non modifiable.',
             ),
             SizedBox(height: YkSpacing.md),
             YkRichEditor(

@@ -4,7 +4,7 @@
 // GÉNÉRÉ — ne pas éditer à la main.
 // Régénérer : dart run tool/generate_endpoints.dart
 // Source : ../../yeki_backend/yeki_backend/schema_local.yaml
-// Généré le : 2026-08-09T11:31:43.525223
+// Généré le : 2026-08-09T14:48:51.249601
 //
 // Chemins RELATIFS uniquement — ApiClient porte seul la
 // base URL (ApiConstants.baseUrl) via Dio BaseOptions.
@@ -57,9 +57,6 @@ class CoreEndpoints {
 class EvaluationEndpoints {
   EvaluationEndpoints._();
 
-  static const String adminOlympiadesAValider = '/admin/olympiades/a-valider/';
-  static String adminOlympiadesRefuser(int id) => '/admin/olympiades/$id/refuser/';
-  static String adminOlympiadesValider(int id) => '/admin/olympiades/$id/valider/';
   static String classementDepartement(int departement_id) => '/classement/departement/$departement_id/';
   static String classementDepartementHistorique(int departement_id) => '/classement/departement/$departement_id/historique/';
   static String classementDepartementPeriodes(int departement_id) => '/classement/departement/$departement_id/periodes/';

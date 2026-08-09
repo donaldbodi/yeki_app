@@ -14,7 +14,7 @@ class _FakeOlympiadeRepository extends OlympiadeRepository {
 
   final ApiException? erreurInscrire;
   int appelsInscrire = 0;
-  int? dernierMontantPaye;
+  int appelsPayerParticipation = 0;
 
   @override
   Future<void> inscrire(int olympiadeId) async {
@@ -23,8 +23,8 @@ class _FakeOlympiadeRepository extends OlympiadeRepository {
   }
 
   @override
-  Future<void> payerParticipation(int olympiadeId, int montant) async {
-    dernierMontantPaye = montant;
+  Future<void> payerParticipation(int olympiadeId) async {
+    appelsPayerParticipation++;
   }
 }
 
@@ -65,13 +65,13 @@ void main() {
       expect(c.inscriptionEnCours, isFalse);
     });
 
-    test('payerParticipation délègue le montant exact au repository', () async {
+    test('payerParticipation délègue au repository — le montant est fixe côté serveur, jamais un paramètre client', () async {
       final repo = _FakeOlympiadeRepository();
       final c = OlympiadeInscriptionController(olympiadeId: 5, repository: repo);
 
-      await c.payerParticipation(100);
+      await c.payerParticipation();
 
-      expect(repo.dernierMontantPaye, 100);
+      expect(repo.appelsPayerParticipation, 1);
     });
   });
 }

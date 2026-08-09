@@ -62,8 +62,9 @@ class ExercicesCoursPage extends StatefulWidget {
 class _ExercicesCoursPageState extends State<ExercicesCoursPage> {
   late final ExercicesCoursController _controller;
 
-  bool get _canEdit =>
-      widget.role == RoleEnseignant.enseignantPrincipal || widget.role == RoleEnseignant.enseignantCadre;
+  /// Réservé au seul enseignant principal (décision explicite, non
+  /// négociable) : un cadre ne peut plus créer d'exercices.
+  bool get _canEdit => widget.role == RoleEnseignant.enseignantPrincipal;
 
   @override
   void initState() {

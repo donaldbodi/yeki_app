@@ -83,7 +83,11 @@ class ExerciceRepository {
       if (inclureEpreuves) 'include_epreuves': 'true',
     };
     final data = await _api.get(EvaluationEndpoints.coursExercices(coursId), query: query);
-    final list = data as List;
+    // `ListeExercicesCoursView` utilise `PaginatedListMixin` : la réponse
+    // réelle est `{count, next, previous, results}`, jamais un tableau
+    // brut — cast direct confirmé être la root cause de « impossible de
+    // charger les exercices » (TypeError avalé par le catch générique).
+    final list = data is List ? data : (data['results'] as List? ?? []);
     return list.map((e) => ExerciceListItem.fromJson(Map<String, dynamic>.from(e as Map))).toList();
   }
 
@@ -100,7 +104,9 @@ class ExerciceRepository {
   /// `ModuleOption`/`LeconOption` ci-dessous.
   Future<List<ModuleOption>> listerModules(int coursId) async {
     final data = await _api.get(FormationEndpoints.coursListeModules(coursId));
-    final list = data as List;
+    // Même bug que `listerParCours()` : `ModuleListByCoursView` est aussi
+    // paginée, jamais un tableau brut.
+    final list = data is List ? data : (data['results'] as List? ?? []);
     return list.map((m) => ModuleOption.fromJson(Map<String, dynamic>.from(m as Map))).toList();
   }
 
