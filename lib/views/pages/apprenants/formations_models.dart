@@ -26,6 +26,14 @@ class CoursItem {
   final String color;
   final double progression;
   final String niveau;
+  final int? departementId;
+
+  /// Accès réel au département de ce cours — `true` par défaut (aucun
+  /// département cursus observé à accès restreint jusqu'ici, mais rien
+  /// ne l'empêche structurellement), calculé côté backend
+  /// (`ApprenantCursusAPIView`, même critère que `Departement.
+  /// acces_restreint`/`apprenants_autorises`).
+  final bool estAccessible;
 
   CoursItem({
     required this.id,
@@ -39,6 +47,8 @@ class CoursItem {
     required this.color,
     required this.progression,
     required this.niveau,
+    this.departementId,
+    this.estAccessible = true,
   });
 
   factory CoursItem.fromJson(Map<String, dynamic> json) {
@@ -54,6 +64,8 @@ class CoursItem {
       color: json['color'] ?? json['color_code'] ?? '#2884A0',
       progression: (json['progression'] as num?)?.toDouble() ?? 0.0,
       niveau: json['niveau'] ?? '',
+      departementId: json['departement_id'] as int?,
+      estAccessible: json['est_accessible'] as bool? ?? true,
     );
   }
 }

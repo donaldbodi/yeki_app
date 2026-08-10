@@ -170,12 +170,15 @@ class _CursusPageState extends State<CursusPage> {
           queryParameters: {
             'titre': cours.title,
             'coursColor': couleur.toARGB32().toString(),
-            // `true` volontaire (pas un oubli, P11.4) : le Cursus n'a pas
-            // de système d'accès restreint par département contrairement
-            // à Formations/Prépa Concours (`FormationRepository.cursus()`
-            // ne renvoie que des `CoursItem`, sans `DepartementItem.
-            // estAccessible`) — c'est le socle toujours accessible.
-            'isPremium': 'true',
+            // Dynamique (demande explicite) : reflète le VRAI accès du
+            // département de ce cours (`ApprenantCursusAPIView`, même
+            // critère `acces_restreint`/`apprenants_autorises` que
+            // Formations/Prépa Concours) — `true` reste la valeur
+            // observée en pratique (aucun département cursus mis à
+            // accès restreint jusqu'ici), mais ce n'est plus une
+            // constante figée : un département cursus rendu restreint
+            // un jour se reflétera ici sans changement de code.
+            'isPremium': cours.estAccessible.toString(),
           },
         ),
         child: Row(
