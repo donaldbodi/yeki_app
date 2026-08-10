@@ -156,7 +156,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
 
     return Scaffold(
       backgroundColor: YkColors.background(context),
-      appBar: AppBar(title: const Text('Édition du profil')),
+      appBar: const YkGradientAppBar(title: 'Édition du profil'),
       body: SingleChildScrollView(
         padding: EdgeInsets.all(YkSpacing.md),
         child: Column(

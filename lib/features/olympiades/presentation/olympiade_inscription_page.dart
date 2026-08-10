@@ -103,7 +103,7 @@ class _OlympiadeInscriptionPageState extends State<OlympiadeInscriptionPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: YkColors.background(context),
-      appBar: AppBar(title: Text(widget.titre, maxLines: 1, overflow: TextOverflow.ellipsis)),
+      appBar: YkGradientAppBar(titleWidget: Text(widget.titre, maxLines: 1, overflow: TextOverflow.ellipsis)),
       body: AnimatedBuilder(
         animation: _controller,
         builder: (context, _) => ListView(

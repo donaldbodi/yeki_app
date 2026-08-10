@@ -150,7 +150,7 @@ class _RepetiteursPageState extends State<RepetiteursPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: YkColors.background(context),
-      appBar: AppBar(title: const Text('Trouver un répétiteur')),
+      appBar: const YkGradientAppBar(title: 'Trouver un répétiteur'),
       body: _chargementInitial
           ? Center(child: YkProgress(shape: YkProgressShape.circular))
           : Column(

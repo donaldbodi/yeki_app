@@ -64,7 +64,7 @@ class _RetraitPageState extends State<RetraitPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: YkColors.background(context),
-      appBar: AppBar(title: const Text('Demande de retrait')),
+      appBar: const YkGradientAppBar(title: 'Demande de retrait'),
       body: AnimatedBuilder(
         animation: _controller,
         builder: (context, _) {

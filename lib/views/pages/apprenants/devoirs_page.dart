@@ -305,9 +305,14 @@ class _DevoirsPageState extends State<DevoirsPage> {
                 child: ListView(
                   padding: EdgeInsets.all(YkSpacing.md),
                   children: [
-                    _buildTitre(context),
-                    SizedBox(height: YkSpacing.md),
-                    _buildStats(context),
+                    YkDashboardHeroBanner(
+                      title: 'Mes devoirs',
+                      stats: [
+                        ('${_tous.length}', 'Total'),
+                        ('$_aFaire', 'À faire'),
+                        ('$_enRetard', 'En retard'),
+                      ],
+                    ),
                     SizedBox(height: YkSpacing.md),
                     YkTextField(
                       type: YkTextFieldType.search,
@@ -344,42 +349,6 @@ class _DevoirsPageState extends State<DevoirsPage> {
                   ],
                 ),
               ),
-      ),
-    );
-  }
-
-  Widget _buildTitre(BuildContext context) {
-    return Row(
-      children: [
-        Text('Mes devoirs', style: YkTypography.h3(context).copyWith(color: YkColors.textPrimary(context))),
-        SizedBox(width: YkSpacing.xs),
-        YkBadge(variant: YkBadgeVariant.label, label: 'ÉVALUATIONS', color: YkColors.accent(context)),
-      ],
-    );
-  }
-
-  Widget _buildStats(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(child: _buildStatCard(context, 'Total', '${_tous.length}', Icons.assignment_rounded, YkColors.accent(context))),
-        SizedBox(width: YkSpacing.sm),
-        Expanded(child: _buildStatCard(context, 'À faire', '$_aFaire', Icons.pending_rounded, YkColors.info)),
-        SizedBox(width: YkSpacing.sm),
-        Expanded(child: _buildStatCard(context, 'En retard', '$_enRetard', Icons.warning_rounded, YkColors.error)),
-      ],
-    );
-  }
-
-  Widget _buildStatCard(BuildContext context, String label, String valeur, IconData icon, Color couleur) {
-    return YkCard(
-      variant: YkCardVariant.filled,
-      child: Column(
-        children: [
-          Icon(icon, size: 20, color: couleur),
-          SizedBox(height: YkSpacing.xxs),
-          Text(valeur, style: YkTypography.h4(context).copyWith(color: couleur)),
-          Text(label, style: YkTypography.caption(context).copyWith(color: YkColors.textSecondary(context))),
-        ],
       ),
     );
   }

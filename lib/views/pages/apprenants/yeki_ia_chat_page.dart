@@ -540,14 +540,16 @@ class _YekiIAChatPageState extends State<YekiIAChatPage> with TickerProviderStat
   }
 
   PreferredSizeWidget _buildAppBar(BuildContext context) {
-    final accent = YkColors.accent(context);
-    return AppBar(
-      title: Row(
+    // Dégradé de marque (`YkGradientAppBar`) — le titre/sous-titre passent
+    // en blanc pour rester lisibles sur ce fond, comme le reste des
+    // en-têtes dégradés de l'app.
+    return YkGradientAppBar(
+      titleWidget: Row(
         children: [
           CircleAvatar(
             radius: 18,
-            backgroundColor: accent,
-            child: Text('YIA', style: YkTypography.caption(context).copyWith(color: YkColors.onAccent(context))),
+            backgroundColor: Colors.white24,
+            child: Text('YIA', style: YkTypography.caption(context).copyWith(color: Colors.white)),
           ),
           SizedBox(width: YkSpacing.xs),
           Expanded(
@@ -558,7 +560,7 @@ class _YekiIAChatPageState extends State<YekiIAChatPage> with TickerProviderStat
                 const Text('Yéki IA'),
                 Text(
                   widget.coursTitre,
-                  style: YkTypography.caption(context).copyWith(color: YkColors.textSecondary(context)),
+                  style: YkTypography.caption(context).copyWith(color: Colors.white70),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),

@@ -218,10 +218,18 @@ class _LectureLeconPageState extends State<LectureLeconPage> {
 
     return Scaffold(
       backgroundColor: YkColors.background(context),
-      appBar: AppBar(
-        backgroundColor: _accent,
-        foregroundColor: Colors.white,
-        title: Text(lecon.titre, maxLines: 1, overflow: TextOverflow.ellipsis),
+      appBar: YkGradientAppBar(
+        // Dégradé subtil dérivé de la couleur DU COURS (pas le dégradé
+        // de marque fixe par défaut de `YkGradientAppBar`, non pertinent
+        // ici — chaque cours garde sa propre identité de couleur, déjà
+        // établie ailleurs dans l'app) — touche plus légère qu'un plein
+        // dégradé, la lisibilité du PDF en dessous prime sur cet écran.
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [_accent, _accent.withValues(alpha: 0.85)],
+        ),
+        titleWidget: Text(lecon.titre, maxLines: 1, overflow: TextOverflow.ellipsis),
         actions: [
           IconButton(
             icon: Icon(lecon.estTerminee ? Icons.check_circle_rounded : Icons.check_circle_outline_rounded),

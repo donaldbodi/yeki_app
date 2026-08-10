@@ -311,16 +311,38 @@ class _PaiementPageState extends State<PaiementPage> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         YkCard(
-          variant: YkCardVariant.filled,
-          accentColor: YkColors.accent(context),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          padding: EdgeInsets.zero,
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [YkColors.primary800, YkColors.primary700, YkColors.primary500],
+          ),
+          child: Stack(
+            clipBehavior: Clip.none,
             children: [
-              Text(widget.titre, style: YkTypography.h4(context).copyWith(color: YkColors.textPrimary(context))),
-              SizedBox(height: YkSpacing.xs),
-              Text(
-                '$_montantFinal FCFA',
-                style: YkTypography.h2(context).copyWith(color: YkColors.accent(context), fontWeight: FontWeight.w800),
+              Positioned(
+                top: -40,
+                right: -40,
+                child: ClipOval(
+                  child: Container(width: 140, height: 140, color: YkColors.textOnPrimary.withValues(alpha: 0.08)),
+                ),
+              ),
+              Padding(
+                padding: EdgeInsets.all(YkSpacing.lg),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      widget.titre,
+                      style: YkTypography.h4(context).copyWith(color: YkColors.textOnPrimary, fontWeight: FontWeight.w700),
+                    ),
+                    SizedBox(height: YkSpacing.xs),
+                    Text(
+                      '$_montantFinal FCFA',
+                      style: YkTypography.h2(context).copyWith(color: YkColors.textOnPrimary, fontWeight: FontWeight.w800),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),

@@ -269,9 +269,30 @@ class _RegisterPageState extends State<RegisterPage> {
     // d'erreurs (que `YkForm` afficherait automatiquement) est donc
     // reconstruit ici, juste au-dessus — voir `_ErrorSummaryBanner`.
     return Scaffold(
+      backgroundColor: YkColors.background(context),
       body: SafeArea(
         child: Column(
           children: [
+            // Bandeau de marque — `YkStepIndicator` reste sur le fond
+            // clair standard juste en dessous (ses couleurs "à venir"
+            // sont conçues pour un fond clair, pas pour être posées
+            // directement sur ce dégradé) : ce bandeau ajoute
+            // l'habillage maquette sans risquer une perte de lisibilité.
+            YkGradientBackground(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [YkColors.primary800, YkColors.primary700, YkColors.primary500],
+              ),
+              child: Container(
+                width: double.infinity,
+                padding: EdgeInsets.fromLTRB(YkSpacing.md, YkSpacing.md, YkSpacing.md, YkSpacing.lg),
+                child: Text(
+                  'Créer un compte',
+                  style: YkTypography.h3(context).copyWith(color: Colors.white, fontWeight: FontWeight.w800),
+                ),
+              ),
+            ),
             Padding(
               padding: EdgeInsets.fromLTRB(YkSpacing.md, YkSpacing.md, YkSpacing.md, 0),
               child: AnimatedBuilder(

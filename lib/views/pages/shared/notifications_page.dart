@@ -65,24 +65,11 @@ class _NotificationsPageState extends State<NotificationsPage> {
       builder: (context, _) {
         return Scaffold(
           backgroundColor: YkColors.background(context),
-          // Dégradé de la même famille que les en-têtes Admin Général/
-          // Historique (harmonieux avec le reste de l'app) — remplace
-          // l'AppBar Material par défaut, sans en changer le comportement
-          // (bouton retour/actions inchangés, juste re-habillé).
-          appBar: AppBar(
-            backgroundColor: Colors.transparent,
-            elevation: 0,
-            foregroundColor: YkColors.textOnPrimary,
-            flexibleSpace: Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [YkColors.primary800, YkColors.primary700, YkColors.primary500],
-                ),
-              ),
-            ),
-            title: Row(
+          // Dégradé de marque (`YkGradientAppBar`, désormais extrait en
+          // composant partagé — voir son fichier) — comportement de
+          // navigation inchangé (bouton retour/actions), juste re-habillé.
+          appBar: YkGradientAppBar(
+            titleWidget: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 const Text('Notifications'),

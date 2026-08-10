@@ -134,7 +134,7 @@ class _SettingsPageState extends State<SettingsPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: YkColors.background(context),
-      appBar: AppBar(title: const Text('Paramètres')),
+      appBar: const YkGradientAppBar(title: 'Paramètres'),
       body: ListView(
         padding: EdgeInsets.all(YkSpacing.md),
         children: [

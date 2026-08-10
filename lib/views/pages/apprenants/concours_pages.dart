@@ -167,27 +167,16 @@ class _ConcoursPageState extends State<ConcoursPage> {
   }
 
   Widget _buildEnTete(BuildContext context) {
-    return YkCard(
-      variant: YkCardVariant.filled,
-      accentColor: YkColors.accent(context),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          YkBadge(variant: YkBadgeVariant.label, label: 'YÉKI PRÉPA CONCOURS', color: YkColors.accent(context)),
-          SizedBox(height: YkSpacing.xs),
-          Text(
-            "Atteignez l'excellence",
-            style: YkTypography.h3(context).copyWith(color: YkColors.textPrimary(context)),
-          ),
-          SizedBox(height: YkSpacing.xxs),
-          Text(
-            _niveauApprenant.isNotEmpty
-                ? 'Concours accessibles pour le niveau : $_niveauApprenant'
-                : "Propulsez votre avenir au sein des grandes écoles d'ingénierie.",
-            style: YkTypography.bodySm(context).copyWith(color: YkColors.textSecondary(context)),
-          ),
-        ],
-      ),
+    // Demande explicite : en-tête image (voir docs/ecarts ou le rapport
+    // de ticket pour la procédure d'ajout d'une vraie photo — le fichier
+    // n'existe pas encore, le dégradé de repli s'affiche en attendant).
+    return YkImageHeroBanner(
+      imageAssetPath: 'assets/images/header_concours.jpg',
+      badgeLabel: 'YÉKI PRÉPA CONCOURS',
+      title: "Atteignez l'excellence",
+      subtitle: _niveauApprenant.isNotEmpty
+          ? 'Concours accessibles pour le niveau : $_niveauApprenant'
+          : "Propulsez votre avenir au sein des grandes écoles d'ingénierie.",
     );
   }
 

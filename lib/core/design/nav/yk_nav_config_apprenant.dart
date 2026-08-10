@@ -16,8 +16,10 @@ import 'yk_nav_destination.dart';
 /// « Plus » en compact).
 ///
 /// Forum et Yéki IA (en tant que destination autonome, hors contexte d'un
-/// cours) n'ont aujourd'hui aucune route globale — `null`, visibles mais
-/// non cliquables (voir P4.6, décision actée).
+/// cours) ont été retirés de cette liste (demande explicite) — aucune
+/// route globale n'existe pour ni l'un ni l'autre (voir P4.6), et les
+/// deux restent pleinement accessibles dans leur contexte réel (Forum
+/// par cours, Yéki IA via une route contextuelle).
 final List<YkNavGroup> apprenantNavGroups = [
   const YkNavGroup(
     destinations: [
@@ -73,21 +75,12 @@ final List<YkNavGroup> apprenantNavGroups = [
         routeName: AppRoute.dashboardOlympiades,
         badgeKey: 'olympiade',
       ),
-      YkNavDestination(
-        label: 'Forum',
-        icon: Icons.forum_outlined,
-        selectedIcon: Icons.forum,
-        badgeKey: 'forum',
-        // TODO(nav): ForumPage n'existe qu'en widget embarqué par cours
-        // aujourd'hui, jamais en destination globale — §4.2.1, dest. 7.
-      ),
-      YkNavDestination(
-        label: 'Yéki IA',
-        icon: Icons.auto_awesome_outlined,
-        selectedIcon: Icons.auto_awesome,
-        // TODO(nav): route `iaChat` existante mais contextuelle
-        // (nécessite un coursId) — pas une destination de nav autonome.
-      ),
+      // « Forum » et « Yéki IA » retirés (demande explicite) : ni l'un ni
+      // l'autre n'a jamais eu de route globale câblée (voir l'historique
+      // de ce fichier) — Forum reste pleinement fonctionnel comme onglet
+      // contextualisé PAR COURS (`CoursDetailTabs`), Yéki IA comme route
+      // `iaChat` contextuelle (nécessite un coursId) — aucune capacité
+      // perdue, seulement 2 destinations mortes retirées du tiroir.
     ],
   ),
   const YkNavGroup(

@@ -48,7 +48,7 @@ class _ClassementOlympiadePageState extends State<ClassementOlympiadePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: YkColors.background(context),
-      appBar: AppBar(title: Text('Classement — ${widget.titre}', overflow: TextOverflow.ellipsis)),
+      appBar: YkGradientAppBar(titleWidget: Text('Classement — ${widget.titre}', overflow: TextOverflow.ellipsis)),
       body: AnimatedBuilder(animation: _controller, builder: (context, _) => _buildBody(context)),
     );
   }

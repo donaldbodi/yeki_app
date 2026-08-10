@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import 'package:yeki/core/design/components/components.dart';
 import 'package:yeki/core/design/tokens/tokens.dart';
-import 'package:yeki/views/pages/enseignants/dashboard_skeleton.dart' show YkDashboardHeroBanner;
 
 import '../../data/admin_general_models.dart';
 import '../admin_general_controller.dart';

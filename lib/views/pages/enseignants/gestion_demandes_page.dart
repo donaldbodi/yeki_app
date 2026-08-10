@@ -109,8 +109,8 @@ class _GestionDemandesPageState extends State<GestionDemandesPage> with SingleTi
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: YkColors.background(context),
-      appBar: AppBar(
-        title: Text("Demandes d'accès - ${widget.departementNom}"),
+      appBar: YkGradientAppBar(
+        title: "Demandes d'accès - ${widget.departementNom}",
         actions: [IconButton(icon: const Icon(Icons.refresh_rounded), onPressed: _charger)],
       ),
       body: Column(

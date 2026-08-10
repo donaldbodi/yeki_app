@@ -321,26 +321,14 @@ class _FormationsPageState extends State<FormationsPage> with SingleTickerProvid
   }
 
   Widget _buildEnTete(BuildContext context) {
-    return YkCard(
-      variant: YkCardVariant.filled,
-      accentColor: YkColors.accent(context),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          YkBadge(
-            variant: YkBadgeVariant.label,
-            label: 'DÉVELOPPEMENT PROFESSIONNEL',
-            color: YkColors.accent(context),
-          ),
-          SizedBox(height: YkSpacing.xs),
-          Text('Formations', style: YkTypography.h3(context).copyWith(color: YkColors.textPrimary(context))),
-          SizedBox(height: YkSpacing.xxs),
-          Text(
-            'Développez vos compétences avec nos experts.',
-            style: YkTypography.bodySm(context).copyWith(color: YkColors.textSecondary(context)),
-          ),
-        ],
-      ),
+    // Demande explicite : en-tête image (voir docs/ecarts ou le rapport
+    // de ticket pour la procédure d'ajout d'une vraie photo — le fichier
+    // n'existe pas encore, le dégradé de repli s'affiche en attendant).
+    return const YkImageHeroBanner(
+      imageAssetPath: 'assets/images/header_formations.jpg',
+      badgeLabel: 'DÉVELOPPEMENT PROFESSIONNEL',
+      title: 'Formations',
+      subtitle: 'Développez vos compétences avec nos experts.',
     );
   }
 

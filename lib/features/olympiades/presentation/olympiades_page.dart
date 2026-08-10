@@ -123,11 +123,19 @@ class _OlympiadesPageState extends State<OlympiadesPage> {
 
   Widget _buildListe(BuildContext context) {
     final affichees = _controller.affichees;
+    final toutes = _controller.toutes;
+    final enCours = toutes.where((o) => o.statut == 'en_cours').length;
+    final inscrit = toutes.where((o) => o.estInscrit).length;
     return RefreshIndicator(
       onRefresh: _controller.charger,
       child: ListView(
         padding: EdgeInsets.all(YkSpacing.md),
         children: [
+          YkDashboardHeroBanner(
+            title: 'Olympiades',
+            stats: [('${toutes.length}', 'Total'), ('$enCours', 'En cours'), ('$inscrit', 'Inscrit(e)')],
+          ),
+          SizedBox(height: YkSpacing.md),
           YkSegmented<String>(
             segments: const [
               YkSegment(value: 'tous', label: 'Toutes'),

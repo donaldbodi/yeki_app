@@ -21,8 +21,9 @@
 
 import 'package:flutter/material.dart';
 
+import 'package:yeki/core/design/components/components.dart' show YkDashboardHeroBanner;
 import 'package:yeki/views/pages/enseignants/dashboard_skeleton.dart'
-    show EnseignantDashboardSkeleton, YkDashboardHeroBanner, YkDashboardTab;
+    show EnseignantDashboardSkeleton, YkDashboardTab;
 
 import 'service_client_controller.dart';
 import 'widgets/paiements_a_valider_tab.dart';

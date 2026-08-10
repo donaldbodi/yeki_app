@@ -34,10 +34,10 @@ Widget _scaffold({
 
 void main() {
   group('YkNavConfig', () {
-    test('apprenant : 10 destinations, exactement 4 dans la barre compacte', () {
+    test('apprenant : 8 destinations, exactement 4 dans la barre compacte', () {
       final groups = YkNavConfig.forRole('apprenant');
       final flat = [for (final g in groups) ...g.destinations];
-      expect(flat.length, 10);
+      expect(flat.length, 8);
       expect(flat.where((d) => d.inCompactBar).length, 4);
     });
 
@@ -131,16 +131,17 @@ void main() {
     ) async {
       String? tapped;
       await tester.pumpWidget(
-        _scaffold(size: const Size(1300, 900), role: 'apprenant', onDestinationTap: (r) => tapped = r),
+        _scaffold(size: const Size(1300, 900), role: 'enseignant_cadre', onDestinationTap: (r) => tapped = r),
       );
       await tester.pumpAndSettle();
-      // "Forum" : destination sans route globale (widget embarqué par
-      // cours uniquement, voir yk_nav_config_apprenant.dart) — non câblée.
-      // Plus bas dans la liste que "Accueil" (premier élément) : la faire
-      // défiler dans la vue avant de taper (ListView virtualisée).
-      await tester.scrollUntilVisible(find.text('Forum'), 100);
+      // "Mon département" : destination sans route globale câblée
+      // (voir yk_nav_config_enseignant.dart, TODO(nav)) — non câblée.
+      // Forum/Yéki IA (apprenant) servaient jusqu'ici cet exemple, mais
+      // ont été retirés de la config apprenant (demande explicite) —
+      // toutes les destinations apprenant sont désormais câblées.
+      await tester.scrollUntilVisible(find.text('Mon département'), 100);
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Forum'));
+      await tester.tap(find.text('Mon département'));
       await tester.pumpAndSettle();
       expect(find.text('Bientôt disponible'), findsOneWidget);
       expect(tapped, isNull);

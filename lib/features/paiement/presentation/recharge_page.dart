@@ -70,7 +70,7 @@ class _RechargePageState extends State<RechargePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: YkColors.background(context),
-      appBar: AppBar(title: const Text('Recharge du portefeuille')),
+      appBar: const YkGradientAppBar(title: 'Recharge du portefeuille'),
       body: AnimatedBuilder(
         animation: _controller,
         builder: (context, _) {
