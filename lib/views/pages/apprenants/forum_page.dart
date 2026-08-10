@@ -63,6 +63,7 @@ class QForum {
   final int id;
   final String contenu, source, creeLe;
   final String auteurNom, auteurUsername;
+  final String? auteurAvatarUrl;
   final bool estResolue, auteurEstEnseignant;
   final int nbVues;
   int nbReponses;
@@ -81,6 +82,7 @@ class QForum {
     required this.nbReponses,
     required this.auteurNom,
     required this.auteurUsername,
+    this.auteurAvatarUrl,
     this.auteurEstEnseignant = false,
     this.leconId,
     this.leconTitre = '',
@@ -105,6 +107,7 @@ class QForum {
     nbReponses: j['nb_reponses'] ?? 0,
     auteurNom: j['auteur_nom'] ?? '',
     auteurUsername: j['auteur_username'] ?? '',
+    auteurAvatarUrl: j['auteur_avatar_url'] as String?,
     auteurEstEnseignant: j['auteur_est_enseignant'] ?? false,
     leconId: j['lecon_id'],
     leconTitre: j['lecon_titre'] ?? '',
@@ -139,6 +142,7 @@ class QForum {
 class RepForum {
   final int id;
   final String contenu, creeLe, auteurNom, auteurUsername;
+  final String? auteurAvatarUrl;
   final bool estSolution, auteurEstEnseignant;
   int nbLikes;
   bool monLike;
@@ -151,6 +155,7 @@ class RepForum {
     required this.estSolution,
     required this.auteurNom,
     required this.auteurUsername,
+    this.auteurAvatarUrl,
     this.auteurEstEnseignant = false,
     required this.nbLikes,
     required this.monLike,
@@ -165,6 +170,7 @@ class RepForum {
     estSolution: j['est_solution'] ?? false,
     auteurNom: j['auteur_nom'] ?? '',
     auteurUsername: j['auteur_username'] ?? '',
+    auteurAvatarUrl: j['auteur_avatar_url'] as String?,
     auteurEstEnseignant: j['auteur_est_enseignant'] ?? false,
     nbLikes: j['nb_likes'] ?? 0,
     monLike: j['mon_like'] ?? false,
@@ -484,7 +490,16 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin, Wi
         color: YkColors.background(context),
         padding: EdgeInsets.only(top: widget.topPadding),
         child: erreur == kMessagePremiumRequis
-            ? YkPremiumRequired(message: erreur, onSubscribe: () => ouvrirAbonnementPremium(context))
+            ? YkPremiumRequired(
+                message: erreur,
+                onSubscribe: widget.preoccupationCoursId == null
+                    ? null
+                    : () => ouvrirAbonnementPremium(
+                        context,
+                        coursId: widget.preoccupationCoursId!,
+                        coursNom: widget.preoccupationCoursTitre,
+                      ),
+              )
             : YkErrorState(message: erreur, onRetry: () => _loadQuestions()),
       );
     }
@@ -524,6 +539,7 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin, Wi
                 child: YkButton(
                   label: 'Poser une question',
                   icon: Icons.add_rounded,
+                  color: accent,
                   onPressed: () => setState(() => _composerVisible = true),
                 ),
               ),
@@ -556,7 +572,7 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin, Wi
     final items = [
       ('tous', 'Tous', null),
       ('lecon', 'Leçons', YkColors.info),
-      ('exercice', 'Exercices', YkColors.accent(context)),
+      ('exercice', 'Exercices', _accentColor(context)),
       ('devoir', 'Devoirs', YkColors.warning),
       ('libre', 'Libres', YkColors.success),
     ];
@@ -600,6 +616,7 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin, Wi
   Widget _buildComposer(BuildContext context) {
     final accent = _accentColor(context);
     return YkCard(
+      variant: YkCardVariant.tinted,
       accentColor: accent.withValues(alpha: 0.2),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -905,7 +922,7 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin, Wi
             SizedBox(height: YkSpacing.xs),
             Row(
               children: [
-                _buildAvatar(context, q.auteurNom, q.auteurUsername, q.auteurEstEnseignant, color, 16),
+                _buildAvatar(context, q.auteurNom, q.auteurUsername, q.auteurEstEnseignant, color, 16, avatarUrl: q.auteurAvatarUrl),
                 SizedBox(width: YkSpacing.xs),
                 Expanded(
                   child: Text(
@@ -953,22 +970,28 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin, Wi
     String username,
     bool estEnseignant,
     Color color,
-    double radius,
-  ) {
+    double radius, {
+    String? avatarUrl,
+  }) {
     final accent = _accentColor(context);
+    final hasPhoto = avatarUrl != null && avatarUrl.isNotEmpty;
     return Stack(
       children: [
         CircleAvatar(
           radius: radius,
           backgroundColor: estEnseignant ? accent.withValues(alpha: 0.12) : color.withValues(alpha: 0.08),
-          child: Text(
-            _getInitials(nom, username),
-            style: TextStyle(
-              fontSize: radius * 0.7,
-              color: estEnseignant ? accent : color,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
+          backgroundImage: hasPhoto ? NetworkImage(avatarUrl) : null,
+          onBackgroundImageError: hasPhoto ? (_, _) {} : null,
+          child: hasPhoto
+              ? null
+              : Text(
+                  _getInitials(nom, username),
+                  style: TextStyle(
+                    fontSize: radius * 0.7,
+                    color: estEnseignant ? accent : color,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
         ),
         if (estEnseignant)
           Positioned(

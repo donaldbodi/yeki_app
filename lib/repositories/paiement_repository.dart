@@ -39,13 +39,17 @@ class PaiementRepository {
     return ParametresPublics.fromJson(Map<String, dynamic>.from(data as Map));
   }
 
-  /// Statut de l'abonnement Premium de l'apprenant connecté + tarifs réels
-  /// (`AbonnementPremium.TARIFS` côté backend) — endpoint déjà existant
-  /// mais jamais appelé jusqu'ici (bug corrigé : aucune vitrine Premium
-  /// dans l'app malgré un moteur backend complet).
-  Future<Map<String, dynamic>> statutAbonnement() async {
-    final data = await _api.get(PaiementEndpoints.abonnementStatut);
-    return Map<String, dynamic>.from(data as Map);
+  /// Statut de l'abonnement Premium de l'apprenant connecté DANS le
+  /// département du cours [coursId] — rectification : l'abonnement n'est
+  /// plus global, il est propre à chaque département (prix fixés par
+  /// l'administrateur de CE département, `disponible=false` tant qu'il
+  /// n'a rien fixé).
+  Future<AbonnementInfo> statutAbonnement(int coursId) async {
+    final data = await _api.get(
+      PaiementEndpoints.abonnementStatut,
+      query: {'cours_id': coursId},
+    );
+    return AbonnementInfo.fromJson(Map<String, dynamic>.from(data as Map));
   }
 
   /// Soumission d'une demande de paiement manuel — `payload` porte à la

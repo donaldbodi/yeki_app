@@ -31,6 +31,13 @@ void ouvrirDepartementForm({
   final descCtrl = TextEditingController(text: d['description'] ?? '');
   final prixCtrl = TextEditingController(text: (d['prix'] ?? 0).toString());
   final prixPresentielCtrl = TextEditingController(text: (d['prix_presentiel'] ?? 0).toString());
+  // Rectification modèle économique : l'abonnement Premium est désormais
+  // PROPRE À CE DÉPARTEMENT — ces 2 champs existaient déjà côté backend
+  // (P9.1) mais n'avaient jusqu'ici AUCUN formulaire pour les fixer, donc
+  // toujours à 0 en pratique. Tant qu'ils restent à 0, aucun apprenant ne
+  // peut s'abonner à ce département (`StatutAbonnementView.disponible`).
+  final prixMensuelCtrl = TextEditingController(text: (d['prix_mensuel'] ?? 0).toString());
+  final prixAnnuelCtrl = TextEditingController(text: (d['prix_annuel'] ?? 0).toString());
   final nomConcoursCtrl = TextEditingController(text: d['nom_concours'] ?? '');
   final organismeCtrl = TextEditingController(text: d['organisme_concours'] ?? '');
   final dateLimiteCtrl = TextEditingController(text: d['date_limite_inscription']?.toString() ?? '');
@@ -86,6 +93,8 @@ void ouvrirDepartementForm({
       'description': descCtrl.text.trim(),
       'prix': int.tryParse(prixCtrl.text.trim()) ?? 0,
       'prix_presentiel': int.tryParse(prixPresentielCtrl.text.trim()) ?? 0,
+      'prix_mensuel': int.tryParse(prixMensuelCtrl.text.trim()) ?? 0,
+      'prix_annuel': int.tryParse(prixAnnuelCtrl.text.trim()) ?? 0,
       'niveaux_accessibles': niveauxSelectionnes,
       'acces_restreint': accesRestreint,
       'mode': mode,
@@ -266,6 +275,20 @@ void ouvrirDepartementForm({
           YkTextField(controller: prixCtrl, label: 'Prix (FCFA)', type: YkTextFieldType.number, hint: '0 = gratuit'),
           SizedBox(height: YkSpacing.sm),
           YkTextField(controller: prixPresentielCtrl, label: 'Prix présentiel (FCFA)', type: YkTextFieldType.number, hint: '0 = absent'),
+          SizedBox(height: YkSpacing.sm),
+          YkTextField(
+            controller: prixMensuelCtrl,
+            label: 'Abonnement Premium — mensuel (FCFA)',
+            type: YkTextFieldType.number,
+            hint: '0 = abonnement indisponible',
+          ),
+          SizedBox(height: YkSpacing.sm),
+          YkTextField(
+            controller: prixAnnuelCtrl,
+            label: 'Abonnement Premium — annuel (FCFA)',
+            type: YkTextFieldType.number,
+            hint: '0 = abonnement indisponible',
+          ),
           SizedBox(height: YkSpacing.sm),
           selecteurNiveaux(ctx, setS),
           SizedBox(height: YkSpacing.sm),

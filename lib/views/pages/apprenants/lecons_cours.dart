@@ -52,6 +52,10 @@ class LeconsCoursPage extends StatefulWidget {
   /// Utilisé uniquement côté apprenant (carte enseignant, bas de l'onglet).
   final String? enseignantNom;
 
+  /// Photo de profil réelle de l'enseignant principal — `null` si absente
+  /// (repli sur les initiales, `_buildCarteEnseignant`).
+  final String? enseignantAvatarUrl;
+
   /// Espace réservé en haut du contenu défilable — nécessaire quand le
   /// parent (`CoursDetailTabs`) utilise `extendBodyBehindAppBar: true`
   /// pour son en-tête « verre dépoli » (maquette « 09 · Détail cours »),
@@ -70,6 +74,7 @@ class LeconsCoursPage extends StatefulWidget {
     this.isPremium = false,
     required this.courseColor,
     this.enseignantNom,
+    this.enseignantAvatarUrl,
     this.topPadding = 0,
   });
 
@@ -552,6 +557,19 @@ class _LeconsCoursPageState extends State<LeconsCoursPage> {
     ];
   }
 
+  Widget _initialesEnseignant(BuildContext context, String initiales) {
+    return YkGradientBackground(
+      gradient: LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [YkColors.primary700, YkColors.primary500],
+      ),
+      child: Center(
+        child: Text(initiales, style: YkTypography.label(context).copyWith(color: YkColors.textOnPrimary)),
+      ),
+    );
+  }
+
   Widget _buildCarteEnseignant(BuildContext context, String nomComplet) {
     final initiales = nomComplet
         .trim()
@@ -567,16 +585,13 @@ class _LeconsCoursPageState extends State<LeconsCoursPage> {
             child: SizedBox(
               width: 44,
               height: 44,
-              child: YkGradientBackground(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [YkColors.primary700, YkColors.primary500],
-                ),
-                child: Center(
-                  child: Text(initiales, style: YkTypography.label(context).copyWith(color: YkColors.textOnPrimary)),
-                ),
-              ),
+              child: (widget.enseignantAvatarUrl?.isNotEmpty ?? false)
+                  ? Image.network(
+                      widget.enseignantAvatarUrl!,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) => _initialesEnseignant(context, initiales),
+                    )
+                  : _initialesEnseignant(context, initiales),
             ),
           ),
           SizedBox(width: YkSpacing.sm),
@@ -678,6 +693,7 @@ class _LeconsCoursPageState extends State<LeconsCoursPage> {
     return Padding(
       padding: EdgeInsets.only(bottom: YkSpacing.md),
       child: YkCard(
+        variant: YkCardVariant.tinted,
         accentColor: widget.courseColor,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -788,7 +804,7 @@ class _LeconsCoursPageState extends State<LeconsCoursPage> {
       dotFg = YkColors.success;
       dotChild = Icon(Icons.check_rounded, color: dotFg, size: 16);
     } else if (estCourante) {
-      dotBg = YkColors.accent(context);
+      dotBg = widget.courseColor;
       dotFg = YkColors.textOnPrimary;
       dotChild = Icon(Icons.play_arrow_rounded, color: dotFg, size: 16);
     } else {

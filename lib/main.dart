@@ -18,6 +18,7 @@ import 'package:yeki/core/router/auth_state.dart';
 import 'package:yeki/core/design/theme/yeki_theme.dart';
 import 'package:yeki/firebase_options.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:yeki/services/ads_service.dart';
 import 'package:yeki/services/cache_manager.dart';
 import 'package:yeki/services/notification_service.dart';
 import 'package:yeki/services/offline_service.dart';
@@ -60,6 +61,13 @@ void _bootstrap() async {
   FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
   await NotificationService().initialize();
   await UpdateService.initialize();
+  // Init SDK au démarrage (pratique standard) — ne DISPLAY jamais rien
+  // ici, seulement l'initialisation ; l'interdit CDC « jamais de pub au
+  // démarrage » porte sur l'AFFICHAGE, pas sur ce préchargement.
+  // `dateNaissanceIso` absente tant qu'aucun profil n'est chargé — un 2ᵉ
+  // appel avec la vraie date a lieu dans apprenant_shell.dart une fois
+  // `currentUserProvider` résolu (idempotent, voir AdsService.init).
+  unawaited(AdsService.instance.init());
   // 401 → refreshListenable (GoRouter ↔ authState) redirige seul vers
   // /login, sans BuildContext — guards.dart.
   AuthInterceptor.onSessionExpired = authState.clearSession;

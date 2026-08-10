@@ -14,10 +14,8 @@ import 'package:yeki/core/design/components/components.dart';
 import 'package:yeki/core/design/tokens/tokens.dart';
 import 'package:yeki/core/router/route_guard_metadata.dart' show kEnseignantRoles;
 import 'package:yeki/core/router/route_names.dart';
-import 'package:yeki/features/paiement/presentation/ouvrir_abonnement.dart';
 import 'package:yeki/repositories/auth_repository.dart';
 import 'package:yeki/repositories/classement_repository.dart';
-import 'package:yeki/repositories/paiement_repository.dart';
 
 class ProfilPage extends StatefulWidget {
   const ProfilPage({super.key});
@@ -31,7 +29,6 @@ class _ProfilPageState extends State<ProfilPage> with SingleTickerProviderStateM
   Map<String, dynamic> _profil = {};
   Map<String, dynamic> _stats = {};
   Map<String, dynamic> _classement = {};
-  Map<String, dynamic> _abonnement = {};
   String _userType = '';
 
   late final _animCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 600));
@@ -64,11 +61,6 @@ class _ProfilPageState extends State<ProfilPage> with SingleTickerProviderStateM
       final resultats = await Future.wait([
         AuthRepository().profilStats(),
         if (!estEnseignant) ClassementRepository().monScore() else Future.value(<String, dynamic>{}),
-        // Bug corrigé (modèle économique non opérationnel) : la vitrine
-        // Premium n'existait nulle part hors des écrans réactifs déjà
-        // verrouillés (Devoirs/Forum) — statut récupéré ici pour la
-        // bannière « Devenir Premium » (_banniérePremium).
-        if (!estEnseignant) PaiementRepository().statutAbonnement() else Future.value(<String, dynamic>{}),
       ]);
 
       if (!mounted) return;
@@ -77,7 +69,6 @@ class _ProfilPageState extends State<ProfilPage> with SingleTickerProviderStateM
         _userType = userType;
         _stats = resultats[0];
         _classement = resultats[1];
-        _abonnement = resultats[2];
       });
       _animCtrl.forward();
     } catch (_) {
@@ -87,8 +78,6 @@ class _ProfilPageState extends State<ProfilPage> with SingleTickerProviderStateM
   }
 
   bool get _isEnseignant => kEnseignantRoles.contains(_userType);
-
-  bool get _estPremium => _abonnement['actif'] == true;
 
   String get _nomComplet {
     final fn = _profil['first_name']?.toString() ?? '';
@@ -200,7 +189,7 @@ class _ProfilPageState extends State<ProfilPage> with SingleTickerProviderStateM
         children: [
           SizedBox(height: YkSpacing.lg),
           _stats_(context),
-          if (!_isEnseignant && !_estPremium) ...[
+          if (!_isEnseignant) ...[
             SizedBox(height: YkSpacing.md),
             _bannierePremium(context),
           ],
@@ -248,14 +237,19 @@ class _ProfilPageState extends State<ProfilPage> with SingleTickerProviderStateM
 
   /// Bannière « Devenir Premium » — bug corrigé (modèle économique non
   /// opérationnel) : aucun point de découverte proactif n'existait hors
-  /// des écrans réactifs déjà verrouillés (Devoirs/Forum), un apprenant
-  /// qui n'y tombait jamais ignorait que Premium existe. Masquée si déjà
-  /// abonné (`_estPremium`, `PaiementRepository.statutAbonnement()`).
+  /// des écrans réactifs déjà verrouillés (Devoirs/Forum). Rectification
+  /// (Premium désormais PROPRE À CHAQUE DÉPARTEMENT) : cet écran générique
+  /// ne connaît aucun département précis pour proposer un achat direct —
+  /// renvoie vers le catalogue Cursus, où chaque cours ouvre l'abonnement
+  /// de SON département (`ouvrirAbonnementPremium` y exige déjà un
+  /// `coursId`). Toujours affichée (pas de statut « déjà abonné » global
+  /// à vérifier ici, un apprenant peut être abonné à certains départements
+  /// et pas d'autres).
   Widget _bannierePremium(BuildContext context) {
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: YkSpacing.md),
       child: YkCard(
-        onTap: () => ouvrirAbonnementPremium(context),
+        onTap: () => context.goNamed(AppRoute.dashboardCursus),
         child: Row(
           children: [
             Icon(Icons.workspace_premium_rounded, color: YkColors.accent(context), size: 28),
@@ -269,7 +263,7 @@ class _ProfilPageState extends State<ProfilPage> with SingleTickerProviderStateM
                     style: YkTypography.label(context).copyWith(color: YkColors.textPrimary(context)),
                   ),
                   Text(
-                    'Vidéos, devoirs, forum et Yéki IA sans limite.',
+                    'Découvrez les départements Premium : vidéos, devoirs et forum sans limite.',
                     style: YkTypography.bodySm(context).copyWith(color: YkColors.textSecondary(context)),
                   ),
                 ],

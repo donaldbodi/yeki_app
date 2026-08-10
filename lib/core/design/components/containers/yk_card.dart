@@ -5,7 +5,13 @@ import 'package:flutter/material.dart';
 import '../../tokens/tokens.dart';
 
 /// Ton visuel de [YkCard] — CDC_DESIGN §5.3.3.
-enum YkCardVariant { elevated, filled, outlined, glass }
+///
+/// [tinted] : même rendu qu'[elevated] (fond/ombre/rayon identiques) mais
+/// la bordure adopte `accentColor` au lieu de rester neutre — introduit
+/// pour que la couleur d'un cours soit visible sur les cartes de contenu
+/// de son « univers » (leçons/exercices/devoirs/forum) sans changer le
+/// comportement par défaut d'[elevated], utilisé massivement ailleurs.
+enum YkCardVariant { elevated, filled, outlined, glass, tinted }
 
 /// Conteneur de carte — CDC_DESIGN §5.3.3.
 ///
@@ -69,6 +75,18 @@ class YkCard extends StatelessWidget {
             // jamais à la bordure de la carte elle-même) — `accentColor`
             // n'affecte plus ce variant, seulement `filled`/`outlined`/`glass`.
             border: Border.all(color: YkColors.border(context), width: 1),
+          ),
+          child: content,
+        );
+      case YkCardVariant.tinted:
+        card = Container(
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(
+            color: gradient == null ? YkColors.surface(context) : null,
+            gradient: gradient,
+            borderRadius: radius,
+            boxShadow: YkElevation.e1,
+            border: Border.all(color: accentColor ?? YkColors.border(context), width: 1),
           ),
           child: content,
         );

@@ -28,6 +28,7 @@ import 'package:yeki/core/providers/current_user_provider.dart';
 import 'package:yeki/core/providers/notifications_provider.dart';
 import 'package:yeki/core/router/auth_state.dart';
 import 'package:yeki/core/router/route_names.dart';
+import 'package:yeki/services/ads_service.dart';
 
 /// Ordre des branches du `StatefulShellRoute` — doit rester synchronisé
 /// avec `app_router.dart` (arbre apprenant).
@@ -60,6 +61,14 @@ class ApprenantShellPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final notificationsNonLues = ref.watch(notificationsProvider).valueOrNull ?? 0;
     final profil = ref.watch(currentUserProvider).valueOrNull;
+    // Tagging AdMob mineur/enfant (CDC §8.3) — un seul appel dès que la
+    // vraie date de naissance est connue, pas à chaque rebuild.
+    ref.listen(currentUserProvider, (prev, next) {
+      final nouveau = next.valueOrNull;
+      if (nouveau != null && prev?.valueOrNull?.dateNaissance != nouveau.dateNaissance) {
+        AdsService.instance.init(dateNaissanceIso: nouveau.dateNaissance);
+      }
+    });
     final nomAffiche = profil == null
         ? 'Apprenant'
         : (profil.firstName.isNotEmpty ? profil.firstName : profil.username);
@@ -69,6 +78,7 @@ class ApprenantShellPage extends ConsumerWidget {
       selectedRouteName: _selectedRouteName,
       onDestinationTap: (routeName) => _onDestinationTap(context, routeName),
       userName: nomAffiche,
+      avatarUrl: profil?.avatar,
       userRole: 'Apprenant',
       onSettings: () => context.pushNamed(AppRoute.profile),
       onLogout: () => authState.clearSession(),

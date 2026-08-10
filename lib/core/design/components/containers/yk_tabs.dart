@@ -19,16 +19,23 @@ class YkTabItem {
 /// `GlobalKey<FormState>`/`TextEditingController` ailleurs dans le
 /// projet), pour rester synchronisé avec un `TabBarView` externe.
 class YkTabs extends StatelessWidget implements PreferredSizeWidget {
-  const YkTabs({super.key, required this.controller, required this.tabs});
+  const YkTabs({super.key, required this.controller, required this.tabs, this.activeColor});
 
   final TabController controller;
   final List<YkTabItem> tabs;
+
+  /// Couleur du soulignement/libellé actif — `null` (défaut, comportement
+  /// inchangé partout où ce paramètre n'est pas fourni) retombe sur
+  /// `YkColors.accent(context)`. Introduit pour que `CoursDetailTabs`
+  /// puisse teinter la barre d'onglets avec la couleur du cours consulté.
+  final Color? activeColor;
 
   @override
   Size get preferredSize => const Size.fromHeight(48);
 
   @override
   Widget build(BuildContext context) {
+    final couleur = activeColor ?? YkColors.accent(context);
     return Material(
       color: YkColors.surface(context),
       child: TabBar(
@@ -38,11 +45,9 @@ class YkTabs extends StatelessWidget implements PreferredSizeWidget {
         // le LABEL (border-bottom 2.5px), pas l'indicateur Material 3
         // par défaut (remplissage arrondi pleine cellule) — indicateur
         // explicite pour un rendu identique.
-        indicator: UnderlineTabIndicator(
-          borderSide: BorderSide(width: 2.5, color: YkColors.accent(context)),
-        ),
+        indicator: UnderlineTabIndicator(borderSide: BorderSide(width: 2.5, color: couleur)),
         indicatorSize: TabBarIndicatorSize.label,
-        labelColor: YkColors.accent(context),
+        labelColor: couleur,
         unselectedLabelColor: YkColors.textSecondary(context),
         labelStyle: YkTypography.label(context),
         tabs: [

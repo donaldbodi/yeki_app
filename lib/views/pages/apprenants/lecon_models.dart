@@ -167,7 +167,7 @@ class SupplementCoursItem {
 /// enseignant de `lecons_cours.dart` (Phase 2, refonte identique
 /// maquette).
 class CoursDetailInfo {
-  const CoursDetailInfo({required this.niveau, required this.enseignantNom});
+  const CoursDetailInfo({required this.niveau, required this.enseignantNom, this.enseignantAvatarUrl});
 
   final String niveau;
 
@@ -175,6 +175,10 @@ class CoursDetailInfo {
   /// Pas de civilité (« M. »/« Mme ») : aucune donnée de genre disponible
   /// sur `User`/`Profile`, non fabriquée.
   final String? enseignantNom;
+
+  /// Photo de profil réelle de l'enseignant principal — `null` si absente
+  /// (repli sur les initiales, déjà géré côté widget).
+  final String? enseignantAvatarUrl;
 
   factory CoursDetailInfo.fromJson(Map<String, dynamic> json) {
     final principal = json['enseignant_principal'] as Map?;
@@ -185,6 +189,7 @@ class CoursDetailInfo {
     return CoursDetailInfo(
       niveau: json['niveau']?.toString() ?? '',
       enseignantNom: nomComplet.isEmpty ? null : nomComplet,
+      enseignantAvatarUrl: principal?['avatar'] as String?,
     );
   }
 }

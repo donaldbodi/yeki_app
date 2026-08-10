@@ -52,6 +52,7 @@ class DevoirCard extends StatelessWidget {
     return Padding(
       padding: EdgeInsets.only(bottom: YkSpacing.md),
       child: YkCard(
+        variant: YkCardVariant.tinted,
         accentColor: courseColor,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -148,12 +149,19 @@ class DevoirCard extends StatelessWidget {
                 ],
                 const Spacer(),
                 if (canEdit)
-                  YkButton(label: 'Gérer', icon: Icons.edit_note_rounded, size: YkButtonSize.sm, onPressed: onGerer)
+                  YkButton(
+                    label: 'Gérer',
+                    icon: Icons.edit_note_rounded,
+                    size: YkButtonSize.sm,
+                    color: courseColor,
+                    onPressed: onGerer,
+                  )
                 else if (onDemarrer != null)
                   YkButton(
                     label: devoir.maSoumission == null ? 'Démarrer' : 'Continuer',
                     icon: Icons.play_arrow_rounded,
                     size: YkButtonSize.sm,
+                    color: courseColor,
                     onPressed: onDemarrer,
                   ),
               ],

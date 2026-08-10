@@ -227,21 +227,41 @@ class _CursusPageState extends State<CursusPage> {
                         child: SizedBox(
                           width: 20,
                           height: 20,
-                          child: YkGradientBackground(
-                            gradient: LinearGradient(
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                              colors: [couleur, couleur.withValues(alpha: 0.7)],
-                            ),
-                            child: Center(
-                              child: Text(
-                                _initialesEnseignant(cours.enseignantPrincipal),
-                                style: YkTypography.caption(
-                                  context,
-                                ).copyWith(color: Colors.white, fontSize: 8, fontWeight: FontWeight.w800),
-                              ),
-                            ),
-                          ),
+                          child: (cours.enseignantAvatarUrl?.isNotEmpty ?? false)
+                              ? Image.network(
+                                  cours.enseignantAvatarUrl!,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) => YkGradientBackground(
+                                    gradient: LinearGradient(
+                                      begin: Alignment.topLeft,
+                                      end: Alignment.bottomRight,
+                                      colors: [couleur, couleur.withValues(alpha: 0.7)],
+                                    ),
+                                    child: Center(
+                                      child: Text(
+                                        _initialesEnseignant(cours.enseignantPrincipal),
+                                        style: YkTypography.caption(
+                                          context,
+                                        ).copyWith(color: Colors.white, fontSize: 8, fontWeight: FontWeight.w800),
+                                      ),
+                                    ),
+                                  ),
+                                )
+                              : YkGradientBackground(
+                                  gradient: LinearGradient(
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                    colors: [couleur, couleur.withValues(alpha: 0.7)],
+                                  ),
+                                  child: Center(
+                                    child: Text(
+                                      _initialesEnseignant(cours.enseignantPrincipal),
+                                      style: YkTypography.caption(
+                                        context,
+                                      ).copyWith(color: Colors.white, fontSize: 8, fontWeight: FontWeight.w800),
+                                    ),
+                                  ),
+                                ),
                         ),
                       ),
                       SizedBox(width: YkSpacing.xs),

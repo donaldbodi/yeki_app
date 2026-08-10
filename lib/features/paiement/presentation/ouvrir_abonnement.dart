@@ -1,10 +1,12 @@
 // lib/features/paiement/presentation/ouvrir_abonnement.dart
 //
 // Point d'entrée unique vers l'achat d'un abonnement Premium — utilisé par
-// tout écran qui affiche `YkPremiumRequired` (Devoirs, Forum, à terme
-// Exercices/IA). Récupère les tarifs RÉELS (`AbonnementPremium.TARIFS`
-// côté backend, `StatutAbonnementView`) plutôt que de les figer en dur
-// côté client (règle 3) — aucune valeur inventée si l'appel échoue.
+// tout écran qui affiche `YkPremiumRequired` (Devoirs, Forum, leçon/vidéo).
+// Rectification (demande explicite) : l'abonnement n'est plus global, il
+// est PROPRE À CHAQUE DÉPARTEMENT, aux prix RÉELS fixés par l'enseignant
+// administrateur de CE département (`Departement.prix_mensuel`/
+// `prix_annuel`, `StatutAbonnementView`) — jamais une constante globale
+// figée côté client (règle 3).
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -25,15 +27,19 @@ import 'paiement_page.dart';
 /// d'erreur générique.
 const kMessagePremiumRequis = 'Cette fonctionnalité est réservée aux abonnés Premium.';
 
-Future<void> ouvrirAbonnementPremium(BuildContext context) async {
+/// [coursId] : n'importe quel cours DU département concerné (le serveur
+/// résout le département depuis ce cours) — déjà disponible à chacun des
+/// écrans « univers du cours » qui appellent cette fonction.
+Future<void> ouvrirAbonnementPremium(BuildContext context, {required int coursId, String? coursNom}) async {
   try {
-    final statut = await PaiementRepository().statutAbonnement();
-    final tarifs = statut['tarifs'] as Map<String, dynamic>?;
-    final mensuel = (tarifs?['mensuel'] as num?)?.toInt();
-    final annuel = (tarifs?['annuel'] as num?)?.toInt();
-    if (mensuel == null) {
+    final statut = await PaiementRepository().statutAbonnement(coursId);
+    if (!statut.disponible) {
       if (context.mounted) {
-        YkSnack.error(context, "Tarifs de l'abonnement indisponibles pour le moment.");
+        YkSnack.error(
+          context,
+          "L'abonnement Premium n'est pas encore disponible pour ce département — "
+          "l'administrateur n'a pas encore fixé de prix.",
+        );
       }
       return;
     }
@@ -42,9 +48,10 @@ Future<void> ouvrirAbonnementPremium(BuildContext context) async {
       AppRoute.paiement,
       queryParameters: {
         'type': PaiementType.abonnementMensuel.name,
-        'titre': 'Abonnement Premium',
-        'montant': mensuel.toString(),
-        if (annuel != null) 'montantAnnuel': annuel.toString(),
+        'titre': coursNom == null ? 'Abonnement Premium' : 'Abonnement Premium — $coursNom',
+        'montant': statut.prixMensuel.toString(),
+        'departementId': statut.departementId.toString(),
+        if (statut.prixAnnuel > 0) 'montantAnnuel': statut.prixAnnuel.toString(),
       },
     );
   } on ApiException catch (e) {

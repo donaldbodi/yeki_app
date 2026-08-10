@@ -29,6 +29,7 @@ class YkButton extends StatelessWidget {
     this.isLoading = false,
     this.isEnabled = true,
     this.semanticLabel,
+    this.color,
   });
 
   /// Libellé visible (sauf si [iconPosition] vaut
@@ -48,6 +49,13 @@ class YkButton extends StatelessWidget {
   /// Libellé d'accessibilité si différent de [label] (utile en mode
   /// [YkButtonIconPosition.only]).
   final String? semanticLabel;
+
+  /// Couleur d'accent personnalisée — `null` (défaut, comportement
+  /// inchangé partout où ce paramètre n'est pas fourni) retombe sur
+  /// `YkColors.accent(context)`. Introduit pour teinter les CTA
+  /// (« Traiter »/« Démarrer »/« Poser une question ») avec la couleur
+  /// du cours consulté.
+  final Color? color;
 
   double get _height => switch (size) {
     YkButtonSize.sm => 36,
@@ -70,7 +78,7 @@ class YkButton extends StatelessWidget {
   bool get _iconOnly => icon != null && iconPosition == YkButtonIconPosition.only;
 
   ({Color background, Color foreground, Color? border}) _colors(BuildContext context) {
-    final accent = YkColors.accent(context);
+    final accent = color ?? YkColors.accent(context);
     final onAccent = YkColors.onAccent(context);
     final dark = YkColors.isDark(context);
     switch (variant) {

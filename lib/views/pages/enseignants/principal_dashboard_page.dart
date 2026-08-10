@@ -171,7 +171,13 @@ class _DashboardPrincipalPageState extends State<DashboardPrincipalPage> with Si
           _cours = cours;
         });
       }
-    } catch (_) {
+    } catch (e) {
+      // Filet de diagnostic (même idiome que passer_exercice_controller.dart/
+      // olympiades_controller.dart) : aucune root cause confirmée pour ce
+      // signalement précis (exploration exhaustive, rien de cassé trouvé) —
+      // si le bug persiste après déploiement, ce debugPrint donnera le vrai
+      // type d'exception au lieu de re-deviner à l'aveugle.
+      debugPrint('PrincipalDashboardPage._charger() — ${e.runtimeType} : $e');
       if (mounted) setState(() => _error = 'Impossible de charger votre tableau de bord.');
     } finally {
       if (mounted) setState(() => _loading = false);

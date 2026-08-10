@@ -19,18 +19,20 @@ class CoursItem {
   final String title;
   final String description;
   final String enseignantPrincipal;
+  final String? enseignantAvatarUrl;
   final int lessons;
   final int assignments;
   final String icon;
   final String color;
   final double progression;
   final String niveau;
-  
+
   CoursItem({
     required this.id,
     required this.title,
     required this.description,
     required this.enseignantPrincipal,
+    this.enseignantAvatarUrl,
     required this.lessons,
     required this.assignments,
     required this.icon,
@@ -38,13 +40,14 @@ class CoursItem {
     required this.progression,
     required this.niveau,
   });
-  
+
   factory CoursItem.fromJson(Map<String, dynamic> json) {
     return CoursItem(
       id: json['id'] ?? 0,
       title: json['title'] ?? json['titre'] ?? '',
       description: json['description'] ?? json['description_brief'] ?? '',
       enseignantPrincipal: json['enseignant_principal'] ?? '---',
+      enseignantAvatarUrl: json['enseignant_principal_avatar_url'] as String?,
       lessons: json['lessons'] ?? json['nb_lecons'] ?? 0,
       assignments: json['assignments'] ?? json['nb_devoirs'] ?? 0,
       icon: json['icon'] ?? json['icon_name'] ?? 'school',

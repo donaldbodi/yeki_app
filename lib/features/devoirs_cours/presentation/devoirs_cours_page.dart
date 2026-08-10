@@ -175,7 +175,14 @@ class _DevoirsCoursPageState extends State<DevoirsCoursPage> {
         return Padding(
           padding: EdgeInsets.only(top: widget.topPadding),
           child: message == kMessagePremiumRequis
-              ? YkPremiumRequired(message: message, onSubscribe: () => ouvrirAbonnementPremium(context))
+              ? YkPremiumRequired(
+                  message: message,
+                  onSubscribe: () => ouvrirAbonnementPremium(
+                    context,
+                    coursId: int.parse(widget.coursId),
+                    coursNom: widget.coursTitre,
+                  ),
+                )
               : YkErrorState(message: message, onRetry: _controller.charger),
         );
       case DevoirsCoursEtat.pret:

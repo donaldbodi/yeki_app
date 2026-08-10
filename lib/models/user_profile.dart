@@ -14,6 +14,11 @@ class UserProfile {
   final String? ville;
   final String? avatar;
 
+  /// `"YYYY-MM-DD"` — ajouté pour le tagging AdMob des mineurs
+  /// (`tagForChildDirectedTreatment`/`tagForUnderAgeOfConsent`, CDC
+  /// §8.3/§9.3), déjà collectée à l'inscription mais jamais relue jusqu'ici.
+  final String? dateNaissance;
+
   const UserProfile({
     required this.id,
     required this.username,
@@ -25,6 +30,7 @@ class UserProfile {
     this.niveau,
     this.ville,
     this.avatar,
+    this.dateNaissance,
   });
 
   factory UserProfile.fromJson(Map<String, dynamic> json) => UserProfile(
@@ -38,5 +44,6 @@ class UserProfile {
         niveau: json['niveau'] as String?,
         ville: json['ville'] as String?,
         avatar: json['avatar'] as String?,
+        dateNaissance: json['date_naissance'] as String?,
       );
 }

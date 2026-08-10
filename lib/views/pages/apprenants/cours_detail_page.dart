@@ -76,6 +76,7 @@ class _CoursDetailTabsState extends State<CoursDetailTabs> with SingleTickerProv
   int? _leconsCompletees;
   String? _niveau;
   String? _enseignantNom;
+  String? _enseignantAvatarUrl;
 
   int? _forumScrollToId;
   String? _forumPreoccupationContenu;
@@ -119,6 +120,7 @@ class _CoursDetailTabsState extends State<CoursDetailTabs> with SingleTickerProv
         _leconsCompletees = lecons.where((l) => l.estTerminee).length;
         _niveau = detail.niveau;
         _enseignantNom = detail.enseignantNom;
+        _enseignantAvatarUrl = detail.enseignantAvatarUrl;
       });
     } catch (_) {
       // Échec silencieux — repli sur le texte générique (`_sousTitre`),
@@ -260,6 +262,7 @@ class _CoursDetailTabsState extends State<CoursDetailTabs> with SingleTickerProv
                       padding: EdgeInsets.symmetric(horizontal: YkSpacing.md),
                       child: YkTabs(
                         controller: _tabController,
+                        activeColor: _courseColor,
                         tabs: const [
                           YkTabItem(label: 'Leçons'),
                           YkTabItem(label: 'Exercices'),
@@ -299,6 +302,7 @@ class _CoursDetailTabsState extends State<CoursDetailTabs> with SingleTickerProv
           isPremium: widget.isPremium,
           courseColor: _courseColor,
           enseignantNom: _enseignantNom,
+          enseignantAvatarUrl: _enseignantAvatarUrl,
           topPadding: _headerHeight,
         ),
         widget.isPremium

@@ -12,7 +12,19 @@ import 'package:yeki/repositories/auth_repository.dart';
 
 class CurrentUserController extends AsyncNotifier<UserProfile> {
   @override
-  Future<UserProfile> build() => AuthRepository().getCurrentUser();
+  Future<UserProfile> build() async {
+    try {
+      return await AuthRepository().getCurrentUser();
+    } catch (_) {
+      // Durcissement (nom/avatar du header bloqués indéfiniment sur le
+      // repli générique en cas d'échec réseau transitoire au démarrage,
+      // `refresh()` n'étant sinon jamais rappelé automatiquement) — un
+      // seul retry après un court délai, puis on laisse l'erreur réelle
+      // remonter si elle persiste (pas de boucle infinie).
+      await Future.delayed(const Duration(seconds: 2));
+      return AuthRepository().getCurrentUser();
+    }
+  }
 
   Future<void> refresh() async {
     state = const AsyncValue.loading();

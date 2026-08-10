@@ -338,7 +338,7 @@ class _DetailQuestionForumPageState extends State<DetailQuestionForumPage> {
                       SizedBox(height: YkSpacing.sm),
                       Row(
                         children: [
-                          _buildAvatar(context, q.auteurNom, q.auteurUsername, q.auteurEstEnseignant, color, 20),
+                          _buildAvatar(context, q.auteurNom, q.auteurUsername, q.auteurEstEnseignant, color, 20, avatarUrl: q.auteurAvatarUrl),
                           SizedBox(width: YkSpacing.xs),
                           Expanded(
                             child: Column(
@@ -433,7 +433,7 @@ class _DetailQuestionForumPageState extends State<DetailQuestionForumPage> {
           children: [
             Row(
               children: [
-                _buildAvatar(context, reponse.auteurNom, reponse.auteurUsername, isEnseignant, color, 18),
+                _buildAvatar(context, reponse.auteurNom, reponse.auteurUsername, isEnseignant, color, 18, avatarUrl: reponse.auteurAvatarUrl),
                 SizedBox(width: YkSpacing.xs),
                 Expanded(
                   child: Column(
@@ -576,22 +576,28 @@ class _DetailQuestionForumPageState extends State<DetailQuestionForumPage> {
     String username,
     bool estEnseignant,
     Color color,
-    double radius,
-  ) {
+    double radius, {
+    String? avatarUrl,
+  }) {
     final accent = _accentColor(context);
+    final hasPhoto = avatarUrl != null && avatarUrl.isNotEmpty;
     return Stack(
       children: [
         CircleAvatar(
           radius: radius,
           backgroundColor: estEnseignant ? accent.withValues(alpha: 0.15) : color.withValues(alpha: 0.1),
-          child: Text(
-            _getInitials(nom, username),
-            style: TextStyle(
-              fontSize: radius * 0.75,
-              color: estEnseignant ? accent : color,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
+          backgroundImage: hasPhoto ? NetworkImage(avatarUrl) : null,
+          onBackgroundImageError: hasPhoto ? (_, _) {} : null,
+          child: hasPhoto
+              ? null
+              : Text(
+                  _getInitials(nom, username),
+                  style: TextStyle(
+                    fontSize: radius * 0.75,
+                    color: estEnseignant ? accent : color,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
         ),
         if (estEnseignant)
           Positioned(

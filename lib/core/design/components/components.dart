@@ -5,6 +5,9 @@ library;
 export '../nav/yk_nav_config.dart';
 export '../nav/yk_nav_destination.dart';
 
+// ── Publicité (AdMob, mode gratuit — CDC_BACKEND §8.3) ──────────────
+export 'ads/yk_banner_ad.dart';
+
 // ── Actions ──────────────────────────────────────────────────────
 export 'actions/yk_button.dart';
 export 'actions/yk_repetiteur_button.dart';

@@ -10,6 +10,47 @@
 // P9.5 : `DemandeRetrait`/`ServiceClientStatistiques` ajoutés ici (même
 // domaine paiement) plutôt que dans un fichier séparé — règle 1.
 
+/// `GET /api/abonnement/statut/?cours_id=<id>` — statut de l'abonnement
+/// Premium de l'apprenant connecté DANS le département du cours donné
+/// (rectification : plus un abonnement global, propre à chaque
+/// département, prix fixés par l'administrateur du département).
+class AbonnementInfo {
+  const AbonnementInfo({
+    required this.actif,
+    required this.typeAbonnement,
+    required this.finIso,
+    required this.joursRestants,
+    required this.departementId,
+    required this.prixMensuel,
+    required this.prixAnnuel,
+    required this.disponible,
+  });
+
+  final bool actif;
+  final String? typeAbonnement;
+  final String? finIso;
+  final int joursRestants;
+  final int departementId;
+  final int prixMensuel;
+  final int prixAnnuel;
+
+  /// `false` si l'administrateur du département n'a fixé aucun prix réel
+  /// (`prixMensuel`/`prixAnnuel` tous deux à 0) — aucun abonnement
+  /// possible tant que ce n'est pas le cas (aucun montant inventé).
+  final bool disponible;
+
+  factory AbonnementInfo.fromJson(Map<String, dynamic> json) => AbonnementInfo(
+    actif: json['actif'] as bool? ?? false,
+    typeAbonnement: json['type_abonnement'] as String?,
+    finIso: json['fin'] as String?,
+    joursRestants: (json['jours_restants'] as num?)?.toInt() ?? 0,
+    departementId: (json['departement_id'] as num?)?.toInt() ?? 0,
+    prixMensuel: (json['prix_mensuel'] as num?)?.toInt() ?? 0,
+    prixAnnuel: (json['prix_annuel'] as num?)?.toInt() ?? 0,
+    disponible: json['disponible'] as bool? ?? false,
+  );
+}
+
 /// `GET /api/parametres/publics/` — non sensible, `AllowAny` côté backend.
 class ParametresPublics {
   const ParametresPublics({

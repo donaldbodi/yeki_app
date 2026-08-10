@@ -28,6 +28,7 @@ import 'package:yeki/core/design/tokens/tokens.dart';
 import 'package:yeki/core/router/route_names.dart';
 import 'package:yeki/features/paiement/presentation/ouvrir_abonnement.dart';
 import 'package:yeki/repositories/cours_repository.dart';
+import 'package:yeki/services/ads_service.dart';
 import 'package:yeki/services/download_manager.dart';
 import 'package:yeki/views/pages/apprenants/lecon_models.dart';
 import 'package:yeki/widgets/form_preoccupation_sheet.dart';
@@ -306,6 +307,8 @@ class _DetailLeconPageState extends State<DetailLeconPage> {
                     lecon: lecon,
                     accent: _accent,
                     estAccessible: widget.estAccessible,
+                    coursId: widget.coursId,
+                    coursTitre: widget.coursTitre,
                     onOuvrirPdf: () => _ouvrirPdf(lecon),
                     onExercices: () => _naviguerVersExercices(lecon),
                   ),
@@ -347,6 +350,8 @@ class _LeconFeedCard extends StatelessWidget {
     required this.lecon,
     required this.accent,
     required this.estAccessible,
+    required this.coursId,
+    required this.coursTitre,
     required this.onOuvrirPdf,
     required this.onExercices,
   });
@@ -354,12 +359,23 @@ class _LeconFeedCard extends StatelessWidget {
   final LeconItem lecon;
   final Color accent;
   final bool estAccessible;
+  final int coursId;
+  final String coursTitre;
   final VoidCallback onOuvrirPdf;
   final VoidCallback onExercices;
 
   @override
   Widget build(BuildContext context) {
     final montrerVideo = estAccessible && lecon.hasVideo;
+    // Publicité mode gratuit (CDC §8.3, "entre 2 leçons du flux, max
+    // 1/5") — jamais pour un Premium DE CE DÉPARTEMENT : `estAccessible`
+    // (accès département) + vidéo NON verrouillée par le palier gratuit
+    // est le signal déjà disponible ici le plus proche de "premium dans
+    // ce département", sans appel réseau supplémentaire (règle 3 : pas
+    // de statut inventé). Voir docs/ADMOB_SETUP.md pour la nuance.
+    final estPremiumIci = estAccessible && !lecon.videoVerrouille;
+    final afficherPub = AdsService.instance.doitAfficherPub(estPremiumDeLaMatiere: estPremiumIci) &&
+        AdsService.instance.doitAfficherEntreLecons();
 
     return Container(
       color: Colors.black,
@@ -375,6 +391,10 @@ class _LeconFeedCard extends StatelessWidget {
                     )
                   : _buildPlaceholder(context),
             ),
+            if (afficherPub) ...[
+              const YkBannerAd(),
+              SizedBox(height: YkSpacing.xs),
+            ],
             Padding(
               padding: EdgeInsets.fromLTRB(YkSpacing.md, YkSpacing.sm, YkSpacing.xxl * 2, YkSpacing.lg),
               child: Column(
@@ -475,7 +495,7 @@ class _LeconFeedCard extends StatelessWidget {
               YkButton(
                 label: "S'abonner",
                 icon: Icons.workspace_premium_rounded,
-                onPressed: () => ouvrirAbonnementPremium(context),
+                onPressed: () => ouvrirAbonnementPremium(context, coursId: coursId, coursNom: coursTitre),
               ),
             ],
           ],

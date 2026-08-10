@@ -44,6 +44,7 @@ class ExerciceCard extends StatelessWidget {
     return Padding(
       padding: EdgeInsets.only(bottom: YkSpacing.md),
       child: YkCard(
+        variant: YkCardVariant.tinted,
         accentColor: courseColor,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -145,6 +146,7 @@ class ExerciceCard extends StatelessWidget {
                   label: 'Traiter',
                   icon: Icons.play_arrow_rounded,
                   size: YkButtonSize.sm,
+                  color: courseColor,
                   onPressed: onTraiter,
                 ),
               ],

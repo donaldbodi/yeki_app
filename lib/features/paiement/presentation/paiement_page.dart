@@ -143,6 +143,14 @@ class _PaiementPageState extends State<PaiementPage> {
     }
     if (widget.type == PaiementType.abonnementMensuel) data['type_abonnement'] = 'mensuel';
     if (widget.type == PaiementType.abonnementAnnuel) data['type_abonnement'] = 'annuel';
+    // Rectification : l'abonnement est désormais PAR DÉPARTEMENT — le
+    // backend l'exige maintenant pour categorie="abonnement" (voir
+    // SoumettrePaiementManuelView), sans quoi il n'y a aucun département
+    // à qui rattacher l'abonnement créé.
+    if ((widget.type == PaiementType.abonnementMensuel || widget.type == PaiementType.abonnementAnnuel) &&
+        widget.departementId != null) {
+      data['departement_id'] = widget.departementId;
+    }
     return data;
   }
 
