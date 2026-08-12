@@ -141,6 +141,24 @@ class UpdateService {
     return null;
   }
 
+  /// Interroge `/latest-version/` pour une plateforme EXPLICITE (pas celle
+  /// détectée par [_getPlatform] — utile pour l'écran de téléchargement
+  /// Web qui doit lister Android/iOS/Desktop même en tournant lui-même
+  /// sur le Web). Aucun cache/version-ignorée : chaque appel reflète l'état
+  /// réel du serveur. `null` si aucune version active pour cette
+  /// plateforme (réponse vide, `download_url` absent) — pas une erreur,
+  /// c'est le cas normal tant qu'aucun binaire réel n'a été publié.
+  static Future<UpdateInfo?> fetchVersion({required String platform}) async {
+    try {
+      final data = await ApiClient().get('/latest-version/', query: {'platform': platform});
+      final info = UpdateInfo.fromJson(data, 0);
+      return info.downloadUrl.isEmpty ? null : info;
+    } catch (e) {
+      debugPrint('UpdateService.fetchVersion($platform) — $e');
+      return null;
+    }
+  }
+
   /// Vérifie si une mise à jour OBLIGATOIRE est requise, via
   /// `/api/app/version/` (P12.1) — coexiste avec [checkForUpdate]
   /// (`/latest-version/`, flux optionnel) : renvoie un [UpdateInfo]

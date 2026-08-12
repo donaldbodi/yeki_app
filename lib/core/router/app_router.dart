@@ -10,6 +10,7 @@ import 'package:yeki/features/splash/presentation/splash_page.dart';
 import 'package:yeki/views/pages/shared/not_found_page.dart';
 import 'package:yeki/views/pages/shared/forbidden_page.dart';
 import 'package:yeki/core/design/showcase/design_system_page.dart';
+import 'package:yeki/features/download/presentation/download_page.dart';
 import 'package:yeki/views/pages/shared/profil_page.dart';
 import 'package:yeki/views/pages/shared/notifications_page.dart';
 import 'package:yeki/features/onboarding/presentation/onboarding_page.dart';
@@ -134,6 +135,11 @@ final GoRouter appRouter = GoRouter(
       path: AppPath.designSystem,
       name: AppRoute.designSystem,
       builder: (context, state) => const DesignSystemPage(),
+    ),
+    GoRoute(
+      path: AppPath.download,
+      name: AppRoute.download,
+      builder: (context, state) => const DownloadPage(),
     ),
 
     // ── Partagé (apprenant + enseignant) ───────────────────────────────

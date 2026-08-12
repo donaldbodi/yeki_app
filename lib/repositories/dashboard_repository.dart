@@ -1,5 +1,22 @@
+import 'package:flutter/foundation.dart';
+
 import 'package:yeki/core/network/api_client.dart';
 import 'package:yeki/core/network/api_endpoints.dart';
+
+/// Garde défensive partagée par `secondaire()`/`principal()`/`cadre()`/
+/// `admin()` — même motif déjà appliqué aux méthodes qui renvoient une
+/// `List` dans ce fichier (`data is List ? ...`), jamais répliqué ici :
+/// un cast `Map<String, dynamic>.from(data as Map)` sans garde lève un
+/// `TypeError` brut (jamais une `ApiException`) si `data` n'est pas un
+/// Map — réponse tronquée/non-JSON, timeout de plateforme — masqué par
+/// le `catch` générique de l'écran appelant en message trompeur
+/// ("Impossible de charger..."). `debugPrint` du type réel pour
+/// diagnostiquer sans deviner si ça se reproduit.
+Map<String, dynamic> _asMap(dynamic data, String origine) {
+  if (data is Map) return Map<String, dynamic>.from(data);
+  debugPrint('DashboardRepository.$origine() — réponse inattendue : ${data.runtimeType}');
+  return <String, dynamic>{};
+}
 
 /// Tableaux de bord enseignants (P11.5) — migre les appels `http` bruts
 /// des 4 dashboards (secondaire/principal/cadre/coordonnateur) vers
@@ -16,12 +33,12 @@ class DashboardRepository {
 
   Future<Map<String, dynamic>> secondaire() async {
     final data = await _api.get(AccountsEndpoints.enseignantDashboard);
-    return Map<String, dynamic>.from(data as Map);
+    return _asMap(data, 'secondaire');
   }
 
   Future<Map<String, dynamic>> principal() async {
     final data = await _api.get(FormationEndpoints.principalDashboardStats);
-    return Map<String, dynamic>.from(data as Map);
+    return _asMap(data, 'principal');
   }
 
   Future<List<Map<String, dynamic>>> principalCours() async {
@@ -45,7 +62,7 @@ class DashboardRepository {
 
   Future<Map<String, dynamic>> cadre() async {
     final data = await _api.get(FormationEndpoints.enseignantCadreDashboard);
-    return Map<String, dynamic>.from(data as Map);
+    return _asMap(data, 'cadre');
   }
 
   Future<List<Map<String, dynamic>>> mesOlympiadesCadre() async {
@@ -70,7 +87,7 @@ class DashboardRepository {
 
   Future<Map<String, dynamic>> admin() async {
     final data = await _api.get(AccountsEndpoints.enseignantAdminDashboard);
-    return Map<String, dynamic>.from(data as Map);
+    return _asMap(data, 'admin');
   }
 
   Future<List<Map<String, dynamic>>> tousLesCours() async {

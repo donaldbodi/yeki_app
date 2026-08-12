@@ -12,6 +12,7 @@
 
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -261,6 +262,18 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
             ),
           ),
         ),
+        // Uniquement pertinent depuis un navigateur (l'app EST déjà l'app
+        // sur mobile/desktop natif, inutile de proposer de la télécharger)
+        // — exigence CDC §10 : téléchargement des versions Android/iOS/
+        // Desktop DEPUIS la version Web de l'application elle-même.
+        if (kIsWeb)
+          Center(
+            child: TextButton.icon(
+              onPressed: () => context.pushNamed(AppRoute.download),
+              icon: const Icon(Icons.download_rounded, size: 18),
+              label: const Text("Télécharger l'application"),
+            ),
+          ),
       ],
     );
   }

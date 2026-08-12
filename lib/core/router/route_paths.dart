@@ -12,6 +12,7 @@ abstract final class AppPath {
   static const String forbidden = '/403';
   static const String notFound = '/404';
   static const String designSystem = '/design-system';
+  static const String download = '/telecharger';
 
   // ── Apprenant : onglets du shell (chemins complets) ─────────────
   static const String dashboardAccueil = '/dashboard/accueil';

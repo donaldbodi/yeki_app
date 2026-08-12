@@ -78,6 +78,7 @@ final Map<String, RouteAccess> routeAccessByName = {
   AppRoute.notFound: RouteAccess.public,
   // designSystem : géré à part par guards.dart (kDebugMode), pas par rôle.
   AppRoute.designSystem: RouteAccess.public,
+  AppRoute.download: RouteAccess.public,
 
   // Apprenant.
   AppRoute.dashboardAccueil: RouteAccess.apprenant,

@@ -12,6 +12,7 @@ abstract final class AppRoute {
   static const String forbidden = 'forbidden';
   static const String notFound = 'notFound';
   static const String designSystem = 'designSystem';
+  static const String download = 'download';
 
   // ── Apprenant : onglets du shell ───────────────────────────────
   static const String dashboardAccueil = 'dashboardAccueil';
