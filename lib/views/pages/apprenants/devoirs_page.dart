@@ -19,6 +19,7 @@ import 'package:yeki/core/design/components/components.dart';
 import 'package:yeki/core/design/tokens/tokens.dart';
 import 'package:yeki/core/network/api_exception.dart';
 import 'package:yeki/core/router/route_names.dart';
+import 'package:yeki/features/paiement/presentation/ouvrir_abonnement.dart' show kMessagePremiumRequis;
 import 'package:yeki/repositories/devoir_repository.dart';
 import 'package:yeki/repositories/formation_repository.dart';
 import 'package:yeki/services/offline_service.dart';
@@ -132,6 +133,11 @@ class _DevoirsPageState extends State<DevoirsPage> {
 
   bool _loading = true;
   bool _enErreur = false;
+  // Distingue le 403 "réservé aux abonnés Premium" (backend, tout-ou-rien
+  // pour cette liste globale — apprenant non-Premium dans AUCUN
+  // département) d'une vraie coupure réseau — jusqu'ici confondus,
+  // produisant le message trompeur "Vérifiez votre connexion".
+  bool _erreurPremium = false;
 
   List<DevoirItem> _tous = const [];
   List<DevoirItem> _affiches = const [];
@@ -203,6 +209,7 @@ class _DevoirsPageState extends State<DevoirsPage> {
       setState(() {
         _loading = true;
         _enErreur = false;
+        _erreurPremium = false;
       });
     }
     try {
@@ -215,9 +222,22 @@ class _DevoirsPageState extends State<DevoirsPage> {
         _loading = false;
         _appliquerFiltres();
       });
-    } on ApiException catch (_) {
-      OfflineService.isOnline = false;
-      _chargerDepuisCache();
+    } on ApiException catch (e) {
+      // Apprenant non-Premium dans AUCUN département : la liste globale
+      // est un "tout ou rien" côté backend (AccesMatricePermission,
+      // acces_modele = Devoir) — pas une coupure réseau, un vrai état
+      // "réservé Premium" à distinguer du repli hors-ligne.
+      if (e.message == kMessagePremiumRequis) {
+        if (mounted) {
+          setState(() {
+            _erreurPremium = true;
+            _loading = false;
+          });
+        }
+      } else {
+        OfflineService.isOnline = false;
+        _chargerDepuisCache();
+      }
     } catch (_) {
       OfflineService.isOnline = false;
       _chargerDepuisCache();
@@ -292,6 +312,15 @@ class _DevoirsPageState extends State<DevoirsPage> {
       body: SafeArea(
         child: _loading
             ? Padding(padding: EdgeInsets.all(YkSpacing.md), child: YkSkeleton.list(itemCount: 4, itemHeight: 180))
+            : _erreurPremium
+            ? YkPremiumRequired(
+                message: kMessagePremiumRequis,
+                // Pas de département précis à cibler ici (liste globale,
+                // potentiellement multi-département) — même repli déjà
+                // établi dans profil_page.dart : rediriger vers Cursus
+                // plutôt que de forcer un `coursId` arbitraire.
+                onSubscribe: () => context.goNamed(AppRoute.dashboardCursus),
+              )
             : _enErreur
             ? YkEmptyState(
                 icon: Icons.wifi_off_rounded,

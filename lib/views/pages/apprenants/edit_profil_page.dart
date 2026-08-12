@@ -13,7 +13,6 @@ import 'package:yeki/core/design/tokens/tokens.dart';
 import 'package:yeki/core/network/api_exception.dart';
 import 'package:yeki/core/providers/current_user_provider.dart';
 import 'package:yeki/repositories/auth_repository.dart';
-import 'package:yeki/repositories/formation_repository.dart';
 
 /// Édition du profil de l'utilisateur CONNECTÉ — toujours « mon propre
 /// profil », jamais celui d'un tiers : autonome, fetch son propre profil
@@ -34,7 +33,6 @@ class EditProfilePage extends ConsumerStatefulWidget {
 
 class _EditProfilePageState extends ConsumerState<EditProfilePage> {
   final _repo = AuthRepository();
-  final _formationRepo = FormationRepository();
 
   final _firstNameCtrl = TextEditingController();
   final _lastNameCtrl = TextEditingController();
@@ -45,14 +43,9 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
   final _villeCtrl = TextEditingController();
   final _whatsappCtrl = TextEditingController();
 
-  // Bug corrigé : liste EN DUR (`['Secondaire - Francophone', ...]`) qui ne
-  // correspondait à aucun vrai `Parcours.nom` en base — un apprenant qui
-  // sauvegardait depuis cet écran cassait sa visibilité Cursus (`profile.
-  // cursus` doit correspondre exactement à un `Parcours.nom` réel, voir
-  // docs/ecarts/p2_inscription_cursus_root_cause.md). Chargée dynamiquement
-  // depuis la même source que l'inscription.
-  List<ParcoursOption> _cursusOptions = const [];
-
+  // Cursus/Niveau : lecture seule (voir section "Scolarité" du build())
+  // — plus de sélecteur `_cursusOptions`/`FormationRepository.parcours()`
+  // à charger, la valeur brute du profil suffit pour un simple affichage.
   String? _cursus;
   DateTime? _dateNaissance;
   YkPickedFile? _avatar;
@@ -69,13 +62,6 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
   Future<void> _charger() async {
     try {
       final profil = await _repo.getCurrentUserRaw();
-      List<ParcoursOption> cursusOptions = const [];
-      try {
-        cursusOptions = await _formationRepo.parcours(typeParcours: 'cursus');
-      } catch (_) {
-        // Best-effort : une erreur ici ne doit pas bloquer le chargement du
-        // profil, juste laisser le menu Cursus vide pour cette session.
-      }
       if (!mounted) return;
       setState(() {
         _profil = profil;
@@ -87,9 +73,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
         _niveauCtrl.text = profil['niveau'] ?? '';
         _villeCtrl.text = profil['ville'] ?? '';
         _whatsappCtrl.text = profil['whatsapp'] ?? '';
-        _cursusOptions = cursusOptions;
-        final cursusValue = profil['cursus'] as String?;
-        _cursus = (cursusValue != null && cursusOptions.any((c) => c.nom == cursusValue)) ? cursusValue : null;
+        _cursus = profil['cursus'] as String?;
         final dateNaissanceValue = profil['date_naissance'] as String?;
         _dateNaissance = (dateNaissanceValue != null && dateNaissanceValue.isNotEmpty)
             ? DateTime.tryParse(dateNaissanceValue)
@@ -123,10 +107,13 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
         'email': _emailCtrl.text.trim(),
         'phone': _phoneCtrl.text.trim(),
         'bio': _bioCtrl.text.trim(),
-        'niveau': _niveauCtrl.text.trim(),
+        // 'niveau'/'cursus' ne sont plus envoyés — ces 2 champs de scolarité
+        // sont passés en lecture seule (demande explicite), voir la section
+        // "Scolarité" du build() (YkKeyValue au lieu de YkDropdown/
+        // YkTextField). Barrière serveur correspondante :
+        // apps/accounts/views/profil.py::ProfilUpdateView.patch().
         'ville': _villeCtrl.text.trim(),
         'whatsapp': _whatsappCtrl.text.trim(),
-        if (_cursus != null && _cursus!.isNotEmpty) 'cursus': _cursus!,
         if (_dateNaissance != null) 'date_naissance': _dateNaissance!.toIso8601String().split('T').first,
       }, avatar: _avatar);
       ref.invalidate(currentUserProvider);
@@ -187,19 +174,26 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
               ),
             ),
             SizedBox(height: YkSpacing.md),
+            // Cursus/Niveau d'étude : lecture seule (demande explicite —
+            // aucun utilisateur ne doit pouvoir modifier ses informations
+            // de scolarité depuis son profil, seulement les consulter).
+            // Même motif d'affichage déjà utilisé par `profil_page.dart`
+            // pour ces 2 champs.
             YkSection(
               title: 'Scolarité',
               child: YkCard(
                 child: Column(
                   children: [
-                    YkDropdown<String>(
+                    YkKeyValue(
+                      icon: Icons.route_rounded,
                       label: 'Cursus actuel',
-                      value: _cursus,
-                      items: [for (final c in _cursusOptions) YkDropdownItem(value: c.nom, label: c.nom)],
-                      onChanged: (v) => setState(() => _cursus = v),
+                      value: (_cursus == null || _cursus!.isEmpty) ? 'Non défini' : _cursus!,
                     ),
-                    SizedBox(height: YkSpacing.sm),
-                    YkTextField(controller: _niveauCtrl, label: "Niveau d'étude"),
+                    YkKeyValue(
+                      icon: Icons.grade_rounded,
+                      label: "Niveau d'étude",
+                      value: _niveauCtrl.text.isEmpty ? 'Non défini' : _niveauCtrl.text,
+                    ),
                   ],
                 ),
               ),

@@ -171,12 +171,17 @@ class _DashboardPrincipalPageState extends State<DashboardPrincipalPage> with Si
           _cours = cours;
         });
       }
+    } on ApiException catch (e) {
+      // Le vrai motif backend (403/401/validation…) est désormais affiché
+      // À L'ÉCRAN, pas seulement journalisé (inaccessible sans outil de
+      // dev en production) — 2 explorations exhaustives (celle-ci et un
+      // ticket antérieur) n'ont trouvé aucune régression de code : sans
+      // preuve réelle, je ne devine pas de correctif supplémentaire
+      // (règle 7) ; ce message visible permettra enfin un diagnostic
+      // sûr si le bug persiste.
+      debugPrint('PrincipalDashboardPage._charger() — ApiException : ${e.message}');
+      if (mounted) setState(() => _error = e.message);
     } catch (e) {
-      // Filet de diagnostic (même idiome que passer_exercice_controller.dart/
-      // olympiades_controller.dart) : aucune root cause confirmée pour ce
-      // signalement précis (exploration exhaustive, rien de cassé trouvé) —
-      // si le bug persiste après déploiement, ce debugPrint donnera le vrai
-      // type d'exception au lieu de re-deviner à l'aveugle.
       debugPrint('PrincipalDashboardPage._charger() — ${e.runtimeType} : $e');
       if (mounted) setState(() => _error = 'Impossible de charger votre tableau de bord.');
     } finally {

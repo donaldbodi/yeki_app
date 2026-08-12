@@ -25,6 +25,16 @@
 // committer, jamais suspendus. Voir docs/ADMOB_SETUP.md pour les 3
 // actions externes restantes (compte AdMob réel, blocs d'annonces,
 // remplacement de ces IDs) avant toute publication.
+//
+// Bug corrigé (ticket revêtement Web/Desktop) : `google_mobile_ads` ne
+// supporte QUE Android/iOS — `init()` était pourtant appelé
+// inconditionnellement (`main.dart`, hors du bloc `if (!kIsWeb)` qui
+// protège les autres services), risquant une `MissingPluginException`
+// silencieuse ou un no-op sur Web/Desktop natif. [isSupported] est
+// désormais le garde UNIQUE (règle 1) — voir `YkAdBanner`
+// (`lib/core/design/components/ads/yk_ad_banner.dart`) pour
+// l'alternative Web (Google AdSense) et le repli desktop natif (aucune
+// pub, aucune alternative crédible n'existant pour une app desktop).
 
 import 'package:flutter/foundation.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
@@ -32,6 +42,12 @@ import 'package:google_mobile_ads/google_mobile_ads.dart';
 class AdsService {
   AdsService._();
   static final AdsService instance = AdsService._();
+
+  /// AdMob ne fonctionne que sur Android/iOS — jamais sur Web (aucune
+  /// implémentation officielle) ni desktop natif (aucun canal de
+  /// plugin enregistré, plantage silencieux possible sinon).
+  static bool get isSupported =>
+      !kIsWeb && (defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS);
 
   bool _initialized = false;
 
@@ -64,6 +80,7 @@ class AdsService {
   /// appel avec la vraie date une fois le profil chargé est sûr
   /// (idempotent, `updateRequestConfiguration` peut être rappelé).
   Future<void> init({String? dateNaissanceIso}) async {
+    if (!isSupported) return;
     final estMineur = _estMineur(dateNaissanceIso);
     await MobileAds.instance.updateRequestConfiguration(
       RequestConfiguration(
@@ -117,11 +134,15 @@ class AdsService {
   }
 
   /// Bannière adaptative — « bas de liste de cours/exercices » (CDC §8.3).
-  BannerAd creerBanniere({
+  /// `null` si [isSupported] est faux (défense en profondeur — `YkBannerAd`
+  /// n'est censé être instancié QUE via la branche mobile de `YkAdBanner`,
+  /// mais un appel direct ne doit jamais planter).
+  BannerAd? creerBanniere({
     required AdSize size,
     void Function(Ad ad)? onLoaded,
     void Function(Ad ad, LoadAdError error)? onFailed,
   }) {
+    if (!isSupported) return null;
     return BannerAd(
       adUnitId: bannerAdUnitId,
       size: size,

@@ -392,7 +392,7 @@ class _LeconFeedCard extends StatelessWidget {
                   : _buildPlaceholder(context),
             ),
             if (afficherPub) ...[
-              const YkBannerAd(),
+              const YkAdBanner(),
               SizedBox(height: YkSpacing.xs),
             ],
             Padding(

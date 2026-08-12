@@ -31,9 +31,10 @@ import 'package:go_router/go_router.dart';
 
 import 'package:yeki/core/design/components/components.dart';
 import 'package:yeki/core/design/tokens/tokens.dart';
+import 'package:yeki/core/providers/current_user_provider.dart';
 import 'package:yeki/core/providers/notifications_provider.dart';
 import 'package:yeki/core/router/route_names.dart';
-import 'package:yeki/repositories/auth_repository.dart';
+import 'package:yeki/models/user_profile.dart';
 import 'package:yeki/repositories/devoir_repository.dart';
 import 'package:yeki/repositories/formation_repository.dart';
 import 'package:yeki/views/pages/apprenants/devoir_models.dart' show DevoirItem;
@@ -46,13 +47,21 @@ class AccueilPage extends ConsumerStatefulWidget {
 }
 
 class _AccueilPageState extends ConsumerState<AccueilPage> {
-  final _authRepo = AuthRepository();
   final _formationRepo = FormationRepository();
   final _devoirRepo = DevoirRepository();
 
+  // Bug corrigé : le prénom/nom venaient d'un fetch LOCAL
+  // (`AuthRepository().getCurrentUser()`) groupé dans le même
+  // `Future.wait` que `lecturesRecentes()`/`listMine()` — un seul membre
+  // du groupe en échec (ex. `listMine()` qui peut légitimement 403 pour
+  // un apprenant non-Premium) faisait échouer TOUT le groupe, laissant
+  // le header bloqué sur son repli générique indéfiniment (`catch (_)`
+  // sans retry). L'identité vient désormais de `currentUserProvider`
+  // (même provider partagé, déjà durci — retry automatique, invalidé à
+  // la bascule de compte — déjà utilisé correctement par
+  // `apprenant_shell.dart`), lu directement dans `build()`, complètement
+  // découplé du chargement de reprises/échéances ci-dessous.
   bool _loading = true;
-  String _prenom = '';
-  String _nom = '';
   List<LectureRecente> _reprises = const [];
   List<DevoirItem> _echeances = const [];
 
@@ -64,38 +73,40 @@ class _AccueilPageState extends ConsumerState<AccueilPage> {
 
   Future<void> _charger() async {
     setState(() => _loading = true);
+    // Chacune sa propre erreur — un échec de l'une (ex. 403 Premium sur
+    // les devoirs) ne doit plus empêcher l'autre de s'afficher.
+    var reprises = const <LectureRecente>[];
+    var echeances = const <DevoirItem>[];
     try {
-      final resultats = await Future.wait([
-        _authRepo.getCurrentUser(),
-        _formationRepo.lecturesRecentes(),
-        _devoirRepo.listMine(),
-      ]);
-      if (!mounted) return;
-      final utilisateur = resultats[0] as dynamic;
-      final reprises = resultats[1] as List<LectureRecente>;
-      final devoirs = resultats[2] as List<DevoirItem>;
-      final echeances =
+      reprises = await _formationRepo.lecturesRecentes();
+    } catch (_) {
+      // Repli silencieux — section "Continuer la lecture" simplement vide.
+    }
+    try {
+      final devoirs = await _devoirRepo.listMine();
+      echeances =
           devoirs
               .where((d) => d.statutApprenant == 'non_commence' || d.statutApprenant == 'en_cours')
               .toList()
             ..sort((a, b) => a.dateLimite.compareTo(b.dateLimite));
-      setState(() {
-        _prenom = utilisateur.firstName.isNotEmpty ? utilisateur.firstName : utilisateur.username;
-        _nom = utilisateur.lastName as String;
-        _reprises = reprises;
-        _echeances = echeances.take(3).toList();
-        _loading = false;
-      });
     } catch (_) {
-      if (mounted) setState(() => _loading = false);
+      // Repli silencieux (ex. 403 Premium — voir devoirs_page.dart pour le
+      // vrai message sur l'écran Devoirs dédié) — section "Prochaines
+      // échéances" simplement vide ici.
     }
+    if (!mounted) return;
+    setState(() {
+      _reprises = reprises;
+      _echeances = echeances.take(3).toList();
+      _loading = false;
+    });
   }
 
   /// 2 initiales (prénom + nom, comme la maquette) — repli sur `'?'` si
   /// aucun des deux n'est encore chargé.
-  String get _initiales {
-    final p = _prenom.isNotEmpty ? _prenom[0].toUpperCase() : '';
-    final n = _nom.isNotEmpty ? _nom[0].toUpperCase() : '';
+  String _initiales(String prenom, String nom) {
+    final p = prenom.isNotEmpty ? prenom[0].toUpperCase() : '';
+    final n = nom.isNotEmpty ? nom[0].toUpperCase() : '';
     final combinees = '$p$n';
     return combinees.isEmpty ? '?' : combinees;
   }
@@ -119,6 +130,7 @@ class _AccueilPageState extends ConsumerState<AccueilPage> {
   @override
   Widget build(BuildContext context) {
     final nonLues = ref.watch(notificationsProvider).valueOrNull ?? 0;
+    final profil = ref.watch(currentUserProvider).valueOrNull;
 
     return Scaffold(
       backgroundColor: YkColors.background(context),
@@ -130,7 +142,7 @@ class _AccueilPageState extends ConsumerState<AccueilPage> {
                 child: ListView(
                   padding: EdgeInsets.all(YkSpacing.md),
                   children: [
-                    _buildAppBar(context, nonLues),
+                    _buildAppBar(context, nonLues, profil),
                     SizedBox(height: YkSpacing.md),
                     YkSearchBar(
                       hint: 'Rechercher un cours, un enseignant…',
@@ -149,7 +161,9 @@ class _AccueilPageState extends ConsumerState<AccueilPage> {
     );
   }
 
-  Widget _buildAppBar(BuildContext context, int nonLues) {
+  Widget _buildAppBar(BuildContext context, int nonLues, UserProfile? profil) {
+    final prenom = (profil != null && profil.firstName.isNotEmpty) ? profil.firstName : (profil?.username ?? '');
+    final nom = profil?.lastName ?? '';
     return Row(
       children: [
         ClipOval(
@@ -164,7 +178,7 @@ class _AccueilPageState extends ConsumerState<AccueilPage> {
               ),
               child: Center(
                 child: Text(
-                  _initiales,
+                  _initiales(prenom, nom),
                   style: YkTypography.label(context).copyWith(color: YkColors.textOnPrimary),
                 ),
               ),
@@ -181,7 +195,7 @@ class _AccueilPageState extends ConsumerState<AccueilPage> {
                 style: YkTypography.caption(context).copyWith(color: YkColors.textSecondary(context)),
               ),
               Text(
-                _prenom.isEmpty ? 'Apprenant' : _prenom,
+                prenom.isEmpty ? 'Apprenant' : prenom,
                 style: YkTypography.h4(context).copyWith(color: YkColors.textPrimary(context)),
               ),
             ],

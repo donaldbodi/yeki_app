@@ -385,6 +385,12 @@ class UpdateService {
     if (kIsWeb) return 'web';
     if (Platform.isAndroid) return 'android';
     if (Platform.isIOS) return 'ios';
+    // Bug corrigé : un build desktop natif (Windows/macOS/Linux) retombait
+    // sur 'web' par défaut alors que le backend a déjà un choix
+    // `platform="desktop"` dédié (`AppVersion.PLATFORM_CHOICES`) —
+    // interrogeait donc la mauvaise plateforme pour son propre mécanisme
+    // de mise à jour in-app.
+    if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) return 'desktop';
     return 'web';
   }
 
