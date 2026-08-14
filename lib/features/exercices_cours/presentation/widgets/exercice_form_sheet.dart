@@ -4,6 +4,8 @@ import 'package:yeki/core/design/components/components.dart';
 import 'package:yeki/core/design/tokens/tokens.dart';
 import 'package:yeki/models/exercice_models.dart';
 
+const _imageConstraint = YkFileConstraint(allowedExtensions: ['jpg', 'jpeg', 'png'], maxSizeBytes: 5 * 1024 * 1024);
+
 const _typeItems = [
   YkDropdownItem(value: 'general', label: 'Général'),
   YkDropdownItem(value: 'module', label: 'Module'),
@@ -11,14 +13,12 @@ const _typeItems = [
   YkDropdownItem(value: 'epreuve', label: 'Épreuve (ensemble)'),
 ];
 
-const _imageConstraint = YkFileConstraint(allowedExtensions: ['jpg', 'jpeg', 'png'], maxSizeBytes: 5 * 1024 * 1024);
-
 /// État du formulaire — `ChangeNotifier` plutôt que `setState` (interdit
 /// sous `lib/features/`, règle 7 de `check_design_system.sh`).
 class _ExerciceFormController extends ChangeNotifier {
   _ExerciceFormController(this.existant, this.modules)
     : titreCtrl = TextEditingController(text: existant?.titre ?? ''),
-      enonceCtrl = TextEditingController(text: existant?.enonce ?? ''),
+      enonce = existant?.enonce ?? '',
       typeExercice = existant?.typeExercice ?? 'general',
       moduleId = existant?.moduleId,
       leconId = existant?.leconId,
@@ -31,7 +31,12 @@ class _ExerciceFormController extends ChangeNotifier {
   final List<ModuleOption> modules;
 
   final TextEditingController titreCtrl;
-  final TextEditingController enonceCtrl;
+
+  /// Rectification (demande explicite) : `enonce` + `enonce_image`
+  /// (deux champs séparés) fusionnés en un unique champ riche (HTML),
+  /// même mécanisme que `EnonceDevoir.contenu`/`YkRichEditor` — plus de
+  /// champ image à part.
+  String enonce;
   String typeExercice;
   int? moduleId;
   int? leconId;
@@ -39,9 +44,9 @@ class _ExerciceFormController extends ChangeNotifier {
   double duree;
   double tentatives;
   Set<int> exercicesComposes;
-  YkPickedFile? nouvelleImage;
-  bool supprimerImage = false;
   bool envoi = false;
+
+  void setEnonce(String v) => enonce = v;
 
   bool get estEpreuve => typeExercice == 'epreuve';
 
@@ -81,12 +86,6 @@ class _ExerciceFormController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void setImage(YkPickedFile? f) {
-    nouvelleImage = f;
-    supprimerImage = f == null && existant?.enonceImageUrl != null;
-    notifyListeners();
-  }
-
   void setEtoiles(int v) {
     etoiles = v.toDouble();
     notifyListeners();
@@ -110,7 +109,6 @@ class _ExerciceFormController extends ChangeNotifier {
   @override
   void dispose() {
     titreCtrl.dispose();
-    enonceCtrl.dispose();
     super.dispose();
   }
 }
@@ -148,8 +146,6 @@ class ExerciceFormSheet extends StatefulWidget {
     int? leconId,
     required bool estEpreuve,
     List<int>? exercicesComposes,
-    YkPickedFile? enonceImage,
-    bool removeImage,
   })
   onSubmit;
 
@@ -168,15 +164,23 @@ class _ExerciceFormSheetState extends State<ExerciceFormSheet> {
     super.dispose();
   }
 
+  Future<String> _uploadImage(YkPickedFile file) async {
+    // Aucun endpoint de téléversement générique côté backend (même
+    // limitation déjà documentée et acceptée pour `devoir_form_sheet.dart`/
+    // `question_devoir_form.dart` — l'insertion d'image échoue proprement,
+    // message déjà géré par le composant).
+    throw UnsupportedError('Téléversement d\'image indisponible pour le moment.');
+  }
+
   Future<void> _submit() async {
-    if (_controller.titreCtrl.text.trim().isEmpty || _controller.enonceCtrl.text.trim().isEmpty) {
+    if (_controller.titreCtrl.text.trim().isEmpty || _controller.enonce.trim().isEmpty) {
       YkSnack.error(context, 'Le titre et l\'énoncé sont requis.');
       return;
     }
     _controller.setEnvoi(true);
     final ok = await widget.onSubmit(
       titre: _controller.titreCtrl.text.trim(),
-      enonce: _controller.enonceCtrl.text.trim(),
+      enonce: _controller.enonce.trim(),
       etoiles: _controller.etoiles.round(),
       dureeMinutes: _controller.duree.round(),
       tentativesMax: _controller.tentatives.round(),
@@ -185,8 +189,6 @@ class _ExerciceFormSheetState extends State<ExerciceFormSheet> {
       leconId: _controller.typeExercice == 'lecon' ? _controller.leconId : null,
       estEpreuve: _controller.estEpreuve,
       exercicesComposes: _controller.estEpreuve ? _controller.exercicesComposes.toList() : null,
-      enonceImage: _controller.nouvelleImage,
-      removeImage: _controller.supprimerImage,
     );
     if (!mounted) return;
     _controller.setEnvoi(false);
@@ -257,19 +259,13 @@ class _ExerciceFormSheetState extends State<ExerciceFormSheet> {
         SizedBox(height: YkSpacing.sm),
         YkTextField(controller: c.titreCtrl, label: 'Titre', required: true),
         SizedBox(height: YkSpacing.sm),
-        YkTextField(
-          controller: c.enonceCtrl,
-          type: YkTextFieldType.multiline,
-          maxLines: 3,
+        YkRichEditor(
+          key: const ValueKey('enonce-exercice'),
+          initialHtml: c.enonce,
+          onChanged: c.setEnonce,
+          onUploadImage: _uploadImage,
+          imageConstraint: _imageConstraint,
           label: 'Énoncé',
-          required: true,
-        ),
-        SizedBox(height: YkSpacing.sm),
-        YkFileUpload(
-          label: "Image de l'énoncé (optionnelle)",
-          constraint: _imageConstraint,
-          picked: c.nouvelleImage,
-          onChanged: c.setImage,
         ),
         SizedBox(height: YkSpacing.md),
         YkRating(value: c.etoiles.round(), onChanged: c.setEtoiles),

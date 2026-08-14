@@ -1,9 +1,18 @@
+import 'dart:ui' show ImageFilter;
+
 import 'package:flutter/material.dart';
 
 import '../../tokens/tokens.dart';
 
 /// Ton visuel de [YkIconButton] — CDC_DESIGN §5.3.1.
-enum YkIconButtonVariant { filled, tonal, outlined, ghost }
+///
+/// `glass` (P17.17) : flou dépoli sur fond translucide sombre — pour les
+/// boutons superposés à un contenu imprévisible (vidéo plein écran,
+/// `detail_lecon_page.dart`), où une opacité liée au thème clair/sombre
+/// de l'app produirait un contraste incohérent contre la vidéo (cet écran
+/// force déjà un chrome toujours sombre, indépendant du thème système —
+/// même précédent que le badge « Hors ligne » de `YkVideoPlayer`).
+enum YkIconButtonVariant { filled, tonal, outlined, ghost, glass }
 
 /// Bouton icône seul — CDC_DESIGN §5.3.1.
 ///
@@ -48,6 +57,8 @@ class YkIconButton extends StatelessWidget {
         return (background: Colors.transparent, foreground: accent);
       case YkIconButtonVariant.ghost:
         return (background: Colors.transparent, foreground: YkColors.textPrimary(context));
+      case YkIconButtonVariant.glass:
+        return (background: Colors.black.withValues(alpha: 0.28), foreground: Colors.white);
     }
   }
 
@@ -65,22 +76,31 @@ class YkIconButton extends StatelessWidget {
     // entière), seul le rendu VISUEL (fond+bordure) se recentre à 34×34
     // dans une `Material` imbriquée, transparente pour le tap.
     final isCompactOutline = variant == YkIconButtonVariant.outlined;
+    final isGlass = variant == YkIconButtonVariant.glass;
     final ShapeBorder shape = isCompactOutline
         ? RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(YkRadius.md),
             side: BorderSide(color: YkColors.border(context)),
           )
+        : isGlass
+        ? CircleBorder(side: BorderSide(color: Colors.white.withValues(alpha: 0.18)))
         : const CircleBorder();
+
+    final material = Material(
+      color: background,
+      shape: shape,
+      child: Center(child: Icon(icon, size: iconSize, color: foreground)),
+    );
 
     final visual = Center(
       child: SizedBox(
         width: isCompactOutline ? 34 : _tapTarget,
         height: isCompactOutline ? 34 : _tapTarget,
-        child: Material(
-          color: background,
-          shape: shape,
-          child: Center(child: Icon(icon, size: iconSize, color: foreground)),
-        ),
+        child: isGlass
+            ? ClipOval(
+                child: BackdropFilter(filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16), child: material),
+              )
+            : material,
       ),
     );
 

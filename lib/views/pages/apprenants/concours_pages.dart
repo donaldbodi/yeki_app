@@ -303,9 +303,13 @@ class _ConcoursPageState extends State<ConcoursPage> {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Text(
+                            // Libellé clarifié (P17.16) : `dept.prix` est l'accès
+                            // CATALOGUE ponctuel (achat unique), distinct de
+                            // l'abonnement Premium — préfixe pour éviter toute
+                            // confusion avec l'abonnement récurrent.
                             aProgression
                                 ? 'Préparation en cours'
-                                : (dept.prix == 0 ? 'Accès libre' : '${dept.prix} FCFA'),
+                                : (dept.prix == 0 ? 'Accès libre' : 'Accès catalogue : ${dept.prix} FCFA'),
                             style: YkTypography.bodySm(context).copyWith(
                               color: aProgression
                                   ? YkColors.accent(context)

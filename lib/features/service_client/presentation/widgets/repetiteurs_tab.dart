@@ -3,20 +3,18 @@ import 'package:flutter/material.dart';
 import 'package:yeki/core/design/components/components.dart';
 import 'package:yeki/core/design/tokens/tokens.dart';
 import 'package:yeki/models/repetiteur_models.dart';
+import 'package:yeki/repositories/formation_repository.dart';
 
 import '../service_client_controller.dart';
 
 /// Onglet « Répétiteurs » (P9.5) — basculer `is_repetiteur`, ajouter/
 /// retirer d'un cours, éditer ville et tarif.
 ///
-/// Simplification actée (pas de question bloquante — décision
-/// d'implémentation, règle 4) : « ajouter à un cours » demande l'ID du
-/// cours directement (champ numérique), plutôt qu'un sélecteur de
-/// cours/matière recherché — aucun endpoint de liste de cours n'existe
-/// aujourd'hui côté `FormationRepository` (seulement parcours/départements),
-/// et construire un sélecteur de recherche complet sort du périmètre de ce
-/// ticket. Le Service Client doit connaître l'ID du cours (visible depuis
-/// l'écran Administration générale).
+/// « Ajouter à un cours » demandait jusqu'ici l'ID du cours en clair
+/// (aucun endpoint de liste de cours n'existait côté `FormationRepository`
+/// à l'époque). Remplacé par une cascade de menus déroulants (Parcours →
+/// Département → Niveau → Cours), `liste_cours` (backend) désormais
+/// accessible au Service Client et filtrable par département/niveau.
 class RepetiteursTab extends StatelessWidget {
   const RepetiteursTab({super.key, required this.controller});
 
@@ -206,12 +204,110 @@ class _FormulaireFiche extends StatefulWidget {
 }
 
 /// État local du formulaire — `ChangeNotifier` plutôt que `setState`
-/// (interdit sous `lib/features/`, règle 7).
+/// (interdit sous `lib/features/`, règle 7). Porte aussi la cascade de
+/// sélection de cours (Parcours → Département → Niveau → Cours).
 class _FormulaireState extends ChangeNotifier {
   _FormulaireState({required this.disponible});
 
+  final _repo = FormationRepository();
+
   bool disponible;
   bool enCours = false;
+
+  bool chargementParcours = true;
+  List<ParcoursOption> parcoursListe = const [];
+  int? parcoursId;
+
+  List<DepartementOption> departementsListe = const [];
+  int? departementId;
+  bool chargementDepartements = false;
+
+  List<String> niveauxListe = const [];
+  String? niveau;
+  bool chargementNiveaux = false;
+
+  List<CoursOption> coursListe = const [];
+  int? coursId;
+  bool chargementCours = false;
+
+  Future<void> chargerParcours() async {
+    chargementParcours = true;
+    notifyListeners();
+    try {
+      parcoursListe = await _repo.parcours();
+    } catch (_) {
+      parcoursListe = const [];
+    }
+    chargementParcours = false;
+    notifyListeners();
+  }
+
+  Future<void> choisirParcours(int? id) async {
+    parcoursId = id;
+    departementId = null;
+    niveau = null;
+    coursId = null;
+    departementsListe = const [];
+    niveauxListe = const [];
+    coursListe = const [];
+    notifyListeners();
+    if (id == null) return;
+    chargementDepartements = true;
+    notifyListeners();
+    try {
+      departementsListe = await _repo.departementsForParcours(id);
+    } catch (_) {
+      departementsListe = const [];
+    }
+    chargementDepartements = false;
+    notifyListeners();
+  }
+
+  Future<void> choisirDepartement(int? id) async {
+    departementId = id;
+    niveau = null;
+    coursId = null;
+    niveauxListe = const [];
+    coursListe = const [];
+    notifyListeners();
+    if (id == null) return;
+    chargementNiveaux = true;
+    notifyListeners();
+    try {
+      niveauxListe = await _repo.niveauxForDepartement(id);
+    } catch (_) {
+      niveauxListe = const [];
+    }
+    chargementNiveaux = false;
+    notifyListeners();
+    await _chargerCours();
+  }
+
+  Future<void> choisirNiveau(String? v) async {
+    niveau = v;
+    coursId = null;
+    notifyListeners();
+    await _chargerCours();
+  }
+
+  Future<void> _chargerCours() async {
+    if (departementId == null) return;
+    chargementCours = true;
+    coursListe = const [];
+    notifyListeners();
+    try {
+      coursListe = await _repo.coursFiltres(departementId: departementId, niveau: niveau);
+    } catch (_) {
+      coursListe = const [];
+    }
+    chargementCours = false;
+    notifyListeners();
+  }
+
+  void choisirCours(int? id) {
+    coursId = id;
+    notifyListeners();
+  }
 
   void setDisponible(bool v) {
     disponible = v;
@@ -225,7 +321,6 @@ class _FormulaireState extends ChangeNotifier {
 }
 
 class _FormulaireFicheState extends State<_FormulaireFiche> {
-  late final TextEditingController _coursIdCtrl = TextEditingController();
   late final TextEditingController _villeCtrl = TextEditingController(text: widget.ville ?? '');
   late final TextEditingController _telephoneCtrl = TextEditingController(text: widget.telephone ?? '');
   late final TextEditingController _tarifCtrl = TextEditingController(
@@ -236,8 +331,13 @@ class _FormulaireFicheState extends State<_FormulaireFiche> {
   bool get _estEdition => widget.onValiderAvecDisponibilite != null;
 
   @override
+  void initState() {
+    super.initState();
+    if (!_estEdition) _state.chargerParcours();
+  }
+
+  @override
   void dispose() {
-    _coursIdCtrl.dispose();
     _villeCtrl.dispose();
     _telephoneCtrl.dispose();
     _tarifCtrl.dispose();
@@ -259,10 +359,10 @@ class _FormulaireFicheState extends State<_FormulaireFiche> {
       if (_estEdition) {
         await widget.onValiderAvecDisponibilite!(ville, telephone, tarif, _state.disponible);
       } else {
-        final coursId = int.tryParse(_coursIdCtrl.text.trim());
+        final coursId = _state.coursId;
         if (coursId == null) {
           _state.setEnCours(false);
-          YkSnack.warning(context, 'ID du cours invalide.');
+          YkSnack.warning(context, 'Sélectionnez un cours.');
           return;
         }
         await widget.onValider(coursId, ville, telephone, tarif);
@@ -287,11 +387,39 @@ class _FormulaireFicheState extends State<_FormulaireFiche> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             if (!_estEdition) ...[
-              YkTextField(
-                controller: _coursIdCtrl,
-                label: 'ID du cours',
-                type: YkTextFieldType.number,
-                required: true,
+              YkDropdown<int>(
+                label: 'Parcours',
+                isLoading: _state.chargementParcours,
+                value: _state.parcoursId,
+                items: [for (final p in _state.parcoursListe) YkDropdownItem(value: p.id, label: p.nom)],
+                onChanged: _state.choisirParcours,
+              ),
+              SizedBox(height: YkSpacing.sm),
+              YkDropdown<int>(
+                label: 'Département',
+                isLoading: _state.chargementDepartements,
+                value: _state.departementId,
+                items: [for (final d in _state.departementsListe) YkDropdownItem(value: d.id, label: d.nom)],
+                onChanged: _state.parcoursId == null ? (_) {} : _state.choisirDepartement,
+              ),
+              SizedBox(height: YkSpacing.sm),
+              YkDropdown<String>(
+                label: 'Niveau',
+                isLoading: _state.chargementNiveaux,
+                value: _state.niveau,
+                items: [for (final n in _state.niveauxListe) YkDropdownItem(value: n, label: n)],
+                onChanged: _state.departementId == null ? (_) {} : _state.choisirNiveau,
+              ),
+              SizedBox(height: YkSpacing.sm),
+              YkDropdown<int>(
+                label: 'Cours',
+                isLoading: _state.chargementCours,
+                value: _state.coursId,
+                items: [
+                  for (final c in _state.coursListe)
+                    YkDropdownItem(value: c.id, label: '${c.titre} (${c.matiere})'),
+                ],
+                onChanged: _state.departementId == null ? (_) {} : _state.choisirCours,
               ),
               SizedBox(height: YkSpacing.sm),
             ],

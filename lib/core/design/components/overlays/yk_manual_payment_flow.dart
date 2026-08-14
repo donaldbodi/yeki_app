@@ -133,6 +133,7 @@ class _YkManualPaymentFlowBodyState extends State<_YkManualPaymentFlowBody> {
   late final TextEditingController _montantCtrl;
   final TextEditingController _numeroCtrl = TextEditingController();
   String? _erreurSaisie;
+  String? _erreurNumero;
   bool _soumissionEnCours = false;
   Map<String, dynamic>? _resultat;
   String? _statutActuel;
@@ -168,14 +169,18 @@ class _YkManualPaymentFlowBodyState extends State<_YkManualPaymentFlowBody> {
       setState(() => _erreurSaisie = "L'identifiant de transaction semble trop court.");
       return;
     }
-    if (_estRetrait && _numeroCtrl.text.trim().isEmpty) {
-      setState(() => _erreurSaisie = 'Le numéro de destination est obligatoire.');
+    // Rectification (demande explicite) : le numéro n'est plus optionnel,
+    // même règle que pour le retrait — erreur dédiée (champ distinct de
+    // l'identifiant de transaction).
+    if (_numeroCtrl.text.trim().isEmpty) {
+      setState(() => _erreurNumero = _estRetrait ? 'Le numéro de destination est obligatoire.' : 'Votre numéro est obligatoire.');
       return;
     }
 
     setState(() {
       _soumissionEnCours = true;
       _erreurSaisie = null;
+      _erreurNumero = null;
     });
 
     final payload = _estRetrait
@@ -236,6 +241,26 @@ class _YkManualPaymentFlowBodyState extends State<_YkManualPaymentFlowBody> {
     }
   }
 
+  /// Insère le vrai montant dans le modèle USSD configuré par l'admin
+  /// (`ParametreSysteme.ussd_orange_money`/`ussd_mtn_momo`, ex.
+  /// `#150*1*1*656566253*{montant}#`) — jamais un numéro/format codé en
+  /// dur ici (règle 3), seul l'espace réservé `{montant}` est substitué.
+  /// Si l'admin n'a pas encore inclus `{montant}` dans son modèle (valeur
+  /// historique), le code est utilisé tel quel plutôt que de planter.
+  String _composerUssd(String modele) {
+    if (!modele.contains('{montant}')) return modele;
+    return modele.replaceAll('{montant}', widget.montant.toString());
+  }
+
+  Future<void> _composerAppel(String ussd) async {
+    final uri = Uri.parse('tel:$ussd');
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri);
+    } else if (mounted) {
+      YkSnack.error(context, "Impossible d'ouvrir l'interface d'appel.");
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final labels = _labels;
@@ -249,7 +274,16 @@ class _YkManualPaymentFlowBodyState extends State<_YkManualPaymentFlowBody> {
         children: [
           YkStepIndicator(labels: labels, currentIndex: _currentStep),
           SizedBox(height: YkSpacing.lg),
-          IndexedStack(index: _currentStep, children: _buildEtapes(context, labels)),
+          // Bug corrigé : un `IndexedStack` garde TOUTES les étapes montées
+          // et se dimensionne sur la plus haute d'entre elles ("Instructions",
+          // la plus longue) — à l'étape 1 ("Récapitulatif", bien plus
+          // courte), le bouton "Suivant" se retrouvait poussé sous une
+          // zone vide, hors champ sans faire défiler. Un simple
+          // remplacement du widget courant laisse chaque étape prendre sa
+          // propre hauteur naturelle (l'état vit déjà dans ce `State`, pas
+          // dans les widgets d'étape eux-mêmes — rien à préserver en
+          // gardant les autres étapes montées).
+          _buildEtapes(context, labels)[_currentStep],
           if (!enConfirmation) ...[SizedBox(height: YkSpacing.lg), _buildNavigation(context, labels)],
         ],
       ),
@@ -322,13 +356,11 @@ class _YkManualPaymentFlowBodyState extends State<_YkManualPaymentFlowBody> {
 
   Widget _buildInstructions(BuildContext context) {
     final estOrange = _operateur == 'orange_money';
-    final ussd = estOrange ? widget.ussdOrange : widget.ussdMtn;
-    final numeroDepot = estOrange ? widget.numeroDepotOrange : widget.numeroDepotMtn;
+    final ussdModele = estOrange ? widget.ussdOrange : widget.ussdMtn;
+    final ussd = _composerUssd(ussdModele);
     final etapes = [
-      'Composez $ussd sur votre téléphone.',
-      'Choisissez « Envoyer de l\'argent » vers le numéro $numeroDepot.',
-      'Entrez le montant de ${widget.montant} FCFA et confirmez.',
-      'Notez l\'identifiant de transaction reçu par SMS — vous en aurez besoin à l\'étape suivante.',
+      'Touchez le code USSD ci-dessus (ou copiez-le puis composez-le dans votre interface d\'appel).',
+      'Envoyez et notez l\'identifiant de transaction reçu par SMS — vous en aurez besoin à l\'étape suivante.',
     ];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -342,9 +374,10 @@ class _YkManualPaymentFlowBodyState extends State<_YkManualPaymentFlowBody> {
           onChanged: (v) => setState(() => _operateur = v),
         ),
         SizedBox(height: YkSpacing.md),
-        YkCopyableCode(label: 'Code USSD', code: ussd),
-        SizedBox(height: YkSpacing.sm),
-        YkCopyableCode(label: 'Numéro de dépôt', code: numeroDepot),
+        // Le numéro de dépôt est déjà inclus dans le code USSD lui-même
+        // (modèle admin, ex. `#150*1*1*656566253*{montant}#`) — plus de
+        // champ séparé, redondant avec ce que le clic/appel compose déjà.
+        YkCopyableCode(label: 'Code USSD', code: ussd, onCall: () => _composerAppel(ussd)),
         SizedBox(height: YkSpacing.md),
         YkCard(
           variant: YkCardVariant.filled,
@@ -419,7 +452,7 @@ class _YkManualPaymentFlowBodyState extends State<_YkManualPaymentFlowBody> {
             hint: 'Ex. 690000000',
             type: YkTextFieldType.number,
             required: true,
-            errorText: _erreurSaisie,
+            errorText: _erreurNumero,
           ),
         ],
       );
@@ -442,7 +475,13 @@ class _YkManualPaymentFlowBodyState extends State<_YkManualPaymentFlowBody> {
           required: true,
         ),
         SizedBox(height: YkSpacing.md),
-        YkTextField(controller: _numeroCtrl, label: 'Votre numéro (optionnel)', type: YkTextFieldType.number),
+        YkTextField(
+          controller: _numeroCtrl,
+          label: 'Votre numéro',
+          type: YkTextFieldType.number,
+          required: true,
+          errorText: _erreurNumero,
+        ),
       ],
     );
   }

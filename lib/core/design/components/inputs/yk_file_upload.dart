@@ -111,7 +111,14 @@ class _YkFileUploadState extends State<YkFileUpload> {
 
   Future<void> _pick() async {
     setState(() => _localError = null);
-    final result = await FilePicker.platform.pickFiles(withData: true);
+    // Bug corrigé : la fenêtre système montrait TOUJOURS tous les
+    // fichiers, quelle que soit `widget.constraint` — un seul point à
+    // corriger (composant partagé) plutôt qu'un correctif par appelant.
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: widget.constraint.allowedExtensions,
+      withData: true,
+    );
     if (result == null || result.files.isEmpty) return;
     final file = result.files.single;
     final bytes = file.bytes;

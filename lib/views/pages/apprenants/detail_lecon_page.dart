@@ -174,12 +174,6 @@ class _DetailLeconPageState extends State<DetailLeconPage> {
     );
   }
 
-  void _onShare(String leconIdStr) {
-    final lecon = _lecons.firstWhere((l) => l.id.toString() == leconIdStr);
-    Clipboard.setData(ClipboardData(text: '${widget.coursTitre} — ${lecon.titre} (Yéki)'));
-    YkSnack.success(context, 'Lien copié dans le presse-papiers.');
-  }
-
   void _onDownload(String leconIdStr) {
     final lecon = _lecons.firstWhere((l) => l.id.toString() == leconIdStr);
     final url = lecon.hasVideo ? _urlComplete(lecon.videoUrl) : _urlComplete(lecon.pdfUrl);
@@ -317,7 +311,6 @@ class _DetailLeconPageState extends State<DetailLeconPage> {
             onLike: _onLike,
             onFavorite: _onFavorite,
             onPreoccupation: _onPreoccupation,
-            onShare: _onShare,
             onDownload: _onDownload,
             onSupplements: _onSupplements,
             onPageChanged: (i) => _repo.marquerLecon(_lecons[i].id, 10),
@@ -334,7 +327,7 @@ class _DetailLeconPageState extends State<DetailLeconPage> {
               child: YkIconButton(
                 icon: Icons.arrow_back_ios_new_rounded,
                 label: 'Retour',
-                variant: YkIconButtonVariant.filled,
+                variant: YkIconButtonVariant.glass,
                 onPressed: () => Navigator.pop(context),
               ),
             ),
@@ -377,76 +370,104 @@ class _LeconFeedCard extends StatelessWidget {
     final afficherPub = AdsService.instance.doitAfficherPub(estPremiumDeLaMatiere: estPremiumIci) &&
         AdsService.instance.doitAfficherEntreLecons();
 
+    // P17.17 : vrai plein écran « style TikTok » — la vidéo/le placeholder
+    // occupe désormais la TOTALITÉ du cadre (bord à bord, y compris sous
+    // la barre de statut), le texte et les boutons sont superposés en bas
+    // sur un voile dégradé plutôt qu'empilés dans une `Column` qui
+    // cantonnait la vidéo à une simple boîte 16:9.
     return Container(
       color: Colors.black,
-      child: SafeArea(
-        child: Column(
-          children: [
-            SizedBox(height: YkSpacing.xxl),
-            Expanded(
-              child: montrerVideo
-                  ? Padding(
-                      padding: EdgeInsets.symmetric(horizontal: YkSpacing.md),
-                      child: Center(child: YkVideoPlayer(videoUrl: _urlComplete(lecon.videoUrl))),
-                    )
-                  : _buildPlaceholder(context),
-            ),
-            if (afficherPub) ...[
-              const YkAdBanner(),
-              SizedBox(height: YkSpacing.xs),
-            ],
-            Padding(
-              padding: EdgeInsets.fromLTRB(YkSpacing.md, YkSpacing.sm, YkSpacing.xxl * 2, YkSpacing.lg),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Row(
-                    children: [
-                      Text(
-                        lecon.moduleTitre.toUpperCase(),
-                        style: YkTypography.caption(context).copyWith(color: Colors.white70, letterSpacing: 1),
-                      ),
-                      if (lecon.estTerminee) ...[
-                        SizedBox(width: YkSpacing.xs),
-                        YkBadge(variant: YkBadgeVariant.label, label: 'Terminée', color: YkColors.success),
-                      ],
-                    ],
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          montrerVideo
+              ? YkVideoPlayer(videoUrl: _urlComplete(lecon.videoUrl), fillScreen: true)
+              : _buildPlaceholder(context),
+          // Voile dégradé bas — garantit la lisibilité du texte blanc
+          // quel que soit le contenu (vidéo/couleur) affiché derrière,
+          // motif standard des flux immersifs plein écran.
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            height: 280,
+            child: IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [Colors.transparent, Colors.black.withValues(alpha: 0.85)],
                   ),
-                  SizedBox(height: YkSpacing.xs),
-                  Text(lecon.titre, style: YkTypography.h3(context).copyWith(color: Colors.white)),
-                  if (lecon.description.isNotEmpty) ...[
-                    SizedBox(height: YkSpacing.xs),
-                    Text(
-                      lecon.description,
-                      maxLines: 3,
-                      overflow: TextOverflow.ellipsis,
-                      style: YkTypography.bodySm(context).copyWith(color: Colors.white70),
-                    ),
-                  ],
-                  SizedBox(height: YkSpacing.md),
-                  Row(
-                    children: [
-                      if (lecon.hasPdf)
-                        Expanded(
-                          child: YkButton(
-                            label: 'Support PDF',
-                            icon: Icons.picture_as_pdf_outlined,
-                            variant: YkButtonVariant.secondary,
-                            onPressed: onOuvrirPdf,
-                          ),
-                        ),
-                      if (lecon.hasPdf) SizedBox(width: YkSpacing.sm),
-                      Expanded(
-                        child: YkButton(label: 'Exercices', icon: Icons.assignment_outlined, onPressed: onExercices),
-                      ),
-                    ],
-                  ),
-                ],
+                ),
               ),
             ),
-          ],
-        ),
+          ),
+          SafeArea(
+            child: Align(
+              alignment: Alignment.bottomCenter,
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(YkSpacing.md, YkSpacing.sm, YkSpacing.xxl * 2, YkSpacing.lg),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (afficherPub) ...[
+                      const YkAdBanner(),
+                      SizedBox(height: YkSpacing.sm),
+                    ],
+                    Row(
+                      children: [
+                        Text(
+                          lecon.moduleTitre.toUpperCase(),
+                          style: YkTypography.caption(context).copyWith(color: Colors.white70, letterSpacing: 1),
+                        ),
+                        if (lecon.estTerminee) ...[
+                          SizedBox(width: YkSpacing.xs),
+                          YkBadge(variant: YkBadgeVariant.label, label: 'Terminée', color: YkColors.success),
+                        ],
+                      ],
+                    ),
+                    SizedBox(height: YkSpacing.xs),
+                    Text(lecon.titre, style: YkTypography.h3(context).copyWith(color: Colors.white)),
+                    if (lecon.description.isNotEmpty) ...[
+                      SizedBox(height: YkSpacing.xs),
+                      Text(
+                        lecon.description,
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                        style: YkTypography.bodySm(context).copyWith(color: Colors.white70),
+                      ),
+                    ],
+                    SizedBox(height: YkSpacing.md),
+                    Row(
+                      children: [
+                        if (lecon.hasPdf)
+                          Expanded(
+                            child: YkButton(
+                              label: 'Support PDF',
+                              icon: Icons.picture_as_pdf_outlined,
+                              variant: YkButtonVariant.glass,
+                              onPressed: onOuvrirPdf,
+                            ),
+                          ),
+                        if (lecon.hasPdf) SizedBox(width: YkSpacing.sm),
+                        Expanded(
+                          child: YkButton(
+                            label: 'Exercices',
+                            icon: Icons.assignment_outlined,
+                            variant: YkButtonVariant.glass,
+                            onPressed: onExercices,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

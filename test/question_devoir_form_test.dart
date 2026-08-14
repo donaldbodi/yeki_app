@@ -115,14 +115,15 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final champs = find.byType(TextFormField);
-    expect(champs, findsNWidgets(2)); // 2 choix (l'énoncé est un YkRichEditor, pas un TextFormField)
-
+    // P17.9 : les choix sont désormais eux aussi des `YkRichEditor`, pas
+    // des `TextFormField` — plus rien à saisir ici (déjà pré-remplis via
+    // `existant`), seule la sélection du choix correct est exercée.
     // Sélectionne le choix actuellement NON coché ("Douala") comme
     // correct — il était initialement "Yaoundé" (estCorrect: true) via
     // `existant`.
     final choixNonCoche = find.ancestor(of: find.byIcon(Icons.circle_outlined), matching: find.byType(InkWell));
     expect(choixNonCoche, findsOneWidget);
+    await tester.ensureVisible(choixNonCoche);
     await tester.tap(choixNonCoche);
     await tester.pumpAndSettle();
 

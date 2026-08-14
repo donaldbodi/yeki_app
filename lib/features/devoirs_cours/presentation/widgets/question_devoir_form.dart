@@ -13,9 +13,9 @@ class _QuestionDevoirController extends ChangeNotifier {
     : enonce = existant?.enonce ?? '',
       type = autoriseQcm ? (existant?.typeQuestion ?? 'qcm') : 'texte',
       points = existant?.points ?? 1.0,
-      choixCtrl = existant != null && existant.estQcm
-          ? existant.choix.map((c) => TextEditingController(text: c.texte)).toList()
-          : [TextEditingController(), TextEditingController()],
+      choix = existant != null && existant.estQcm
+          ? existant.choix.map((c) => c.texte).toList()
+          : ['', ''],
       correctIndex = existant != null && existant.estQcm
           ? existant.choix.indexWhere((c) => c.estCorrect).clamp(0, 1 << 30)
           : 0,
@@ -25,7 +25,11 @@ class _QuestionDevoirController extends ChangeNotifier {
   String enonce;
   String type;
   double points;
-  List<TextEditingController> choixCtrl;
+
+  /// Rectification (demande explicite) : rich-editable (HTML) comme
+  /// `enonce` — remplace les `TextEditingController` par de simples
+  /// chaînes HTML, `YkRichEditor` gère son propre état interne.
+  List<String> choix;
   int correctIndex;
   final TextEditingController reponseAttendueCtrl;
   final TextEditingController reponseExempleCtrl;
@@ -34,6 +38,8 @@ class _QuestionDevoirController extends ChangeNotifier {
   bool get estQcm => type == 'qcm';
 
   void setEnonce(String v) => enonce = v;
+
+  void setChoixTexte(int index, String html) => choix[index] = html;
 
   void setType(String v) {
     type = v;
@@ -46,13 +52,13 @@ class _QuestionDevoirController extends ChangeNotifier {
   }
 
   void ajouterChoix() {
-    choixCtrl.add(TextEditingController());
+    choix.add('');
     notifyListeners();
   }
 
   void supprimerDernierChoix() {
-    choixCtrl.removeLast().dispose();
-    if (correctIndex >= choixCtrl.length) correctIndex = choixCtrl.length - 1;
+    choix.removeLast();
+    if (correctIndex >= choix.length) correctIndex = choix.length - 1;
     notifyListeners();
   }
 
@@ -68,9 +74,6 @@ class _QuestionDevoirController extends ChangeNotifier {
 
   @override
   void dispose() {
-    for (final c in choixCtrl) {
-      c.dispose();
-    }
     reponseAttendueCtrl.dispose();
     reponseExempleCtrl.dispose();
     super.dispose();
@@ -128,16 +131,16 @@ class _QuestionDevoirFormState extends State<QuestionDevoirForm> {
       return;
     }
 
-    List<ChoixReponseItem>? choix;
+    List<ChoixReponseItem>? choixEnvoyes;
     String? reponseAttendue;
     if (c.estQcm) {
-      if (c.choixCtrl.any((ctrl) => ctrl.text.trim().isEmpty)) {
+      if (c.choix.any((html) => html.trim().isEmpty)) {
         YkSnack.error(context, 'Remplissez tous les choix.');
         return;
       }
-      choix = [
-        for (var i = 0; i < c.choixCtrl.length; i++)
-          ChoixReponseItem(id: 0, texte: c.choixCtrl[i].text.trim(), estCorrect: i == c.correctIndex),
+      choixEnvoyes = [
+        for (var i = 0; i < c.choix.length; i++)
+          ChoixReponseItem(id: 0, texte: c.choix[i], estCorrect: i == c.correctIndex),
       ];
     } else {
       reponseAttendue = c.reponseAttendueCtrl.text.trim();
@@ -154,7 +157,7 @@ class _QuestionDevoirFormState extends State<QuestionDevoirForm> {
       points: c.points,
       reponseAttendue: reponseAttendue,
       reponseExemple: c.reponseExempleCtrl.text.trim(),
-      choix: choix,
+      choix: choixEnvoyes,
     );
     if (!mounted) return;
     c.setEnvoi(false);
@@ -206,17 +209,17 @@ class _QuestionDevoirFormState extends State<QuestionDevoirForm> {
             style: YkTypography.bodySm(context).copyWith(color: YkColors.textSecondary(context)),
           ),
           SizedBox(height: YkSpacing.xs),
-          ...List.generate(c.choixCtrl.length, (i) => _buildChoixRow(context, i)),
+          ...List.generate(c.choix.length, (i) => _buildChoixRow(context, i)),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              if (c.choixCtrl.length < 6)
+              if (c.choix.length < 6)
                 TextButton.icon(
                   onPressed: c.ajouterChoix,
                   icon: const Icon(Icons.add, size: 16),
                   label: const Text('Ajouter un choix'),
                 ),
-              if (c.choixCtrl.length > 2)
+              if (c.choix.length > 2)
                 TextButton.icon(
                   onPressed: c.supprimerDernierChoix,
                   icon: Icon(Icons.remove_circle_outline, size: 16, color: YkColors.error),
@@ -261,10 +264,14 @@ class _QuestionDevoirFormState extends State<QuestionDevoirForm> {
           ),
           SizedBox(width: YkSpacing.xs),
           Expanded(
-            child: YkTextField(
-              controller: c.choixCtrl[index],
-              hint: 'Choix ${index + 1}',
-              semanticLabel: 'Choix ${index + 1}',
+            child: YkRichEditor(
+              key: ValueKey('choix-devoir-$index'),
+              initialHtml: c.choix[index],
+              onChanged: (html) => c.setChoixTexte(index, html),
+              onUploadImage: _uploadImage,
+              imageConstraint: _imageConstraint,
+              label: 'Choix ${index + 1}',
+              showEmoji: false,
             ),
           ),
         ],

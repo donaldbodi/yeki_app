@@ -23,6 +23,7 @@ class YkVideoPlayer extends StatefulWidget {
     this.chapters = const [],
     this.isOffline = false,
     this.onPositionChanged,
+    this.fillScreen = false,
   });
 
   final String videoUrl;
@@ -32,6 +33,13 @@ class YkVideoPlayer extends StatefulWidget {
   final Duration? startAt;
   final List<YkVideoChapter> chapters;
   final bool isOffline;
+
+  /// P17.17 : plein écran « style TikTok » (`detail_lecon_page.dart`) —
+  /// remplit tout l'espace disponible en `BoxFit.cover` (rognée si besoin)
+  /// au lieu de se cantonner à son `AspectRatio` natif. Défaut `false` :
+  /// comportement inchangé pour tout autre appelant (vitrine du design
+  /// system, tout futur lecteur encadré classique).
+  final bool fillScreen;
 
   /// Appelé périodiquement — l'écran appelant décide s'il persiste cette
   /// position pour la reprise.
@@ -84,35 +92,42 @@ class _YkVideoPlayerState extends State<YkVideoPlayer> {
       );
     }
 
+    final video = widget.fillScreen
+        ? SizedBox.expand(
+            child: FittedBox(
+              fit: BoxFit.cover,
+              child: SizedBox(
+                width: _videoController.value.size.width,
+                height: _videoController.value.size.height,
+                child: Chewie(controller: _chewieController!),
+              ),
+            ),
+          )
+        : AspectRatio(
+            aspectRatio: _videoController.value.aspectRatio,
+            child: Chewie(controller: _chewieController!),
+          );
+
+    if (widget.fillScreen) {
+      // Plein écran : pas de `Column`/chapitres sous la vidéo (aucun
+      // espace pour eux dans un flux immersif) — la vidéo occupe la
+      // totalité de l'espace donné par l'appelant.
+      return Stack(
+        fit: StackFit.expand,
+        children: [
+          video,
+          if (widget.isOffline) _buildBadgeHorsLigne(context),
+        ],
+      );
+    }
+
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         Stack(
           children: [
-            AspectRatio(
-              aspectRatio: _videoController.value.aspectRatio,
-              child: Chewie(controller: _chewieController!),
-            ),
-            if (widget.isOffline)
-              Positioned(
-                top: YkSpacing.xs,
-                left: YkSpacing.xs,
-                child: Container(
-                  padding: EdgeInsets.symmetric(horizontal: YkSpacing.xs, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: Colors.black54,
-                    borderRadius: BorderRadius.circular(YkRadius.full),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.wifi_off, size: 12, color: Colors.white),
-                      SizedBox(width: YkSpacing.xxs),
-                      Text('Hors ligne', style: YkTypography.caption(context).copyWith(color: Colors.white)),
-                    ],
-                  ),
-                ),
-              ),
+            video,
+            if (widget.isOffline) _buildBadgeHorsLigne(context),
           ],
         ),
         if (widget.chapters.isNotEmpty) ...[
@@ -136,6 +151,28 @@ class _YkVideoPlayerState extends State<YkVideoPlayer> {
           ),
         ],
       ],
+    );
+  }
+
+  Widget _buildBadgeHorsLigne(BuildContext context) {
+    return Positioned(
+      top: YkSpacing.xs,
+      left: YkSpacing.xs,
+      child: Container(
+        padding: EdgeInsets.symmetric(horizontal: YkSpacing.xs, vertical: 2),
+        decoration: BoxDecoration(
+          color: Colors.black54,
+          borderRadius: BorderRadius.circular(YkRadius.full),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.wifi_off, size: 12, color: Colors.white),
+            SizedBox(width: YkSpacing.xxs),
+            Text('Hors ligne', style: YkTypography.caption(context).copyWith(color: Colors.white)),
+          ],
+        ),
+      ),
     );
   }
 }

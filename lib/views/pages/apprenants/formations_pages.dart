@@ -478,7 +478,14 @@ class _FormationsPageState extends State<FormationsPage> with SingleTickerProvid
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Text(
-                            aProgression ? 'Formation en cours' : (dept.prix == 0 ? 'Accès libre' : '${dept.prix} FCFA'),
+                            // Libellé clarifié (P17.16) : `dept.prix` est l'accès
+                            // CATALOGUE ponctuel (achat unique), distinct de
+                            // l'abonnement Premium (`prix_mensuel`/`prix_annuel`)
+                            // — le préfixe évite de laisser croire à un lien avec
+                            // l'abonnement récurrent.
+                            aProgression
+                                ? 'Formation en cours'
+                                : (dept.prix == 0 ? 'Accès libre' : 'Accès catalogue : ${dept.prix} FCFA'),
                             style: YkTypography.bodySm(context).copyWith(
                               color: aProgression
                                   ? YkColors.accent(context)

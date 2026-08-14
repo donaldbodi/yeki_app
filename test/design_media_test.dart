@@ -135,7 +135,6 @@ void main() {
               onLike: (id) => liked = id,
               onFavorite: (_) {},
               onPreoccupation: (_) {},
-              onShare: (_) {},
               onDownload: (_) {},
             ),
           ),

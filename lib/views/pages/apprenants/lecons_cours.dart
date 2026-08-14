@@ -15,6 +15,7 @@ import 'package:yeki/core/design/components/components.dart';
 import 'package:yeki/core/design/tokens/tokens.dart';
 import 'package:yeki/core/network/api_exception.dart';
 import 'package:yeki/core/router/route_names.dart';
+import 'package:yeki/features/paiement/presentation/ouvrir_abonnement.dart';
 import 'package:yeki/repositories/cours_repository.dart';
 import 'package:yeki/views/pages/apprenants/lecon_models.dart';
 import 'package:yeki/views/pages/enseignants/interface_enseignant_page.dart';
@@ -275,7 +276,12 @@ class _LeconsCoursPageState extends State<LeconsCoursPage> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            YkTextField(controller: titreCtrl, label: 'Titre de la leçon', hint: 'Ex : Chapitre 1 — Introduction'),
+            YkTextField(
+              controller: titreCtrl,
+              label: 'Titre de la leçon',
+              hint: 'Ex : Chapitre 1 — Introduction',
+              required: true,
+            ),
             SizedBox(height: YkSpacing.sm),
             YkTextField(
               controller: descCtrl,
@@ -283,6 +289,7 @@ class _LeconsCoursPageState extends State<LeconsCoursPage> {
               hint: 'De quoi parle cette leçon ?',
               type: YkTextFieldType.multiline,
               maxLines: 3,
+              required: true,
             ),
             SizedBox(height: YkSpacing.sm),
             if (_modules.length > 1)
@@ -317,6 +324,10 @@ class _LeconsCoursPageState extends State<LeconsCoursPage> {
               YkSnack.error(context, 'Le titre est requis.');
               return;
             }
+            if (descCtrl.text.trim().isEmpty) {
+              YkSnack.error(context, 'La description est requise.');
+              return;
+            }
             Navigator.pop(ctx);
             try {
               if (existante != null) {
@@ -341,6 +352,12 @@ class _LeconsCoursPageState extends State<LeconsCoursPage> {
                 if (mounted) YkSnack.success(context, 'Leçon publiée !');
               }
               _charger();
+            } on ApiException catch (e) {
+              // Le détail exploitable (champs en erreur) est dans
+              // `e.fields`, jamais affiché jusqu'ici (même correctif déjà
+              // appliqué à `creer_cours_sheet.dart`).
+              final details = e.fields.isNotEmpty ? ' (${e.fields.keys.join(", ")})' : '';
+              if (mounted) YkSnack.error(context, '${e.message}$details');
             } catch (_) {
               if (mounted) YkSnack.error(context, 'Erreur lors de la publication.');
             }
@@ -552,7 +569,9 @@ class _LeconsCoursPageState extends State<LeconsCoursPage> {
       SizedBox(height: YkSpacing.sm),
       SizedBox(
         width: double.infinity,
-        child: YkRepetiteurButton(onPressed: () => context.pushNamed(AppRoute.repetiteurs)),
+        child: YkRepetiteurButton(
+          onPressed: () => context.pushNamed(AppRoute.repetiteurs, queryParameters: {'coursId': widget.coursId}),
+        ),
       ),
     ];
   }
@@ -623,10 +642,20 @@ class _LeconsCoursPageState extends State<LeconsCoursPage> {
 
   /// Suppléments de PORTÉE COURS ENTIÈRE, en lecture seule — apprenant.
   /// Distinct de `_gererSupplements` (édition, enseignant, par leçon).
+  /// Rectification (demande explicite) : réservés Premium — le 403
+  /// (`kMessagePremiumRequis`) ouvre le même flux d'abonnement déjà établi
+  /// pour Devoirs/Forum plutôt qu'une erreur générique.
   Future<void> _voirSupplementsCours() async {
     List<SupplementCoursItem> supplements;
     try {
       supplements = await _repo.supplements(int.parse(widget.coursId));
+    } on ApiException catch (e) {
+      if (e.message == kMessagePremiumRequis && mounted) {
+        await ouvrirAbonnementPremium(context, coursId: int.parse(widget.coursId), coursNom: widget.coursTitre);
+        return;
+      }
+      if (mounted) YkSnack.error(context, 'Erreur de chargement.');
+      return;
     } catch (_) {
       if (mounted) YkSnack.error(context, 'Erreur de chargement.');
       return;

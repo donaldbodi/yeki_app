@@ -10,7 +10,7 @@ import '../feedback/yk_toast.dart';
 /// équivalent trouvé dans le projet (`Clipboard.setData` : zéro
 /// occurrence ailleurs avant ce composant).
 class YkCopyableCode extends StatelessWidget {
-  const YkCopyableCode({super.key, required this.code, this.label});
+  const YkCopyableCode({super.key, required this.code, this.label, this.onCall});
 
   /// Le code affiché ET copié tel quel (ex. `#150*1#`, un numéro de
   /// téléphone…).
@@ -18,6 +18,12 @@ class YkCopyableCode extends StatelessWidget {
 
   /// Libellé optionnel au-dessus du code (ex. « Code USSD Orange Money »).
   final String? label;
+
+  /// Fourni pour un code USSD (P9.3, ticket paiement) : ajoute un bouton
+  /// « Appeler » dédié (ouvre directement l'interface d'appel du
+  /// téléphone avec le code déjà composé) à côté du bouton copier — le
+  /// tap sur le reste de la carte continue de copier.
+  final VoidCallback? onCall;
 
   Future<void> _copier(BuildContext context) async {
     await Clipboard.setData(ClipboardData(text: code));
@@ -73,7 +79,20 @@ class YkCopyableCode extends StatelessWidget {
                       ).copyWith(color: YkColors.textPrimary(context), fontWeight: FontWeight.w700),
                     ),
                   ),
-                SizedBox(width: YkSpacing.sm),
+                if (onCall != null) ...[
+                  Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(YkRadius.full),
+                      onTap: onCall,
+                      child: Padding(
+                        padding: EdgeInsets.all(YkSpacing.xs),
+                        child: Icon(Icons.call_rounded, size: 20, color: YkColors.success),
+                      ),
+                    ),
+                  ),
+                  SizedBox(width: YkSpacing.xs),
+                ],
                 Icon(Icons.copy_rounded, size: 20, color: YkColors.accent(context)),
               ],
             ),

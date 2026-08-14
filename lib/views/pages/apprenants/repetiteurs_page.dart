@@ -17,18 +17,33 @@
 // WhatsApp (règle 3), indépendamment du vrai tarif du répétiteur — corrigé
 // pour utiliser `r['tarif']` (déjà lu par l'API, déjà affiché dans la
 // carte) au lieu d'un texte fixe.
+//
+// Simplification des filtres (demande explicite) : "Matière" (texte
+// libre), "Niveau" et "Matières populaires" retirés — la matière est
+// désormais celle du COURS d'où l'écran est ouvert (`coursId`, transmis
+// en paramètre de route depuis `lecons_cours.dart`), le niveau celui du
+// PROFIL de l'apprenant connecté — les deux résolus côté backend
+// (`RepetiteursSearchView`), jamais saisis ici. Seul le filtre "Ville"
+// reste, sur une VRAIE liste fermée des villes du Cameroun
+// (`villes_cameroun.dart`, nouvelle — n'existait nulle part avant).
 
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import 'package:yeki/core/constants/villes_cameroun.dart';
 import 'package:yeki/core/design/components/components.dart';
 import 'package:yeki/core/design/tokens/tokens.dart';
-import 'package:yeki/repositories/auth_repository.dart';
 import 'package:yeki/repositories/paiement_repository.dart';
 import 'package:yeki/repositories/repetiteur_repository.dart';
 
 class RepetiteursPage extends StatefulWidget {
-  const RepetiteursPage({super.key});
+  const RepetiteursPage({super.key, this.coursId});
+
+  /// Cours d'où l'écran est ouvert — détermine la matière recherchée
+  /// côté backend. `null` = recherche sans contexte de cours (aucun
+  /// résultat tant qu'aucune ville n'affine, le backend exige `matiere`
+  /// ou `cours_id`).
+  final String? coursId;
 
   @override
   State<RepetiteursPage> createState() => _RepetiteursPageState();
@@ -38,19 +53,12 @@ class _RepetiteursPageState extends State<RepetiteursPage> {
   final _repetiteurRepo = RepetiteurRepository();
   final _paiementRepo = PaiementRepository();
 
-  final _searchCtrl = TextEditingController();
-  final _niveauCtrl = TextEditingController();
-  final _villeCtrl = TextEditingController();
-
-  final List<String> _matieresPopulaires = const [
-    'Mathématiques', 'Physique', 'Chimie', 'SVT',
-    'Informatique', 'Français', 'Anglais', 'Histoire-Géo',
-  ];
+  String? _ville;
 
   List<Map<String, dynamic>> _repetiteurs = [];
   bool _loading = false;
   bool _chargementInitial = true;
-  String? _matiereSelectionnee;
+  bool _aRecherche = false;
   String? _erreur;
   String? _whatsappServiceClient;
 
@@ -60,53 +68,39 @@ class _RepetiteursPageState extends State<RepetiteursPage> {
     _initialiser();
   }
 
-  @override
-  void dispose() {
-    _searchCtrl.dispose();
-    _niveauCtrl.dispose();
-    _villeCtrl.dispose();
-    super.dispose();
-  }
-
   Future<void> _initialiser() async {
     try {
-      final profil = await AuthRepository().getCurrentUser();
       final parametres = await _paiementRepo.parametresPublics();
-      if (mounted) {
-        setState(() {
-          if (profil.niveau?.isNotEmpty ?? false) _niveauCtrl.text = profil.niveau!;
-          if (profil.ville?.isNotEmpty ?? false) _villeCtrl.text = profil.ville!;
-          _whatsappServiceClient = parametres.whatsappServiceClient;
-        });
-      }
+      if (mounted) setState(() => _whatsappServiceClient = parametres.whatsappServiceClient);
     } catch (_) {
     } finally {
       if (mounted) setState(() => _chargementInitial = false);
     }
+    // Sans `coursId` (ouverture hors contexte d'un cours), le backend exige
+    // `matiere`/`cours_id` — rien à chercher tant que l'apprenant n'a pas au
+    // moins choisi une ville.
+    if (widget.coursId != null) await _rechercher();
   }
 
-  Future<void> _rechercher(String matiere) async {
-    if (matiere.trim().isEmpty) {
-      YkSnack.error(context, 'Veuillez entrer une matière.');
-      return;
-    }
+  Future<void> _rechercher() async {
+    // La matière recherchée est dérivée de `coursId` côté backend — sans
+    // lui, rien à chercher (le backend exige `matiere` ou `cours_id`).
+    if (widget.coursId == null) return;
     setState(() {
       _loading = true;
       _erreur = null;
-      _matiereSelectionnee = matiere;
+      _aRecherche = true;
     });
     try {
       final resultats = await _repetiteurRepo.search({
-        'matiere': matiere,
-        if (_villeCtrl.text.trim().isNotEmpty) 'ville': _villeCtrl.text.trim(),
-        if (_niveauCtrl.text.trim().isNotEmpty) 'niveau': _niveauCtrl.text.trim(),
+        if (widget.coursId != null) 'cours_id': widget.coursId!,
+        if (_ville != null) 'ville': _ville!,
       });
       if (mounted) {
         setState(() {
           _repetiteurs = resultats;
           _loading = false;
         });
-        if (resultats.isEmpty) YkSnack.info(context, 'Aucun répétiteur trouvé pour "$matiere".');
       }
     } catch (_) {
       if (mounted) {
@@ -124,13 +118,11 @@ class _RepetiteursPageState extends State<RepetiteursPage> {
       YkSnack.error(context, 'Numéro du service client indisponible pour le moment.');
       return;
     }
-    final niveau = _niveauCtrl.text.trim().isNotEmpty ? _niveauCtrl.text.trim() : 'mon niveau';
-    final ville = _villeCtrl.text.trim().isNotEmpty ? _villeCtrl.text.trim() : 'ma ville';
+    final ville = _ville ?? 'ma ville';
     final tarifLabel = tarif != null ? '$tarif FCFA/mois' : 'à confirmer';
     final message = Uri.encodeComponent(
       'Bonjour,\n\n'
       'Je souhaite prendre des cours particuliers en $matiere avec $nomEnseignant via Yéki.\n'
-      'Niveau : $niveau\n'
       'Ville : $ville\n'
       'Tarif affiché : $tarifLabel.\n\n'
       'Pouvez-vous m\'aider à organiser ces cours ?\n\n'
@@ -156,13 +148,12 @@ class _RepetiteursPageState extends State<RepetiteursPage> {
           : Column(
               children: [
                 _formulaire(context),
-                _matieresPopulairesWidget(context),
                 Expanded(
                   child: _loading
                       ? Center(child: YkProgress(shape: YkProgressShape.circular))
                       : _erreur != null && _repetiteurs.isEmpty
                           ? _etatErreur(context)
-                          : _repetiteurs.isEmpty && _matiereSelectionnee != null
+                          : _repetiteurs.isEmpty && _aRecherche
                               ? _etatVide(context)
                               : _listeResultats(context),
                 ),
@@ -175,55 +166,21 @@ class _RepetiteursPageState extends State<RepetiteursPage> {
     return Container(
       padding: EdgeInsets.all(YkSpacing.md),
       decoration: BoxDecoration(color: YkColors.surface(context), border: Border(bottom: BorderSide(color: YkColors.border(context)))),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          Text('Rechercher un répétiteur', style: YkTypography.label(context).copyWith(color: YkColors.textPrimary(context))),
-          SizedBox(height: YkSpacing.sm),
-          Row(
-            children: [
-              Expanded(flex: 2, child: YkTextField(controller: _searchCtrl, type: YkTextFieldType.search, hint: 'Matière…', onSubmitted: _rechercher)),
-              SizedBox(width: YkSpacing.sm),
-              Expanded(child: YkTextField(controller: _niveauCtrl, hint: 'Niveau…')),
-            ],
+          Expanded(
+            child: YkDropdown<String>(
+              label: 'Ville',
+              value: _ville,
+              items: [for (final v in villesCameroun) YkDropdownItem(value: v, label: v)],
+              onChanged: (v) {
+                setState(() => _ville = v);
+                _rechercher();
+              },
+            ),
           ),
-          SizedBox(height: YkSpacing.sm),
-          Row(
-            children: [
-              Expanded(child: YkTextField(controller: _villeCtrl, hint: 'Ville…')),
-              SizedBox(width: YkSpacing.sm),
-              YkButton(label: 'Rechercher', onPressed: () => _rechercher(_searchCtrl.text)),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _matieresPopulairesWidget(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.fromLTRB(YkSpacing.md, YkSpacing.sm, YkSpacing.md, YkSpacing.xs),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Matières populaires', style: YkTypography.caption(context).copyWith(color: YkColors.textSecondary(context))),
-          SizedBox(height: YkSpacing.xs),
-          Wrap(
-            spacing: YkSpacing.xs,
-            runSpacing: YkSpacing.xs,
-            children: [
-              for (final matiere in _matieresPopulaires)
-                YkChip(
-                  label: matiere,
-                  variant: YkChipVariant.filter,
-                  selected: _matiereSelectionnee == matiere,
-                  onPressed: () {
-                    _searchCtrl.text = matiere;
-                    _rechercher(matiere);
-                  },
-                ),
-            ],
-          ),
+          SizedBox(width: YkSpacing.sm),
+          YkButton(label: 'Rechercher', onPressed: _rechercher),
         ],
       ),
     );
@@ -295,7 +252,7 @@ class _RepetiteursPageState extends State<RepetiteursPage> {
   Widget _etatVide(BuildContext context) => YkEmptyState(
         icon: Icons.person_search_rounded,
         title: 'Aucun répétiteur trouvé',
-        message: 'Essayez une autre matière ou vérifiez votre connexion.',
+        message: 'Essayez une autre ville ou vérifiez votre connexion.',
       );
 
   Widget _etatErreur(BuildContext context) => YkEmptyState(
@@ -303,6 +260,6 @@ class _RepetiteursPageState extends State<RepetiteursPage> {
         title: 'Erreur',
         message: _erreur ?? '',
         actionLabel: 'Réessayer',
-        onAction: () => _rechercher(_searchCtrl.text),
+        onAction: _rechercher,
       );
 }

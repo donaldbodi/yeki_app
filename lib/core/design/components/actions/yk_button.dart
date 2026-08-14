@@ -1,9 +1,16 @@
+import 'dart:ui' show ImageFilter;
+
 import 'package:flutter/material.dart';
 
 import '../../tokens/tokens.dart';
 
 /// Ton visuel du bouton — CDC_DESIGN §5.3.1.
-enum YkButtonVariant { primary, secondary, tertiary, ghost, destructive }
+///
+/// `glass` (P17.17) : flou dépoli translucide sombre, indépendant du
+/// thème clair/sombre de l'app — pour les CTA superposés à un contenu
+/// imprévisible (vidéo plein écran, `detail_lecon_page.dart`), même
+/// recette que `YkIconButtonVariant.glass`.
+enum YkButtonVariant { primary, secondary, tertiary, ghost, destructive, glass }
 
 /// Taille du bouton.
 enum YkButtonSize { sm, md, lg }
@@ -96,6 +103,12 @@ class YkButton extends StatelessWidget {
         return (background: Colors.transparent, foreground: accent, border: null);
       case YkButtonVariant.destructive:
         return (background: YkColors.error, foreground: YkColors.textOnPrimary, border: null);
+      case YkButtonVariant.glass:
+        return (
+          background: Colors.black.withValues(alpha: 0.28),
+          foreground: Colors.white,
+          border: Colors.white.withValues(alpha: 0.18),
+        );
     }
   }
 
@@ -130,44 +143,51 @@ class YkButton extends StatelessWidget {
             ],
           );
 
+    final button = Material(
+      color: background,
+      borderRadius: BorderRadius.circular(YkRadius.sm),
+      child: InkWell(
+        onTap: enabled ? onPressed : null,
+        borderRadius: BorderRadius.circular(YkRadius.sm),
+        focusColor: colors.foreground.withValues(alpha: 0.12),
+        hoverColor: colors.foreground.withValues(alpha: 0.08),
+        highlightColor: colors.foreground.withValues(alpha: 0.16),
+        child: Container(
+          height: _height,
+          padding: EdgeInsets.symmetric(horizontal: _iconOnly ? 0 : _horizontalPadding),
+          width: _iconOnly ? _height : null,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(YkRadius.sm),
+            border: border != null ? Border.all(color: border, width: 1.5) : null,
+          ),
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Opacity(opacity: isLoading ? 0 : 1, child: content),
+              if (isLoading)
+                SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: foreground),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+
     return Semantics(
       button: true,
       enabled: enabled,
       label: semanticLabel ?? label,
       excludeSemantics: true,
-      child: Material(
-        color: background,
-        borderRadius: BorderRadius.circular(YkRadius.sm),
-        child: InkWell(
-          onTap: enabled ? onPressed : null,
-          borderRadius: BorderRadius.circular(YkRadius.sm),
-          focusColor: colors.foreground.withValues(alpha: 0.12),
-          hoverColor: colors.foreground.withValues(alpha: 0.08),
-          highlightColor: colors.foreground.withValues(alpha: 0.16),
-          child: Container(
-            height: _height,
-            padding: EdgeInsets.symmetric(horizontal: _iconOnly ? 0 : _horizontalPadding),
-            width: _iconOnly ? _height : null,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
+      child: variant == YkButtonVariant.glass
+          ? ClipRRect(
               borderRadius: BorderRadius.circular(YkRadius.sm),
-              border: border != null ? Border.all(color: border, width: 1.5) : null,
-            ),
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                Opacity(opacity: isLoading ? 0 : 1, child: content),
-                if (isLoading)
-                  SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: foreground),
-                  ),
-              ],
-            ),
-          ),
-        ),
-      ),
+              child: BackdropFilter(filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16), child: button),
+            )
+          : button,
     );
   }
 }

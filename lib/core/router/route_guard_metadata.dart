@@ -106,7 +106,18 @@ final Map<String, RouteAccess> routeAccessByName = {
   AppRoute.concoursDetail: RouteAccess.apprenant,
   AppRoute.paiement: RouteAccess.apprenant,
   AppRoute.iaChat: RouteAccess.apprenant,
-  AppRoute.forumQuestionDetail: RouteAccess.apprenant,
+  // Rectification (demande explicite) : tous les grades enseignant
+  // peuvent répondre à une question de forum (le backend n'a jamais
+  // exclu personne — `AccesService.peut_soumettre` laisse déjà passer
+  // tout non-apprenant — seul CE garde bloquait l'accès à l'écran).
+  // Service Client explicitement exclu (arbitrage tranché).
+  AppRoute.forumQuestionDetail: RouteAccess.roles({
+    'apprenant',
+    'enseignant',
+    'enseignant_principal',
+    'enseignant_cadre',
+    'enseignant_admin',
+  }),
   AppRoute.profileEdit: RouteAccess.anyAuthenticated,
 
   // Partagé.

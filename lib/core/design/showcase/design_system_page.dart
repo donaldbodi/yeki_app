@@ -728,7 +728,6 @@ class _DesignSystemPageState extends State<DesignSystemPage> with SingleTickerPr
           onLike: (_) {},
           onFavorite: (_) {},
           onPreoccupation: (_) {},
-          onShare: (_) {},
           onDownload: (_) {},
         ),
       ),

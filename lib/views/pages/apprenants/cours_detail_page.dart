@@ -29,6 +29,7 @@ import 'package:yeki/core/design/components/components.dart';
 import 'package:yeki/core/design/tokens/tokens.dart';
 import 'package:yeki/features/devoirs_cours/presentation/devoirs_cours_page.dart';
 import 'package:yeki/features/exercices_cours/presentation/exercices_cours_page.dart';
+import 'package:yeki/features/paiement/presentation/ouvrir_abonnement.dart';
 import 'package:yeki/repositories/cours_repository.dart';
 import 'package:yeki/views/pages/apprenants/forum_page.dart';
 import 'package:yeki/views/pages/apprenants/lecon_models.dart';
@@ -373,10 +374,12 @@ class _CoursDetailTabsState extends State<CoursDetailTabs> with SingleTickerProv
             YkButton(
               label: 'Découvrir nos offres',
               icon: Icons.workspace_premium_rounded,
-              // Aucun prix réel n'est disponible ici (voir commentaire
-              // d'en-tête) — `YkSnack.info` plutôt qu'une navigation vers
-              // `AppRoute.paiement` avec un montant inventé à 0.
-              onPressed: () => YkSnack.info(context, 'Nos offres seront bientôt disponibles depuis cet écran.'),
+              // Rectification (demande explicite) : `ouvrirAbonnementPremium`
+              // est déjà pleinement câblé et fonctionnel ailleurs (Devoirs,
+              // Forum, Lecture leçon) — `widget.coursId`/`widget.titre` sont
+              // déjà disponibles ici, plus de raison de rester sur un message
+              // générique.
+              onPressed: () => ouvrirAbonnementPremium(context, coursId: int.parse(widget.coursId), coursNom: widget.titre),
             ),
           ],
           ),

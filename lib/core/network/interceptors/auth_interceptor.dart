@@ -1,6 +1,8 @@
 import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:yeki/core/constants/api_constants.dart';
+
 /// Injecte l'en-tête d'authentification sur chaque requête et réagit à un
 /// 401 (token invalide/révoqué). Lit le token depuis `SharedPreferences`,
 /// clé `'token'` — exactement la même clé que 45+ fichiers non encore
@@ -18,11 +20,27 @@ class AuthInterceptor extends Interceptor {
   /// accès à aucun `BuildContext`.
   static Future<void> Function()? onSessionExpired;
 
+  static final Uri _apiHost = Uri.parse(ApiConstants.baseUrl);
+
   @override
   Future<void> onRequest(
     RequestOptions options,
     RequestInterceptorHandler handler,
   ) async {
+    // Bug corrigé (piste la plus solide trouvée pour « impossible de
+    // charger le PDF ») : `ApiClient.downloadStream()` sert aussi à
+    // télécharger des médias HORS `baseUrl` (Firebase Storage/GCS —
+    // voir son propre commentaire de tête), sur un Dio PARTAGÉ avec
+    // toutes les requêtes API. Sans cette garde, notre propre jeton
+    // `Authorization: Token ...` était envoyé à `storage.googleapis.com`
+    // — Google Cloud Storage traite tout `Authorization` non reconnu
+    // comme une tentative d'accès authentifié invalide (401/403), MÊME
+    // si l'objet est public en lecture (`allUsers`). N'attacher le
+    // jeton qu'aux requêtes visant réellement notre propre backend.
+    if (options.uri.host != _apiHost.host) {
+      handler.next(options);
+      return;
+    }
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString(_tokenKey);
     if (token != null && token.isNotEmpty) {

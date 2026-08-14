@@ -4,7 +4,7 @@
 // GÉNÉRÉ — ne pas éditer à la main.
 // Régénérer : dart run tool/generate_endpoints.dart
 // Source : ../../yeki_backend/yeki_backend/schema_local.yaml
-// Généré le : 2026-08-09T14:48:51.249601
+// Généré le : 2026-08-14T06:01:11.552648
 //
 // Chemins RELATIFS uniquement — ApiClient porte seul la
 // base URL (ApiConstants.baseUrl) via Dio BaseOptions.
@@ -57,6 +57,7 @@ class CoreEndpoints {
 class EvaluationEndpoints {
   EvaluationEndpoints._();
 
+  static const String classementCoefficientDevoirMinimum = '/classement/coefficient-devoir-minimum/';
   static String classementDepartement(int departement_id) => '/classement/departement/$departement_id/';
   static String classementDepartementHistorique(int departement_id) => '/classement/departement/$departement_id/historique/';
   static String classementDepartementPeriodes(int departement_id) => '/classement/departement/$departement_id/periodes/';

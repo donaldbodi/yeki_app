@@ -129,8 +129,6 @@ class _ExercicesCoursPageState extends State<ExercicesCoursPage> {
                 leconId,
                 required estEpreuve,
                 exercicesComposes,
-                enonceImage,
-                removeImage = false,
               }) => _controller.creerExercice(
                 titre: titre,
                 enonce: enonce,
@@ -142,7 +140,6 @@ class _ExercicesCoursPageState extends State<ExercicesCoursPage> {
                 leconId: leconId,
                 estEpreuve: estEpreuve,
                 exercicesComposes: exercicesComposes,
-                enonceImage: enonceImage,
               )
             : ({
                 required titre,
@@ -155,8 +152,6 @@ class _ExercicesCoursPageState extends State<ExercicesCoursPage> {
                 leconId,
                 required estEpreuve,
                 exercicesComposes,
-                enonceImage,
-                removeImage = false,
               }) => _controller.modifierExercice(
                 exerciceId: existant.id,
                 titre: titre,
@@ -169,8 +164,6 @@ class _ExercicesCoursPageState extends State<ExercicesCoursPage> {
                 leconId: leconId,
                 estEpreuve: estEpreuve,
                 exercicesComposes: exercicesComposes,
-                enonceImage: enonceImage,
-                removeImage: removeImage,
               ),
       ),
     );

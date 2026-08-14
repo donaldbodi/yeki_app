@@ -109,4 +109,13 @@ class ClassementRepository {
     final data = await _api.get(EvaluationEndpoints.classementMonScore);
     return Map<String, dynamic>.from(data as Map);
   }
+
+  /// P17.14 : plancher réel du coefficient d'un devoir (poids
+  /// `ParametreClassement` de la source `etoile_3`) — jamais codé en dur
+  /// côté Dart (règle 3), toujours lu depuis le backend.
+  Future<double> coefficientDevoirMinimum() async {
+    final data = await _api.get(EvaluationEndpoints.classementCoefficientDevoirMinimum);
+    final map = Map<String, dynamic>.from(data as Map);
+    return (map['coefficient_min'] as num?)?.toDouble() ?? 0.1;
+  }
 }

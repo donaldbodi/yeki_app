@@ -156,11 +156,13 @@ class EnonceSection extends StatelessWidget {
                       color: c.estCorrect ? YkColors.success : YkColors.textTertiary(context),
                     ),
                     SizedBox(width: YkSpacing.xs),
-                    Text(
-                      c.texte,
-                      style: YkTypography.bodySm(context).copyWith(
-                        color: c.estCorrect ? YkColors.success : YkColors.textPrimary(context),
-                        fontWeight: c.estCorrect ? FontWeight.w700 : FontWeight.normal,
+                    Expanded(
+                      child: YkRichViewer(
+                        html: c.texte,
+                        textStyle: YkTypography.bodySm(context).copyWith(
+                          color: c.estCorrect ? YkColors.success : YkColors.textPrimary(context),
+                          fontWeight: c.estCorrect ? FontWeight.w700 : FontWeight.normal,
+                        ),
                       ),
                     ),
                   ],

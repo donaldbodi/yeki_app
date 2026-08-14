@@ -1,3 +1,5 @@
+import 'dart:ui' show ImageFilter;
+
 import 'package:flutter/material.dart';
 
 import '../../tokens/tokens.dart';
@@ -34,7 +36,6 @@ class YkLessonFeed extends StatefulWidget {
     required this.onLike,
     required this.onFavorite,
     required this.onPreoccupation,
-    required this.onShare,
     required this.onDownload,
     this.onSupplements,
     this.onPageChanged,
@@ -45,7 +46,6 @@ class YkLessonFeed extends StatefulWidget {
   final ValueChanged<String> onLike;
   final ValueChanged<String> onFavorite;
   final ValueChanged<String> onPreoccupation;
-  final ValueChanged<String> onShare;
   final ValueChanged<String> onDownload;
   final ValueChanged<String>? onSupplements;
   final ValueChanged<int>? onPageChanged;
@@ -127,11 +127,6 @@ class _YkLessonFeedState extends State<YkLessonFeed> {
                 onTap: () => widget.onPreoccupation(current.id),
               ),
               _FeedAction(
-                icon: Icons.share_outlined,
-                label: 'Partager',
-                onTap: () => widget.onShare(current.id),
-              ),
-              _FeedAction(
                 icon: Icons.download_outlined,
                 label: 'Télécharger',
                 onTap: () => widget.onDownload(current.id),
@@ -157,20 +152,41 @@ class _FeedAction extends StatelessWidget {
   final String label;
   final VoidCallback onTap;
 
+  static const double _size = 44;
+
   @override
   Widget build(BuildContext context) {
-    return Semantics(
-      button: true,
-      label: label,
-      child: InkWell(
-        customBorder: const CircleBorder(),
-        onTap: onTap,
-        child: Padding(
-          padding: EdgeInsets.all(YkSpacing.xs),
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: YkSpacing.xxs),
+      child: Semantics(
+        button: true,
+        label: label,
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: onTap,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, color: Colors.white, size: 28, shadows: const [Shadow(blurRadius: 4, color: Colors.black54)]),
+              // Pastille en verre dépoli (P17.17) — n'accombre plus la
+              // vidéo derrière (icône nue + ombre portée auparavant),
+              // même recette blur que `YkIconButtonVariant.glass`.
+              ClipOval(
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+                  child: Container(
+                    width: _size,
+                    height: _size,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.28),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
+                    ),
+                    child: Icon(icon, color: Colors.white, size: 22),
+                  ),
+                ),
+              ),
+              SizedBox(height: YkSpacing.xxs),
               Text(label, style: const TextStyle(color: Colors.white, fontSize: 11, shadows: [Shadow(blurRadius: 4, color: Colors.black54)])),
             ],
           ),

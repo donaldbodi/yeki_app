@@ -1,7 +1,6 @@
 import 'package:flutter/foundation.dart';
 
 import 'package:yeki/core/network/api_exception.dart';
-import 'package:yeki/core/design/components/inputs/yk_file_upload.dart';
 import 'package:yeki/models/exercice_models.dart';
 import 'package:yeki/repositories/exercice_repository.dart';
 
@@ -120,7 +119,6 @@ class ExercicesCoursController extends ChangeNotifier {
     int? leconId,
     bool estEpreuve = false,
     List<int>? exercicesComposes,
-    YkPickedFile? enonceImage,
   }) async {
     try {
       await _repo.creer(
@@ -135,7 +133,6 @@ class ExercicesCoursController extends ChangeNotifier {
         leconId: leconId,
         estEpreuve: estEpreuve,
         exercicesComposes: exercicesComposes,
-        enonceImage: enonceImage,
       );
       await charger(moduleId: moduleFiltre, leconId: leconFiltre);
       return true;
@@ -156,8 +153,6 @@ class ExercicesCoursController extends ChangeNotifier {
     int? leconId,
     bool estEpreuve = false,
     List<int>? exercicesComposes,
-    YkPickedFile? enonceImage,
-    bool removeImage = false,
   }) async {
     try {
       await _repo.modifier(
@@ -172,8 +167,6 @@ class ExercicesCoursController extends ChangeNotifier {
         leconId: leconId,
         estEpreuve: estEpreuve,
         exercicesComposes: exercicesComposes,
-        enonceImage: enonceImage,
-        removeImage: removeImage,
       );
       await charger(moduleId: moduleFiltre, leconId: leconFiltre);
       return true;
@@ -214,6 +207,11 @@ class ExercicesCoursController extends ChangeNotifier {
         bonneReponse: bonneReponse,
         choix: choix,
       );
+      // Bug corrigé : contrairement à `supprimerExercice()` (juste
+      // au-dessus), cette méthode ne rappelait jamais `charger(...)` —
+      // le badge "N questions" de la carte exercice restait périmé tant
+      // que l'onglet n'était pas quitté/rouvert.
+      await charger(moduleId: moduleFiltre, leconId: leconFiltre);
       return true;
     } catch (_) {
       return false;

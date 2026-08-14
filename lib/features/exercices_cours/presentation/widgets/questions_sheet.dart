@@ -4,6 +4,8 @@ import 'package:yeki/core/design/components/components.dart';
 import 'package:yeki/core/design/tokens/tokens.dart';
 import 'package:yeki/models/exercice_models.dart';
 
+const _imageConstraint = YkFileConstraint(allowedExtensions: ['jpg', 'jpeg', 'png'], maxSizeBytes: 5 * 1024 * 1024);
+
 /// État de la feuille — `ChangeNotifier` plutôt que `setState` (interdit
 /// sous `lib/features/`, règle 7 de `check_design_system.sh`).
 class _QuestionsSheetController extends ChangeNotifier {
@@ -20,9 +22,17 @@ class _QuestionsSheetController extends ChangeNotifier {
   final bonneRepCtrl = TextEditingController();
   String type = 'qcm';
   double points = 1.0;
-  List<TextEditingController> choixCtrl = [TextEditingController(), TextEditingController()];
+
+  /// Rectification (demande explicite) : rich-editable (HTML) comme
+  /// `enonce` — remplace les `TextEditingController` par de simples
+  /// chaînes HTML, `YkRichEditor` gère son propre état interne.
+  List<String> choix = ['', ''];
   int correctIndex = 0;
   bool envoi = false;
+
+  void setChoixTexte(int index, String html) {
+    choix[index] = html;
+  }
 
   Future<void> charger() async {
     chargement = true;
@@ -40,10 +50,7 @@ class _QuestionsSheetController extends ChangeNotifier {
   void resetForm() {
     texteCtrl.clear();
     bonneRepCtrl.clear();
-    for (final c in choixCtrl) {
-      c.dispose();
-    }
-    choixCtrl = [TextEditingController(), TextEditingController()];
+    choix = ['', ''];
     type = 'qcm';
     points = 1.0;
     correctIndex = 0;
@@ -62,13 +69,13 @@ class _QuestionsSheetController extends ChangeNotifier {
   }
 
   void ajouterChoix() {
-    choixCtrl.add(TextEditingController());
+    choix.add('');
     notifyListeners();
   }
 
   void supprimerDernierChoix() {
-    choixCtrl.removeLast().dispose();
-    if (correctIndex >= choixCtrl.length) correctIndex = choixCtrl.length - 1;
+    choix.removeLast();
+    if (correctIndex >= choix.length) correctIndex = choix.length - 1;
     notifyListeners();
   }
 
@@ -86,9 +93,6 @@ class _QuestionsSheetController extends ChangeNotifier {
   void dispose() {
     texteCtrl.dispose();
     bonneRepCtrl.dispose();
-    for (final c in choixCtrl) {
-      c.dispose();
-    }
     super.dispose();
   }
 }
@@ -147,6 +151,13 @@ class _QuestionsSheetState extends State<QuestionsSheet> {
     super.dispose();
   }
 
+  Future<String> _uploadImage(YkPickedFile file) async {
+    // Aucun endpoint de téléversement générique côté backend (même
+    // limitation déjà documentée et acceptée pour les autres éditeurs
+    // riches du projet).
+    throw UnsupportedError('Téléversement d\'image indisponible pour le moment.');
+  }
+
   Future<void> _submit() async {
     final c = _controller;
     final texte = c.texteCtrl.text.trim();
@@ -155,16 +166,16 @@ class _QuestionsSheetState extends State<QuestionsSheet> {
       return;
     }
 
-    List<ChoixQuestion>? choix;
+    List<ChoixQuestion>? choixEnvoyes;
     String? bonneReponse;
     if (c.type == 'qcm') {
-      if (c.choixCtrl.any((ctrl) => ctrl.text.trim().isEmpty)) {
+      if (c.choix.any((html) => html.trim().isEmpty)) {
         YkSnack.error(context, 'Remplissez tous les choix.');
         return;
       }
-      choix = [
-        for (var i = 0; i < c.choixCtrl.length; i++)
-          ChoixQuestion(texte: c.choixCtrl[i].text.trim(), estCorrect: i == c.correctIndex),
+      choixEnvoyes = [
+        for (var i = 0; i < c.choix.length; i++)
+          ChoixQuestion(texte: c.choix[i], estCorrect: i == c.correctIndex),
       ];
     } else {
       bonneReponse = c.bonneRepCtrl.text.trim();
@@ -181,7 +192,7 @@ class _QuestionsSheetState extends State<QuestionsSheet> {
       typeQuestion: c.type,
       points: c.points,
       bonneReponse: bonneReponse,
-      choix: choix,
+      choix: choixEnvoyes,
     );
     if (!mounted) return;
     c.setEnvoi(false);
@@ -260,17 +271,17 @@ class _QuestionsSheetState extends State<QuestionsSheet> {
                 style: YkTypography.bodySm(context).copyWith(color: YkColors.textSecondary(context)),
               ),
               SizedBox(height: YkSpacing.xs),
-              ...List.generate(c.choixCtrl.length, (i) => _buildChoixRow(context, i)),
+              ...List.generate(c.choix.length, (i) => _buildChoixRow(context, i)),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  if (c.choixCtrl.length < 6)
+                  if (c.choix.length < 6)
                     TextButton.icon(
                       onPressed: c.ajouterChoix,
                       icon: const Icon(Icons.add, size: 16),
                       label: const Text('Ajouter un choix'),
                     ),
-                  if (c.choixCtrl.length > 2)
+                  if (c.choix.length > 2)
                     TextButton.icon(
                       onPressed: c.supprimerDernierChoix,
                       icon: Icon(Icons.remove_circle_outline, size: 16, color: YkColors.error),
@@ -320,10 +331,14 @@ class _QuestionsSheetState extends State<QuestionsSheet> {
           ),
           SizedBox(width: YkSpacing.xs),
           Expanded(
-            child: YkTextField(
-              controller: c.choixCtrl[index],
-              hint: 'Choix ${index + 1}',
-              semanticLabel: 'Choix ${index + 1}',
+            child: YkRichEditor(
+              key: ValueKey('choix-exercice-$index'),
+              initialHtml: c.choix[index],
+              onChanged: (html) => c.setChoixTexte(index, html),
+              onUploadImage: _uploadImage,
+              imageConstraint: _imageConstraint,
+              label: 'Choix ${index + 1}',
+              showEmoji: false,
             ),
           ),
         ],
@@ -371,11 +386,13 @@ class _QuestionsSheetState extends State<QuestionsSheet> {
                         color: c.estCorrect ? YkColors.success : YkColors.textTertiary(context),
                       ),
                       SizedBox(width: YkSpacing.xs),
-                      Text(
-                        c.texte,
-                        style: YkTypography.bodySm(context).copyWith(
-                          color: c.estCorrect ? YkColors.success : YkColors.textPrimary(context),
-                          fontWeight: c.estCorrect ? FontWeight.w700 : FontWeight.normal,
+                      Expanded(
+                        child: YkRichViewer(
+                          html: c.texte,
+                          textStyle: YkTypography.bodySm(context).copyWith(
+                            color: c.estCorrect ? YkColors.success : YkColors.textPrimary(context),
+                            fontWeight: c.estCorrect ? FontWeight.w700 : FontWeight.normal,
+                          ),
                         ),
                       ),
                     ],

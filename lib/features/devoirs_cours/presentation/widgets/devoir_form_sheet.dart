@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:yeki/core/design/components/components.dart';
 import 'package:yeki/core/design/tokens/tokens.dart';
 import 'package:yeki/models/devoir_models.dart';
+import 'package:yeki/repositories/classement_repository.dart';
 
 const _imageConstraint = YkFileConstraint(allowedExtensions: ['jpg', 'jpeg', 'png'], maxSizeBytes: 5 * 1024 * 1024);
 const _pdfConstraint = YkFileConstraint(allowedExtensions: ['pdf'], maxSizeBytes: 10 * 1024 * 1024);
@@ -35,7 +36,17 @@ class _DevoirFormController extends ChangeNotifier {
   YkPickedFile? fichierCorrection;
   bool envoi = false;
 
+  /// P17.14 : plancher réel (poids `etoile_3`), jamais codé en dur — 0.1
+  /// tant qu'il n'est pas encore chargé depuis le backend.
+  double coefficientMin = 0.1;
+
   bool get estManuel => typeCorrection == 'manuel';
+
+  void setCoefficientMin(double v) {
+    coefficientMin = v;
+    if (coefficient < v) coefficient = v;
+    notifyListeners();
+  }
 
   void setEnonce(String v) => enonce = v;
 
@@ -129,6 +140,21 @@ class DevoirFormSheet extends StatefulWidget {
 
 class _DevoirFormSheetState extends State<DevoirFormSheet> {
   late final _DevoirFormController _controller = _DevoirFormController(widget.existant);
+
+  @override
+  void initState() {
+    super.initState();
+    _chargerCoefficientMin();
+  }
+
+  Future<void> _chargerCoefficientMin() async {
+    try {
+      final min = await ClassementRepository().coefficientDevoirMinimum();
+      if (mounted) _controller.setCoefficientMin(min);
+    } catch (_) {
+      // Repli silencieux sur le plancher par défaut (0.1) — jamais bloquant.
+    }
+  }
 
   @override
   void dispose() {
@@ -246,8 +272,8 @@ class _DevoirFormSheetState extends State<DevoirFormSheet> {
         YkStepper(
           label: 'Coefficient',
           value: c.coefficient,
-          min: 0.5,
-          max: 5,
+          min: c.coefficientMin,
+          max: c.coefficientMin > 5 ? c.coefficientMin * 2 : 10,
           step: 0.5,
           onChanged: c.setCoefficient,
         ),

@@ -1,8 +1,5 @@
-import 'package:dio/dio.dart' show FormData, MultipartFile;
-
 import 'package:yeki/core/network/api_client.dart';
 import 'package:yeki/core/network/api_endpoints.dart';
-import 'package:yeki/core/design/components/inputs/yk_file_upload.dart';
 import 'package:yeki/models/exercice_models.dart';
 
 /// Exercices — complété en P6.4 (refonte de `passer_exercice.dart`),
@@ -110,7 +107,11 @@ class ExerciceRepository {
     return list.map((m) => ModuleOption.fromJson(Map<String, dynamic>.from(m as Map))).toList();
   }
 
-  FormData _exerciceFormData({
+  // Rectification (demande explicite) : `enonce_image` (champ séparé)
+  // retiré — l'énoncé est désormais un unique champ riche (HTML, comme
+  // `EnonceDevoir.contenu`), les images éventuelles y sont insérées
+  // inline par l'éditeur lui-même plutôt que via un champ fichier à part.
+  Map<String, dynamic> _exerciceData({
     required String titre,
     required String enonce,
     required int etoiles,
@@ -121,27 +122,19 @@ class ExerciceRepository {
     int? leconId,
     required bool estEpreuve,
     List<int>? exercicesComposes,
-    YkPickedFile? enonceImage,
-    bool removeImage = false,
   }) {
-    return FormData.fromMap({
+    return {
       'titre': titre,
       'enonce': enonce,
-      'etoiles': etoiles.toString(),
-      'duree_minutes': dureeMinutes.toString(),
-      'tentatives_max': tentativesMax.toString(),
+      'etoiles': etoiles,
+      'duree_minutes': dureeMinutes,
+      'tentatives_max': tentativesMax,
       'type_exercice': typeExercice,
-      'est_epreuve': estEpreuve.toString(),
-      if (moduleId != null) 'module': moduleId.toString(),
-      if (leconId != null) 'lecon': leconId.toString(),
-      if (estEpreuve) 'exercices_composes': (exercicesComposes ?? const <int>[]).toString(),
-      if (enonceImage != null)
-        'enonce_image': MultipartFile.fromBytes(
-          enonceImage.bytes,
-          filename: enonceImage.name,
-        ),
-      if (enonceImage == null && removeImage) 'enonce_image': 'null',
-    });
+      'est_epreuve': estEpreuve,
+      'module': moduleId,
+      'lecon': leconId,
+      if (estEpreuve) 'exercices_composes': exercicesComposes ?? const <int>[],
+    };
   }
 
   Future<void> creer({
@@ -156,11 +149,10 @@ class ExerciceRepository {
     int? leconId,
     bool estEpreuve = false,
     List<int>? exercicesComposes,
-    YkPickedFile? enonceImage,
   }) async {
     await _api.post(
       EvaluationEndpoints.coursExercicesAjouter(coursId),
-      data: _exerciceFormData(
+      data: _exerciceData(
         titre: titre,
         enonce: enonce,
         etoiles: etoiles,
@@ -171,7 +163,6 @@ class ExerciceRepository {
         leconId: leconId,
         estEpreuve: estEpreuve,
         exercicesComposes: exercicesComposes,
-        enonceImage: enonceImage,
       ),
     );
   }
@@ -188,12 +179,10 @@ class ExerciceRepository {
     int? leconId,
     bool estEpreuve = false,
     List<int>? exercicesComposes,
-    YkPickedFile? enonceImage,
-    bool removeImage = false,
   }) async {
     await _api.patch(
       EvaluationEndpoints.exercicesModifier(exerciceId),
-      data: _exerciceFormData(
+      data: _exerciceData(
         titre: titre,
         enonce: enonce,
         etoiles: etoiles,
@@ -204,8 +193,6 @@ class ExerciceRepository {
         leconId: leconId,
         estEpreuve: estEpreuve,
         exercicesComposes: exercicesComposes,
-        enonceImage: enonceImage,
-        removeImage: removeImage,
       ),
     );
   }

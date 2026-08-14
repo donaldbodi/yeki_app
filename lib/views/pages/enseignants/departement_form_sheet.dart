@@ -29,8 +29,14 @@ void ouvrirDepartementForm({
 
   final nomCtrl = TextEditingController(text: d['nom'] ?? '');
   final descCtrl = TextEditingController(text: d['description'] ?? '');
-  final prixCtrl = TextEditingController(text: (d['prix'] ?? 0).toString());
-  final prixPresentielCtrl = TextEditingController(text: (d['prix_presentiel'] ?? 0).toString());
+  // `prix`/`prix_presentiel` (legacy, accès one-shot au catalogue) ne sont
+  // PLUS modifiables depuis ce formulaire — analyse confirmée : ils ne
+  // pilotent ni le Premium ni l'accès réel une fois `prix_mensuel`/
+  // `prix_annuel` renseignés, ne servent plus qu'à l'étiquette catalogue
+  // (voir `formations_pages.dart`/`concours_pages.dart`), et leur
+  // présence ici laissait croire à tort qu'ils fixaient l'accès Premium.
+  // Champs backend/API/données INCHANGÉS (aucune perte, règle 5) — retrait
+  // du formulaire uniquement.
   // Rectification modèle économique : l'abonnement Premium est désormais
   // PROPRE À CE DÉPARTEMENT — ces 2 champs existaient déjà côté backend
   // (P9.1) mais n'avaient jusqu'ici AUCUN formulaire pour les fixer, donc
@@ -91,8 +97,6 @@ void ouvrirDepartementForm({
     final donnees = <String, dynamic>{
       'nom': nomCtrl.text.trim(),
       'description': descCtrl.text.trim(),
-      'prix': int.tryParse(prixCtrl.text.trim()) ?? 0,
-      'prix_presentiel': int.tryParse(prixPresentielCtrl.text.trim()) ?? 0,
       'prix_mensuel': int.tryParse(prixMensuelCtrl.text.trim()) ?? 0,
       'prix_annuel': int.tryParse(prixAnnuelCtrl.text.trim()) ?? 0,
       'niveaux_accessibles': niveauxSelectionnes,
@@ -271,10 +275,6 @@ void ouvrirDepartementForm({
           YkTextField(controller: nomCtrl, label: 'Nom *', hint: typeParcours == 'prepa' ? 'Ex : Concours ENS' : 'Ex : Formation Développement Web'),
           SizedBox(height: YkSpacing.sm),
           YkTextField(controller: descCtrl, label: 'Description', type: YkTextFieldType.multiline, maxLines: 3),
-          SizedBox(height: YkSpacing.sm),
-          YkTextField(controller: prixCtrl, label: 'Prix (FCFA)', type: YkTextFieldType.number, hint: '0 = gratuit'),
-          SizedBox(height: YkSpacing.sm),
-          YkTextField(controller: prixPresentielCtrl, label: 'Prix présentiel (FCFA)', type: YkTextFieldType.number, hint: '0 = absent'),
           SizedBox(height: YkSpacing.sm),
           YkTextField(
             controller: prixMensuelCtrl,

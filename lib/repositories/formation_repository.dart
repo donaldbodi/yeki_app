@@ -36,6 +36,25 @@ class DepartementOption {
       );
 }
 
+/// Un cours — uniquement les champs utiles à un menu déroulant (cascade
+/// Parcours → Département → Niveau → Cours, ex. affectation d'un
+/// répétiteur par le Service Client), pas le modèle complet.
+class CoursOption {
+  const CoursOption({required this.id, required this.titre, required this.niveau, required this.matiere});
+
+  final int id;
+  final String titre;
+  final String niveau;
+  final String matiere;
+
+  factory CoursOption.fromJson(Map<String, dynamic> json) => CoursOption(
+    id: json['id'] as int,
+    titre: json['titre'] as String? ?? '',
+    niveau: json['niveau'] as String? ?? '',
+    matiere: json['matiere'] as String? ?? '',
+  );
+}
+
 /// Une reprise de lecture récente (`GET /apprenant/lectures-recentes/`) —
 /// carte "Continuer la lecture" (Accueil, Cursus).
 class LectureRecente {
@@ -106,6 +125,21 @@ class FormationRepository {
   Future<List<DepartementOption>> departementsForParcours(int parcoursId) async {
     final data = await _api.get(FormationEndpoints.parcoursDepartements(parcoursId));
     return _asList(data, DepartementOption.fromJson);
+  }
+
+  /// Cours filtrés par département/niveau (`GET /cours/`, déjà utilisé par
+  /// `DashboardRepository.tousLesCours()` sans filtre) — cascade de
+  /// sélection de cours (ex. affectation d'un répétiteur par le Service
+  /// Client). Tous les paramètres sont optionnels.
+  Future<List<CoursOption>> coursFiltres({int? departementId, String? niveau}) async {
+    final data = await _api.get(
+      FormationEndpoints.cours,
+      query: {
+        if (departementId != null) 'departement_id': departementId.toString(),
+        if (niveau != null && niveau.isNotEmpty) 'niveau': niveau,
+      },
+    );
+    return _asList(data, CoursOption.fromJson);
   }
 
   /// Catalogue "Cursus" de l'apprenant connecté (`cursus_page.dart`, P11.2)

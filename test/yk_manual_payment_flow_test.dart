@@ -72,6 +72,9 @@ void main() {
       expect(find.textContaining('trop court'), findsOneWidget);
 
       await tester.enterText(find.byType(TextFormField).first, 'CI240912.1234.A56789');
+      // P17.13 : « Votre numéro » est désormais obligatoire (3ᵉ champ de
+      // cette étape, après identifiant de transaction et montant).
+      await tester.enterText(find.byType(TextFormField).at(2), '690000000');
       await tester.ensureVisible(find.text('Envoyer'));
       await tester.tap(find.text('Envoyer'));
       await tester.pumpAndSettle();

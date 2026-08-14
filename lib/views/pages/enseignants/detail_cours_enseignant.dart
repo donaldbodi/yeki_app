@@ -77,13 +77,11 @@ class _DetailCoursEnseignantPageState extends State<DetailCoursEnseignantPage> w
             backgroundColor: widget.courseColor,
             foregroundColor: Colors.white,
             flexibleSpace: FlexibleSpaceBar(
-              background: Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [widget.courseColor, widget.courseColor.withValues(alpha: 0.7)],
-                  ),
+              background: YkGradientBackground(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [widget.courseColor, widget.courseColor.withValues(alpha: 0.7)],
                 ),
                 child: SafeArea(
                   child: Padding(

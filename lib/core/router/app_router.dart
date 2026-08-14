@@ -239,7 +239,7 @@ final GoRouter appRouter = GoRouter(
       path: AppPath.repetiteurs,
       name: AppRoute.repetiteurs,
       parentNavigatorKey: rootNavigatorKey,
-      builder: (context, state) => const RepetiteursPage(),
+      builder: (context, state) => RepetiteursPage(coursId: state.uri.queryParameters['coursId']),
     ),
     GoRoute(
       path: AppPath.settings,
