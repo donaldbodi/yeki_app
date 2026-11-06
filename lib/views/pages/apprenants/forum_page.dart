@@ -13,10 +13,9 @@
 // - `_loadQuestions()` castait directement l'enveloppe paginée du
 //   backend (`{count, next, previous, results}`) en `List` — corrigé À LA
 //   SOURCE dans `ForumRepository.listQuestions()`.
-// - `ApiConstants.forumRealtimeEnabled` (actuellement `false`) n'était
-//   JAMAIS consulté : le sondage 8 s tournait inconditionnellement malgré
-//   le drapeau. Câblé ici — le sondage ne démarre que si le drapeau est à
-//   `true`.
+// - `ApiConstants.forumRealtimeEnabled` n'était JAMAIS consulté : le sondage
+//   8 s tournait inconditionnellement malgré le drapeau. Câblé ici — le
+//   sondage ne démarre que si le drapeau est à `true`.
 // - `_selectedImage`/`_selectedAudio` passent de `File` (dart:io) à
 //   `Uint8List` : `File` plante sur le web (voir `YkPickedFile` dans
 //   `yk_file_upload.dart`), même bug déjà corrigé ailleurs.
@@ -36,6 +35,7 @@ import 'package:yeki/core/network/api_exception.dart';
 import 'package:yeki/core/router/route_names.dart';
 import 'package:yeki/features/paiement/presentation/ouvrir_abonnement.dart';
 import 'package:yeki/repositories/forum_repository.dart';
+import 'package:yeki/services/forum_realtime_service.dart';
 import 'package:yeki/utils/error_handler.dart';
 import 'package:yeki/widgets/forum_audio_player.dart';
 import 'package:yeki/widgets/forum_style.dart';
@@ -237,7 +237,10 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin, Wi
   String _sourceFiltre = 'tous';
   String _searchText = '';
   Timer? _poll;
+  Timer? _rechargeDifferee;
   DateTime? _dernierSondage;
+  ForumRealtimeConnexion? _tempsReel;
+  bool _tempsReelConnecte = false;
   final _searchCtrl = TextEditingController();
 
   bool _composerVisible = false;
@@ -261,6 +264,7 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin, Wi
       _loadQuestions();
     });
     _demarrerSondage();
+    _demarrerTempsReel();
     if (widget.preoccupationContenu != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _composerCtrl.text = widget.preoccupationContenu!;
@@ -274,34 +278,63 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin, Wi
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _poll?.cancel();
+    _rechargeDifferee?.cancel();
+    _tempsReel?.arreter();
     _searchCtrl.dispose();
     _composerCtrl.dispose();
     super.dispose();
   }
 
-  // ── Sondage temps réel (repli WebSocket) ───────────────────────────────
-  // PythonAnywhere ne supporte pas les WebSockets (voir
-  // docs/FORUM_TEMPS_REEL.md) : ce sondage ne tourne JAMAIS en arrière-plan
-  // (uniquement pendant que cet écran est visible), et ne démarre QUE
-  // derrière `ApiConstants.forumRealtimeEnabled` (`false` par défaut
-  // aujourd'hui — le drapeau existait mais n'était jamais consulté ici,
-  // corrigé en P10.5).
+  // ── Temps réel : WebSocket + sondage de repli ──────────────────────────
+  // Voir docs/FORUM_TEMPS_REEL.md. Ni l'un ni l'autre ne tournent en
+  // arrière-plan (uniquement pendant que cet écran est visible), ni si
+  // `ApiConstants.forumRealtimeEnabled` est à `false`.
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (!ApiConstants.forumRealtimeEnabled) return;
     if (state == AppLifecycleState.resumed) {
       _demarrerSondage();
       _sonderActivite();
+      _tempsReel?.demarrer();
     } else {
       _poll?.cancel();
+      _tempsReel?.arreter();
     }
+  }
+
+  void _demarrerTempsReel() {
+    if (!ApiConstants.forumRealtimeEnabled) return;
+    _tempsReel = ForumRealtimeConnexion(
+      room: _room,
+      onEvenement: _surEvenementForum,
+      onEtat: (connecte) {
+        _tempsReelConnecte = connecte;
+        _demarrerSondage();
+        // Rattrape ce qui a pu se passer pendant la coupure.
+        if (connecte) _sonderActivite();
+      },
+      // Pas d'accès au forum : le sondage serait refusé lui aussi.
+      onRefus: () => _poll?.cancel(),
+    )..demarrer();
+  }
+
+  void _surEvenementForum(ForumEvenement evenement) {
+    // La liste n'affiche pas les likes ; un rechargement par like serait du
+    // trafic pour rien, chez chaque personne présente sur le forum.
+    if (evenement.type == 'like_modifie') return;
+    // Regroupe les rafales d'événements en un seul rechargement.
+    _rechargeDifferee?.cancel();
+    _rechargeDifferee = Timer(const Duration(seconds: 1), () => _loadQuestions(silent: true));
   }
 
   void _demarrerSondage() {
     if (!ApiConstants.forumRealtimeEnabled) return;
     _poll?.cancel();
     _dernierSondage ??= DateTime.now();
-    _poll = Timer.periodic(const Duration(seconds: 8), (_) => _sonderActivite());
+    // WebSocket ouvert : le sondage ne sert plus que de filet, pour une coupure
+    // réseau silencieuse que le socket mettrait longtemps à détecter.
+    final periode = Duration(seconds: _tempsReelConnecte ? 60 : 8);
+    _poll = Timer.periodic(periode, (_) => _sonderActivite());
   }
 
   String get _room => widget.preoccupationCoursId?.toString() ?? 'global';

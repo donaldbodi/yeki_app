@@ -12,6 +12,7 @@
 // tête de `YkPickedFile` dans `yk_file_upload.dart`) — même bug déjà
 // corrigé ailleurs dans le projet, corrigé ici aussi au passage.
 
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -19,11 +20,13 @@ import 'package:go_router/go_router.dart';
 import 'package:timeago/timeago.dart' as timeago;
 import 'package:image_picker/image_picker.dart';
 import 'package:yeki/views/pages/apprenants/forum_page.dart';
+import 'package:yeki/core/constants/api_constants.dart';
 import 'package:yeki/core/design/components/components.dart';
 import 'package:yeki/core/design/tokens/tokens.dart';
 import 'package:yeki/core/network/api_exception.dart';
 import 'package:yeki/core/router/route_names.dart';
 import 'package:yeki/repositories/forum_repository.dart';
+import 'package:yeki/services/forum_realtime_service.dart';
 import 'package:yeki/utils/error_handler.dart';
 import 'package:yeki/widgets/forum_audio_player.dart';
 import 'package:yeki/widgets/forum_style.dart';
@@ -58,10 +61,12 @@ class DetailQuestionForumPage extends StatefulWidget {
   State<DetailQuestionForumPage> createState() => _DetailQuestionForumPageState();
 }
 
-class _DetailQuestionForumPageState extends State<DetailQuestionForumPage> {
+class _DetailQuestionForumPageState extends State<DetailQuestionForumPage> with WidgetsBindingObserver {
   final _repo = ForumRepository();
   bool _loading = true;
   QForum? _question;
+  ForumRealtimeConnexion? _tempsReel;
+  Timer? _rechargeDifferee;
   final TextEditingController _reponseCtrl = TextEditingController();
   bool _sending = false;
   Uint8List? _selectedImageBytes;
@@ -86,22 +91,52 @@ class _DetailQuestionForumPageState extends State<DetailQuestionForumPage> {
     } else {
       _loadQuestion();
     }
+    if (ApiConstants.forumRealtimeEnabled) {
+      WidgetsBinding.instance.addObserver(this);
+      // Salle globale : elle reçoit les événements de toutes les questions,
+      // et la page peut être ouverte sans connaître le cours (lien direct).
+      _tempsReel = ForumRealtimeConnexion(room: 'global', onEvenement: _surEvenementForum)
+        ..demarrer();
+    }
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _rechargeDifferee?.cancel();
+    _tempsReel?.arreter();
     _reponseCtrl.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _tempsReel?.demarrer();
+      _loadQuestion(silent: true, compterVue: false);
+    } else {
+      _tempsReel?.arreter();
+    }
+  }
+
+  void _surEvenementForum(ForumEvenement evenement) {
+    if (evenement.questionId != widget.questionId) return;
+    // Regroupe les rafales d'événements en un seul rechargement.
+    _rechargeDifferee?.cancel();
+    _rechargeDifferee = Timer(
+      const Duration(seconds: 1),
+      () => _loadQuestion(silent: true, compterVue: false),
+    );
   }
 
   /// [silent] : `true` quand un aperçu transitoire (`widget.question`,
   /// sans réponses) est déjà affiché — évite de reclignoter un état de
   /// chargement plein écran, `_question` est simplement remplacé dès que
   /// les données fraîches (avec réponses) arrivent.
-  Future<void> _loadQuestion({bool silent = false}) async {
+  Future<void> _loadQuestion({bool silent = false, bool compterVue = true}) async {
     if (!silent) setState(() => _loading = true);
     try {
-      final data = await _repo.getQuestion(widget.questionId);
+      final data = await _repo.getQuestion(widget.questionId, compterVue: compterVue);
       if (!mounted) return;
       setState(() {
         _question = QForum.fromJson(data);

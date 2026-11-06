@@ -22,13 +22,18 @@ class ForumRepository {
     return list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
   }
 
-  Future<Map<String, dynamic>> getQuestion(int id) async {
-    final data = await _api.get(ForumEndpoints.forumQuestionsDetail(id));
+  /// [compterVue] : `false` pour un rechargement déclenché par le temps réel,
+  /// qui n'est pas une nouvelle consultation.
+  Future<Map<String, dynamic>> getQuestion(int id, {bool compterVue = true}) async {
+    final data = await _api.get(
+      ForumEndpoints.forumQuestionsDetail(id),
+      query: compterVue ? null : {'sans_vue': '1'},
+    );
     return Map<String, dynamic>.from(data as Map);
   }
 
-  /// Sondage léger (`?since=`) — repli sans WebSocket (PythonAnywhere ne
-  /// les supporte pas), voir `ApiConstants.forumRealtimeEnabled`.
+  /// Sondage léger (`?since=`) — repli quand le WebSocket du forum est
+  /// indisponible, voir `ApiConstants.forumRealtimeEnabled`.
   Future<Map<String, dynamic>> sonderActivite(String room, {DateTime? since}) async {
     final query = since != null ? {'since': since.toUtc().toIso8601String()} : null;
     final data = await _api.get(ForumEndpoints.forumMessages(room), query: query);

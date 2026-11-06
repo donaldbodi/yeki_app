@@ -4,13 +4,10 @@
 // ═══════════════════════════════════════════════════════════════════════════
 
 class ApiConstants {
-  // URL de base — migration hébergement backend PythonAnywhere → Railway
-  // (2026-08-06) : PythonAnywhere ne servait que du WSGI (aucun WebSocket
-  // possible) et a atteint son quota disque. Ancienne valeur conservée en
-  // commentaire, PythonAnywhere restant actif quelques jours en secours
-  // avant décommissionnement complet (voir plan de migration).
-  // static const String baseUrl = 'https://yeki.pythonanywhere.com/api';
-  static const String baseUrl = 'https://yekibackend-production.up.railway.app/api';
+  // Backend sur le VPS OVH, voir docs/MIGRATION_OVH.md (dépôt backend).
+  // L'hôte est l'IP du VPS en tirets (sslip.io).
+  static const String apiHost = '158-69-178-164.sslip.io';
+  static const String baseUrl = 'https://$apiHost/api';
   
   // ── Endpoints Auth ────────────────────────────────────────────────────────
   static const String login = '$baseUrl/auth/login/';
@@ -114,12 +111,13 @@ class ApiConstants {
   static String forumReponseSolution(int id) => '$baseUrl/forum/reponses/$id/solution/';
   static const String forumStats = '$baseUrl/forum/stats/';
 
-  // Sondage incrémental (repli du forum temps réel — voir docs/FORUM_TEMPS_REEL.md).
-  // `room` : id de cours (String) ou 'global'. `PythonAnywhere ne supporte pas
-  // les WebSockets : ce drapeau documente qu'aucune connexion temps réel ne
-  // doit être tentée tant qu'il reste à false — voir le fichier ci-dessus.
-  static const bool forumRealtimeEnabled = false;
+  // Forum temps réel (voir docs/FORUM_TEMPS_REEL.md) : WebSocket, avec le sondage
+  // incrémental en repli. À false, ni l'un ni l'autre ne tournent.
+  // `room` : id de cours (String) ou 'global'.
+  static const bool forumRealtimeEnabled = true;
   static String forumMessages(String room) => '$baseUrl/forum/$room/messages/';
+  static String forumWebSocket(String room) =>
+      room == 'global' ? 'wss://$apiHost/ws/forum/' : 'wss://$apiHost/ws/forum/cours/$room/';
 
   // ── Endpoints Enseignants ─────────────────────────────────────────────────
   static const String enseignantDashboard = '$baseUrl/enseignant/dashboard/';
