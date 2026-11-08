@@ -1,5 +1,5 @@
 # Compile l'app web et l'APK Android, téléchargeables dans l'onglet Actions
-# (section « Artifacts » de chaque exécution). Sur `main`, publie aussi le web
+# (section « Artifacts » de chaque exécution). Sur `main` et `migration-ovh`, publie le web
 # sur Firebase Hosting si le secret FIREBASE_SERVICE_ACCOUNT existe.
 #
 # Secrets de dépôt (Settings → Secrets and variables → Actions) :
@@ -36,7 +36,7 @@ jobs:
           name: yeki-web
           path: build/web
       - name: Publier sur Firebase Hosting
-        if: github.ref == 'refs/heads/main' && env.FIREBASE_SERVICE_ACCOUNT != ''
+        if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/migration-ovh') && env.FIREBASE_SERVICE_ACCOUNT != ''
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
