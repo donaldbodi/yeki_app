@@ -1,0 +1,70 @@
+# Compile l'app web et l'APK Android, téléchargeables dans l'onglet Actions
+# (section « Artifacts » de chaque exécution). Sur `main`, publie aussi le web
+# sur Firebase Hosting si le secret FIREBASE_SERVICE_ACCOUNT existe.
+#
+# Secrets de dépôt (Settings → Secrets and variables → Actions) :
+# - GOOGLE_SERVICES_JSON : contenu de android/app/google-services.json, exclu
+#   du dépôt par .gitignore mais indispensable à la compilation Android.
+# - FIREBASE_SERVICE_ACCOUNT : clé JSON d'un compte de service Firebase
+#   (facultatif, seulement pour la publication web automatique).
+
+name: Build
+
+on:
+  push:
+    branches: [main, migration-ovh]
+  workflow_dispatch:
+
+jobs:
+  web:
+    runs-on: ubuntu-latest
+    env:
+      FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: flutter build web --release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: yeki-web
+          path: build/web
+      - name: Publier sur Firebase Hosting
+        if: github.ref == 'refs/heads/main' && env.FIREBASE_SERVICE_ACCOUNT != ''
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          projectId: yeki-84b1a
+          channelId: live
+
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Écrire google-services.json
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: |
+          if [ -z "$GOOGLE_SERVICES_JSON" ]; then
+            echo "::error::Secret GOOGLE_SERVICES_JSON manquant (voir l'en-tête de ce fichier)."
+            exit 1
+          fi
+          printf '%s' "$GOOGLE_SERVICES_JSON" > android/app/google-services.json
+      - run: flutter pub get
+      - run: flutter build apk --release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: yeki-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
