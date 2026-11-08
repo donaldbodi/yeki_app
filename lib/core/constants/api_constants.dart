@@ -4,7 +4,7 @@
 // ═══════════════════════════════════════════════════════════════════════════
 
 class ApiConstants {
-  // Backend sur le VPS OVH, voir docs/MIGRATION_OVH.md (dépôt backend).
+  // Backend sur le VPS OVH, voir docs/DEPLOIEMENT_OVH.md (dépôt backend).
   // L'hôte est l'IP du VPS en tirets (sslip.io).
   static const String apiHost = '158-69-178-164.sslip.io';
   static const String baseUrl = 'https://$apiHost/api';
