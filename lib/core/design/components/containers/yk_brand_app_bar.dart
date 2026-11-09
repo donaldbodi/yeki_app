@@ -1,8 +1,8 @@
 // lib/core/design/components/containers/yk_brand_app_bar.dart
 //
 // En-tête principal des espaces apprenant et enseignant, inspiré de
-// WhatsApp : le nom « Yéki » seul à gauche, dans la police arrondie du logo
-// (Fredoka), et les actions rangées à droite (action propre à l'écran,
+// WhatsApp : le logo (icône dans son disque) et le nom « Yéki » à gauche,
+// dans la police arrondie du logo (Fredoka), et les actions rangées à droite (action propre à l'écran,
 // notifications, puis l'avatar). L'avatar ouvre un menu qui reprend le nom
 // et le rôle de l'utilisateur : aucune information de l'ancien en-tête
 // n'est perdue.
@@ -12,6 +12,7 @@ import 'package:flutter/services.dart';
 
 import '../../tokens/tokens.dart';
 import '../data/yk_avatar.dart';
+import '../media/yk_brand_logo.dart';
 
 /// Bouton d'action affiché à droite du nom, avant l'avatar.
 class YkBrandAppBarAction {
@@ -75,20 +76,10 @@ class YkBrandAppBar extends StatelessWidget implements PreferredSizeWidget {
       shape: dark ? Border(bottom: BorderSide(color: YkColors.border(context))) : null,
       systemOverlayStyle: SystemUiOverlayStyle.light,
       centerTitle: false,
-      titleSpacing: 18,
+      titleSpacing: 14,
       title: Semantics(
         header: true,
-        label: 'Yéki',
-        child: Text(
-          'Yéki',
-          style: TextStyle(
-            fontFamily: 'FredokaOne',
-            fontSize: 27,
-            height: 1,
-            letterSpacing: 0.3,
-            color: marque,
-          ),
-        ),
+        child: YkBrandLogo(size: 32, nameColor: marque, nameSize: 26),
       ),
       actions: [
         for (final action in actions)

@@ -36,6 +36,16 @@ class YkTypography {
     );
   }
 
+  /// Nom de marque « Yéki » : police arrondie du logo (Fredoka), taille
+  /// fixe choisie par l'appelant (en-tête, splash, onboarding…).
+  static TextStyle brand({double size = 27, Color? color}) => TextStyle(
+    fontFamily: 'FredokaOne',
+    fontSize: size,
+    height: 1,
+    letterSpacing: 0.3,
+    color: color,
+  );
+
   /// Écran d'accueil, splash, hero.
   static TextStyle display(BuildContext context) => _fluidStyle(
     width: MediaQuery.sizeOf(context).width,

@@ -92,8 +92,13 @@ String? redirect(BuildContext context, GoRouterState state) {
   // sur `/splash`, l'app y restait indéfiniment, sans jamais être
   // poussée vers `/login`.
   if (name == AppRoute.splash) {
-    if (!snapshot.isAuthenticated) return AppPath.login;
+    // Bug corrigé (onboarding jamais affiché) : un visiteur non connecté
+    // partait directement sur /login, et la connexion marque ensuite
+    // l'onboarding comme vu — l'écran de bienvenue n'apparaissait donc à
+    // personne. Le premier lancement passe désormais par l'onboarding,
+    // qui renvoie ensuite vers /login (ou /register).
     if (!snapshot.onboardingDone) return AppPath.onboarding;
+    if (!snapshot.isAuthenticated) return AppPath.login;
     return homePathForRole(snapshot.role);
   }
 

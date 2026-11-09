@@ -29,6 +29,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:yeki/core/design/components/containers/yk_gradient_background.dart';
 import 'package:yeki/core/design/components/feedback/yk_glow.dart';
+import 'package:yeki/core/design/components/media/yk_brand_logo.dart';
 import 'package:yeki/core/design/tokens/tokens.dart';
 import 'package:yeki/core/providers/app_info_provider.dart';
 import 'package:yeki/core/router/auth_state.dart';
@@ -177,19 +178,18 @@ class _SplashPageState extends ConsumerState<SplashPage> with TickerProviderStat
                       ),
                       child: FadeTransition(
                         opacity: _logoOpacity,
+                        // Même disque que l'icône de l'app et l'écran de
+                        // démarrage natif : la transition est invisible.
                         child: YkGlowShadow(
                           color: YkColors.primary300,
-                          child: Image.asset(
-                            'assets/images/yeki_logo_icon_transparent.png',
-                            width: 132,
-                          ),
+                          child: const YkBrandLogo(size: 128, showName: false),
                         ),
                       ),
                     ),
                     SizedBox(height: YkSpacing.lg),
                     Text(
                       'Yéki',
-                      style: YkTypography.display(context).copyWith(color: Colors.white, height: 1.0),
+                      style: YkTypography.brand(size: 44, color: Colors.white),
                     ),
                     SizedBox(height: YkSpacing.lg),
                     ExcludeSemantics(

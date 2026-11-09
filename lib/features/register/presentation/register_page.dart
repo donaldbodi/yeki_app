@@ -268,94 +268,135 @@ class _RegisterPageState extends State<RegisterPage> {
     // sans imposer de hauteur non bornée à l'`IndexedStack`. Le résumé
     // d'erreurs (que `YkForm` afficherait automatiquement) est donc
     // reconstruit ici, juste au-dessus — voir `_ErrorSummaryBanner`.
+    // Habillage : bandeau de marque bleu (logo, titre, étape en cours) puis
+    // le formulaire sur un panneau clair aux coins supérieurs arrondis,
+    // posé sur le même bleu que le bas du bandeau (raccord invisible).
+    // `YkStepIndicator` reste sur le panneau clair : ses couleurs « à
+    // venir » sont prévues pour un fond clair.
     return Scaffold(
-      backgroundColor: YkColors.background(context),
-      body: SafeArea(
-        child: Column(
-          children: [
-            // Bandeau de marque — `YkStepIndicator` reste sur le fond
-            // clair standard juste en dessous (ses couleurs "à venir"
-            // sont conçues pour un fond clair, pas pour être posées
-            // directement sur ce dégradé) : ce bandeau ajoute
-            // l'habillage maquette sans risquer une perte de lisibilité.
-            YkGradientBackground(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [YkColors.primary800, YkColors.primary700, YkColors.primary500],
-              ),
-              child: Container(
-                width: double.infinity,
-                padding: EdgeInsets.fromLTRB(YkSpacing.md, YkSpacing.md, YkSpacing.md, YkSpacing.lg),
-                child: Text(
-                  'Créer un compte',
-                  style: YkTypography.h3(context).copyWith(color: Colors.white, fontWeight: FontWeight.w800),
+      backgroundColor: YkColors.primary700,
+      body: Column(
+        children: [
+          YkGradientBackground(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [YkColors.primary800, YkColors.primary700],
+            ),
+            child: SafeArea(
+              bottom: false,
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(YkSpacing.lg, YkSpacing.md, YkSpacing.lg, YkSpacing.lg),
+                child: AnimatedBuilder(
+                  animation: Listenable.merge([_currentStep, _userType]),
+                  builder: (context, _) {
+                    final (labels, index) = _etapeAffichee();
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const YkBrandLogo(size: 30, nameColor: YkColors.textOnPrimary),
+                        SizedBox(height: YkSpacing.lg),
+                        Text(
+                          'Créer un compte',
+                          style: YkTypography.h1(context).copyWith(color: YkColors.textOnPrimary),
+                        ),
+                        SizedBox(height: YkSpacing.xxs),
+                        Text(
+                          'Étape ${index + 1} sur ${labels.length} · ${labels[index]}',
+                          style: YkTypography.bodyMd(context).copyWith(
+                            color: YkColors.textOnPrimary.withValues(alpha: 0.8),
+                          ),
+                        ),
+                      ],
+                    );
+                  },
                 ),
               ),
             ),
-            Padding(
-              padding: EdgeInsets.fromLTRB(YkSpacing.md, YkSpacing.md, YkSpacing.md, 0),
-              child: AnimatedBuilder(
-                animation: Listenable.merge([_currentStep, _userType]),
-                builder: (context, _) {
-                  final apprenant = _isApprenant;
-                  final labels = apprenant ? _kLabelsApprenant : _kLabelsEnseignant;
-                  final effectiveIndex = apprenant
-                      ? _currentStep.value
-                      : (_currentStep.value == _kIdentiteStep ? 0 : 1);
-                  return YkStepIndicator(labels: labels, currentIndex: effectiveIndex);
-                },
+          ),
+          Expanded(
+            child: Material(
+              color: YkColors.background(context),
+              shape: const RoundedRectangleBorder(
+                borderRadius: BorderRadius.vertical(top: Radius.circular(YkRadius.xl + 4)),
               ),
-            ),
-            Padding(
-              padding: EdgeInsets.fromLTRB(YkSpacing.md, YkSpacing.sm, YkSpacing.md, 0),
-              child: _ErrorSummaryBanner(controller: _formController),
-            ),
-            Expanded(
-              child: YkFormScope(
-                controller: _formController,
-                child: Form(
-                  key: _formController.formKey,
-                  autovalidateMode: AutovalidateMode.onUserInteraction,
-                  child: ValueListenableBuilder<int>(
-                    valueListenable: _currentStep,
-                    builder: (context, step, _) => _buildSteps(),
-                  ),
+              clipBehavior: Clip.antiAlias,
+              child: SafeArea(
+                top: false,
+                child: Column(
+                  children: [
+                    Padding(
+                      padding: EdgeInsets.fromLTRB(YkSpacing.md, YkSpacing.lg, YkSpacing.md, 0),
+                      child: AnimatedBuilder(
+                        animation: Listenable.merge([_currentStep, _userType]),
+                        builder: (context, _) {
+                          final (labels, index) = _etapeAffichee();
+                          return YkStepIndicator(labels: labels, currentIndex: index);
+                        },
+                      ),
+                    ),
+                    Padding(
+                      padding: EdgeInsets.fromLTRB(YkSpacing.md, YkSpacing.sm, YkSpacing.md, 0),
+                      child: _ErrorSummaryBanner(controller: _formController),
+                    ),
+                    Expanded(
+                      child: YkFormScope(
+                        controller: _formController,
+                        child: Form(
+                          key: _formController.formKey,
+                          autovalidateMode: AutovalidateMode.onUserInteraction,
+                          child: ValueListenableBuilder<int>(
+                            valueListenable: _currentStep,
+                            builder: (context, step, _) => _buildSteps(),
+                          ),
+                        ),
+                      ),
+                    ),
+                    Padding(
+                      padding: EdgeInsets.all(YkSpacing.md),
+                      child: _NavigationBar(
+                        currentStep: _currentStep,
+                        userType: _userType,
+                        formController: _formController,
+                        selectedParcours: _selectedParcours,
+                        selectedDepartement: _selectedDepartement,
+                        selectedNiveau: _selectedNiveau,
+                        dateNaissance: _dateNaissance,
+                        canAdvance: _canAdvanceFromCurrentStep,
+                        canSubmitFinal: _canSubmitFinal,
+                        onBack: _goBack,
+                        onNext: _goNext,
+                        onSubmitFinal: () => _formController.submit(
+                          context: context,
+                          onValidSubmit: _submitRegistration,
+                          successMessage: 'Compte créé. Connectez-vous pour continuer.',
+                        ),
+                      ),
+                    ),
+                    Padding(
+                      padding: EdgeInsets.only(bottom: YkSpacing.sm),
+                      child: TextButton(
+                        onPressed: () => context.pushNamed(AppRoute.login),
+                        child: const Text('Déjà un compte ? Se connecter'),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
-            Padding(
-              padding: EdgeInsets.all(YkSpacing.md),
-              child: _NavigationBar(
-                currentStep: _currentStep,
-                userType: _userType,
-                formController: _formController,
-                selectedParcours: _selectedParcours,
-                selectedDepartement: _selectedDepartement,
-                selectedNiveau: _selectedNiveau,
-                dateNaissance: _dateNaissance,
-                canAdvance: _canAdvanceFromCurrentStep,
-                canSubmitFinal: _canSubmitFinal,
-                onBack: _goBack,
-                onNext: _goNext,
-                onSubmitFinal: () => _formController.submit(
-                  context: context,
-                  onValidSubmit: _submitRegistration,
-                  successMessage: 'Compte créé. Connectez-vous pour continuer.',
-                ),
-              ),
-            ),
-            Padding(
-              padding: EdgeInsets.only(bottom: YkSpacing.sm),
-              child: TextButton(
-                onPressed: () => context.pushNamed(AppRoute.login),
-                child: const Text('Déjà un compte ? Se connecter'),
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
+  }
+
+  /// Libellés des étapes et position affichée : l'enseignant n'a que deux
+  /// étapes (Identité, Confirmation).
+  (List<String>, int) _etapeAffichee() {
+    final apprenant = _isApprenant;
+    final labels = apprenant ? _kLabelsApprenant : _kLabelsEnseignant;
+    final index = apprenant ? _currentStep.value : (_currentStep.value == _kIdentiteStep ? 0 : 1);
+    return (labels, index);
   }
 }
 

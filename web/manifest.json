@@ -1,11 +1,11 @@
 {
-    "name": "yeki",
-    "short_name": "yeki",
+    "name": "Yéki",
+    "short_name": "Yéki",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#0E2233",
+    "theme_color": "#1A5276",
+    "description": "Cours, exercices, devoirs, olympiades et forum pour apprendre à son rythme.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

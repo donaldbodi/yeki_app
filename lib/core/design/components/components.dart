@@ -66,6 +66,7 @@ export 'data/yk_timeline.dart';
 
 // ── Média ────────────────────────────────────────────────────────
 export 'media/yk_audio_player.dart';
+export 'media/yk_brand_logo.dart';
 export 'media/yk_image_viewer.dart';
 export 'media/yk_lesson_feed.dart';
 export 'media/yk_pdf_viewer.dart';
