@@ -83,6 +83,28 @@ class ApprenantShellPage extends ConsumerWidget {
       onSettings: () => context.pushNamed(AppRoute.profile),
       onLogout: () => authState.clearSession(),
       badges: {'notifications': notificationsNonLues},
+      compactAppBar: YkBrandAppBar(
+        actions: [
+          YkBrandAppBarAction(
+            icon: Icons.search_rounded,
+            tooltip: 'Rechercher un cours',
+            // Onglet Cursus : c'est lui qui porte le champ de recherche.
+            onPressed: () => _onDestinationTap(context, AppRoute.dashboardCursus),
+          ),
+          YkBrandAppBarAction(
+            icon: Icons.notifications_outlined,
+            tooltip: 'Notifications',
+            badge: notificationsNonLues,
+            onPressed: () => context.pushNamed(AppRoute.notifications),
+          ),
+        ],
+        userName: nomAffiche,
+        roleLabel: 'Apprenant',
+        avatarUrl: profil?.avatar,
+        onProfile: () => context.pushNamed(AppRoute.profile),
+        onSettings: () => context.pushNamed(AppRoute.settings),
+        onLogout: () => authState.clearSession(),
+      ),
       body: navigationShell,
     );
   }

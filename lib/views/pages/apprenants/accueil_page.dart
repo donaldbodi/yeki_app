@@ -5,8 +5,8 @@
 // une nouvelle comparaison avec `docs/maquette/YEKI App Apprenant.dc.html`
 // (écran "01 · Accueil — dashboard vivant") et 3 arbitrages explicites
 // avec l'utilisateur :
-// - Salutation + avatar (désormais 2 initiales sur dégradé, comme la
-//   maquette) + notifications (badge réel, `notificationsProvider`)
+// - Salutation (avatar et notifications : en-tête commun `YkBrandAppBar`
+//   de la coque apprenant)
 // - `YkSearchBar` — raccourci qui bascule vers l'onglet Cursus (la
 //   recherche réelle dans le catalogue vit sur cet onglet, elle n'est pas
 //   dupliquée ici)
@@ -32,7 +32,6 @@ import 'package:go_router/go_router.dart';
 import 'package:yeki/core/design/components/components.dart';
 import 'package:yeki/core/design/tokens/tokens.dart';
 import 'package:yeki/core/providers/current_user_provider.dart';
-import 'package:yeki/core/providers/notifications_provider.dart';
 import 'package:yeki/core/router/route_names.dart';
 import 'package:yeki/models/user_profile.dart';
 import 'package:yeki/repositories/devoir_repository.dart';
@@ -102,15 +101,6 @@ class _AccueilPageState extends ConsumerState<AccueilPage> {
     });
   }
 
-  /// 2 initiales (prénom + nom, comme la maquette) — repli sur `'?'` si
-  /// aucun des deux n'est encore chargé.
-  String _initiales(String prenom, String nom) {
-    final p = prenom.isNotEmpty ? prenom[0].toUpperCase() : '';
-    final n = nom.isNotEmpty ? nom[0].toUpperCase() : '';
-    final combinees = '$p$n';
-    return combinees.isEmpty ? '?' : combinees;
-  }
-
   String get _salutation {
     final heure = DateTime.now().hour;
     if (heure < 12) return 'Bonjour';
@@ -129,7 +119,6 @@ class _AccueilPageState extends ConsumerState<AccueilPage> {
 
   @override
   Widget build(BuildContext context) {
-    final nonLues = ref.watch(notificationsProvider).valueOrNull ?? 0;
     final profil = ref.watch(currentUserProvider).valueOrNull;
 
     return Scaffold(
@@ -142,7 +131,7 @@ class _AccueilPageState extends ConsumerState<AccueilPage> {
                 child: ListView(
                   padding: EdgeInsets.all(YkSpacing.md),
                   children: [
-                    _buildAppBar(context, nonLues, profil),
+                    _buildSalutation(context, profil),
                     SizedBox(height: YkSpacing.md),
                     YkSearchBar(
                       hint: 'Rechercher un cours, un enseignant…',
@@ -161,62 +150,20 @@ class _AccueilPageState extends ConsumerState<AccueilPage> {
     );
   }
 
-  Widget _buildAppBar(BuildContext context, int nonLues, UserProfile? profil) {
+  /// Salutation en tête de page. L'avatar et les notifications sont dans
+  /// l'en-tête commun de l'espace apprenant (`YkBrandAppBar`, coque).
+  Widget _buildSalutation(BuildContext context, UserProfile? profil) {
     final prenom = (profil != null && profil.firstName.isNotEmpty) ? profil.firstName : (profil?.username ?? '');
-    final nom = profil?.lastName ?? '';
-    return Row(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        ClipOval(
-          child: SizedBox(
-            width: 44,
-            height: 44,
-            child: YkGradientBackground(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [YkColors.primary700, YkColors.primary500],
-              ),
-              child: Center(
-                child: Text(
-                  _initiales(prenom, nom),
-                  style: YkTypography.label(context).copyWith(color: YkColors.textOnPrimary),
-                ),
-              ),
-            ),
-          ),
+        Text(
+          '$_salutation 👋',
+          style: YkTypography.caption(context).copyWith(color: YkColors.textSecondary(context)),
         ),
-        SizedBox(width: YkSpacing.sm),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '$_salutation 👋',
-                style: YkTypography.caption(context).copyWith(color: YkColors.textSecondary(context)),
-              ),
-              Text(
-                prenom.isEmpty ? 'Apprenant' : prenom,
-                style: YkTypography.h4(context).copyWith(color: YkColors.textPrimary(context)),
-              ),
-            ],
-          ),
-        ),
-        Stack(
-          clipBehavior: Clip.none,
-          children: [
-            YkIconButton(
-              icon: Icons.notifications_outlined,
-              label: 'Notifications',
-              variant: YkIconButtonVariant.tonal,
-              onPressed: () => context.pushNamed(AppRoute.notifications),
-            ),
-            if (nonLues > 0)
-              Positioned(
-                top: -2,
-                right: -2,
-                child: YkBadge(count: nonLues),
-              ),
-          ],
+        Text(
+          prenom.isEmpty ? 'Apprenant' : prenom,
+          style: YkTypography.h4(context).copyWith(color: YkColors.textPrimary(context)),
         ),
       ],
     );

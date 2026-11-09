@@ -31,7 +31,12 @@ class YkAdaptiveScaffold extends StatefulWidget {
     required this.onSettings,
     required this.onLogout,
     this.badges = const {},
+    this.compactAppBar,
   });
+
+  /// En-tête affiché uniquement en `compact` (téléphone), par exemple
+  /// `YkBrandAppBar` ; les autres tailles gardent leur navigation latérale.
+  final PreferredSizeWidget? compactAppBar;
 
   /// `YkNavConfig.forRole(role)`.
   final List<YkNavGroup> groups;
@@ -113,6 +118,7 @@ class _YkAdaptiveScaffoldState extends State<YkAdaptiveScaffold> {
       // nécessaire pour que le flou de `_YkBottomBar` ait un contenu réel
       // à flouter derrière elle.
       extendBody: true,
+      appBar: widget.compactAppBar,
       body: widget.body,
       bottomNavigationBar: _YkBottomBar(
         destinations: compactDestinations,

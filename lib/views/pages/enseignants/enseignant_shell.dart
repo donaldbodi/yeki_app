@@ -13,13 +13,12 @@
 // concrets y est actuellement affiché.
 // ═══════════════════════════════════════════════════════════════════════════
 
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:yeki/core/design/components/containers/yk_brand_app_bar.dart';
 import 'package:yeki/core/design/tokens/tokens.dart';
 import 'package:yeki/core/providers/current_user_provider.dart';
 import 'package:yeki/core/router/auth_state.dart';
@@ -82,36 +81,6 @@ class _Avatar extends StatelessWidget {
   }
 }
 
-/// Reproduction fidèle de l'ancien `YekiRoleBadge` — y compris son bug
-/// pré-existant découvert pendant cette migration (non corrigé ici, hors
-/// périmètre d'une migration de tokens à comportement inchangé) : le
-/// composant d'origine recevait un LIBELLÉ déjà traduit (« Cadre »,
-/// « Principal »...) alors que son switch interne de coloration attendait
-/// une clé brute en minuscules (« cadre », « principal »...) — aucune
-/// correspondance ne matchait jamais, donc le badge affichait toujours la
-/// même couleur par défaut quel que soit le rôle réel (contrairement à
-/// l'avatar, coloré correctement via `_getRoleColor` ailleurs dans ce
-/// fichier). Signalé dans la fiche d'écart, pas corrigé.
-class _RoleBadge extends StatelessWidget {
-  const _RoleBadge({required this.label, this.fontSize});
-
-  final String label;
-  final double? fontSize;
-
-  @override
-  Widget build(BuildContext context) {
-    final color = YkColors.accent(context);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(YkRadius.xl),
-        border: Border.all(color: color.withValues(alpha: 0.2), width: 1),
-      ),
-      child: Text(label, style: TextStyle(color: color, fontSize: fontSize ?? 11, fontWeight: FontWeight.w600)),
-    );
-  }
-}
 
 class EnseignantShellPage extends ConsumerStatefulWidget {
   final StatefulNavigationShell navigationShell;
@@ -207,6 +176,7 @@ class _EnseignantShellPageState extends ConsumerState<EnseignantShellPage> {
       child: Scaffold(
         extendBody: true,
         backgroundColor: YkColors.background(context),
+        appBar: isDesktop ? null : _buildBrandAppBar(context),
         body: isDesktop ? _buildDesktopLayout(context) : _buildMobileLayout(context),
         bottomNavigationBar: isMobile || isTablet ? _buildFloatingNav(context) : null,
       ),
@@ -514,11 +484,46 @@ class _EnseignantShellPageState extends ConsumerState<EnseignantShellPage> {
     }
   }
 
+  // ─── EN-TÊTE MOBILE/TABLETTE ─────────────────────────────────────────────
+  // « Yéki » seul à gauche, actions à droite (façon WhatsApp), commun avec
+  // l'espace apprenant : `YkBrandAppBar`. Le nom et le rôle sont repris dans
+  // le menu de l'avatar et dans la salutation de l'onglet Accueil.
+  PreferredSizeWidget _buildBrandAppBar(BuildContext context) {
+    final role = _role;
+    return YkBrandAppBar(
+      actions: [
+        // Cadre uniquement : `repartir_et_crediter()` ne crédite que
+        // `departement.cadre`, un principal n'a rien à retirer.
+        if (role == RoleEnseignant.enseignantCadre)
+          YkBrandAppBarAction(
+            icon: Icons.account_balance_wallet_outlined,
+            tooltip: 'Mes revenus',
+            onPressed: () => context.pushNamed(AppRoute.wallet),
+          ),
+        YkBrandAppBarAction(
+          icon: Icons.notifications_outlined,
+          tooltip: 'Notifications',
+          badge: _nbNotifs,
+          onPressed: () => context.pushNamed(AppRoute.notifications),
+        ),
+      ],
+      userName: _nomAffiche,
+      roleLabel: _getRoleLabel(role),
+      roleColor: _getRoleColor(context, role),
+      avatarUrl: _avatarUrl,
+      onProfile: () => widget.navigationShell.goBranch(2),
+      onSettings: () => context.pushNamed(AppRoute.settings),
+      onLogout: () => authState.clearSession(),
+    );
+  }
+
   // ─── LAYOUT MOBILE/TABLETTE ──────────────────────────────────────────────
   Widget _buildMobileLayout(BuildContext context) {
     return Stack(
       children: [
         // ── Fond décoratif ──────────────────────────────────────────────
+        // Part du bleu de l'en-tête (`primary700`) pour le prolonger sans
+        // rupture de teinte.
         Positioned(
           top: 0,
           left: 0,
@@ -526,13 +531,10 @@ class _EnseignantShellPageState extends ConsumerState<EnseignantShellPage> {
           height: 240,
           child: Container(
             decoration: BoxDecoration(
-              // Dégradé 3 tons déjà établi cette session pour les en-têtes/
-              // bannières héro (Admin Général/Historique/Notifications) —
-              // habillage de la maquette, structure du fond inchangée.
               gradient: LinearGradient(
-                begin: Alignment.topLeft,
+                begin: Alignment.topCenter,
                 end: Alignment.bottomRight,
-                colors: [YkColors.primary800, YkColors.primary700, YkColors.primary500],
+                colors: [YkColors.primary700, YkColors.primary600, YkColors.primary500],
               ),
               borderRadius: BorderRadius.only(
                 bottomLeft: Radius.circular(YkRadius.xl * 1.5),
@@ -546,7 +548,7 @@ class _EnseignantShellPageState extends ConsumerState<EnseignantShellPage> {
         SafeArea(
           child: Column(
             children: [
-              _buildMobileHeader(context),
+              if (widget.navigationShell.currentIndex == 0) _buildSalutation(context),
               Expanded(child: widget.navigationShell),
             ],
           ),
@@ -555,148 +557,39 @@ class _EnseignantShellPageState extends ConsumerState<EnseignantShellPage> {
     );
   }
 
-  // ─── HEADER MOBILE ──────────────────────────────────────────────────────
-  Widget _buildMobileHeader(BuildContext context) {
+  // ─── SALUTATION (onglet Accueil) ────────────────────────────────────────
+  Widget _buildSalutation(BuildContext context) {
     final role = _role;
-    final roleColor = _getRoleColor(context, role);
-
     return Padding(
-      padding: EdgeInsets.fromLTRB(
-        _dynamicPadding(context),
-        12,
-        _dynamicPadding(context),
-        16,
-      ),
-      child: Row(
-        children: [
-          // ── Avatar ──────────────────────────────────────────────────────
-          GestureDetector(
-            onTap: () => widget.navigationShell.goBranch(2),
-            child: Stack(
-              children: [
-                _Avatar(
-                  imageUrl: _avatarUrl,
-                  initials: _initials,
-                  radius: 22,
-                  backgroundColor: roleColor.withValues(alpha: 0.3),
-                  showBorder: true,
-                ),
-                Positioned(
-                  right: 0,
-                  bottom: 0,
-                  child: Container(
-                    width: 12,
-                    height: 12,
-                    decoration: const BoxDecoration(
-                      color: YkColors.success,
-                      shape: BoxShape.circle,
-                      border: Border.fromBorderSide(BorderSide(color: Colors.white, width: 1.5)),
-                    ),
-                  ),
-                ),
-              ],
+      padding: EdgeInsets.fromLTRB(_dynamicPadding(context), 14, _dynamicPadding(context), 12),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Bonjour, $_nomAffiche 👋',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: YkTypography.h4(context).copyWith(color: YkColors.textOnPrimary),
             ),
-          ),
-
-          const SizedBox(width: 12),
-
-          // ── Infos utilisateur ──────────────────────────────────────────
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Bonjour, $_nomAffiche 👋',
-                  style: TextStyle(
-                    color: YkColors.textOnPrimary,
-                    fontSize: _isMobile(context) ? 14 : 16,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                _RoleBadge(
-                  label: _getRoleLabel(role),
-                  fontSize: 10,
-                ),
-              ],
+            const SizedBox(height: 6),
+            YkRoleChip(
+              label: _getRoleLabel(role),
+              color: _getRoleColor(context, role),
+              onDark: true,
             ),
-          ),
-
-          const SizedBox(width: 8),
-
-          // ── Bouton « Mes revenus » (cadre uniquement) ──────────────────
-          // Même correctif que la navigation desktop (`_buildRevenusNavItem`)
-          // — un principal n'a structurellement rien à retirer.
-          if (role == RoleEnseignant.enseignantCadre) ...[
-            GestureDetector(
-              onTap: () => context.pushNamed(AppRoute.wallet),
-              child: ClipOval(
-                child: Container(
-                  width: 40,
-                  height: 40,
-                  color: YkColors.textOnPrimary.withValues(alpha: 0.15),
-                  alignment: Alignment.center,
-                  child: Icon(
-                    Icons.account_balance_wallet_outlined,
-                    color: YkColors.textOnPrimary,
-                    size: 20,
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
           ],
-
-          // ── Bouton notifications ──────────────────────────────────────
-          GestureDetector(
-            onTap: () => context.pushNamed(AppRoute.notifications),
-            child: Stack(
-              children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: YkColors.textOnPrimary.withValues(alpha: 0.15),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    Icons.notifications_outlined,
-                    color: YkColors.textOnPrimary,
-                    size: 20,
-                  ),
-                ),
-                if (_nbNotifs > 0)
-                  Positioned(
-                    top: 4,
-                    right: 4,
-                    child: Container(
-                      width: 16,
-                      height: 16,
-                      decoration: const BoxDecoration(
-                        color: YkColors.error,
-                        shape: BoxShape.circle,
-                      ),
-                      child: Center(
-                        child: Text(
-                          '$_nbNotifs',
-                          style: TextStyle(
-                            color: YkColors.textOnPrimary,
-                            fontSize: 9,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
 
   // ─── NAVIGATION FLOTTANTE MOBILE/TABLETTE ──────────────────────────────
+  // Fond bleu YEKI plein et blanc lisible : l'ancienne pilule translucide
+  // (onglet actif en bleu sur bleu-gris, inactifs en gris pâle) manquait de
+  // contraste. Onglet actif : pastille blanche, icône et libellé bleus ;
+  // inactifs : icône et libellé blancs.
   Widget _buildFloatingNav(BuildContext context) {
     final items = [
       (Icons.grid_view_rounded, Icons.grid_view_outlined, 'Accueil'),
@@ -706,7 +599,11 @@ class _EnseignantShellPageState extends ConsumerState<EnseignantShellPage> {
 
     final isMobile = _isMobile(context);
     final currentIndex = widget.navigationShell.currentIndex;
-    final accent = YkColors.accent(context);
+    final dark = YkColors.isDark(context);
+    final fond = dark ? YkColors.surfaceVariant(context) : YkColors.primary800;
+    final pastille = dark ? YkColors.primary300 : YkColors.textOnPrimary;
+    final surPastille = dark ? YkColors.primary900 : YkColors.primary700;
+    final inactif = YkColors.textOnPrimary.withValues(alpha: 0.92);
 
     return Padding(
       padding: EdgeInsets.fromLTRB(
@@ -715,80 +612,67 @@ class _EnseignantShellPageState extends ConsumerState<EnseignantShellPage> {
         isMobile ? 16 : 24,
         isMobile ? 16 : 24,
       ),
-      // Pilule en verre dépoli (maquette : `background: var(--glass);
-      // backdrop-filter: blur(20px)`) — même recette déjà établie cette
-      // session (`cours_detail_page.dart`/`YkAdaptiveScaffold`), remplace
-      // le dégradé sombre plein d'origine. Même forme/position/enfants.
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(32),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-          child: Container(
-            height: isMobile ? 68 : 76,
-            decoration: BoxDecoration(
-              color: YkColors.textPrimary(context).withValues(alpha: 0.65),
-              borderRadius: BorderRadius.circular(32),
-              boxShadow: _kShadowStrong,
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: List.generate(items.length, (i) {
-                final item = items[i];
-                final isSelected = currentIndex == i;
+      child: Container(
+        height: isMobile ? 68 : 76,
+        decoration: BoxDecoration(
+          color: fond,
+          borderRadius: BorderRadius.circular(32),
+          border: dark ? Border.all(color: YkColors.border(context)) : null,
+          boxShadow: _kShadowStrong,
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          children: List.generate(items.length, (i) {
+            final item = items[i];
+            final isSelected = currentIndex == i;
+            final couleur = isSelected ? surPastille : inactif;
 
-                return GestureDetector(
-                  onTap: () => widget.navigationShell.goBranch(i),
-                  behavior: HitTestBehavior.opaque,
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 250),
-                    padding: EdgeInsets.symmetric(
-                      horizontal: isSelected ? (isMobile ? 16 : 20) : 12,
-                      vertical: 8,
-                    ),
-                    decoration: BoxDecoration(
-                      color: isSelected
-                          ? YkColors.primary700.withValues(alpha: 0.25)
-                          : Colors.transparent,
-                      borderRadius: BorderRadius.circular(YkRadius.xl),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        AnimatedSwitcher(
-                          duration: const Duration(milliseconds: 200),
-                          child: Icon(
-                            isSelected ? item.$1 : item.$2,
-                            key: ValueKey(isSelected),
-                            color: isSelected
-                                ? accent
-                                : YkColors.textOnPrimary.withValues(alpha: 0.54),
-                            size: isSelected ? (isMobile ? 22 : 24) : (isMobile ? 20 : 22),
-                          ),
-                        ),
-                        AnimatedSize(
-                          duration: const Duration(milliseconds: 250),
-                          curve: Curves.easeOutCubic,
-                          child: isSelected
-                              ? Padding(
-                                  padding: EdgeInsets.only(left: isMobile ? 6 : 8),
-                                  child: Text(
-                                    item.$3,
-                                    style: TextStyle(
-                                      color: accent,
-                                      fontSize: isMobile ? 11 : 13,
-                                      fontWeight: FontWeight.w800,
-                                    ),
-                                  ),
-                                )
-                              : const SizedBox.shrink(),
-                        ),
-                      ],
-                    ),
+            final icone = Icon(
+              isSelected ? item.$1 : item.$2,
+              color: couleur,
+              size: isMobile ? 22 : 24,
+            );
+            final libelle = Text(
+              item.$3,
+              style: TextStyle(
+                color: couleur,
+                fontSize: isSelected ? (isMobile ? 12 : 13) : (isMobile ? 10.5 : 11.5),
+                fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+              ),
+            );
+
+            return Semantics(
+              button: true,
+              selected: isSelected,
+              label: item.$3,
+              excludeSemantics: true,
+              child: GestureDetector(
+                onTap: () => widget.navigationShell.goBranch(i),
+                behavior: HitTestBehavior.opaque,
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 250),
+                  curve: Curves.easeOutCubic,
+                  padding: EdgeInsets.symmetric(
+                    horizontal: isSelected ? (isMobile ? 16 : 20) : 14,
+                    vertical: isSelected ? 9 : 6,
                   ),
-                );
-              }),
-            ),
-          ),
+                  decoration: BoxDecoration(
+                    color: isSelected ? pastille : Colors.transparent,
+                    borderRadius: BorderRadius.circular(YkRadius.xl),
+                  ),
+                  child: isSelected
+                      ? Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [icone, SizedBox(width: isMobile ? 6 : 8), libelle],
+                        )
+                      : Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [icone, const SizedBox(height: 2), libelle],
+                        ),
+                ),
+              ),
+            );
+          }),
         ),
       ),
     );

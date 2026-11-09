@@ -38,6 +38,7 @@ export 'inputs/yk_text_field.dart';
 // ── Conteneurs ───────────────────────────────────────────────────
 export 'containers/yk_adaptive_scaffold.dart';
 export 'containers/yk_app_bar.dart';
+export 'containers/yk_brand_app_bar.dart';
 export 'containers/yk_card.dart';
 export 'containers/yk_dashboard_hero_banner.dart';
 export 'containers/yk_gradient_app_bar.dart';
