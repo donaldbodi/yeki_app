@@ -52,3 +52,8 @@ ios/Runner/GoogleService-Info.plist
 macos/Runner/GoogleService-Info.plist
 **/firebase-service-account*.json
 .firebase/
+
+# Clé de signature Android : jamais dans le dépôt
+*.jks
+*.keystore
+key.properties

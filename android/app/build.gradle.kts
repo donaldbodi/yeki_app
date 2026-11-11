@@ -33,9 +33,26 @@ android {
         multiDexEnabled = true  // Important
     }
 
+    // Clé de signature définitive (même clé pour toutes les versions, pour
+    // que chaque mise à jour s'installe par-dessus la précédente). Fournie
+    // par l'environnement : en CI par les secrets GitHub (voir
+    // .github/workflows/build.yml), en local par les mêmes variables.
+    // Sans elle, repli sur la clé de debug (APK de test uniquement).
+    val keystorePath = System.getenv("YEKI_KEYSTORE_PATH")
+    val releaseSigning = if (keystorePath != null && file(keystorePath).exists()) {
+        signingConfigs.create("release") {
+            storeFile = file(keystorePath)
+            storePassword = System.getenv("YEKI_KEYSTORE_PASSWORD")
+            keyAlias = System.getenv("YEKI_KEY_ALIAS") ?: "yeki"
+            keyPassword = System.getenv("YEKI_KEY_PASSWORD") ?: System.getenv("YEKI_KEYSTORE_PASSWORD")
+        }
+    } else {
+        null
+    }
+
     buildTypes {
         release {
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = releaseSigning ?: signingConfigs.getByName("debug")
         }
     }
 }

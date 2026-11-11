@@ -7,6 +7,9 @@
 #   du dépôt par .gitignore mais indispensable à la compilation Android.
 # - FIREBASE_SERVICE_ACCOUNT : clé JSON d'un compte de service Firebase
 #   (facultatif, seulement pour la publication web automatique).
+# - ANDROID_KEYSTORE_BASE64 et ANDROID_KEYSTORE_PASSWORD : clé de signature
+#   définitive de l'APK (fichier .jks encodé en base64, alias « yeki ») ;
+#   sans elles, l'APK est signé avec une clé de test.
 
 name: Build
 
@@ -68,8 +71,21 @@ jobs:
             exit 1
           fi
           printf '%s' "$GOOGLE_SERVICES_JSON" > android/app/google-services.json
+      - name: Écrire la clé de signature
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$ANDROID_KEYSTORE_BASE64" ]; then
+            echo "::warning::Secret ANDROID_KEYSTORE_BASE64 absent : APK signé avec une clé de test (désinstallation nécessaire à chaque version)."
+            exit 0
+          fi
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/yeki-release.jks"
+          echo "YEKI_KEYSTORE_PATH=$RUNNER_TEMP/yeki-release.jks" >> "$GITHUB_ENV"
       - run: flutter pub get
       - run: flutter build apk --release
+        env:
+          YEKI_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          YEKI_KEY_ALIAS: yeki
       - uses: actions/upload-artifact@v4
         with:
           name: yeki-apk
