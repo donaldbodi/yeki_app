@@ -22,6 +22,7 @@
 // désormais `AppRoute.recharge` dédié.
 
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
 import 'package:yeki/core/design/components/components.dart';
@@ -46,9 +47,19 @@ class PaiementPage extends StatefulWidget {
     this.isHybride = false,
     this.isFormation = false,
     this.montantAnnuel,
+    this.libelleCycle,
+    this.finCycle,
     this.badge,
     this.ancienPrixMensuel,
   });
+
+  /// Nom de l'offre au prix [montantAnnuel] (abonnement sur le cycle) :
+  /// « Abonnement annuel » ou « Abonnement à <département> pour le compte
+  /// de N mois ». `null` : ancien libellé « Annuel ».
+  final String? libelleCycle;
+
+  /// Dernier jour du cycle en cours (AAAA-MM-JJ), fin de cette offre.
+  final String? finCycle;
 
   final PaiementType type;
   final int? departementId;
@@ -92,7 +103,21 @@ class _PaiementPageState extends State<PaiementPage> {
     super.dispose();
   }
 
-  bool get _afficherPaywall => widget.type == PaiementType.accesDepartement;
+  bool get _estAbonnement =>
+      widget.type == PaiementType.abonnementMensuel || widget.type == PaiementType.abonnementAnnuel;
+
+  /// Choix entre les offres : accès à un département, ou abonnement
+  /// Premium dont le département propose aussi l'abonnement sur le cycle.
+  bool get _afficherPaywall =>
+      widget.type == PaiementType.accesDepartement || (_estAbonnement && (widget.montantAnnuel ?? 0) > 0);
+
+  /// « jusqu'au 31 mars 2027 » pour l'offre sur le cycle, sinon la durée.
+  String get _dureeAcces {
+    if (_controller.periodicite != 'annuel') return '1 mois';
+    final fin = DateTime.tryParse(widget.finCycle ?? '');
+    if (fin == null) return '1 an';
+    return "jusqu'au ${DateFormat('d MMMM yyyy', 'fr_FR').format(fin)}";
+  }
 
   bool get _presentielDisponible => (widget.montantPresentiel ?? 0) > 0;
 
@@ -126,10 +151,16 @@ class _PaiementPageState extends State<PaiementPage> {
       case PaiementType.olympiade:
         return 'olympiade';
       case PaiementType.abonnementMensuel:
-        return 'abonnement_mensuel';
       case PaiementType.abonnementAnnuel:
-        return 'abonnement_annuel';
+        return 'abonnement_$_typeAbonnement';
     }
+  }
+
+  /// `mensuel` ou `annuel` (= sur le cycle) : choisi dans le paywall s'il
+  /// est affiché, sinon fixé par le type de la page.
+  String get _typeAbonnement {
+    if (_afficherPaywall) return _controller.periodicite;
+    return widget.type == PaiementType.abonnementAnnuel ? 'annuel' : 'mensuel';
   }
 
   Map<String, dynamic> _enrichirPayload(Map<String, dynamic> payload) {
@@ -141,8 +172,7 @@ class _PaiementPageState extends State<PaiementPage> {
       if (widget.departementId != null) data['departement_id'] = widget.departementId;
       data['type_abonnement'] = _controller.periodicite;
     }
-    if (widget.type == PaiementType.abonnementMensuel) data['type_abonnement'] = 'mensuel';
-    if (widget.type == PaiementType.abonnementAnnuel) data['type_abonnement'] = 'annuel';
+    if (_estAbonnement) data['type_abonnement'] = _typeAbonnement;
     // Rectification : l'abonnement est désormais PAR DÉPARTEMENT — le
     // backend l'exige maintenant pour categorie="abonnement" (voir
     // SoumettrePaiementManuelView), sans quoi il n'y a aucun département
@@ -164,7 +194,7 @@ class _PaiementPageState extends State<PaiementPage> {
       sens: widget.type == PaiementType.rechargeWallet ? YkPaiementSens.recharge : YkPaiementSens.paiement,
       montant: _montantFinal,
       titre: widget.titre,
-      dureeAcces: _afficherPaywall ? (_controller.periodicite == 'annuel' ? '1 an' : '1 mois') : null,
+      dureeAcces: _afficherPaywall ? _dureeAcces : null,
       ussdOrange: params.ussdOrangeMoney,
       ussdMtn: params.ussdMtnMomo,
       numeroDepotOrange: params.numeroDepotOrange,
@@ -272,8 +302,12 @@ class _PaiementPageState extends State<PaiementPage> {
   }
 
   Widget _buildPaywall(BuildContext context) {
+    final annuel = widget.libelleCycle == null || widget.libelleCycle == 'Abonnement annuel';
+    final finCycle = DateTime.tryParse(widget.finCycle ?? '');
     return YkPaywall(
-      title: widget.isFormation ? 'Accès à la formation' : 'Accès au département',
+      title: _estAbonnement
+          ? 'Abonnement Premium'
+          : (widget.isFormation ? 'Accès à la formation' : 'Accès au département'),
       description: widget.titre,
       features: const [],
       presentielLabel: _presentielDisponible ? 'Supplément présentiel' : null,
@@ -295,9 +329,11 @@ class _PaiementPageState extends State<PaiementPage> {
         ),
         if (widget.montantAnnuel != null && widget.montantAnnuel! > 0)
           YkPaywallPlan(
-            label: 'Annuel',
-            priceLabel: '${widget.montantAnnuel} FCFA/an',
-            economieLabel: widget.montant * 12 > widget.montantAnnuel!
+            label: widget.libelleCycle ?? 'Annuel',
+            priceLabel: finCycle != null
+                ? "${widget.montantAnnuel} FCFA · jusqu'au ${DateFormat('d MMM yyyy', 'fr_FR').format(finCycle)}"
+                : '${widget.montantAnnuel} FCFA/an',
+            economieLabel: annuel && widget.montant * 12 > widget.montantAnnuel!
                 ? 'Économisez ${widget.montant * 12 - widget.montantAnnuel!} FCFA vs mensuel'
                 : null,
             onSelect: () => _lancerFluxManuel(periodiciteChoisie: 'annuel'),

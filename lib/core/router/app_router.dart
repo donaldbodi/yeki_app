@@ -425,6 +425,8 @@ final GoRouter appRouter = GoRouter(
           isHybride: _bool(q['isHybride']),
           isFormation: _bool(q['isFormation']),
           montantAnnuel: _intOrNull(q['montantAnnuel']),
+          libelleCycle: q['libelleCycle'],
+          finCycle: q['finCycle'],
           badge: q['badge'],
           ancienPrixMensuel: _intOrNull(q['ancienPrixMensuel']),
         );

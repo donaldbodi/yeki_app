@@ -8,10 +8,12 @@
 // ici en un seul formulaire piloté par [existant] (`null` = création).
 
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 import 'package:yeki/core/design/components/components.dart';
 import 'package:yeki/core/design/tokens/tokens.dart';
 import 'package:yeki/core/network/api_exception.dart';
+import 'package:yeki/core/utils/cycles_departement.dart';
 import 'package:yeki/repositories/dashboard_repository.dart';
 import 'package:yeki/repositories/formation_repository.dart';
 
@@ -69,12 +71,16 @@ void ouvrirDepartementForm({
   var accesRestreint = d['acces_restreint'] as bool? ?? false;
   var estCertifiante = d['est_certifiante'] as bool? ?? false;
   var mode = d['mode'] as String? ?? 'hybride';
-  // Bug corrigé : `periode` (CDC §6.4/§7.4) est exigé sans exception par
-  // `CreerDepartementView` — absent de ce formulaire jusqu'ici, la création
-  // échouait TOUJOURS avec « La période de classement (periode) est
-  // obligatoire ». 6 mois = pré-sélection pratique (pas un défaut caché
-  // côté serveur, l'admin peut la changer avant de soumettre).
-  var periode = d['periode'] as int? ?? 6;
+  // Cycles (abonnement et classement) : date de début, période du cycle en
+  // mois, nombre de cycles par an (au plus 12 ÷ période) et placement. Les
+  // dates de chaque cycle sont calculées (aperçu ici, référence côté
+  // serveur : apps/formation/cycles.py). Le classement suit les cycles.
+  final aujourdhui = DateTime.now();
+  DateTime? cycleDebut = DateTime.tryParse(d['cycle_date_debut']?.toString() ?? '') ??
+      (estModification ? null : DateTime(aujourdhui.year, aujourdhui.month, aujourdhui.day));
+  var cycleDuree = (d['cycle_duree_mois'] as int?) ?? (d['periode'] as int?)?.clamp(1, 12).toInt() ?? 12;
+  var cycleNombre = ((d['cycle_nombre'] as int?) ?? 1).clamp(1, nombreMaxCycles(cycleDuree)).toInt();
+  var cyclePlacement = d['cycle_placement'] as String? ?? kPlacementSuite;
   var niveauFormation = d['niveau_formation'] as String? ?? 'debutant';
   var niveauxDisponibles = <String>[];
   var niveauxFormationDisponibles = <NiveauFormation>[];
@@ -88,8 +94,15 @@ void ouvrirDepartementForm({
   FormationRepository().niveauxFormation().then((n) => niveauxFormationDisponibles = n).catchError((_) => <NiveauFormation>[]);
 
   Future<void> soumettre(BuildContext ctx, StateSetter setS) async {
-    if (nomCtrl.text.trim().isEmpty) {
-      YkSnack.error(context, 'Le nom est obligatoire.');
+    final manquants = [
+      if (nomCtrl.text.trim().isEmpty) 'le nom',
+      if (cycleDebut == null) 'la date de début du cycle',
+      if (prixAnnuelCtrl.text.trim().isEmpty) "le prix de l'abonnement sur le cycle",
+      if (prixMensuelCtrl.text.trim().isEmpty) "le prix de l'abonnement mensuel",
+      if (typeParcours == 'formation' && !estFormationMetier && !estFormationClassique) 'le type de formation',
+    ];
+    if (manquants.isNotEmpty) {
+      YkSnack.error(context, 'Champs obligatoires manquants : ${manquants.join(', ')}.');
       return;
     }
     setS(() => envoi = true);
@@ -102,7 +115,12 @@ void ouvrirDepartementForm({
       'niveaux_accessibles': niveauxSelectionnes,
       'acces_restreint': accesRestreint,
       'mode': mode,
-      'periode': periode,
+      'cycle_date_debut': DateFormat('yyyy-MM-dd').format(cycleDebut!),
+      'cycle_duree_mois': cycleDuree,
+      'cycle_nombre': cycleNombre,
+      'cycle_placement': cycleNombre > 1 ? cyclePlacement : kPlacementSuite,
+      // Compatibilité avec un serveur pas encore à jour.
+      'periode': cycleDuree,
       if (!estModification) 'parcours_id': idParcours,
       if (!estModification) 'est_prepa_concours': typeParcours == 'prepa',
     };
@@ -186,6 +204,118 @@ void ouvrirDepartementForm({
     );
   }
 
+  Widget titreSection(BuildContext ctx, String texte) => Padding(
+    padding: EdgeInsets.only(top: YkSpacing.md, bottom: YkSpacing.xs),
+    child: Text(texte, style: YkTypography.h4(ctx).copyWith(color: YkColors.textPrimary(ctx))),
+  );
+
+  // ── Cycles et abonnement ────────────────────────────────────────────
+  List<Widget> champsCycles(BuildContext ctx, StateSetter setS) {
+    final maximum = nombreMaxCycles(cycleDuree);
+    final placement = cycleNombre > 1 ? cyclePlacement : kPlacementSuite;
+    final cycles = cycleDebut == null
+        ? const <CycleDepartement>[]
+        : calculerCycles(debut: cycleDebut!, dureeMois: cycleDuree, nombre: cycleNombre, placement: placement);
+    final libelle = libelleAbonnementCycle(nomDepartement: nomCtrl.text, dureeMois: cycleDuree, nombre: cycleNombre);
+    final format = DateFormat('d MMM yyyy', 'fr_FR');
+
+    return [
+      titreSection(ctx, 'Cycles et abonnement'),
+      Text(
+        "Le classement est remis à zéro à la fin de chaque cycle, et les cycles recommencent chaque année.",
+        style: YkTypography.caption(ctx).copyWith(color: YkColors.textSecondary(ctx)),
+      ),
+      SizedBox(height: YkSpacing.sm),
+      YkDateTimePicker(
+        mode: YkDateTimePickerMode.date,
+        label: 'Date de début du cycle *',
+        value: cycleDebut,
+        firstDate: DateTime(aujourdhui.year - 1),
+        lastDate: DateTime(aujourdhui.year + 2, 12, 31),
+        onChanged: (v) => setS(() => cycleDebut = DateTime(v.year, v.month, v.day)),
+      ),
+      SizedBox(height: YkSpacing.sm),
+      YkDropdown<int>(
+        label: 'Période du cycle *',
+        value: cycleDuree,
+        items: [for (var m = 1; m <= 12; m++) YkDropdownItem(value: m, label: m == 1 ? '1 mois' : '$m mois')],
+        onChanged: (v) => setS(() {
+          cycleDuree = v ?? cycleDuree;
+          // Le nombre de cycles ne peut jamais dépasser 12 ÷ période.
+          cycleNombre = cycleNombre.clamp(1, nombreMaxCycles(cycleDuree)).toInt();
+        }),
+      ),
+      SizedBox(height: YkSpacing.sm),
+      YkDropdown<int>(
+        label: 'Nombre de cycles par an * (maximum $maximum)',
+        value: cycleNombre,
+        items: [for (var n = 1; n <= maximum; n++) YkDropdownItem(value: n, label: n == 1 ? '1 cycle' : '$n cycles')],
+        onChanged: (v) => setS(() => cycleNombre = v ?? cycleNombre),
+      ),
+      if (cycleNombre > 1) ...[
+        SizedBox(height: YkSpacing.sm),
+        Text('Placement des cycles *', style: YkTypography.label(ctx).copyWith(color: YkColors.textPrimary(ctx))),
+        SizedBox(height: YkSpacing.xs),
+        Row(
+          children: [
+            Expanded(
+              child: YkChip(
+                label: 'À la suite',
+                variant: YkChipVariant.filter,
+                selected: cyclePlacement == kPlacementSuite,
+                onPressed: () => setS(() => cyclePlacement = kPlacementSuite),
+              ),
+            ),
+            SizedBox(width: YkSpacing.xs),
+            Expanded(
+              child: YkChip(
+                label: "Répartis sur l'année",
+                variant: YkChipVariant.filter,
+                selected: cyclePlacement == kPlacementRepartis,
+                onPressed: () => setS(() => cyclePlacement = kPlacementRepartis),
+              ),
+            ),
+          ],
+        ),
+      ],
+      if (cycles.isNotEmpty) ...[
+        SizedBox(height: YkSpacing.sm),
+        YkCard(
+          variant: YkCardVariant.filled,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Dates calculées', style: YkTypography.label(ctx).copyWith(color: YkColors.textPrimary(ctx))),
+              SizedBox(height: YkSpacing.xs),
+              for (final c in cycles)
+                Padding(
+                  padding: EdgeInsets.only(top: YkSpacing.xxs),
+                  child: Text(
+                    'Cycle ${c.numero} : du ${format.format(c.debut)} au ${format.format(c.dernierJour)}',
+                    style: YkTypography.bodySm(ctx).copyWith(color: YkColors.textSecondary(ctx)),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ],
+      SizedBox(height: YkSpacing.sm),
+      YkTextField(
+        controller: prixAnnuelCtrl,
+        label: '$libelle (FCFA) *',
+        type: YkTextFieldType.number,
+        hint: "Valable jusqu'à la fin du cycle en cours · 0 = indisponible",
+      ),
+      SizedBox(height: YkSpacing.sm),
+      YkTextField(
+        controller: prixMensuelCtrl,
+        label: 'Abonnement mensuel (FCFA) *',
+        type: YkTextFieldType.number,
+        hint: 'Valable 30 jours · 0 = indisponible',
+      ),
+    ];
+  }
+
   List<Widget> champsPrepa(BuildContext ctx) => [
     SizedBox(height: YkSpacing.sm),
     YkTextField(controller: nomConcoursCtrl, label: 'Nom du concours', hint: 'Ex : ENS, Polytechnique…'),
@@ -205,7 +335,7 @@ void ouvrirDepartementForm({
 
   List<Widget> champsFormation(BuildContext ctx, StateSetter setS) => [
     SizedBox(height: YkSpacing.sm),
-    Text('Type de formation', style: YkTypography.label(ctx).copyWith(color: YkColors.textPrimary(ctx))),
+    Text('Type de formation *', style: YkTypography.label(ctx).copyWith(color: YkColors.textPrimary(ctx))),
     SizedBox(height: YkSpacing.xs),
     Row(
       children: [
@@ -272,24 +402,22 @@ void ouvrirDepartementForm({
         children: [
           Text('Parcours : $nomParcours', style: YkTypography.bodySm(ctx).copyWith(color: YkColors.textSecondary(ctx))),
           SizedBox(height: YkSpacing.md),
-          YkTextField(controller: nomCtrl, label: 'Nom *', hint: typeParcours == 'prepa' ? 'Ex : Concours ENS' : 'Ex : Formation Développement Web'),
+          Text(
+            'Les champs marqués d’une étoile (*) sont obligatoires.',
+            style: YkTypography.caption(ctx).copyWith(color: YkColors.textTertiary(ctx)),
+          ),
+          SizedBox(height: YkSpacing.sm),
+          YkTextField(
+            controller: nomCtrl,
+            label: 'Nom *',
+            hint: typeParcours == 'prepa' ? 'Ex : Concours ENS' : 'Ex : Formation Développement Web',
+            // Le libellé de l'abonnement reprend le nom du département.
+            onChanged: (_) => setS(() {}),
+          ),
           SizedBox(height: YkSpacing.sm),
           YkTextField(controller: descCtrl, label: 'Description', type: YkTextFieldType.multiline, maxLines: 3),
-          SizedBox(height: YkSpacing.sm),
-          YkTextField(
-            controller: prixMensuelCtrl,
-            label: 'Abonnement Premium — mensuel (FCFA)',
-            type: YkTextFieldType.number,
-            hint: '0 = abonnement indisponible',
-          ),
-          SizedBox(height: YkSpacing.sm),
-          YkTextField(
-            controller: prixAnnuelCtrl,
-            label: 'Abonnement Premium — annuel (FCFA)',
-            type: YkTextFieldType.number,
-            hint: '0 = abonnement indisponible',
-          ),
-          SizedBox(height: YkSpacing.sm),
+          ...champsCycles(ctx, setS),
+          titreSection(ctx, 'Accès'),
           selecteurNiveaux(ctx, setS),
           SizedBox(height: YkSpacing.sm),
           SwitchListTile(
@@ -299,18 +427,8 @@ void ouvrirDepartementForm({
             subtitle: const Text("Les apprenants doivent demander l'accès"),
             contentPadding: EdgeInsets.zero,
           ),
-          SizedBox(height: YkSpacing.sm),
-          YkDropdown<int>(
-            // Tous les mois (1-12), pas seulement 1/3/6/12 — demande
-            // explicite de l'utilisateur : une durée de période est une
-            // vraie donnée métier par département, pas un choix à limiter.
-            items: [for (var m = 1; m <= 12; m++) YkDropdownItem(value: m, label: m == 1 ? '1 mois' : '$m mois')],
-            value: periode,
-            label: 'Période de classement *',
-            onChanged: (v) => setS(() => periode = v ?? periode),
-          ),
-          if (typeParcours == 'prepa') ...champsPrepa(ctx),
-          if (typeParcours == 'formation') ...champsFormation(ctx, setS),
+          if (typeParcours == 'prepa') ...[titreSection(ctx, 'Concours'), ...champsPrepa(ctx)],
+          if (typeParcours == 'formation') ...[titreSection(ctx, 'Formation'), ...champsFormation(ctx, setS)],
         ],
       ),
     ),
