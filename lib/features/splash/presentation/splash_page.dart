@@ -33,6 +33,7 @@ import 'package:yeki/core/design/components/media/yk_brand_logo.dart';
 import 'package:yeki/core/design/tokens/tokens.dart';
 import 'package:yeki/core/providers/app_info_provider.dart';
 import 'package:yeki/core/router/auth_state.dart';
+import 'package:yeki/services/acces_hors_ligne_service.dart';
 import 'package:yeki/services/push_notification_service.dart';
 import 'package:yeki/services/update_service.dart';
 
@@ -117,6 +118,9 @@ class _SplashPageState extends ConsumerState<SplashPage> with TickerProviderStat
     // méthode).
     if (authState.value.isAuthenticated) {
       unawaited(PushNotificationService().initialiser());
+      // Médias téléchargés : fins d'abonnement mises à jour, effacement
+      // après 30 jours sans connexion une fois l'abonnement terminé.
+      unawaited(AccesHorsLigneService.demarrer());
     }
   }
 

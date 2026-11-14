@@ -22,7 +22,6 @@
 // désormais `AppRoute.recharge` dédié.
 
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
 import 'package:yeki/core/design/components/components.dart';
@@ -48,18 +47,13 @@ class PaiementPage extends StatefulWidget {
     this.isFormation = false,
     this.montantAnnuel,
     this.libelleCycle,
-    this.finCycle,
     this.badge,
     this.ancienPrixMensuel,
   });
 
-  /// Nom de l'offre au prix [montantAnnuel] (abonnement sur le cycle) :
-  /// « Abonnement annuel » ou « Abonnement à <département> pour le compte
-  /// de N mois ». `null` : ancien libellé « Annuel ».
+  /// Nom de l'offre au prix [montantAnnuel] (prix d'un cycle, 365 jours
+  /// d'accès) : « Abonnement annuel ». `null` : libellé « Annuel ».
   final String? libelleCycle;
-
-  /// Dernier jour du cycle en cours (AAAA-MM-JJ), fin de cette offre.
-  final String? finCycle;
 
   final PaiementType type;
   final int? departementId;
@@ -111,13 +105,7 @@ class _PaiementPageState extends State<PaiementPage> {
   bool get _afficherPaywall =>
       widget.type == PaiementType.accesDepartement || (_estAbonnement && (widget.montantAnnuel ?? 0) > 0);
 
-  /// « jusqu'au 31 mars 2027 » pour l'offre sur le cycle, sinon la durée.
-  String get _dureeAcces {
-    if (_controller.periodicite != 'annuel') return '1 mois';
-    final fin = DateTime.tryParse(widget.finCycle ?? '');
-    if (fin == null) return '1 an';
-    return "jusqu'au ${DateFormat('d MMMM yyyy', 'fr_FR').format(fin)}";
-  }
+  String get _dureeAcces => _controller.periodicite == 'annuel' ? '1 an' : '1 mois';
 
   bool get _presentielDisponible => (widget.montantPresentiel ?? 0) > 0;
 
@@ -302,8 +290,6 @@ class _PaiementPageState extends State<PaiementPage> {
   }
 
   Widget _buildPaywall(BuildContext context) {
-    final annuel = widget.libelleCycle == null || widget.libelleCycle == 'Abonnement annuel';
-    final finCycle = DateTime.tryParse(widget.finCycle ?? '');
     return YkPaywall(
       title: _estAbonnement
           ? 'Abonnement Premium'
@@ -330,10 +316,8 @@ class _PaiementPageState extends State<PaiementPage> {
         if (widget.montantAnnuel != null && widget.montantAnnuel! > 0)
           YkPaywallPlan(
             label: widget.libelleCycle ?? 'Annuel',
-            priceLabel: finCycle != null
-                ? "${widget.montantAnnuel} FCFA · jusqu'au ${DateFormat('d MMM yyyy', 'fr_FR').format(finCycle)}"
-                : '${widget.montantAnnuel} FCFA/an',
-            economieLabel: annuel && widget.montant * 12 > widget.montantAnnuel!
+            priceLabel: '${widget.montantAnnuel} FCFA/an',
+            economieLabel: widget.montant * 12 > widget.montantAnnuel!
                 ? 'Économisez ${widget.montant * 12 - widget.montantAnnuel!} FCFA vs mensuel'
                 : null,
             onSelect: () => _lancerFluxManuel(periodiciteChoisie: 'annuel'),

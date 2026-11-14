@@ -216,13 +216,13 @@ void ouvrirDepartementForm({
     final cycles = cycleDebut == null
         ? const <CycleDepartement>[]
         : calculerCycles(debut: cycleDebut!, dureeMois: cycleDuree, nombre: cycleNombre, placement: placement);
-    final libelle = libelleAbonnementCycle(nomDepartement: nomCtrl.text, dureeMois: cycleDuree, nombre: cycleNombre);
+    const libelle = kLibelleAbonnementCycle;
     final format = DateFormat('d MMM yyyy', 'fr_FR');
 
     return [
       titreSection(ctx, 'Cycles et abonnement'),
       Text(
-        "Le classement est remis à zéro à la fin de chaque cycle, et les cycles recommencent chaque année.",
+        'Le classement est remis à zéro à la fin de chaque cycle, et le forum n’est ouvert que pendant les cycles. Les cycles recommencent chaque année.',
         style: YkTypography.caption(ctx).copyWith(color: YkColors.textSecondary(ctx)),
       ),
       SizedBox(height: YkSpacing.sm),
@@ -304,7 +304,7 @@ void ouvrirDepartementForm({
         controller: prixAnnuelCtrl,
         label: '$libelle (FCFA) *',
         type: YkTextFieldType.number,
-        hint: "Valable jusqu'à la fin du cycle en cours · 0 = indisponible",
+        hint: 'Valable 1 an (365 jours) · 0 = indisponible',
       ),
       SizedBox(height: YkSpacing.sm),
       YkTextField(
@@ -411,8 +411,6 @@ void ouvrirDepartementForm({
             controller: nomCtrl,
             label: 'Nom *',
             hint: typeParcours == 'prepa' ? 'Ex : Concours ENS' : 'Ex : Formation Développement Web',
-            // Le libellé de l'abonnement reprend le nom du département.
-            onChanged: (_) => setS(() {}),
           ),
           SizedBox(height: YkSpacing.sm),
           YkTextField(controller: descCtrl, label: 'Description', type: YkTextFieldType.multiline, maxLines: 3),

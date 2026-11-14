@@ -1,6 +1,7 @@
 import 'package:yeki/core/network/api_client.dart';
 import 'package:yeki/core/network/api_endpoints.dart';
 import 'package:yeki/models/paiement_models.dart';
+import 'package:yeki/services/acces_hors_ligne_service.dart';
 
 /// Paiement. Couvre CinetPay (initiation/vérification) et, depuis P9.3,
 /// le paiement manuel Orange Money/MTN MoMo (`YkManualPaymentFlow`) et le
@@ -49,7 +50,11 @@ class PaiementRepository {
       PaiementEndpoints.abonnementStatut,
       query: {'cours_id': coursId},
     );
-    return AbonnementInfo.fromJson(Map<String, dynamic>.from(data as Map));
+    final info = AbonnementInfo.fromJson(Map<String, dynamic>.from(data as Map));
+    // Fin d'abonnement gardée sur le téléphone pour les médias téléchargés
+    // de ce cours (lecture et effacement hors ligne).
+    await AccesHorsLigneService.enregistrerStatut(coursId, finIso: info.finIso);
+    return info;
   }
 
   /// Soumission d'une demande de paiement manuel — `payload` porte à la

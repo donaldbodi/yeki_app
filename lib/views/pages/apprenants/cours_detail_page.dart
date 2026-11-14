@@ -23,10 +23,13 @@
 
 import 'dart:ui';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
 import 'package:yeki/core/design/components/components.dart';
 import 'package:yeki/core/design/tokens/tokens.dart';
+import 'package:yeki/core/router/auth_state.dart';
+import 'package:yeki/repositories/paiement_repository.dart';
 import 'package:yeki/features/devoirs_cours/presentation/devoirs_cours_page.dart';
 import 'package:yeki/features/exercices_cours/presentation/exercices_cours_page.dart';
 import 'package:yeki/features/paiement/presentation/ouvrir_abonnement.dart';
@@ -106,6 +109,23 @@ class _CoursDetailTabsState extends State<CoursDetailTabs> with SingleTickerProv
       if (!_tabController.indexIsChanging) setState(() {});
     });
     _chargerProgression();
+    if (kIsWeb && authState.value.role == 'apprenant') _verifierAbonnementWeb();
+  }
+
+  /// Version web : les cours sont réservés aux apprenants abonnés au
+  /// département (décision produit — pas de téléchargement possible sur
+  /// le web, donc rien à consulter une fois l'abonnement terminé).
+  /// `null` tant que non vérifié, ou si la vérification échoue (le serveur
+  /// protège de toute façon les contenus Premium).
+  bool? _abonneWeb;
+
+  Future<void> _verifierAbonnementWeb() async {
+    try {
+      final statut = await PaiementRepository().statutAbonnement(int.parse(widget.coursId));
+      if (mounted) setState(() => _abonneWeb = statut.actif);
+    } catch (_) {
+      // Vérification impossible (réseau) : pas de blocage côté interface.
+    }
   }
 
   Future<void> _chargerProgression() async {
@@ -280,7 +300,15 @@ class _CoursDetailTabsState extends State<CoursDetailTabs> with SingleTickerProv
           ),
         ),
       ),
-      body: _buildTabViews(),
+      body: _abonneWeb == false
+          ? _buildPremiumLock(
+              context,
+              titre: 'Abonnement requis',
+              message:
+                  "Sur le site web, l'accès aux cours est réservé aux abonnés de ce département. "
+                  'Abonnez-vous pour continuer.',
+            )
+          : _buildTabViews(),
     );
   }
 
@@ -348,7 +376,11 @@ class _CoursDetailTabsState extends State<CoursDetailTabs> with SingleTickerProv
     );
   }
 
-  Widget _buildPremiumLock(BuildContext context) {
+  Widget _buildPremiumLock(
+    BuildContext context, {
+    String titre = 'Débloquez tout le potentiel',
+    String message = 'Accédez sans limite aux exercices, devoirs et au forum de ce cours en découvrant nos offres.',
+  }) {
     return Padding(
       padding: EdgeInsets.only(top: _headerHeight),
       child: Center(
@@ -360,13 +392,13 @@ class _CoursDetailTabsState extends State<CoursDetailTabs> with SingleTickerProv
             Icon(Icons.workspace_premium_rounded, color: YkColors.warning, size: 64),
             SizedBox(height: YkSpacing.md),
             Text(
-              'Débloquez tout le potentiel',
+              titre,
               textAlign: TextAlign.center,
               style: YkTypography.h3(context).copyWith(color: YkColors.textPrimary(context)),
             ),
             SizedBox(height: YkSpacing.xs),
             Text(
-              "Accédez sans limite aux exercices, devoirs et au forum de ce cours en découvrant nos offres.",
+              message,
               textAlign: TextAlign.center,
               style: YkTypography.bodySm(context).copyWith(color: YkColors.textSecondary(context)),
             ),

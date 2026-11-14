@@ -62,9 +62,5 @@ List<CycleDepartement> calculerCycles({
   ];
 }
 
-/// Libellé de l'abonnement sur le cycle (même texte que le serveur).
-String libelleAbonnementCycle({required String nomDepartement, required int dureeMois, required int nombre}) {
-  if (nombre == 1) return 'Abonnement annuel';
-  final nom = nomDepartement.trim().isEmpty ? 'ce département' : nomDepartement.trim();
-  return 'Abonnement à $nom pour le compte de $dureeMois mois';
-}
+/// Libellé de l'abonnement payé au prix du cycle (même texte que le serveur).
+const String kLibelleAbonnementCycle = 'Abonnement annuel';

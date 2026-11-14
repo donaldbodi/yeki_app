@@ -186,6 +186,9 @@ class _DetailLeconPageState extends State<DetailLeconPage> {
       fileId: 'lecon_${lecon.id}',
       fileName: '${lecon.titre}.${lecon.hasVideo ? 'mp4' : 'pdf'}',
       fileType: lecon.hasVideo ? 'video' : 'pdf',
+      // Rattache le média à son cours : règle d'abonnement hors ligne
+      // (`AccesHorsLigneService`).
+      coursId: widget.coursId,
       onComplete: () => mounted ? YkSnack.success(context, 'Téléchargement terminé.') : null,
       onError: (e) => mounted ? YkSnack.error(context, e) : null,
     );

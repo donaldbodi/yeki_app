@@ -53,7 +53,6 @@ Future<void> ouvrirAbonnementPremium(BuildContext context, {required int coursId
         'departementId': statut.departementId.toString(),
         if (statut.prixAnnuel > 0) 'montantAnnuel': statut.prixAnnuel.toString(),
         if (statut.libelleAbonnementCycle != null) 'libelleCycle': statut.libelleAbonnementCycle!,
-        if (statut.finCycle != null) 'finCycle': statut.finCycle!,
       },
     );
   } on ApiException catch (e) {

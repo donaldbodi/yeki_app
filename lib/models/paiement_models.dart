@@ -25,17 +25,11 @@ class AbonnementInfo {
     required this.prixAnnuel,
     required this.disponible,
     this.libelleAbonnementCycle,
-    this.finCycle,
   });
 
-  /// Nom de l'offre payée au prix [prixAnnuel] : « Abonnement annuel » s'il
-  /// n'y a qu'un cycle, sinon « Abonnement à <département> pour le compte
-  /// de N mois ». `null` avec un serveur pas encore à jour.
+  /// Nom de l'offre payée au prix [prixAnnuel] (365 jours) : « Abonnement
+  /// annuel ». `null` avec un serveur pas encore à jour.
   final String? libelleAbonnementCycle;
-
-  /// Dernier jour du cycle en cours (AAAA-MM-JJ) : fin de l'abonnement
-  /// acheté au prix [prixAnnuel].
-  final String? finCycle;
 
   final bool actif;
   final String? typeAbonnement;
@@ -60,7 +54,6 @@ class AbonnementInfo {
     prixAnnuel: (json['prix_annuel'] as num?)?.toInt() ?? 0,
     disponible: json['disponible'] as bool? ?? false,
     libelleAbonnementCycle: json['libelle_abonnement_cycle'] as String?,
-    finCycle: (json['cycle_en_cours'] as Map<String, dynamic>?)?['fin'] as String?,
   );
 }
 
