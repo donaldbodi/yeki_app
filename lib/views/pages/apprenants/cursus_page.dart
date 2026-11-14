@@ -1,196 +1,312 @@
+// lib/views/pages/apprenants/cursus_page.dart
+//
+// Refondu en P11.2 (rituel P5.0) — fiche d'écart : `docs/ecarts/accueil.md`
+// §1 documente déjà le partage de responsabilité avec `accueil_page.dart`
+// (P11.1) : la salutation/notifications/"Continuer la lecture" migrent
+// vers l'onglet Accueil, CET écran redevient un catalogue PUR (recherche +
+// grille de cours), sans duplication entre les deux onglets.
+//
+// Bascule vers `FormationRepository.cursus()` (plus de `http`/
+// `SharedPreferences` bruts) et les tokens/composants `Yk*` (plus de
+// `YekiColors`/`YekiTextStyles`/`YekiButton`/glassmorphism codée en dur).
+
 import 'package:flutter/material.dart';
-import '../../../../widgets/yeki_app_bar.dart';
-import 'cours_detail_page.dart';
+import 'package:go_router/go_router.dart';
 
-class CursusPage extends StatelessWidget {
-  final bool isSubscribed = true; // ← Change cette valeur pour simuler l’abonnement
+import 'package:yeki/core/design/components/components.dart';
+import 'package:yeki/core/design/tokens/tokens.dart';
+import 'package:yeki/core/router/route_names.dart';
+import 'package:yeki/repositories/formation_repository.dart';
+import 'package:yeki/views/pages/apprenants/formations_models.dart' show CoursItem;
 
-  final List<Map<String, dynamic>> cursusList = [
-    {
-      'title': 'Mathématiques',
-      'description': 'Analyse, Algèbre, Géométrie et plus',
-      'teacher': 'Dr. Bodi',
-      'lessons': 18,
-      'assignments': 6,
-      'icon': Icons.calculate_rounded,
-      'gradient': [Color(0xFF00B4DB), Color(0xFF0083B0)],
-    },
-    {
-      'title': 'Physique',
-      'description': 'Mécanique, Électromagnétisme',
-      'teacher': 'Mme. Tchatchoua',
-      'lessons': 22,
-      'assignments': 8,
-      'icon': Icons.science_rounded,
-      'gradient': [Color(0xFF4AC29A), Color(0xFFBDFFF3)],
-    },
-    {
-      'title': 'Chimie',
-      'description': 'Organique, Inorganique, Analyse',
-      'teacher': 'Dr. Ayissi',
-      'lessons': 17,
-      'assignments': 5,
-      'icon': Icons.bubble_chart_rounded,
-      'gradient': [Color(0xFFFF6A00), Color(0xFFFFC371)],
-    },
-    {
-      'title': 'SVT',
-      'description': 'Biologie humaine, animale, végétale',
-      'teacher': 'Mme. Bilong',
-      'lessons': 20,
-      'assignments': 7,
-      'icon': Icons.eco_rounded,
-      'gradient': [Color(0xFF00C9FF), Color(0xFF92FE9D)],
-    },
-  ];
+class CursusPage extends StatefulWidget {
+  const CursusPage({super.key});
+
+  @override
+  State<CursusPage> createState() => _CursusPageState();
+}
+
+class _CursusPageState extends State<CursusPage> {
+  final _repo = FormationRepository();
+
+  bool _loading = true;
+  bool _enErreur = false;
+  List<CoursItem> _cours = const [];
+  String _recherche = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _charger();
+  }
+
+  Future<void> _charger() async {
+    setState(() {
+      _loading = true;
+      _enErreur = false;
+    });
+    try {
+      final cours = await _repo.cursus();
+      if (!mounted) return;
+      setState(() {
+        _cours = cours;
+        _loading = false;
+      });
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _enErreur = true;
+          _loading = false;
+        });
+      }
+    }
+  }
+
+  List<CoursItem> get _coursFiltres {
+    if (_recherche.trim().isEmpty) return _cours;
+    final q = _recherche.toLowerCase();
+    return _cours
+        .where(
+          (c) => c.title.toLowerCase().contains(q) || c.enseignantPrincipal.toLowerCase().contains(q),
+        )
+        .toList();
+  }
+
+  Color _parseColor(String hex) {
+    try {
+      return Color(int.parse(hex.replaceAll('#', 'FF'), radix: 16));
+    } catch (_) {
+      return YkColors.accent(context);
+    }
+  }
+
+  IconData _iconePourMatiere(String titre) {
+    final t = titre.toLowerCase();
+    if (t.contains('physique') || t.contains('chimie')) return Icons.science_rounded;
+    if (t.contains('code') || t.contains('flutter') || t.contains('dev')) return Icons.terminal_rounded;
+    if (t.contains('math') || t.contains('algebre') || t.contains('calcul')) return Icons.functions_rounded;
+    if (t.contains('droit') || t.contains('juridique')) return Icons.gavel_rounded;
+    return Icons.menu_book_rounded;
+  }
+
+  /// 2 initiales de repli pour l'avatar de l'enseignant principal (même
+  /// motif que l'avatar de l'app bar Accueil — dégradé + initiales).
+  String _initialesEnseignant(String nom) {
+    final mots = nom.trim().split(RegExp(r'\s+')).where((m) => m.isNotEmpty).toList();
+    if (mots.isEmpty) return '?';
+    if (mots.length == 1) return mots.first.substring(0, 1).toUpperCase();
+    return (mots.first.substring(0, 1) + mots.last.substring(0, 1)).toUpperCase();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F7FA),
-      appBar: const YekiAppBar(
-        title: "Yéki - Mon Cursus",
-        subtitle: "Vos matières principales",
-        icon: Icons.menu_book_rounded,
-      ),
-      body: ListView.separated(
-        padding: const EdgeInsets.all(16),
-        itemCount: cursusList.length + 1,
-        separatorBuilder: (_, __) => const SizedBox(height: 16),
-        itemBuilder: (context, index) {
-          if (index == 0) {
-            // Section abonnement
-            return Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                border: Border.all(color: Colors.teal.withOpacity(0.2), width: 1),
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: const [
-                BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2)),
-              ],
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.workspace_premium_rounded,
-                    color: isSubscribed ? Colors.orange : Colors.redAccent,
-                    size: 20,
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      isSubscribed
-                          ? 'Abonnement actif jusqu\'au 31 Déc. 2025'
-                          : 'Aucun abonnement actif',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: const Color(0xFF333333),
-                        fontWeight: FontWeight.w500,
-                      ),
+      backgroundColor: YkColors.background(context),
+      body: SafeArea(
+        child: _loading
+            ? Padding(padding: EdgeInsets.all(YkSpacing.md), child: YkSkeleton.list(itemCount: 4, itemHeight: 140))
+            : _enErreur
+            ? YkEmptyState(
+                icon: Icons.wifi_off_rounded,
+                title: 'Impossible de charger vos programmes',
+                message: 'Vérifiez votre connexion puis réessayez.',
+                actionLabel: 'Réessayer',
+                onAction: _charger,
+              )
+            : RefreshIndicator(
+                onRefresh: _charger,
+                child: ListView(
+                  padding: EdgeInsets.all(YkSpacing.md),
+                  children: [
+                    YkTextField(
+                      type: YkTextFieldType.search,
+                      hint: 'Rechercher un cours, un enseignant…',
+                      onChanged: (v) => setState(() => _recherche = v),
                     ),
-                  ),
-                  isSubscribed
-                      ? const Icon(Icons.check_circle, color: Colors.teal, size: 18)
-                      : TextButton(
-                          onPressed: () {
-                            // TODO: Ajouter la logique de souscription
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text("Fonctionnalité d'abonnement à venir")),
-                            );
-                          },
-                          child: const Text("S'abonner", style: TextStyle(color: Colors.redAccent),),
-                        ),
-                ],
-              ),
-            );
-          }
-
-          final cursus = cursusList[index - 1];
-          return InkWell(
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const CoursDetailTabs()),
-              );
-            },
-            child: Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                border: Border.all(
-                  width: 1,
-                  color: cursus['gradient'].first.withOpacity(0.4),
-                ),
-                borderRadius: BorderRadius.circular(14),
-                boxShadow: const [
-                BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2)),
-              ],
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    width: 50,
-                    height: 50,
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: cursus['gradient'],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      cursus['icon'],
-                      color: Colors.white,
-                      size: 26,
-                    ),
-                  ),
-                  const SizedBox(width: 18),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    SizedBox(height: YkSpacing.md),
+                    Row(
                       children: [
                         Text(
-                          cursus['title'],
-                          style: const TextStyle(
-                            color: Color(0xFF1A1A1A),
-                            fontSize: 18,
-                            fontWeight: FontWeight.w600,
-                          ),
+                          'Vos programmes',
+                          style: YkTypography.h4(context).copyWith(color: YkColors.textPrimary(context)),
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          cursus['description'],
-                          style: const TextStyle(
-                            fontSize: 13,
-                            color: Colors.black54,
+                        const Spacer(),
+                        if (_cours.isNotEmpty)
+                          Text(
+                            '${_coursFiltres.length} cours',
+                            style: YkTypography.caption(
+                              context,
+                            ).copyWith(color: YkColors.textSecondary(context)),
                           ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Prof : ${cursus['teacher']}',
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: Colors.black87,
-                          ),
-                        ),
-                        Text(
-                          '${cursus['lessons']} leçons • ${cursus['assignments']} devoirs',
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey,
-                          ),
-                        ),
                       ],
+                    ),
+                    SizedBox(height: YkSpacing.sm),
+                    if (_coursFiltres.isEmpty)
+                      YkEmptyState(
+                        icon: Icons.school_outlined,
+                        title: 'Aucun cours',
+                        message: _recherche.isEmpty
+                            ? "Vous n'avez pas encore accès à un cours de ce cursus."
+                            : 'Aucun cours ne correspond à « $_recherche ».',
+                      )
+                    else
+                      for (final cours in _coursFiltres) _buildCarteCours(context, cours),
+                  ],
+                ),
+              ),
+      ),
+    );
+  }
+
+  Widget _buildCarteCours(BuildContext context, CoursItem cours) {
+    final couleur = _parseColor(cours.color);
+    return Padding(
+      padding: EdgeInsets.only(bottom: YkSpacing.sm),
+      child: YkCard(
+        accentColor: couleur,
+        onTap: () => context.pushNamed(
+          AppRoute.coursDetail,
+          pathParameters: {'coursId': cours.id.toString()},
+          queryParameters: {
+            'titre': cours.title,
+            'coursColor': couleur.toARGB32().toString(),
+            // Dynamique (demande explicite) : reflète le VRAI accès du
+            // département de ce cours (`ApprenantCursusAPIView`, même
+            // critère `acces_restreint`/`apprenants_autorises` que
+            // Formations/Prépa Concours) — `true` reste la valeur
+            // observée en pratique (aucun département cursus mis à
+            // accès restreint jusqu'ici), mais ce n'est plus une
+            // constante figée : un département cursus rendu restreint
+            // un jour se reflétera ici sans changement de code.
+            'isPremium': cours.estAccessible.toString(),
+          },
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(YkRadius.md),
+              child: Container(
+                width: 50,
+                height: 50,
+                color: couleur.withValues(alpha: 0.12),
+                alignment: Alignment.center,
+                child: Icon(_iconePourMatiere(cours.title), color: couleur, size: 24),
+              ),
+            ),
+            SizedBox(width: YkSpacing.sm),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          cours.title,
+                          style: YkTypography.label(context).copyWith(color: YkColors.textPrimary(context)),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      SizedBox(width: YkSpacing.xs),
+                      _buildBadgeProgression(context, cours.progression),
+                    ],
+                  ),
+                  if (cours.description.isNotEmpty) ...[
+                    SizedBox(height: YkSpacing.xxs),
+                    Text(
+                      cours.description,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: YkTypography.caption(context).copyWith(color: YkColors.textSecondary(context)),
+                    ),
+                  ],
+                  SizedBox(height: YkSpacing.xs),
+                  Row(
+                    children: [
+                      ClipOval(
+                        child: SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: (cours.enseignantAvatarUrl?.isNotEmpty ?? false)
+                              ? Image.network(
+                                  cours.enseignantAvatarUrl!,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) => YkGradientBackground(
+                                    gradient: LinearGradient(
+                                      begin: Alignment.topLeft,
+                                      end: Alignment.bottomRight,
+                                      colors: [couleur, couleur.withValues(alpha: 0.7)],
+                                    ),
+                                    child: Center(
+                                      child: Text(
+                                        _initialesEnseignant(cours.enseignantPrincipal),
+                                        style: YkTypography.caption(
+                                          context,
+                                        ).copyWith(color: Colors.white, fontSize: 8, fontWeight: FontWeight.w800),
+                                      ),
+                                    ),
+                                  ),
+                                )
+                              : YkGradientBackground(
+                                  gradient: LinearGradient(
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                    colors: [couleur, couleur.withValues(alpha: 0.7)],
+                                  ),
+                                  child: Center(
+                                    child: Text(
+                                      _initialesEnseignant(cours.enseignantPrincipal),
+                                      style: YkTypography.caption(
+                                        context,
+                                      ).copyWith(color: Colors.white, fontSize: 8, fontWeight: FontWeight.w800),
+                                    ),
+                                  ),
+                                ),
+                        ),
+                      ),
+                      SizedBox(width: YkSpacing.xs),
+                      Expanded(
+                        child: Text(
+                          '${cours.enseignantPrincipal} · ${cours.lessons} leçons · '
+                          '${cours.progression.toStringAsFixed(0)}%',
+                          style: YkTypography.caption(context).copyWith(color: YkColors.textTertiary(context)),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: YkSpacing.xs),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(YkRadius.full),
+                    child: LinearProgressIndicator(
+                      value: cours.progression / 100,
+                      minHeight: 6,
+                      backgroundColor: YkColors.border(context),
+                      valueColor: AlwaysStoppedAnimation(couleur),
                     ),
                   ),
                 ],
               ),
             ),
-          );
-        },
+          ],
+        ),
       ),
     );
+  }
+
+  Widget _buildBadgeProgression(BuildContext context, double progression) {
+    String texte = 'NOUVEAU';
+    Color couleur = YkColors.accent(context);
+    if (progression >= 100) {
+      texte = 'TERMINÉ';
+      couleur = YkColors.success;
+    } else if (progression > 0) {
+      texte = 'EN COURS';
+      couleur = YkColors.warning;
+    }
+    return YkBadge(variant: YkBadgeVariant.label, label: texte, color: couleur);
   }
 }

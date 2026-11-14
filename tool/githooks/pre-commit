@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# tool/githooks/pre-commit
+#
+# Hook pre-commit versionné (P4.2) — voir tool/setup_hooks.sh pour l'activer.
+# Version rapide du pare-feu design system : règles 1-8 uniquement (greps),
+# sans flutter analyze (règle 9, réservée à la CI) pour ne pas ralentir
+# chaque commit local.
+set -uo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+bash "$REPO_ROOT/tool/check_design_system.sh"

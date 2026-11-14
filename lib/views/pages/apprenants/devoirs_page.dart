@@ -1,299 +1,628 @@
-import 'package:flutter/material.dart';
+// lib/views/pages/apprenants/devoirs_page.dart
+//
+// Refondu en P11.2 (rituel P5.0, migration mécanique comme le forum en
+// P10.5 — même volume, même risque sans QA visuelle) : bascule vers
+// `DevoirRepository.listMine()` (plus de `http`/`SharedPreferences` bruts)
+// et les tokens/composants `Yk*` (plus de `YekiColors`/`YekiButton`/
+// glassmorphism codée en dur). `DevoirItem` déménagé vers
+// `devoir_models.dart` (P11.2 : ancien `DevoirModel`/`OlympiadeInfo` du
+// même fichier étaient du code mort, retirés).
+//
+// Cache hors-ligne (`OfflineService`) conservé à l'identique — le seul
+// changement est la source des données fraîches (repository au lieu de
+// `http` direct), pas la logique de repli hors-ligne elle-même.
 
-import '../../../../widgets/yeki_app_bar.dart';
+import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+
+import 'package:yeki/core/design/components/components.dart';
+import 'package:yeki/core/design/tokens/tokens.dart';
+import 'package:yeki/core/network/api_exception.dart';
+import 'package:yeki/core/router/route_names.dart';
+import 'package:yeki/features/paiement/presentation/ouvrir_abonnement.dart' show kMessagePremiumRequis;
+import 'package:yeki/repositories/devoir_repository.dart';
+import 'package:yeki/repositories/formation_repository.dart';
+import 'package:yeki/services/offline_service.dart';
+import 'package:yeki/services/sync_service.dart';
+import 'package:yeki/views/pages/apprenants/devoir_models.dart' show DevoirItem;
+
+class _TypeDevoirTab {
+  const _TypeDevoirTab(this.code, this.icon);
+  final String code;
+  final IconData icon;
+}
+
+Color _couleurType(BuildContext context, String typeDevoir) {
+  switch (typeDevoir) {
+    case 'cursus':
+      return YkColors.info;
+    case 'concours':
+      return YkColors.accent(context);
+    case 'formation_classique':
+      return YkColors.success;
+    case 'formation_metier':
+      return YkColors.warning;
+    case 'olympiade':
+      return YkColors.accent(context);
+    default:
+      return YkColors.textSecondary(context);
+  }
+}
+
+Color _couleurStatut(BuildContext context, String? statutApprenant) {
+  switch (statutApprenant) {
+    case 'non_commence':
+      return YkColors.accent(context);
+    case 'en_cours':
+      return YkColors.info;
+    case 'soumis':
+      return YkColors.warning;
+    case 'corrige':
+      return YkColors.success;
+    case 'en_retard':
+      return YkColors.error;
+    default:
+      return YkColors.accent(context);
+  }
+}
+
+IconData _iconePourType(String typeDevoir) {
+  switch (typeDevoir) {
+    case 'cursus':
+      return Icons.school_rounded;
+    case 'concours':
+      return Icons.emoji_events_rounded;
+    case 'formation_classique':
+      return Icons.account_balance_rounded;
+    case 'formation_metier':
+      return Icons.work_rounded;
+    case 'olympiade':
+      return Icons.military_tech_rounded;
+    default:
+      return Icons.assignment_rounded;
+  }
+}
+
+String _libelleType(String code) {
+  switch (code) {
+    case 'Tous':
+      return 'Tous';
+    case 'cursus':
+      return 'Cursus';
+    case 'concours':
+      return 'Concours';
+    case 'formation_classique':
+      return 'Formation';
+    case 'formation_metier':
+      return 'Métier';
+    case 'olympiade':
+      return 'Olympiade';
+    default:
+      return code;
+  }
+}
+
+String _libelleStatut(String s) {
+  switch (s) {
+    case 'non_commence':
+      return 'À faire';
+    case 'en_cours':
+      return 'En cours';
+    case 'soumis':
+      return 'Soumis';
+    case 'corrige':
+      return 'Corrigé';
+    case 'en_retard':
+      return 'En retard';
+    default:
+      return s;
+  }
+}
 
 class DevoirsPage extends StatefulWidget {
-  const DevoirsPage({super.key});
+  const DevoirsPage({super.key, required this.estEnseignantPrincipal});
+
+  final bool estEnseignantPrincipal;
 
   @override
   State<DevoirsPage> createState() => _DevoirsPageState();
 }
 
 class _DevoirsPageState extends State<DevoirsPage> {
-  final List<Map<String, dynamic>> devoirs = [
-    {
-      "matiere": "Mathématiques",
-      "titre": "Devoir 3 : Dérivées",
-      "niveau": 3,
-      "dateLimite": DateTime(2025, 6, 27),
-      "statut": "En attente",
-      "isConcours": false,
-    },
-    {
-      "matiere": "Physique",
-      "titre": "Concours ENS : Optique",
-      "niveau": 1,
-      "dateLimite": DateTime(2025, 7, 15),
-      "statut": "Corrigé",
-      "isConcours": true,
-      "concours": "Concours ENS 2025",
-    },
+  final _repo = DevoirRepository();
+
+  bool _loading = true;
+  bool _enErreur = false;
+  // Distingue le 403 "réservé aux abonnés Premium" (backend, tout-ou-rien
+  // pour cette liste globale — apprenant non-Premium dans AUCUN
+  // département) d'une vraie coupure réseau — jusqu'ici confondus,
+  // produisant le message trompeur "Vérifiez votre connexion".
+  bool _erreurPremium = false;
+
+  List<DevoirItem> _tous = const [];
+  List<DevoirItem> _affiches = const [];
+
+  String _typeSelectionne = 'Tous';
+  String? _matiereSelectionnee;
+  String? _niveauSelectionne;
+  String _statutSelectionne = 'Tous';
+  String _recherche = '';
+
+  List<String> _niveaux = const [];
+
+  static const _types = [
+    _TypeDevoirTab('Tous', Icons.grid_view_rounded),
+    _TypeDevoirTab('cursus', Icons.school_rounded),
+    _TypeDevoirTab('concours', Icons.emoji_events_rounded),
+    _TypeDevoirTab('formation_classique', Icons.account_balance_rounded),
+    _TypeDevoirTab('formation_metier', Icons.work_rounded),
+    _TypeDevoirTab('olympiade', Icons.military_tech_rounded),
   ];
 
-  String? filtreMatiere;
-  String? filtreStatut;
-  bool filtreConcours = false;
+  static const _matieres = [
+    'Mathématiques',
+    'Physique',
+    'Chimie',
+    'SVT',
+    'Informatique',
+    'Français',
+    'Anglais',
+    'Histoire-Géo',
+    'Philosophie',
+    'Économie',
+    'Autre',
+  ];
+
+  static const _statuts = ['non_commence', 'en_cours', 'soumis', 'corrige', 'en_retard'];
+
+  @override
+  void initState() {
+    super.initState();
+    _initOffline();
+    _charger();
+    _chargerNiveaux();
+  }
+
+  Future<void> _initOffline() async {
+    await OfflineService.init();
+    SyncService().startAutoSync();
+  }
+
+  @override
+  void dispose() {
+    SyncService().stopAutoSync();
+    super.dispose();
+  }
+
+  Future<void> _chargerNiveaux() async {
+    try {
+      final niveaux = await FormationRepository().niveaux();
+      if (mounted) setState(() => _niveaux = niveaux);
+    } catch (_) {
+      // Filtre niveau simplement vide en cas d'échec réseau — non
+      // bloquant, cohérent avec le reste de cet écran.
+    }
+  }
+
+  Future<void> _charger({bool silent = false}) async {
+    if (!silent && mounted) {
+      setState(() {
+        _loading = true;
+        _enErreur = false;
+        _erreurPremium = false;
+      });
+    }
+    try {
+      final devoirs = await _repo.listMine();
+      if (!mounted) return;
+      await OfflineService.cacheDevoirs('all_devoirs', devoirs.map((d) => d.toJson()).toList());
+      OfflineService.isOnline = true;
+      setState(() {
+        _tous = devoirs;
+        _loading = false;
+        _appliquerFiltres();
+      });
+    } on ApiException catch (e) {
+      // Apprenant non-Premium dans AUCUN département : la liste globale
+      // est un "tout ou rien" côté backend (AccesMatricePermission,
+      // acces_modele = Devoir) — pas une coupure réseau, un vrai état
+      // "réservé Premium" à distinguer du repli hors-ligne.
+      if (e.message == kMessagePremiumRequis) {
+        if (mounted) {
+          setState(() {
+            _erreurPremium = true;
+            _loading = false;
+          });
+        }
+      } else {
+        OfflineService.isOnline = false;
+        _chargerDepuisCache();
+      }
+    } catch (_) {
+      OfflineService.isOnline = false;
+      _chargerDepuisCache();
+    }
+  }
+
+  void _chargerDepuisCache() {
+    final cached = OfflineService.getCachedDevoirs('all_devoirs');
+    if (mounted) {
+      setState(() {
+        if (cached != null) {
+          _tous = cached.map((d) => DevoirItem.fromJson(d as Map<String, dynamic>)).toList();
+          _appliquerFiltres();
+        } else {
+          _enErreur = true;
+        }
+        _loading = false;
+      });
+    }
+  }
+
+  void _appliquerFiltres() {
+    var temp = _tous;
+    if (_typeSelectionne != 'Tous') {
+      temp = temp.where((d) => d.typeDevoir == _typeSelectionne).toList();
+    }
+    if (_matiereSelectionnee != null) {
+      temp = temp.where((d) => d.matiere == _matiereSelectionnee).toList();
+    }
+    if (_niveauSelectionne != null) {
+      temp = temp.where((d) => d.niveau == _niveauSelectionne).toList();
+    }
+    if (_statutSelectionne != 'Tous') {
+      temp = temp.where((d) => d.statutApprenant == _statutSelectionne).toList();
+    }
+    if (_recherche.isNotEmpty) {
+      final q = _recherche.toLowerCase();
+      temp = temp.where((d) => d.titre.toLowerCase().contains(q)).toList();
+    }
+    setState(() => _affiches = temp);
+  }
+
+  int get _aFaire => _tous.where((d) => d.statutApprenant == 'non_commence').length;
+  int get _enRetard => _tous.where((d) => d.statutApprenant == 'en_retard').length;
+
+  void _ouvrirDevoir(DevoirItem d) {
+    context
+        .pushNamed(
+          AppRoute.devoirComposer,
+          pathParameters: {'devoirId': d.id.toString()},
+          queryParameters: {
+            'titre': d.titre,
+            'dureeMin': d.dureeMinutes.toString(),
+            'noteSur': d.noteSur.toInt().toString(),
+          },
+        )
+        .then((_) => _charger());
+  }
+
+  void _voirResultat(DevoirItem d) {
+    context.pushNamed(
+      AppRoute.devoirResultat,
+      pathParameters: {'devoirId': d.id.toString()},
+      queryParameters: {'titre': d.titre},
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    final List<Map<String, dynamic>> devoirsFiltres = devoirs.where((d) {
-      final byMatiere = filtreMatiere == null || d["matiere"] == filtreMatiere;
-      final byStatut = filtreStatut == null || d["statut"] == filtreStatut;
-      final byConcours = !filtreConcours || d["isConcours"] == true;
-      return byMatiere && byStatut && byConcours;
-    }).toList();
-
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F7FA),
-      appBar: const YekiAppBar(
-        title: "Yéki - Mes devoirs",
-        subtitle: "Travaillez vos devoirs et rendez les attent",
-        icon: Icons.menu_book_rounded,
-      ),
-      body: Column(
-        children: [
-          // Filtres
-          Container(
-            margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(14),
-              boxShadow: const [
-                BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 3)),
-              ],
-            ),
-            child: Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                _buildDropdown(
-                  label: "📚 Matière",
-                  value: filtreMatiere,
-                  items: ["Mathématiques", "Physique"],
-                  onChanged: (val) => setState(() => filtreMatiere = val),
-                ),
-                _buildDropdown(
-                  label: "📌 Statut",
-                  value: filtreStatut,
-                  items: ["En attente", "Corrigé"],
-                  onChanged: (val) => setState(() => filtreStatut = val),
-                ),
-                FilterChip(
-                  label: const Text("🎯 Concours"),
-                  selected: filtreConcours,
-                  selectedColor: const Color(0xFF008080),
-                  checkmarkColor: Colors.white,
-                  backgroundColor: Colors.grey[100],
-                  onSelected: (v) => setState(() => filtreConcours = v),
-                ),
-              ],
-            ),
-          ),
-
-          // Liste
-          Expanded(
-            child: devoirsFiltres.isEmpty
-                ? const Center(child: Text("Aucun devoir trouvé."))
-                : ListView.builder(
-                    padding: const EdgeInsets.all(12),
-                    itemCount: devoirsFiltres.length,
-                    itemBuilder: (_, index) {
-                      final d = devoirsFiltres[index];
-                      final now = DateTime.now();
-                      final restant = d["dateLimite"].difference(now);
-                      final estTermine = restant.isNegative;
-
-                      return Card(
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(18),
-                          side: BorderSide(color: Colors.grey.shade200),
+      backgroundColor: YkColors.background(context),
+      body: SafeArea(
+        child: _loading
+            ? Padding(padding: EdgeInsets.all(YkSpacing.md), child: YkSkeleton.list(itemCount: 4, itemHeight: 180))
+            : _erreurPremium
+            ? YkPremiumRequired(
+                message: kMessagePremiumRequis,
+                // Pas de département précis à cibler ici (liste globale,
+                // potentiellement multi-département) — même repli déjà
+                // établi dans profil_page.dart : rediriger vers Cursus
+                // plutôt que de forcer un `coursId` arbitraire.
+                onSubscribe: () => context.goNamed(AppRoute.dashboardCursus),
+              )
+            : _enErreur
+            ? YkEmptyState(
+                icon: Icons.wifi_off_rounded,
+                title: 'Impossible de charger vos devoirs',
+                message: 'Vérifiez votre connexion puis réessayez.',
+                actionLabel: 'Réessayer',
+                onAction: _charger,
+              )
+            : RefreshIndicator(
+                onRefresh: () => _charger(silent: true),
+                child: ListView(
+                  padding: EdgeInsets.all(YkSpacing.md),
+                  children: [
+                    YkDashboardHeroBanner(
+                      title: 'Mes devoirs',
+                      stats: [
+                        ('${_tous.length}', 'Total'),
+                        ('$_aFaire', 'À faire'),
+                        ('$_enRetard', 'En retard'),
+                      ],
+                    ),
+                    SizedBox(height: YkSpacing.md),
+                    YkTextField(
+                      type: YkTextFieldType.search,
+                      hint: 'Rechercher un devoir…',
+                      onChanged: (v) {
+                        _recherche = v;
+                        _appliquerFiltres();
+                      },
+                    ),
+                    SizedBox(height: YkSpacing.md),
+                    _buildTypeChips(context),
+                    SizedBox(height: YkSpacing.sm),
+                    _buildFiltres(context),
+                    SizedBox(height: YkSpacing.md),
+                    Row(
+                      children: [
+                        Text(
+                          'Vos devoirs',
+                          style: YkTypography.h4(context).copyWith(color: YkColors.textPrimary(context)),
                         ),
-                        elevation: 3,
-                        margin: const EdgeInsets.symmetric(vertical: 10),
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Text(
-                                    d["matiere"],
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 16,
-                                      color: Color(0xFF03224C),
-                                    ),
-                                  ),
-                                  Text(
-                                    estTermine
-                                        ? "⏰ Terminé"
-                                        : "⏰ ${restant.inDays} j restants",
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      color: estTermine
-                                          ? Colors.red
-                                          : const Color(0xFF008080),
-                                    ),
-                                  ),
-                                ],
-                              ),
-
-                              const SizedBox(height: 8),
-
-                              Text(
-                                d["titre"],
-                                style: const TextStyle(
-                                  fontSize: 17,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-
-                              if (d["isConcours"] == true) ...[
-                                const SizedBox(height: 8),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 10, vertical: 6),
-                                  decoration: BoxDecoration(
-                                    color: Colors.orange.shade50,
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      const Icon(Icons.emoji_events_rounded,
-                                          color: Colors.orange, size: 18),
-                                      const SizedBox(width: 6),
-                                      Text(
-                                        d["concours"] ?? "",
-                                        style: const TextStyle(
-                                            fontSize: 13,
-                                            color: Colors.orange,
-                                            fontWeight: FontWeight.w600),
-                                      )
-                                    ],
-                                  ),
-                                ),
-                              ],
-
-                              const SizedBox(height: 10),
-                              Row(
-                                children: [
-                                  _tag(
-                                      icon: Icons.grade,
-                                      text: "Niveau ${d["niveau"]}",
-                                      color: Colors.teal),
-                                  const SizedBox(width: 10),
-                                  _tag(
-                                      icon: Icons.calendar_today,
-                                      text:
-                                          "${d["dateLimite"].day}/${d["dateLimite"].month}/${d["dateLimite"].year}",
-                                      color: Colors.grey),
-                                  const Spacer(),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 10, vertical: 6),
-                                    decoration: BoxDecoration(
-                                      color: d["statut"] == "Corrigé"
-                                          ? Colors.green.shade100
-                                          : Colors.orange.shade100,
-                                      borderRadius: BorderRadius.circular(6),
-                                    ),
-                                    child: Text(
-                                      d["statut"],
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 13,
-                                        color: d["statut"] == "Corrigé"
-                                            ? Colors.green.shade800
-                                            : Colors.orange.shade800,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 12),
-                              Align(
-                                alignment: Alignment.centerRight,
-                                child: TextButton.icon(
-                                  onPressed: () {
-                                    // 👉 Aller au détail
-                                  },
-                                  icon: const Icon(Icons.arrow_forward_ios_rounded, size: 14),
-                                  label: Text(
-                                    estTermine
-                                        ? "Voir les résultats"
-                                        : "Faire le devoir",
-                                    style: const TextStyle(fontWeight: FontWeight.w600),
-                                  ),
-                                  style: TextButton.styleFrom(
-                                    foregroundColor: const Color(0xFF008080),
-                                  ),
-                                ),
-                              )
-                            ],
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-          ),
-        ],
+                        const Spacer(),
+                        YkBadge(variant: YkBadgeVariant.label, label: '${_affiches.length}', color: YkColors.accent(context)),
+                      ],
+                    ),
+                    SizedBox(height: YkSpacing.sm),
+                    if (_affiches.isEmpty)
+                      YkEmptyState(
+                        icon: Icons.assignment_turned_in_outlined,
+                        title: 'Aucun devoir trouvé',
+                        message: 'Ajustez vos filtres pour voir plus de résultats.',
+                      )
+                    else
+                      for (final devoir in _affiches) _buildCarteDevoir(context, devoir),
+                  ],
+                ),
+              ),
       ),
     );
   }
 
-  // Widget dropdown filter
-  Widget _buildDropdown({
-    required String label,
-    required String? value,
-    required List<String> items,
-    required void Function(String?) onChanged,
-  }) {
+  Widget _buildTypeChips(BuildContext context) {
     return SizedBox(
-      width: 160,
-      child: DropdownButtonFormField<String>(
-        value: value,
-        isExpanded: true,
-        decoration: InputDecoration(
-          labelText: label,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          filled: true,
-          fillColor: Colors.grey[100],
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide.none,
+      height: 36,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: _types.length,
+        separatorBuilder: (_, _) => SizedBox(width: YkSpacing.xs),
+        itemBuilder: (context, index) {
+          final type = _types[index];
+          final couleur = type.code == 'Tous' ? YkColors.accent(context) : _couleurType(context, type.code);
+          return YkChip(
+            label: _libelleType(type.code),
+            variant: YkChipVariant.filter,
+            selected: _typeSelectionne == type.code,
+            accentColor: couleur,
+            avatar: Icon(type.icon, size: 14, color: couleur),
+            onSelected: (_) {
+              setState(() => _typeSelectionne = type.code);
+              _appliquerFiltres();
+            },
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildFiltres(BuildContext context) {
+    final aUnFiltre = _matiereSelectionnee != null || _niveauSelectionne != null || _statutSelectionne != 'Tous';
+    return Row(
+      children: [
+        Expanded(
+          child: YkDropdown<String>(
+            label: 'Matière',
+            value: _matiereSelectionnee,
+            items: [for (final m in _matieres) YkDropdownItem(value: m, label: m)],
+            onChanged: (v) {
+              setState(() => _matiereSelectionnee = v);
+              _appliquerFiltres();
+            },
           ),
         ),
-        items: items
-            .map((e) => DropdownMenuItem(value: e, child: Text(e)))
-            .toList(),
-        onChanged: onChanged,
+        SizedBox(width: YkSpacing.xs),
+        Expanded(
+          child: YkDropdown<String>(
+            label: 'Niveau',
+            value: _niveauSelectionne,
+            items: [for (final n in _niveaux) YkDropdownItem(value: n, label: n)],
+            onChanged: (v) {
+              setState(() => _niveauSelectionne = v);
+              _appliquerFiltres();
+            },
+          ),
+        ),
+        SizedBox(width: YkSpacing.xs),
+        Expanded(
+          child: YkDropdown<String>(
+            label: 'Statut',
+            value: _statutSelectionne == 'Tous' ? null : _statutSelectionne,
+            items: [for (final s in _statuts) YkDropdownItem(value: s, label: _libelleStatut(s))],
+            onChanged: (v) {
+              setState(() => _statutSelectionne = v ?? 'Tous');
+              _appliquerFiltres();
+            },
+          ),
+        ),
+        if (aUnFiltre)
+          YkIconButton(
+            icon: Icons.clear_rounded,
+            label: 'Effacer les filtres',
+            variant: YkIconButtonVariant.ghost,
+            onPressed: () {
+              setState(() {
+                _matiereSelectionnee = null;
+                _niveauSelectionne = null;
+                _statutSelectionne = 'Tous';
+              });
+              _appliquerFiltres();
+            },
+          ),
+      ],
+    );
+  }
+
+  Widget _buildCarteDevoir(BuildContext context, DevoirItem d) {
+    final joursRestants = d.dateLimite.difference(DateTime.now()).inDays;
+    final estExpire = joursRestants < 0;
+    final couleurType = _couleurType(context, d.typeDevoir);
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: YkSpacing.sm),
+      child: YkCard(
+        onTap: () {
+          if (d.estCorrige && d.noteApprenant != null) {
+            _voirResultat(d);
+          } else if (!estExpire || d.aSoumis) {
+            _ouvrirDevoir(d);
+          }
+        },
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                CircleAvatar(
+                  radius: 20,
+                  backgroundColor: couleurType.withValues(alpha: 0.12),
+                  child: Icon(_iconePourType(d.typeDevoir), color: couleurType, size: 20),
+                ),
+                SizedBox(width: YkSpacing.sm),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        d.titre,
+                        style: YkTypography.label(context).copyWith(color: YkColors.textPrimary(context)),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      SizedBox(height: YkSpacing.xxs),
+                      Row(
+                        children: [
+                          YkBadge(variant: YkBadgeVariant.label, label: d.typeLabel, color: couleurType),
+                          SizedBox(width: YkSpacing.xxs),
+                          YkBadge(
+                            variant: YkBadgeVariant.label,
+                            label: d.statutLabel,
+                            color: _couleurStatut(context, d.statutApprenant),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            if (d.description.isNotEmpty) ...[
+              SizedBox(height: YkSpacing.xs),
+              Text(
+                d.description,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: YkTypography.bodySm(context).copyWith(color: YkColors.textSecondary(context)),
+              ),
+            ],
+            SizedBox(height: YkSpacing.sm),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(YkRadius.sm),
+              child: Container(
+                padding: EdgeInsets.symmetric(horizontal: YkSpacing.sm, vertical: YkSpacing.xs),
+                color: YkColors.surfaceVariant(context),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    _infoIcone(context, Icons.layers_outlined, '${d.matiere} • ${d.niveau}'),
+                    _infoIcone(context, Icons.quiz_rounded, '${d.nbQuestions} questions'),
+                    _infoIcone(context, Icons.timer_rounded, '${d.dureeMinutes} min'),
+                  ],
+                ),
+              ),
+            ),
+            if (d.estCorrige && d.noteApprenant != null) ...[
+              SizedBox(height: YkSpacing.sm),
+              YkCard(
+                variant: YkCardVariant.filled,
+                accentColor: YkColors.success,
+                child: Row(
+                  children: [
+                    Icon(Icons.grade_rounded, color: YkColors.success, size: 18),
+                    SizedBox(width: YkSpacing.xs),
+                    Text(
+                      'Note : ${d.noteApprenant!.toStringAsFixed(1)} / ${d.noteSur.toStringAsFixed(0)}',
+                      style: YkTypography.label(context).copyWith(color: YkColors.textPrimary(context)),
+                    ),
+                    const Spacer(),
+                    YkBadge(
+                      variant: YkBadgeVariant.label,
+                      label: '${((d.noteApprenant! / d.noteSur) * 100).toStringAsFixed(0)}%',
+                      color: YkColors.success,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            SizedBox(height: YkSpacing.sm),
+            Row(
+              children: [
+                Expanded(child: _buildDelai(context, joursRestants, estExpire)),
+                SizedBox(width: YkSpacing.sm),
+                _buildBoutonAction(context, d, estExpire),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  // Tag style
-  Widget _tag({required IconData icon, required String text, required Color color}) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(8),
-      ),
+  Widget _infoIcone(BuildContext context, IconData icon, String texte) {
+    return Flexible(
       child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, color: color, size: 16),
-          const SizedBox(width: 4),
-          Text(
-            text,
-            style: TextStyle(fontSize: 13, color: color),
+          Icon(icon, size: 13, color: YkColors.textSecondary(context)),
+          SizedBox(width: YkSpacing.xxs),
+          Flexible(
+            child: Text(
+              texte,
+              style: YkTypography.caption(context).copyWith(color: YkColors.textSecondary(context)),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildDelai(BuildContext context, int joursRestants, bool estExpire) {
+    if (estExpire) {
+      return YkBadge(variant: YkBadgeVariant.label, label: 'Clôturé', color: YkColors.error);
+    }
+    final couleur = joursRestants < 3
+        ? YkColors.error
+        : (joursRestants < 7 ? YkColors.warning : YkColors.success);
+    return YkBadge(
+      variant: YkBadgeVariant.label,
+      label: '$joursRestants jour${joursRestants > 1 ? 's' : ''}',
+      color: couleur,
+    );
+  }
+
+  Widget _buildBoutonAction(BuildContext context, DevoirItem d, bool estExpire) {
+    if (d.estCorrige && d.noteApprenant != null) {
+      return YkButton(label: 'Voir résultat', variant: YkButtonVariant.secondary, onPressed: () => _voirResultat(d));
+    }
+    if (estExpire && !d.aSoumis) return const SizedBox.shrink();
+    return YkButton(
+      label: d.estEnCours ? 'Continuer' : 'Commencer',
+      onPressed: () => _ouvrirDevoir(d),
     );
   }
 }

@@ -1,8 +1,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application
-        android:label="yeki"
+        android:label="Yéki"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round">
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -30,6 +31,14 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+        <!-- AdMob (CDC_BACKEND §8.3, publicité mode gratuit). ID DE TEST
+             OFFICIEL Google (jamais suspendu, sûr à committer) — À
+             REMPLACER par le vrai App ID avant publication, voir
+             docs/ADMOB_SETUP.md. Utiliser un vrai ID en développement
+             fait suspendre le compte AdMob (avertissement du CDC). -->
+        <meta-data
+            android:name="com.google.android.gms.ads.APPLICATION_ID"
+            android:value="ca-app-pub-3940256099942544~3347511713" />
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and
