@@ -8,13 +8,17 @@
 // aucune mécanique dupliquée (règle 1). Voir docs/ecarts/wallet.md.
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import 'package:yeki/core/design/components/components.dart';
 import 'package:yeki/core/design/tokens/tokens.dart';
+import 'package:yeki/core/providers/current_user_provider.dart';
 import 'package:yeki/core/router/auth_state.dart';
 import 'package:yeki/core/router/route_names.dart';
+import 'package:yeki/models/paiement_models.dart';
+import 'package:yeki/services/facture_service.dart';
 
 import 'wallet_controller.dart';
 
@@ -108,6 +112,10 @@ class _WalletPageState extends State<WalletPage> {
               if (_controller.demandesEnAttente.isNotEmpty) ...[
                 SizedBox(height: YkSpacing.lg),
                 _buildDemandesEnAttente(context),
+              ],
+              if (_controller.factures.isNotEmpty) ...[
+                SizedBox(height: YkSpacing.lg),
+                _buildFactures(context),
               ],
               SizedBox(height: YkSpacing.lg),
               _buildHistorique(context),
@@ -236,6 +244,101 @@ class _WalletPageState extends State<WalletPage> {
         ],
       ),
     );
+  }
+
+  /// « Mes factures » : chaque paiement validé (abonnement en ligne, en
+  /// présentiel ou les deux, inscription) a sa facture, visible et
+  /// imprimable depuis la fenêtre d'aperçu du système.
+  Widget _buildFactures(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Mes factures', style: YkTypography.h4(context).copyWith(color: YkColors.textPrimary(context))),
+        SizedBox(height: YkSpacing.sm),
+        YkCard(
+          variant: YkCardVariant.outlined,
+          child: Column(
+            children: [
+              for (final f in _controller.factures)
+                Padding(
+                  padding: EdgeInsets.symmetric(vertical: YkSpacing.xxs),
+                  child: Row(
+                    children: [
+                      Icon(Icons.receipt_long_rounded, color: YkColors.accent(context), size: 20),
+                      SizedBox(width: YkSpacing.sm),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _libelleFacture(f),
+                              style: YkTypography.bodySm(context).copyWith(color: YkColors.textPrimary(context)),
+                            ),
+                            Text(
+                              '${f.montantConstate ?? f.montant} FCFA · ${_dateFmt.format(f.dateTraitement ?? f.dateCreation)}',
+                              style: YkTypography.caption(context).copyWith(color: YkColors.textSecondary(context)),
+                            ),
+                          ],
+                        ),
+                      ),
+                      YkButton(
+                        label: 'Facture',
+                        size: YkButtonSize.sm,
+                        variant: YkButtonVariant.ghost,
+                        icon: Icons.print_rounded,
+                        onPressed: () => _ouvrirFacture(f),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  String _libelleFacture(DemandePaiementManuel f) {
+    final periode = f.typeAbonnement == 'annuel' ? 'annuel' : 'mensuel';
+    final dept = f.departementNom.isEmpty ? '' : ' — ${f.departementNom}';
+    switch (f.categorie) {
+      case 'presentiel':
+        return 'Abonnement $periode, cours en présentiel$dept';
+      case 'abonnement':
+        return f.montantPresentiel > 0
+            ? 'Abonnement $periode, cours en ligne et en présentiel$dept'
+            : 'Abonnement $periode, cours en ligne$dept';
+      default:
+        return 'Inscription$dept';
+    }
+  }
+
+  Future<void> _ouvrirFacture(DemandePaiementManuel f) async {
+    final total = f.montantConstate ?? f.montant;
+    final presentiel = f.montantPresentiel.clamp(0, total).toInt();
+    try {
+      await FactureService.ouvrirFacture(
+        reference: 'YK-${f.id}',
+        clientNom: _nomClient,
+        clientEmail: '',
+        description: _libelleFacture(f),
+        montantLigne: total - presentiel,
+        montantPresentiel: presentiel,
+        montantTotal: total,
+        date: f.dateTraitement ?? f.dateCreation,
+        departementNom: f.departementNom.isEmpty ? null : f.departementNom,
+        moyenPaiement: f.operateur == 'orange_money' ? 'Orange Money' : 'MTN Mobile Money',
+      );
+    } catch (_) {
+      if (mounted) YkSnack.error(context, "Impossible d'afficher la facture.");
+    }
+  }
+
+  String get _nomClient {
+    final profil = ProviderScope.containerOf(context, listen: false).read(currentUserProvider).valueOrNull;
+    if (profil == null) return 'Apprenant Yéki';
+    final nom = '${profil.firstName} ${profil.lastName}'.trim();
+    return nom.isEmpty ? profil.username : nom;
   }
 
   Widget _buildHistorique(BuildContext context) {

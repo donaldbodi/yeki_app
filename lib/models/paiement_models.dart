@@ -25,7 +25,14 @@ class AbonnementInfo {
     required this.prixAnnuel,
     required this.disponible,
     this.libelleAbonnementCycle,
+    this.prixPresentielMensuel = 0,
+    this.prixPresentielAnnuel = 0,
   });
+
+  /// Formation hybride : abonnement aux cours en présentiel (0 = non
+  /// proposé). Ne débloque rien en ligne.
+  final int prixPresentielMensuel;
+  final int prixPresentielAnnuel;
 
   /// Nom de l'offre payée au prix [prixAnnuel] (365 jours) : « Abonnement
   /// annuel ». `null` avec un serveur pas encore à jour.
@@ -54,6 +61,8 @@ class AbonnementInfo {
     prixAnnuel: (json['prix_annuel'] as num?)?.toInt() ?? 0,
     disponible: json['disponible'] as bool? ?? false,
     libelleAbonnementCycle: json['libelle_abonnement_cycle'] as String?,
+    prixPresentielMensuel: (json['prix_presentiel_mensuel'] as num?)?.toInt() ?? 0,
+    prixPresentielAnnuel: (json['prix_presentiel_annuel'] as num?)?.toInt() ?? 0,
   );
 }
 
@@ -115,7 +124,16 @@ class DemandePaiementManuel {
     required this.dateCreation,
     required this.dateTraitement,
     this.apprenant,
+    this.departementNom = '',
+    this.typeAbonnement = '',
+    this.montantPresentiel = 0,
   });
+
+  /// Pour la facture : département concerné, `mensuel`/`annuel`, et part
+  /// du montant payée pour les cours en présentiel.
+  final String departementNom;
+  final String typeAbonnement;
+  final int montantPresentiel;
 
   final int id;
   final String categorie;
@@ -149,6 +167,9 @@ class DemandePaiementManuel {
     numeroEmetteur: json['numero_emetteur'] as String? ?? '',
     statut: json['statut'] as String? ?? 'en_attente',
     motifRefus: json['motif_refus'] as String? ?? '',
+    departementNom: json['departement_nom'] as String? ?? '',
+    typeAbonnement: json['type_abonnement'] as String? ?? '',
+    montantPresentiel: (json['montant_presentiel'] as num?)?.toInt() ?? 0,
     dateCreation: DateTime.tryParse(json['date_creation'] as String? ?? '') ?? DateTime.now(),
     dateTraitement: json['date_traitement'] != null
         ? DateTime.tryParse(json['date_traitement'] as String)

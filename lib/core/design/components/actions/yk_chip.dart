@@ -47,7 +47,10 @@ class YkChip extends StatelessWidget {
         return FilterChip(
           label: Text(label, style: labelStyle),
           selected: selected,
-          onSelected: onSelected,
+          // Bug corrigé : plusieurs écrans passent `onPressed` à une puce
+          // filtre (type de formation, mode, placement des cycles…) — ignoré
+          // jusqu'ici, la puce restait désactivée et impossible à choisir.
+          onSelected: onSelected ?? (onPressed == null ? null : (_) => onPressed!()),
           avatar: avatar,
           selectedColor: accent.withValues(alpha: 0.15),
           checkmarkColor: accent,

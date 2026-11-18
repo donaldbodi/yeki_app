@@ -2,7 +2,7 @@
 //
 // Écran d'inscription. Refondu en P5.4 (rituel P5.0) — fiche d'écarts :
 // docs/ecarts/register.md. Wizard 5 étapes (Identité/Parcours/
-// Département/Niveau/Confirmation) via `IndexedStack` — les 5 étapes
+// Département/Niveau/Confirmation) toutes montées, une seule affichée — les 5 étapes
 // restent montées simultanément (aucune saisie perdue en revenant en
 // arrière, aucune couche de sauvegarde de brouillon à construire).
 //
@@ -207,11 +207,25 @@ class _RegisterPageState extends State<RegisterPage> {
     super.dispose();
   }
 
+  /// Toutes les étapes restent montées (aucune saisie perdue en revenant en
+  /// arrière) ; seule l'étape en cours est affichée et prend de la place —
+  /// la page entière défile d'un seul bloc (en-tête, étape, boutons).
   Widget _buildSteps() {
-    return IndexedStack(
-      sizing: StackFit.expand,
-      index: _currentStep.value,
+    final etapes = _etapes();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        for (var i = 0; i < etapes.length; i++)
+          Offstage(
+            offstage: i != _currentStep.value,
+            child: TickerMode(enabled: i == _currentStep.value, child: etapes[i]),
+          ),
+      ],
+    );
+  }
+
+  List<Widget> _etapes() {
+    return [
         EtapeIdentite(
           nameCtrl: _nameCtrl,
           usernameCtrl: _usernameCtrl,
@@ -249,8 +263,7 @@ class _RegisterPageState extends State<RegisterPage> {
           selectedNiveau: _selectedNiveau,
           onEditStep: (i) => _currentStep.value = i,
         ),
-      ],
-    );
+    ];
   }
 
   @override
@@ -273,9 +286,13 @@ class _RegisterPageState extends State<RegisterPage> {
     // posé sur le même bleu que le bas du bandeau (raccord invisible).
     // `YkStepIndicator` reste sur le panneau clair : ses couleurs « à
     // venir » sont prévues pour un fond clair.
+    // Le fond de page a la couleur du panneau : sous un contenu court, le
+    // panneau semble se prolonger jusqu'en bas de l'écran.
     return Scaffold(
-      backgroundColor: YkColors.primary700,
-      body: Column(
+      backgroundColor: YkColors.background(context),
+      body: SingleChildScrollView(
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+        child: Column(
         children: [
           YkGradientBackground(
             gradient: LinearGradient(
@@ -314,7 +331,9 @@ class _RegisterPageState extends State<RegisterPage> {
               ),
             ),
           ),
-          Expanded(
+          // Bleu derrière les coins arrondis du panneau (raccord avec le bandeau).
+          ColoredBox(
+            color: YkColors.primary700,
             child: Material(
               color: YkColors.background(context),
               shape: const RoundedRectangleBorder(
@@ -339,16 +358,14 @@ class _RegisterPageState extends State<RegisterPage> {
                       padding: EdgeInsets.fromLTRB(YkSpacing.md, YkSpacing.sm, YkSpacing.md, 0),
                       child: _ErrorSummaryBanner(controller: _formController),
                     ),
-                    Expanded(
-                      child: YkFormScope(
-                        controller: _formController,
-                        child: Form(
-                          key: _formController.formKey,
-                          autovalidateMode: AutovalidateMode.onUserInteraction,
-                          child: ValueListenableBuilder<int>(
-                            valueListenable: _currentStep,
-                            builder: (context, step, _) => _buildSteps(),
-                          ),
+                    YkFormScope(
+                      controller: _formController,
+                      child: Form(
+                        key: _formController.formKey,
+                        autovalidateMode: AutovalidateMode.onUserInteraction,
+                        child: ValueListenableBuilder<int>(
+                          valueListenable: _currentStep,
+                          builder: (context, step, _) => _buildSteps(),
                         ),
                       ),
                     ),
@@ -386,6 +403,7 @@ class _RegisterPageState extends State<RegisterPage> {
             ),
           ),
         ],
+        ),
       ),
     );
   }

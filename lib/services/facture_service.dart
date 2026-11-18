@@ -27,6 +27,74 @@ class FactureService {
     String? departementNom,
     String moyenPaiement = 'Mobile Money',
   }) async {
+    final pdf = _document(
+      reference: reference,
+      clientNom: clientNom,
+      clientEmail: clientEmail,
+      description: description,
+      montantLigne: montantLigne,
+      montantPresentiel: montantPresentiel,
+      montantTotal: montantTotal,
+      date: date,
+      departementNom: departementNom,
+      moyenPaiement: moyenPaiement,
+    );
+
+    // ✅ Support Web : utiliser un fichier virtuel
+    if (kIsWeb) {
+      // Sur web, on retourne un File virtuel
+      return File('/tmp/facture_$reference.pdf');
+    }
+
+    final output = await getTemporaryDirectory();
+    final file = File('${output.path}/facture_$reference.pdf');
+    await file.writeAsBytes(await pdf.save());
+    return file;
+  }
+
+  /// Affiche la facture dans la fenêtre d'aperçu du système, d'où
+  /// l'apprenant peut l'imprimer ou l'enregistrer en PDF — fonctionne sur
+  /// le web comme sur mobile (contrairement à [genererFacture], qui écrit
+  /// un fichier, impossible sur le web).
+  static Future<void> ouvrirFacture({
+    required String reference,
+    required String clientNom,
+    required String clientEmail,
+    required String description,
+    required int montantLigne,
+    required int montantPresentiel,
+    required int montantTotal,
+    required DateTime date,
+    String? departementNom,
+    String moyenPaiement = 'Mobile Money',
+  }) async {
+    final pdf = _document(
+      reference: reference,
+      clientNom: clientNom,
+      clientEmail: clientEmail,
+      description: description,
+      montantLigne: montantLigne,
+      montantPresentiel: montantPresentiel,
+      montantTotal: montantTotal,
+      date: date,
+      departementNom: departementNom,
+      moyenPaiement: moyenPaiement,
+    );
+    await Printing.layoutPdf(name: 'facture_$reference.pdf', onLayout: (_) => pdf.save());
+  }
+
+  static pw.Document _document({
+    required String reference,
+    required String clientNom,
+    required String clientEmail,
+    required String description,
+    required int montantLigne,
+    required int montantPresentiel,
+    required int montantTotal,
+    required DateTime date,
+    String? departementNom,
+    required String moyenPaiement,
+  }) {
     final pdf = pw.Document();
     final format = NumberFormat('#,###', 'fr_FR');
     final dateFormat = DateFormat('dd MMMM yyyy', 'fr_FR');
@@ -52,17 +120,7 @@ class FactureService {
         ],
       ),
     );
-
-    // ✅ Support Web : utiliser un fichier virtuel
-    if (kIsWeb) {
-      // Sur web, on retourne un File virtuel
-      return File('/tmp/facture_$reference.pdf');
-    }
-
-    final output = await getTemporaryDirectory();
-    final file = File('${output.path}/facture_$reference.pdf');
-    await file.writeAsBytes(await pdf.save());
-    return file;
+    return pdf;
   }
 
   static pw.Widget _buildEnTete(pw.Document pdf) {

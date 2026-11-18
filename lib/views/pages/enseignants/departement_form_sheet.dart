@@ -53,7 +53,13 @@ void ouvrirDepartementForm({
   final arreteCtrl = TextEditingController(text: d['arrete_ministeriel'] ?? '');
   final placesCtrl = TextEditingController(text: (d['places_disponibles'] ?? '').toString());
   final debouchesCtrl = TextEditingController(text: d['debouches'] ?? '');
-  final dureeCtrl = TextEditingController(text: d['duree_formation'] ?? '');
+  // Formation hybride : abonnement aux cours en présentiel, annuel et
+  // mensuel, comme pour les cours en ligne. Proposé à l'apprenant seul ou
+  // avec les cours en ligne ; seul le paiement en ligne débloque le contenu
+  // en ligne. (La durée de la formation n'est plus saisie : c'est la
+  // période du cycle.)
+  final prixPresentielAnnuelCtrl = TextEditingController(text: (d['prix_presentiel_annuel'] ?? 0).toString());
+  final prixPresentielMensuelCtrl = TextEditingController(text: (d['prix_presentiel_mensuel'] ?? 0).toString());
   final certificatCtrl = TextEditingController(text: d['certificat_delivre'] ?? '');
   final prerequisCtrl = TextEditingController(text: d['prerequis'] ?? '');
   final objectifsCtrl = TextEditingController(text: d['objectifs'] ?? '');
@@ -93,8 +99,12 @@ void ouvrirDepartementForm({
   FormationRepository().niveaux().then((n) => niveauxDisponibles = n).catchError((_) => <String>[]);
   FormationRepository().niveauxFormation().then((n) => niveauxFormationDisponibles = n).catchError((_) => <NiveauFormation>[]);
 
+  bool estHybride() => typeParcours == 'formation' && mode == 'hybride';
+
   Future<void> soumettre(BuildContext ctx, StateSetter setS) async {
     final manquants = [
+      if (estHybride() && prixPresentielAnnuelCtrl.text.trim().isEmpty) "le prix de l'abonnement annuel en présentiel",
+      if (estHybride() && prixPresentielMensuelCtrl.text.trim().isEmpty) "le prix de l'abonnement mensuel en présentiel",
       if (nomCtrl.text.trim().isEmpty) 'le nom',
       if (cycleDebut == null) 'la date de début du cycle',
       if (prixAnnuelCtrl.text.trim().isEmpty) "le prix de l'abonnement sur le cycle",
@@ -139,7 +149,11 @@ void ouvrirDepartementForm({
       donnees['est_formation_metier'] = estFormationMetier;
       donnees['est_formation_classique'] = estFormationClassique;
       if (estFormationMetier) donnees['niveau_formation'] = niveauFormation;
-      donnees['duree_formation'] = dureeCtrl.text.trim();
+      // La durée affichée au catalogue est celle du cycle.
+      donnees['duree_formation'] = cycleDuree == 1 ? '1 mois' : '$cycleDuree mois';
+      // Hors mode hybride, pas d'abonnement aux cours en présentiel.
+      donnees['prix_presentiel_annuel'] = estHybride() ? (int.tryParse(prixPresentielAnnuelCtrl.text.trim()) ?? 0) : 0;
+      donnees['prix_presentiel_mensuel'] = estHybride() ? (int.tryParse(prixPresentielMensuelCtrl.text.trim()) ?? 0) : 0;
       donnees['domaine'] = domaineCtrl.text.trim();
       donnees['ville'] = villeCtrl.text.trim();
       donnees['certificat_delivre'] = certificatCtrl.text.trim();
@@ -361,13 +375,11 @@ void ouvrirDepartementForm({
       ),
     ],
     SizedBox(height: YkSpacing.sm),
-    YkTextField(controller: dureeCtrl, label: 'Durée', hint: 'Ex : 6 mois, 200 heures…'),
-    SizedBox(height: YkSpacing.sm),
     YkTextField(controller: domaineCtrl, label: 'Domaine', hint: 'Ex : Informatique, Finance…'),
     SizedBox(height: YkSpacing.sm),
     YkTextField(controller: villeCtrl, label: 'Ville', hint: 'Ex : Yaoundé, Douala…'),
     SizedBox(height: YkSpacing.sm),
-    Text('Mode', style: YkTypography.label(ctx).copyWith(color: YkColors.textPrimary(ctx))),
+    Text('Mode *', style: YkTypography.label(ctx).copyWith(color: YkColors.textPrimary(ctx))),
     SizedBox(height: YkSpacing.xs),
     Wrap(
       spacing: YkSpacing.xs,
@@ -376,6 +388,27 @@ void ouvrirDepartementForm({
           YkChip(label: m.value, variant: YkChipVariant.filter, selected: mode == m.key, onPressed: () => setS(() => mode = m.key)),
       ],
     ),
+    if (estHybride()) ...[
+      titreSection(ctx, 'Abonnement aux cours en présentiel'),
+      Text(
+        "Proposé à l'apprenant seul ou avec les cours en ligne. Seul l'abonnement en ligne donne accès au contenu en ligne.",
+        style: YkTypography.caption(ctx).copyWith(color: YkColors.textSecondary(ctx)),
+      ),
+      SizedBox(height: YkSpacing.sm),
+      YkTextField(
+        controller: prixPresentielAnnuelCtrl,
+        label: 'Abonnement annuel en présentiel (FCFA) *',
+        type: YkTextFieldType.number,
+        hint: 'Valable 1 an (365 jours) · 0 = indisponible',
+      ),
+      SizedBox(height: YkSpacing.sm),
+      YkTextField(
+        controller: prixPresentielMensuelCtrl,
+        label: 'Abonnement mensuel en présentiel (FCFA) *',
+        type: YkTextFieldType.number,
+        hint: 'Valable 30 jours · 0 = indisponible',
+      ),
+    ],
     SizedBox(height: YkSpacing.sm),
     YkTextField(controller: certificatCtrl, label: 'Certificat délivré', hint: 'Ex : Certificat Python…'),
     SizedBox(height: YkSpacing.sm),

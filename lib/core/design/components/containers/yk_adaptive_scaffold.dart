@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../nav/yk_nav_destination.dart';
 import '../../tokens/tokens.dart';
 import '../feedback/yk_snack.dart';
+import '../media/yk_brand_logo.dart';
 import 'yk_app_bar.dart';
 
 /// Le composant pivot de toute la navigation — CDC_DESIGN §4.2.
@@ -211,6 +212,11 @@ class _YkAdaptiveScaffoldState extends State<YkAdaptiveScaffold> {
         backgroundColor: YkColors.surface(context),
         selectedIndex: selIdx >= 0 ? selIdx : 0,
         onDestinationSelected: (i) => _handleTap(flat[i], context),
+        // Logo en tête du rail : le disque seul replié, avec le nom déployé.
+        leading: Padding(
+          padding: EdgeInsets.symmetric(vertical: YkSpacing.sm),
+          child: YkBrandLogo(size: 36, showName: _railExpanded),
+        ),
         destinations: [
           for (final d in flat)
             NavigationRailDestination(
@@ -264,12 +270,9 @@ class _YkAdaptiveScaffoldState extends State<YkAdaptiveScaffold> {
                 children: [
                   Padding(
                     padding: EdgeInsets.all(YkSpacing.md),
-                    child: Align(
+                    child: const Align(
                       alignment: Alignment.centerLeft,
-                      child: Text(
-                        'Yéki',
-                        style: YkTypography.h3(context).copyWith(color: YkColors.textPrimary(context)),
-                      ),
+                      child: YkBrandLogo(size: 38),
                     ),
                   ),
                   Expanded(

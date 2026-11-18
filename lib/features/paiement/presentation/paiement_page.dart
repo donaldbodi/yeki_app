@@ -47,9 +47,18 @@ class PaiementPage extends StatefulWidget {
     this.isFormation = false,
     this.montantAnnuel,
     this.libelleCycle,
+    this.montantPresentielMensuel,
+    this.montantPresentielAnnuel,
     this.badge,
     this.ancienPrixMensuel,
   });
+
+  /// Formation hybride : prix de l'abonnement aux cours en présentiel. S'ils
+  /// sont fournis, l'apprenant choisit entre cours en ligne, en présentiel,
+  /// ou les deux ; seule une formule avec les cours en ligne débloque le
+  /// contenu en ligne.
+  final int? montantPresentielMensuel;
+  final int? montantPresentielAnnuel;
 
   /// Nom de l'offre au prix [montantAnnuel] (prix d'un cycle, 365 jours
   /// d'accès) : « Abonnement annuel ». `null` : libellé « Annuel ».
@@ -103,16 +112,47 @@ class _PaiementPageState extends State<PaiementPage> {
   /// Choix entre les offres : accès à un département, ou abonnement
   /// Premium dont le département propose aussi l'abonnement sur le cycle.
   bool get _afficherPaywall =>
-      widget.type == PaiementType.accesDepartement || (_estAbonnement && (widget.montantAnnuel ?? 0) > 0);
+      widget.type == PaiementType.accesDepartement ||
+      (_estAbonnement && ((widget.montantAnnuel ?? 0) > 0 || _formulesPresentiel));
+
+  /// Abonnement d'une formation hybride : choix en ligne / présentiel / les deux.
+  bool get _formulesPresentiel =>
+      _estAbonnement && ((widget.montantPresentielMensuel ?? 0) > 0 || (widget.montantPresentielAnnuel ?? 0) > 0);
 
   String get _dureeAcces => _controller.periodicite == 'annuel' ? '1 an' : '1 mois';
 
   bool get _presentielDisponible => (widget.montantPresentiel ?? 0) > 0;
 
-  int get _montantBase =>
-      _afficherPaywall && _controller.periodicite == 'annuel' && widget.montantAnnuel != null
-      ? widget.montantAnnuel!
-      : widget.montant;
+  /// Montant de la formule choisie pour une périodicité donnée.
+  int _montantPour(String periodicite) {
+    final enLigne = periodicite == 'annuel' ? (widget.montantAnnuel ?? 0) : widget.montant;
+    if (!_formulesPresentiel) return enLigne;
+    final presentiel =
+        periodicite == 'annuel' ? (widget.montantPresentielAnnuel ?? 0) : (widget.montantPresentielMensuel ?? 0);
+    switch (_controller.formule) {
+      case 'presentiel':
+        return presentiel;
+      case 'les_deux':
+        return enLigne + presentiel;
+      default:
+        return enLigne;
+    }
+  }
+
+  /// Part « cours en présentiel » du montant (facture, serveur).
+  int get _partPresentielle {
+    if (!_formulesPresentiel || _controller.formule == 'en_ligne') return 0;
+    return _controller.periodicite == 'annuel'
+        ? (widget.montantPresentielAnnuel ?? 0)
+        : (widget.montantPresentielMensuel ?? 0);
+  }
+
+  int get _montantBase {
+    if (_formulesPresentiel) return _montantPour(_controller.periodicite);
+    return _afficherPaywall && _controller.periodicite == 'annuel' && widget.montantAnnuel != null
+        ? widget.montantAnnuel!
+        : widget.montant;
+  }
 
   int get _montantFinal => _montantBase + (_controller.inclurePresentiel ? (widget.montantPresentiel ?? 0) : 0);
 
@@ -126,7 +166,8 @@ class _PaiementPageState extends State<PaiementPage> {
         return 'olympiade';
       case PaiementType.abonnementMensuel:
       case PaiementType.abonnementAnnuel:
-        return 'abonnement';
+        // Présentiel seul : ne débloque rien en ligne.
+        return _formulesPresentiel && _controller.formule == 'presentiel' ? 'presentiel' : 'abonnement';
     }
   }
 
@@ -161,6 +202,7 @@ class _PaiementPageState extends State<PaiementPage> {
       data['type_abonnement'] = _controller.periodicite;
     }
     if (_estAbonnement) data['type_abonnement'] = _typeAbonnement;
+    if (_formulesPresentiel) data['montant_presentiel'] = _partPresentielle;
     // Rectification : l'abonnement est désormais PAR DÉPARTEMENT — le
     // backend l'exige maintenant pour categorie="abonnement" (voir
     // SoumettrePaiementManuelView), sans quoi il n'y a aucun département
@@ -269,8 +311,13 @@ class _PaiementPageState extends State<PaiementPage> {
           return ListView(
             padding: EdgeInsets.all(YkSpacing.md),
             children: [
+              if (_formulesPresentiel) ...[
+                _buildChoixFormule(context),
+                SizedBox(height: YkSpacing.md),
+              ],
               if (_afficherPaywall) _buildPaywall(context) else _buildRecapSimple(context),
-              if (params.cinetpayDisponible) ...[
+              // CinetPay ne connaît que l'abonnement en ligne.
+              if (params.cinetpayDisponible && (!_formulesPresentiel || _controller.formule == 'en_ligne')) ...[
                 SizedBox(height: YkSpacing.lg),
                 YkButton(
                   label: 'Payer par carte / CinetPay',
@@ -289,7 +336,35 @@ class _PaiementPageState extends State<PaiementPage> {
     );
   }
 
+  /// Formation hybride : cours en ligne, en présentiel, ou les deux.
+  Widget _buildChoixFormule(BuildContext context) {
+    final explication = switch (_controller.formule) {
+      'presentiel' => "Cours en salle uniquement : ne donne pas accès au contenu en ligne.",
+      'les_deux' => 'Cours en ligne (tout le contenu en ligne) et cours en salle.',
+      _ => 'Tout le contenu en ligne : vidéos, devoirs, corrections, forum.',
+    };
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text('Que souhaitez-vous payer ?', style: YkTypography.label(context).copyWith(color: YkColors.textPrimary(context))),
+        SizedBox(height: YkSpacing.xs),
+        YkSegmented<String>(
+          segments: const [
+            YkSegment(value: 'en_ligne', label: 'En ligne', icon: Icons.wifi_rounded),
+            YkSegment(value: 'presentiel', label: 'Présentiel', icon: Icons.groups_rounded),
+            YkSegment(value: 'les_deux', label: 'Les deux', icon: Icons.layers_rounded),
+          ],
+          selected: _controller.formule,
+          onChanged: _controller.choisirFormule,
+        ),
+        SizedBox(height: YkSpacing.xs),
+        Text(explication, style: YkTypography.caption(context).copyWith(color: YkColors.textSecondary(context))),
+      ],
+    );
+  }
+
   Widget _buildPaywall(BuildContext context) {
+    if (_formulesPresentiel) return _buildPaywallFormules(context);
     return YkPaywall(
       title: _estAbonnement
           ? 'Abonnement Premium'
@@ -320,6 +395,37 @@ class _PaiementPageState extends State<PaiementPage> {
             economieLabel: widget.montant * 12 > widget.montantAnnuel!
                 ? 'Économisez ${widget.montant * 12 - widget.montantAnnuel!} FCFA vs mensuel'
                 : null,
+            onSelect: () => _lancerFluxManuel(periodiciteChoisie: 'annuel'),
+          ),
+      ],
+    );
+  }
+
+  /// Offres mensuelle et annuelle de la formule choisie (formation hybride).
+  Widget _buildPaywallFormules(BuildContext context) {
+    final mensuel = _montantPour('mensuel');
+    final annuel = _montantPour('annuel');
+    final libelleFormule = switch (_controller.formule) {
+      'presentiel' => 'cours en présentiel',
+      'les_deux' => 'cours en ligne et en présentiel',
+      _ => 'cours en ligne',
+    };
+    return YkPaywall(
+      title: 'Abonnement — $libelleFormule',
+      description: widget.titre,
+      features: const [],
+      plans: [
+        if (mensuel > 0)
+          YkPaywallPlan(
+            label: 'Mensuel',
+            priceLabel: '$mensuel FCFA/mois',
+            onSelect: () => _lancerFluxManuel(periodiciteChoisie: 'mensuel'),
+          ),
+        if (annuel > 0)
+          YkPaywallPlan(
+            label: widget.libelleCycle ?? 'Abonnement annuel',
+            priceLabel: '$annuel FCFA/an',
+            economieLabel: mensuel > 0 && mensuel * 12 > annuel ? 'Économisez ${mensuel * 12 - annuel} FCFA vs mensuel' : null,
             onSelect: () => _lancerFluxManuel(periodiciteChoisie: 'annuel'),
           ),
       ],

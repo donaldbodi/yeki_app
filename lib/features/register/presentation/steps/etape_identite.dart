@@ -31,7 +31,7 @@ class EtapeIdentite extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
+    return Padding(
       padding: EdgeInsets.all(YkSpacing.md),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -68,7 +68,7 @@ class EtapeIdentite extends StatelessWidget {
             name: 'username',
             required: true,
             label: "Nom d'utilisateur",
-            prefixIcon: Icons.alternate_email_rounded,
+            prefixIcon: Icons.person_outline_rounded,
           ),
           SizedBox(height: YkSpacing.sm),
           YkTextField(

@@ -22,6 +22,15 @@ class PaiementController extends ChangeNotifier {
   String periodicite = 'mensuel';
   bool inclurePresentiel = false;
 
+  /// Formation hybride : `en_ligne` | `presentiel` | `les_deux`. Seule une
+  /// formule avec les cours en ligne débloque le contenu en ligne.
+  String formule = 'en_ligne';
+
+  void choisirFormule(String f) {
+    formule = f;
+    notifyListeners();
+  }
+
   /// Dernière demande de paiement manuel « formation » validée —
   /// vérifiée à la demande de l'utilisateur (pas de webhook consommé
   /// ici) pour proposer le téléchargement de la facture présentiel.

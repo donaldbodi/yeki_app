@@ -40,7 +40,7 @@ class EtapeConfirmation extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
+    return Padding(
       padding: EdgeInsets.all(YkSpacing.md),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,

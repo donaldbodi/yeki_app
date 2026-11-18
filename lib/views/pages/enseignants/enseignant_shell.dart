@@ -19,6 +19,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:yeki/core/design/components/containers/yk_brand_app_bar.dart';
+import 'package:yeki/core/design/components/media/yk_brand_logo.dart';
 import 'package:yeki/core/design/tokens/tokens.dart';
 import 'package:yeki/core/providers/current_user_provider.dart';
 import 'package:yeki/core/router/auth_state.dart';
@@ -203,38 +204,9 @@ class _EnseignantShellPageState extends ConsumerState<EnseignantShellPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Logo / Brand
-              Row(
-                children: [
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: YkColors.accent(context),
-                      borderRadius: BorderRadius.circular(YkRadius.xs),
-                    ),
-                    child: Center(
-                      child: Text(
-                        'Y',
-                        style: TextStyle(
-                          color: YkColors.textOnPrimary,
-                          fontSize: 20,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Text(
-                    'Yeki',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w900,
-                      color: YkColors.textPrimary(context),
-                    ),
-                  ),
-                ],
-              ),
+              // Logo : icône dans son disque et nom « Yéki » (même marque
+              // que l'en-tête mobile).
+              const YkBrandLogo(size: 40),
 
               const SizedBox(height: 40),
 

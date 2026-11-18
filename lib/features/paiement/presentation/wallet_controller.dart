@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import 'package:yeki/models/paiement_models.dart';
 import 'package:yeki/repositories/paiement_repository.dart';
 import 'package:yeki/repositories/wallet_repository.dart';
 
@@ -21,6 +22,10 @@ class WalletController extends ChangeNotifier {
   int totalDepense = 0;
   List<Map<String, dynamic>> transactions = const [];
   List<Map<String, dynamic>> demandesEnAttente = const [];
+
+  /// Paiements validés donnant droit à une facture (abonnements en ligne
+  /// ou en présentiel, inscriptions aux formations).
+  List<DemandePaiementManuel> factures = const [];
 
   Future<void> charger() async {
     chargement = true;
@@ -46,6 +51,8 @@ class WalletController extends ChangeNotifier {
             },
           )
           .toList();
+      final validees = await _paiementRepo.mesDemandes(statut: 'validee');
+      factures = validees.where((d) => const {'abonnement', 'presentiel', 'formation'}.contains(d.categorie)).toList();
     } catch (e) {
       debugPrint('WalletController.charger() — exception non-ApiException : ${e.runtimeType} : $e');
       enErreur = true;
