@@ -268,141 +268,91 @@ class _RegisterPageState extends State<RegisterPage> {
 
   @override
   Widget build(BuildContext context) {
-    // `YkForm` shrink-wrap son propre contenu (son `Column` interne mesure
-    // TOUJOURS son enfant avec une hauteur non bornée, comme tout `Column`
-    // mesurant un enfant non flexible — propriété générale de
-    // `RenderFlex`, indépendante de `mainAxisSize`) : un `IndexedStack`
-    // multi-étapes qui doit remplir l'espace restant de l'écran ne peut
-    // donc pas être `YkForm.child` directement (overflow garanti, cas
-    // jamais rencontré par les écrans `YkForm` existants — tous à une
-    // seule page). `YkFormScope` + `Form` sont utilisés ici directement
-    // (ce que `YkForm` fait en interne, moins sa `Column` shrink-wrap) :
-    // identique pour l'enregistrement des champs et la validation, mais
-    // sans imposer de hauteur non bornée à l'`IndexedStack`. Le résumé
-    // d'erreurs (que `YkForm` afficherait automatiquement) est donc
-    // reconstruit ici, juste au-dessus — voir `_ErrorSummaryBanner`.
-    // Habillage : bandeau de marque bleu (logo, titre, étape en cours) puis
-    // le formulaire sur un panneau clair aux coins supérieurs arrondis,
-    // posé sur le même bleu que le bas du bandeau (raccord invisible).
-    // `YkStepIndicator` reste sur le panneau clair : ses couleurs « à
-    // venir » sont prévues pour un fond clair.
-    // Le fond de page a la couleur du panneau : sous un contenu court, le
-    // panneau semble se prolonger jusqu'en bas de l'écran.
+    // Design épuré (demande : page « trop chargée en couleurs ») : fond
+    // clair uni, logo discret, couleur réservée à l'indicateur d'étapes et
+    // aux boutons. La page entière défile d'un seul bloc (en-tête, étape,
+    // boutons), et reste centrée en largeur limitée sur grand écran.
+    // `YkFormScope` + `Form` plutôt que `YkForm` (qui impose sa propre
+    // colonne) : le résumé d'erreurs est donc affiché ici
+    // (`_ErrorSummaryBanner`).
     return Scaffold(
       backgroundColor: YkColors.background(context),
-      body: SingleChildScrollView(
-        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-        child: Column(
-        children: [
-          YkGradientBackground(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [YkColors.primary800, YkColors.primary700],
-            ),
-            child: SafeArea(
-              bottom: false,
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(YkSpacing.lg, YkSpacing.md, YkSpacing.lg, YkSpacing.lg),
-                child: AnimatedBuilder(
-                  animation: Listenable.merge([_currentStep, _userType]),
-                  builder: (context, _) {
-                    final (labels, index) = _etapeAffichee();
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const YkBrandLogo(size: 30, nameColor: YkColors.textOnPrimary),
-                        SizedBox(height: YkSpacing.lg),
-                        Text(
-                          'Créer un compte',
-                          style: YkTypography.h1(context).copyWith(color: YkColors.textOnPrimary),
-                        ),
-                        SizedBox(height: YkSpacing.xxs),
-                        Text(
-                          'Étape ${index + 1} sur ${labels.length} · ${labels[index]}',
-                          style: YkTypography.bodyMd(context).copyWith(
-                            color: YkColors.textOnPrimary.withValues(alpha: 0.8),
-                          ),
-                        ),
-                      ],
-                    );
-                  },
-                ),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+          padding: EdgeInsets.symmetric(vertical: YkSpacing.md),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 560),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Padding(
+                    padding: EdgeInsets.symmetric(horizontal: YkSpacing.md),
+                    child: AnimatedBuilder(
+                      animation: Listenable.merge([_currentStep, _userType]),
+                      builder: (context, _) {
+                        final (labels, index) = _etapeAffichee();
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const YkBrandLogo(size: 28),
+                            SizedBox(height: YkSpacing.lg),
+                            Text(
+                              'Étape ${index + 1} sur ${labels.length} · ${labels[index]}',
+                              style: YkTypography.caption(context).copyWith(color: YkColors.textSecondary(context)),
+                            ),
+                            SizedBox(height: YkSpacing.xs),
+                            YkStepIndicator(labels: labels, currentIndex: index),
+                          ],
+                        );
+                      },
+                    ),
+                  ),
+                  Padding(
+                    padding: EdgeInsets.fromLTRB(YkSpacing.md, YkSpacing.sm, YkSpacing.md, 0),
+                    child: _ErrorSummaryBanner(controller: _formController),
+                  ),
+                  YkFormScope(
+                    controller: _formController,
+                    child: Form(
+                      key: _formController.formKey,
+                      autovalidateMode: AutovalidateMode.onUserInteraction,
+                      child: ValueListenableBuilder<int>(
+                        valueListenable: _currentStep,
+                        builder: (context, step, _) => _buildSteps(),
+                      ),
+                    ),
+                  ),
+                  Padding(
+                    padding: EdgeInsets.all(YkSpacing.md),
+                    child: _NavigationBar(
+                      currentStep: _currentStep,
+                      userType: _userType,
+                      formController: _formController,
+                      selectedParcours: _selectedParcours,
+                      selectedDepartement: _selectedDepartement,
+                      selectedNiveau: _selectedNiveau,
+                      dateNaissance: _dateNaissance,
+                      canAdvance: _canAdvanceFromCurrentStep,
+                      canSubmitFinal: _canSubmitFinal,
+                      onBack: _goBack,
+                      onNext: _goNext,
+                      onSubmitFinal: () => _formController.submit(
+                        context: context,
+                        onValidSubmit: _submitRegistration,
+                        successMessage: 'Compte créé. Connectez-vous pour continuer.',
+                      ),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () => context.pushNamed(AppRoute.login),
+                    child: const Text('Déjà un compte ? Se connecter'),
+                  ),
+                ],
               ),
             ),
           ),
-          // Bleu derrière les coins arrondis du panneau (raccord avec le bandeau).
-          ColoredBox(
-            color: YkColors.primary700,
-            child: Material(
-              color: YkColors.background(context),
-              shape: const RoundedRectangleBorder(
-                borderRadius: BorderRadius.vertical(top: Radius.circular(YkRadius.xl + 4)),
-              ),
-              clipBehavior: Clip.antiAlias,
-              child: SafeArea(
-                top: false,
-                child: Column(
-                  children: [
-                    Padding(
-                      padding: EdgeInsets.fromLTRB(YkSpacing.md, YkSpacing.lg, YkSpacing.md, 0),
-                      child: AnimatedBuilder(
-                        animation: Listenable.merge([_currentStep, _userType]),
-                        builder: (context, _) {
-                          final (labels, index) = _etapeAffichee();
-                          return YkStepIndicator(labels: labels, currentIndex: index);
-                        },
-                      ),
-                    ),
-                    Padding(
-                      padding: EdgeInsets.fromLTRB(YkSpacing.md, YkSpacing.sm, YkSpacing.md, 0),
-                      child: _ErrorSummaryBanner(controller: _formController),
-                    ),
-                    YkFormScope(
-                      controller: _formController,
-                      child: Form(
-                        key: _formController.formKey,
-                        autovalidateMode: AutovalidateMode.onUserInteraction,
-                        child: ValueListenableBuilder<int>(
-                          valueListenable: _currentStep,
-                          builder: (context, step, _) => _buildSteps(),
-                        ),
-                      ),
-                    ),
-                    Padding(
-                      padding: EdgeInsets.all(YkSpacing.md),
-                      child: _NavigationBar(
-                        currentStep: _currentStep,
-                        userType: _userType,
-                        formController: _formController,
-                        selectedParcours: _selectedParcours,
-                        selectedDepartement: _selectedDepartement,
-                        selectedNiveau: _selectedNiveau,
-                        dateNaissance: _dateNaissance,
-                        canAdvance: _canAdvanceFromCurrentStep,
-                        canSubmitFinal: _canSubmitFinal,
-                        onBack: _goBack,
-                        onNext: _goNext,
-                        onSubmitFinal: () => _formController.submit(
-                          context: context,
-                          onValidSubmit: _submitRegistration,
-                          successMessage: 'Compte créé. Connectez-vous pour continuer.',
-                        ),
-                      ),
-                    ),
-                    Padding(
-                      padding: EdgeInsets.only(bottom: YkSpacing.sm),
-                      child: TextButton(
-                        onPressed: () => context.pushNamed(AppRoute.login),
-                        child: const Text('Déjà un compte ? Se connecter'),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ],
         ),
       ),
     );

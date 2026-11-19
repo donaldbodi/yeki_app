@@ -278,7 +278,7 @@ class _EnseignantShellPageState extends ConsumerState<EnseignantShellPage> {
                 width: double.infinity,
                 child: OutlinedButton.icon(
                   onPressed: () async {
-                    await authState.clearSession();
+                    await authState.logout();
                   },
                   icon: const Icon(Icons.logout, size: 18),
                   label: const Text('Déconnexion'),
@@ -485,7 +485,7 @@ class _EnseignantShellPageState extends ConsumerState<EnseignantShellPage> {
       avatarUrl: _avatarUrl,
       onProfile: () => widget.navigationShell.goBranch(2),
       onSettings: () => context.pushNamed(AppRoute.settings),
-      onLogout: () => authState.clearSession(),
+      onLogout: () => authState.logout(),
     );
   }
 

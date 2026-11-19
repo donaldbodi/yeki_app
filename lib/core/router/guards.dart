@@ -142,6 +142,7 @@ String? redirect(BuildContext context, GoRouterState state) {
 
   // 3. Non authentifié, route non publique → /login avec retour post-connexion.
   if (!snapshot.isAuthenticated) {
+    if (authState.consommerDeconnexionVolontaire()) return AppPath.login;
     final target = state.uri.toString();
     return '${AppPath.login}?redirect=${Uri.encodeComponent(target)}';
   }

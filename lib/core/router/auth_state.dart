@@ -136,11 +136,27 @@ class AuthStateNotifier extends ValueNotifier<YekiAuthSnapshot> {
   /// session locale doit être effacée même si le serveur est injoignable.
   Future<void> logout() async {
     try {
-      await AuthRepository().logout();
+      // Bug corrigé (« la déconnexion ne fonctionne pas correctement ») :
+      // sans limite, un serveur lent faisait attendre jusqu'à 40 s
+      // (délais réseau du client) avant toute déconnexion visible.
+      await AuthRepository().logout().timeout(const Duration(seconds: 4));
     } on ApiException {
       // Best-effort : on efface la session locale même en cas d'échec.
     } catch (_) {}
+    _deconnexionVolontaire = true;
     await clearSession();
+  }
+
+  /// Vrai juste après une déconnexion demandée par l'utilisateur : la page
+  /// de connexion s'ouvre alors sans « retour » vers la page quittée (qui
+  /// renvoyait l'utilisateur sur Paramètres après sa reconnexion). Une
+  /// session expirée (401), elle, garde ce retour.
+  bool _deconnexionVolontaire = false;
+
+  bool consommerDeconnexionVolontaire() {
+    final valeur = _deconnexionVolontaire;
+    _deconnexionVolontaire = false;
+    return valeur;
   }
 
   /// Déconnexion locale uniquement (efface la session, jamais

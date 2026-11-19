@@ -81,7 +81,7 @@ class ApprenantShellPage extends ConsumerWidget {
       avatarUrl: profil?.avatar,
       userRole: 'Apprenant',
       onSettings: () => context.pushNamed(AppRoute.profile),
-      onLogout: () => authState.clearSession(),
+      onLogout: () => authState.logout(),
       badges: {'notifications': notificationsNonLues},
       compactAppBar: YkBrandAppBar(
         actions: [
@@ -103,7 +103,7 @@ class ApprenantShellPage extends ConsumerWidget {
         avatarUrl: profil?.avatar,
         onProfile: () => context.pushNamed(AppRoute.profile),
         onSettings: () => context.pushNamed(AppRoute.settings),
-        onLogout: () => authState.clearSession(),
+        onLogout: () => authState.logout(),
       ),
       body: navigationShell,
     );

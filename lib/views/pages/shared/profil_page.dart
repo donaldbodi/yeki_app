@@ -289,6 +289,10 @@ class _ProfilPageState extends State<ProfilPage> with SingleTickerProviderStateM
       if ((_profil['niveau']?.toString() ?? '').isNotEmpty) lignes.add((Icons.grade_rounded, 'Niveau', _profil['niveau'].toString()));
       if ((_profil['filiere']?.toString() ?? '').isNotEmpty) lignes.add((Icons.bookmark_rounded, 'Filière', _profil['filiere'].toString()));
     }
+    // École : apprenants seulement.
+    if (_profil['user_type'] == 'apprenant' && (_profil['ecole']?.toString() ?? '').isNotEmpty) {
+      lignes.add((Icons.school_rounded, 'École', _profil['ecole'].toString()));
+    }
     if ((_profil['username']?.toString() ?? '').isNotEmpty) {
       lignes.add((Icons.alternate_email_rounded, "Nom d'utilisateur", _profil['username'].toString()));
     }

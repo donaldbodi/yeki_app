@@ -16,7 +16,15 @@ class YkAvatar extends StatelessWidget {
     this.size = YkAvatarSize.md,
     this.showPresence = false,
     this.isOnline = false,
+    this.initialesFond,
+    this.initialesCouleur,
   });
+
+  /// Couleurs du cercle d'initiales (sans photo). Par défaut, teinte de
+  /// l'accent : invisible sur un fond de la même couleur (ex. en-tête bleu),
+  /// d'où ces deux réglages.
+  final Color? initialesFond;
+  final Color? initialesCouleur;
 
   final String? imageUrl;
 
@@ -46,9 +54,9 @@ class YkAvatar extends StatelessWidget {
               width: diameter,
               height: diameter,
               fit: BoxFit.cover,
-              errorBuilder: (context, error, stack) => _InitialCircle(initial: initial, diameter: diameter),
+              errorBuilder: (context, error, stack) => _InitialCircle(initial: initial, diameter: diameter, fond: initialesFond, couleur: initialesCouleur),
             )
-          : _InitialCircle(initial: initial, diameter: diameter),
+          : _InitialCircle(initial: initial, diameter: diameter, fond: initialesFond, couleur: initialesCouleur),
     );
 
     if (!showPresence) {
@@ -81,9 +89,11 @@ class YkAvatar extends StatelessWidget {
 }
 
 class _InitialCircle extends StatelessWidget {
-  const _InitialCircle({required this.initial, required this.diameter});
+  const _InitialCircle({required this.initial, required this.diameter, this.fond, this.couleur});
   final String initial;
   final double diameter;
+  final Color? fond;
+  final Color? couleur;
 
   @override
   Widget build(BuildContext context) {
@@ -91,11 +101,11 @@ class _InitialCircle extends StatelessWidget {
       width: diameter,
       height: diameter,
       alignment: Alignment.center,
-      color: YkColors.accent(context).withValues(alpha: 0.15),
+      color: fond ?? YkColors.accent(context).withValues(alpha: 0.15),
       child: Text(
         initial,
         style: TextStyle(
-          color: YkColors.accent(context),
+          color: couleur ?? YkColors.accent(context),
           fontWeight: FontWeight.w700,
           fontSize: diameter * 0.4,
         ),

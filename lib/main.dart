@@ -59,8 +59,13 @@ void _bootstrap() async {
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   // Doit être enregistré tôt, une seule fois — SDK firebase_messaging.
   FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
-  await NotificationService().initialize();
-  await UpdateService.initialize();
+  // Bug corrigé (chargement trop long) : ces deux initialisations étaient
+  // attendues AVANT le premier écran — jusqu'à 5 s pour UpdateService
+  // (interrogation de Firebase Storage avec délai de 5 s) à chaque
+  // lancement. Aucune n'est nécessaire pour afficher l'app : elles partent
+  // en arrière-plan.
+  unawaited(NotificationService().initialize());
+  unawaited(UpdateService.initialize());
   // Init SDK au démarrage (pratique standard) — ne DISPLAY jamais rien
   // ici, seulement l'initialisation ; l'interdit CDC « jamais de pub au
   // démarrage » porte sur l'AFFICHAGE, pas sur ce préchargement.
@@ -75,6 +80,19 @@ void _bootstrap() async {
     await OfflineService.init();
     await CacheManager().init();
     SyncService().startAutoSync();
+  } else {
+    // Web : pas d'écran de démarrage dans l'app (le chargement du site
+    // affiche déjà le logo, voir web/index.html). La session est restaurée
+    // ici, avant le premier écran — une simple lecture locale — et le
+    // routeur passe directement à la bonne page, sans afficher /splash.
+    try {
+      await authState.bootstrap().timeout(const Duration(seconds: 2));
+    } catch (_) {
+      if (!authState.value.bootstrapped) {
+        authState.value = authState.value.copyWith(bootstrapped: true);
+      }
+    }
+    if (authState.value.isAuthenticated) unawaited(PushNotificationService().initialiser());
   }
   runApp(const ProviderScope(child: YekiApp()));
 }

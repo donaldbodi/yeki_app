@@ -42,6 +42,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
   final _niveauCtrl = TextEditingController();
   final _villeCtrl = TextEditingController();
   final _whatsappCtrl = TextEditingController();
+  final _ecoleCtrl = TextEditingController();
 
   // Cursus/Niveau : lecture seule (voir section "Scolarité" du build())
   // — plus de sélecteur `_cursusOptions`/`FormationRepository.parcours()`
@@ -73,6 +74,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
         _niveauCtrl.text = profil['niveau'] ?? '';
         _villeCtrl.text = profil['ville'] ?? '';
         _whatsappCtrl.text = profil['whatsapp'] ?? '';
+        _ecoleCtrl.text = profil['ecole'] ?? '';
         _cursus = profil['cursus'] as String?;
         final dateNaissanceValue = profil['date_naissance'] as String?;
         _dateNaissance = (dateNaissanceValue != null && dateNaissanceValue.isNotEmpty)
@@ -95,6 +97,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
     _niveauCtrl.dispose();
     _villeCtrl.dispose();
     _whatsappCtrl.dispose();
+    _ecoleCtrl.dispose();
     super.dispose();
   }
 
@@ -114,6 +117,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
         // apps/accounts/views/profil.py::ProfilUpdateView.patch().
         'ville': _villeCtrl.text.trim(),
         'whatsapp': _whatsappCtrl.text.trim(),
+        if (_estApprenant) 'ecole': _ecoleCtrl.text.trim(),
         if (_dateNaissance != null) 'date_naissance': _dateNaissance!.toIso8601String().split('T').first,
       }, avatar: _avatar);
       ref.invalidate(currentUserProvider);
@@ -129,6 +133,8 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
       if (mounted) setState(() => _saving = false);
     }
   }
+
+  bool get _estApprenant => _profil['user_type']?.toString() == 'apprenant';
 
   bool get _isEnseignant {
     final userType = _profil['user_type']?.toString() ?? '';
@@ -194,6 +200,16 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                       label: "Niveau d'étude",
                       value: _niveauCtrl.text.isEmpty ? 'Non défini' : _niveauCtrl.text,
                     ),
+                    // École : apprenants seulement, modifiable.
+                    if (_estApprenant) ...[
+                      SizedBox(height: YkSpacing.sm),
+                      YkTextField(
+                        controller: _ecoleCtrl,
+                        label: 'École',
+                        hint: 'Ex : Lycée bilingue de Yaoundé',
+                        prefixIcon: Icons.school_outlined,
+                      ),
+                    ],
                   ],
                 ),
               ),

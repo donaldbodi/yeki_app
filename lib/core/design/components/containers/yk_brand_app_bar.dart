@@ -199,7 +199,16 @@ class _MenuAvatar extends StatelessWidget {
           shape: BoxShape.circle,
           border: Border.all(color: lisere, width: 2),
         ),
-        child: YkAvatar(imageUrl: avatarUrl, fallbackText: userName, size: YkAvatarSize.sm),
+        // Bug corrigé : sans photo, les initiales (bleu sur bleu translucide)
+        // disparaissaient sur la barre bleue en mode clair. Disque blanc et
+        // initiales bleues (bleu clair et bleu nuit en mode sombre).
+        child: YkAvatar(
+          imageUrl: avatarUrl,
+          fallbackText: userName,
+          size: YkAvatarSize.sm,
+          initialesFond: YkColors.isDark(context) ? YkColors.primary300 : YkColors.textOnPrimary,
+          initialesCouleur: YkColors.isDark(context) ? YkColors.primary900 : YkColors.primary700,
+        ),
       ),
     );
   }
