@@ -1,0 +1,92 @@
+# Compile l'app web et l'APK Android, téléchargeables dans l'onglet Actions
+# (section « Artifacts » de chaque exécution). Sur `main` et `migration-ovh`, publie le web
+# sur Firebase Hosting si le secret FIREBASE_SERVICE_ACCOUNT existe.
+#
+# Secrets de dépôt (Settings → Secrets and variables → Actions) :
+# - GOOGLE_SERVICES_JSON : contenu de android/app/google-services.json, exclu
+#   du dépôt par .gitignore mais indispensable à la compilation Android.
+# - FIREBASE_SERVICE_ACCOUNT : clé JSON d'un compte de service Firebase
+#   (facultatif, seulement pour la publication web automatique).
+# - ANDROID_KEYSTORE_BASE64 et ANDROID_KEYSTORE_PASSWORD : clé de signature
+#   définitive de l'APK (fichier .jks encodé en base64, alias « yeki ») ;
+#   sans elles, l'APK est signé avec une clé de test.
+
+name: Build
+
+on:
+  push:
+    branches: [main, migration-ovh]
+  workflow_dispatch:
+
+jobs:
+  web:
+    runs-on: ubuntu-latest
+    env:
+      FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: subosito/flutter-action@v2
+        with:
+          # Version du développement local (.dart_tool/version) : la dernière
+          # « stable » refuse ce projet (versions Android et API trop anciennes).
+          flutter-version: 3.32.7
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: flutter build web --release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: yeki-web
+          path: build/web
+      - name: Publier sur Firebase Hosting
+        if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/migration-ovh') && env.FIREBASE_SERVICE_ACCOUNT != ''
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          projectId: yeki-84b1a
+          channelId: live
+
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: subosito/flutter-action@v2
+        with:
+          # Version du développement local (.dart_tool/version) : la dernière
+          # « stable » refuse ce projet (versions Android et API trop anciennes).
+          flutter-version: 3.32.7
+          channel: stable
+          cache: true
+      - name: Écrire google-services.json
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: |
+          if [ -z "$GOOGLE_SERVICES_JSON" ]; then
+            echo "::error::Secret GOOGLE_SERVICES_JSON manquant (voir l'en-tête de ce fichier)."
+            exit 1
+          fi
+          printf '%s' "$GOOGLE_SERVICES_JSON" > android/app/google-services.json
+      - name: Écrire la clé de signature
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$ANDROID_KEYSTORE_BASE64" ]; then
+            echo "::warning::Secret ANDROID_KEYSTORE_BASE64 absent : APK signé avec une clé de test (désinstallation nécessaire à chaque version)."
+            exit 0
+          fi
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/yeki-release.jks"
+          echo "YEKI_KEYSTORE_PATH=$RUNNER_TEMP/yeki-release.jks" >> "$GITHUB_ENV"
+      - run: flutter pub get
+      - run: flutter build apk --release
+        env:
+          YEKI_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          YEKI_KEY_ALIAS: yeki
+      - uses: actions/upload-artifact@v4
+        with:
+          name: yeki-apk
+          path: build/app/outputs/flutter-apk/app-release.apk

@@ -45,5 +45,14 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<!-- AdMob (CDC_BACKEND §8.3, publicité mode gratuit). ID DE TEST
+	     OFFICIEL Google (jamais suspendu, sûr à committer) — À REMPLACER
+	     par le vrai App ID avant publication, voir docs/ADMOB_SETUP.md. -->
+	<key>GADApplicationIdentifier</key>
+	<string>ca-app-pub-3940256099942544~1458002511</string>
+	<!-- App Tracking Transparency (iOS 14+, condition Google/Apple pour
+	     AdMob) — texte à faire valider par vous avant publication. -->
+	<key>NSUserTrackingUsageDescription</key>
+	<string>Cette identification permet d'afficher des publicités pertinentes et de soutenir le contenu gratuit de Yéki.</string>
 </dict>
 </plist>

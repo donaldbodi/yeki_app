@@ -1,38 +1,76 @@
 <!DOCTYPE html>
-<html>
+<html lang="fr">
 <head>
   <!--
-    If you are serving your web app in a path other than the root, change the
-    href value below to reflect the base path you are serving from.
-
-    The path provided below has to start and end with a slash "/" in order for
-    it to work correctly.
-
-    For more details:
-    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
-
-    This is a placeholder for base href that will be replaced by the value of
-    the `--base-href` argument provided to `flutter build`.
+    `$FLUTTER_BASE_HREF` est remplacé par la valeur de `--base-href` au
+    moment de `flutter build web`.
   -->
   <base href="$FLUTTER_BASE_HREF">
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="A new Flutter project.">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Yéki : cours, exercices, devoirs, olympiades et forum pour apprendre à son rythme.">
+  <meta name="theme-color" content="#1A5276">
 
-  <!-- iOS meta tags & icons -->
+  <!-- iOS -->
   <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="yeki">
-  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Yéki">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 
-  <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
 
-  <title>yeki</title>
+  <title>Yéki</title>
   <link rel="manifest" href="manifest.json">
+
+  <style>
+    /* Écran d'ouverture affiché pendant le chargement de l'app (même
+       habillage que l'écran de démarrage natif Android), retiré dès que
+       Flutter a dessiné sa première image. */
+    html, body { margin: 0; height: 100%; background: #0E2233; }
+    #yeki-ouverture {
+      position: fixed; inset: 0; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 22px;
+      background: linear-gradient(180deg, #0E2233 0%, #0F172A 55%, #0A1220 100%);
+      transition: opacity .3s ease;
+    }
+    #yeki-ouverture img { width: 112px; height: 112px; }
+    #yeki-ouverture .nom {
+      font: 600 34px/1 "Fredoka", "Nunito", system-ui, -apple-system, "Segoe UI", sans-serif;
+      color: #fff; letter-spacing: .3px;
+    }
+    #yeki-ouverture .roue {
+      width: 22px; height: 22px; border-radius: 50%;
+      border: 2.5px solid rgba(255, 255, 255, .25); border-top-color: #fff;
+      animation: yeki-tourne .9s linear infinite;
+    }
+    #yeki-ouverture.fini { opacity: 0; pointer-events: none; }
+    @keyframes yeki-tourne { to { transform: rotate(360deg); } }
+    @media (prefers-reduced-motion: reduce) { #yeki-ouverture .roue { animation-duration: 3s; } }
+  </style>
 </head>
 <body>
+  <div id="yeki-ouverture" aria-label="Chargement de Yéki" role="status">
+    <img src="icons/Icon-192.png" alt="">
+    <span class="nom">Yéki</span>
+    <span class="roue"></span>
+  </div>
+  <script>
+    window.addEventListener('flutter-first-frame', function () {
+      var el = document.getElementById('yeki-ouverture');
+      if (!el) return;
+      el.classList.add('fini');
+      setTimeout(function () { el.remove(); }, 400);
+    });
+  </script>
+  <!-- P3.6 : enregistrement du service worker de messagerie en arrière-plan
+       (obligatoire pour le push web via Firebase Cloud Messaging). -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('firebase-messaging-sw.js');
+    }
+  </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

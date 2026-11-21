@@ -1,35 +1,48 @@
+// lib/views/pages/apprenants/lecture_lecon_page.dart
+//
+// Refondu en P11.4 (rituel P5.0) : bascule vers `YkPdfViewer` (déjà bâti
+// pour cet écran précisément, voir son commentaire de tête) — remplace le
+// `PDFView` fait main + filigrane statique "Yéki" par un filigrane
+// DYNAMIQUE nom + identifiant (protection du contenu, CDC Backend). Le
+// triple-FAB déprécié `YekiFabs` (Répétiteur/IA/Forum) cède la place à 2
+// `YkFab` (IA, Forum) — le bouton Répétiteur n'y était qu'un placeholder
+// "Bientôt disponible" (aucune navigation), et la maquette de cet écran
+// ne prévoit pas cette action ici (elle vit dans `lecons_cours.dart` et
+// `cours_detail_page.dart`, P11.3/P11.4).
+
+import 'dart:io';
+
 import 'package:flutter/material.dart';
-import 'dart:convert';
-import 'package:archive/archive.dart';
-import 'package:flutter/services.dart' show rootBundle;
-import 'package:flutter_widget_from_html/flutter_widget_from_html.dart';
+import 'package:go_router/go_router.dart';
+import 'package:path_provider/path_provider.dart';
 
-Future<String> extractTextFromDocx(String assetPath) async {
-  final bytes = await rootBundle.load(assetPath);
-  final archive = ZipDecoder().decodeBytes(bytes.buffer.asUint8List());
+import 'package:yeki/core/constants/api_constants.dart';
+import 'package:yeki/core/design/components/components.dart';
+import 'package:yeki/core/design/tokens/tokens.dart';
+import 'package:yeki/core/network/api_client.dart';
+import 'package:yeki/core/router/route_names.dart';
+import 'package:yeki/repositories/auth_repository.dart';
+import 'package:yeki/repositories/cours_repository.dart';
+import 'package:yeki/views/pages/apprenants/lecon_models.dart';
+import 'package:yeki/widgets/form_preoccupation_sheet.dart';
 
-  final documentXml = archive.files.firstWhere(
-    (file) => file.name == 'word/document.xml',
-    orElse: () => throw Exception("Fichier XML non trouvé"),
-  );
-
-  final content = utf8.decode(documentXml.content);
-  final text = content
-      .replaceAll(RegExp(r'</w:p>'), '\n')
-      .replaceAll(RegExp(r'<[^>]+>'), '')
-      .trim();
-
-  return text;
+String _urlComplete(String? chemin) {
+  if (chemin == null || chemin.isEmpty) return '';
+  return chemin.startsWith('http') ? chemin : '${ApiConstants.baseUrl}$chemin';
 }
 
 class LectureLeconPage extends StatefulWidget {
-  final String titre;
-  final String pdfUrl;
+  final int leconId;
+  final int coursId;
+  final String coursTitre;
+  final int coursColor;
 
   const LectureLeconPage({
     super.key,
-    required this.titre,
-    required this.pdfUrl,
+    required this.leconId,
+    required this.coursId,
+    required this.coursTitre,
+    required this.coursColor,
   });
 
   @override
@@ -37,193 +50,306 @@ class LectureLeconPage extends StatefulWidget {
 }
 
 class _LectureLeconPageState extends State<LectureLeconPage> {
-  String contenu = "";
-  bool isLoading = true;
+  final _repo = CoursRepository();
+  bool _loading = true;
+  List<LeconItem> _lecons = [];
+  int _index = 0;
+  String? _watermark;
+
+  bool _pdfLoading = true;
+  String? _pdfPath;
+  String? _pdfError;
+  int _pdfPages = 0;
+  int _pdfCurrent = 0;
+
+  Color get _accent => Color(widget.coursColor);
+  LeconItem get _lecon => _lecons[_index];
 
   @override
   void initState() {
     super.initState();
-    extractTextFromDocx(widget.pdfUrl).then((text) {
-      setState(() {
-        contenu = text;
-        isLoading = false;
-      });
-    });
+    _charger();
+    _chargerWatermark();
   }
 
-  void _showQuestionModal() {
-  final TextEditingController controller = TextEditingController();
-  bool isSending = false;
+  @override
+  void dispose() {
+    // Suppression au mieux (P12.3, dispose() est synchrone) — le PDF
+    // temporaire de la leçon en cours à la fermeture de l'écran ne doit
+    // pas persister en clair indéfiniment dans le dossier temporaire.
+    final chemin = _pdfPath;
+    if (chemin != null) {
+      File(chemin).delete().catchError((_) => File(chemin));
+    }
+    super.dispose();
+  }
 
-  showModalBottomSheet(
-    context: context,
-    isScrollControlled: true,
-    backgroundColor: Colors.white,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-    ),
-    builder: (context) {
-      return StatefulBuilder(
-        builder: (context, setModalState) {
-          return Padding(
-            padding: EdgeInsets.only(
-              bottom: MediaQuery.of(context).viewInsets.bottom,
-              top: 20,
-              left: 20,
-              right: 20,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 40,
-                  height: 4,
-                  margin: const EdgeInsets.only(bottom: 16),
-                  decoration: BoxDecoration(
-                    color: Colors.grey[300],
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                ),
-                const Text(
-                  "Poser une question",
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF03224C),
-                  ),
-                ),
-                const SizedBox(height: 14),
-                TextField(
-                  controller: controller,
-                  minLines: 3,
-                  maxLines: 5,
-                  textInputAction: TextInputAction.newline,
-                  decoration: InputDecoration(
-                    hintText: "Écris ta question ici...",
-                    filled: true,
-                    fillColor: Colors.grey[100],
-                    contentPadding: const EdgeInsets.all(16),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide: BorderSide.none,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 14),
+  Future<void> _chargerWatermark() async {
+    try {
+      final profil = await AuthRepository().getCurrentUser();
+      final nom = '${profil.firstName} ${profil.lastName}'.trim();
+      if (mounted) setState(() => _watermark = '${nom.isEmpty ? profil.username : nom} • #${profil.id}');
+    } catch (_) {
+      if (mounted) setState(() => _watermark = 'Yéki');
+    }
+  }
 
-                // Bouton enregistrement vocal (non fonctionnel pour l'instant)
-                ElevatedButton.icon(
-                  onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                      content: Text("Fonctionnalité à venir : enregistrement vocal"),
-                    ));
-                  },
-                  icon: const Icon(Icons.mic),
-                  label: const Text("Enregistrer un vocal"),
-                  style: ElevatedButton.styleFrom(
-                    foregroundColor: Colors.white,
-                    backgroundColor: Colors.orange,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                  ),
-                ),
-                const SizedBox(height: 14),
+  Future<void> _charger() async {
+    setState(() => _loading = true);
+    try {
+      final modules = await _repo.modules(widget.coursId);
+      final lecons = modules.tousLesLecons();
+      final index = lecons.indexWhere((l) => l.id == widget.leconId);
+      if (mounted) {
+        setState(() {
+          _lecons = lecons;
+          _index = index >= 0 ? index : 0;
+        });
+      }
+      if (lecons.isNotEmpty) await _chargerPdf();
+    } catch (_) {
+      if (mounted) YkSnack.error(context, 'Erreur de chargement.');
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
 
-                // Bouton envoyer
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    icon: isSending
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                          )
-                        : const Icon(Icons.send),
-                    label: Text(isSending ? "Envoi en cours..." : "Envoyer"),
-                    onPressed: () async {
-                      if (controller.text.trim().isEmpty) {
-                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                          content: Text("Veuillez saisir une question."),
-                        ));
-                        return;
-                      }
+  /// Supprime le PDF temporaire de la leçon précédente (P12.3) — sans ce
+  /// nettoyage, `_chargerPdf()` accumulait un fichier en clair par leçon
+  /// visitée dans `getTemporaryDirectory()`, jamais supprimé.
+  Future<void> _supprimerPdfTemporaire() async {
+    final chemin = _pdfPath;
+    if (chemin == null) return;
+    try {
+      final fichier = File(chemin);
+      if (await fichier.exists()) await fichier.delete();
+    } catch (_) {}
+  }
 
-                      setModalState(() => isSending = true);
-                      await Future.delayed(const Duration(seconds: 1)); // Simulation de traitement
+  Future<void> _chargerPdf() async {
+    await _supprimerPdfTemporaire();
+    if (!_lecon.hasPdf) {
+      setState(() {
+        _pdfLoading = false;
+        _pdfPath = null;
+      });
+      return;
+    }
+    setState(() {
+      _pdfLoading = true;
+      _pdfError = null;
+      _pdfPath = null;
+      _pdfPages = 0;
+      _pdfCurrent = 0;
+    });
+    try {
+      final url = _urlComplete(_lecon.pdfUrl);
+      final response = await ApiClient().downloadStream(url);
+      final dir = await getTemporaryDirectory();
+      final file = File('${dir.path}/lecon_${_lecon.id}.pdf');
+      final sink = file.openWrite();
+      await for (final chunk in response.data!.stream) {
+        sink.add(chunk);
+      }
+      await sink.close();
+      await _repo.marquerLecon(_lecon.id, 10);
+      if (mounted) setState(() { _pdfPath = file.path; _pdfLoading = false; });
+    } catch (e) {
+      // Diagnostic (pattern déjà établi cette session) : suspect probable
+      // — contenu mixte (l'URL PDF générée par le backend est `http://`
+      // alors que ce frontend tourne en `https://`, cf. correctif backend
+      // `SECURE_PROXY_SSL_HEADER`) — mais on ne l'affirme pas sans preuve
+      // (règle 7). Le type/texte réel de l'exception tranchera.
+      debugPrint('LectureLeconPage._chargerPdf() — exception : ${e.runtimeType} : $e');
+      if (mounted) setState(() { _pdfError = 'Impossible de charger le PDF.'; _pdfLoading = false; });
+    }
+  }
 
-                      Navigator.pop(context);
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                        content: Text("Votre question a été envoyée avec succès !"),
-                        backgroundColor: Colors.teal,
-                      ));
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF03224C),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 20),
-              ],
-            ),
-          );
-        },
-      );
-    },
-  );
-}
+  Future<void> _changerLecon(LeconItem lecon) async {
+    final index = _lecons.indexWhere((l) => l.id == lecon.id);
+    if (index == -1) return;
+    setState(() => _index = index);
+    await _chargerPdf();
+  }
 
+  Future<void> _marquerTerminee() async {
+    if (_lecon.estTerminee) return;
+    try {
+      await _repo.marquerLecon(_lecon.id, 100);
+      if (mounted) {
+        setState(() => _lecons[_index] = _lecon.copyWith(estTerminee: true));
+        YkSnack.success(context, 'Leçon marquée comme terminée !');
+      }
+    } catch (_) {
+      if (mounted) YkSnack.error(context, 'Erreur réseau.');
+    }
+  }
+
+  void _onPdfPageChanged(int page, int total) {
+    setState(() { _pdfCurrent = page; _pdfPages = total; });
+    if (total > 0 && page == total - 1) {
+      _repo.marquerLecon(_lecon.id, 100);
+    } else if (total > 0 && page >= total ~/ 2) {
+      _repo.marquerLecon(_lecon.id, 50);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    if (_loading) {
+      return Scaffold(backgroundColor: YkColors.background(context), body: Center(child: YkProgress(shape: YkProgressShape.circular, color: _accent)));
+    }
+    if (_lecons.isEmpty) {
+      return Scaffold(
+        backgroundColor: YkColors.background(context),
+        body: YkEmptyState(
+          icon: Icons.error_outline_rounded,
+          title: 'Leçon introuvable',
+          message: 'Cette leçon a peut-être été retirée.',
+          actionLabel: 'Retour',
+          onAction: () => Navigator.pop(context),
+        ),
+      );
+    }
+
+    final lecon = _lecon;
+    final precedente = _index > 0 ? _lecons[_index - 1] : null;
+    final suivante = _index < _lecons.length - 1 ? _lecons[_index + 1] : null;
+
     return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.titre, style: const TextStyle(color: Colors.white)),
-        backgroundColor: const Color(0xFF03224C),
-        iconTheme: const IconThemeData(color: Colors.white),
+      backgroundColor: YkColors.background(context),
+      appBar: YkGradientAppBar(
+        // Dégradé subtil dérivé de la couleur DU COURS (pas le dégradé
+        // de marque fixe par défaut de `YkGradientAppBar`, non pertinent
+        // ici — chaque cours garde sa propre identité de couleur, déjà
+        // établie ailleurs dans l'app) — touche plus légère qu'un plein
+        // dégradé, la lisibilité du PDF en dessous prime sur cet écran.
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [_accent, _accent.withValues(alpha: 0.85)],
+        ),
+        titleWidget: Text(lecon.titre, maxLines: 1, overflow: TextOverflow.ellipsis),
         actions: [
           IconButton(
-            icon: const Icon(Icons.search),
-            onPressed: () {
-              // futur système de recherche dans le texte
-            },
+            icon: Icon(lecon.estTerminee ? Icons.check_circle_rounded : Icons.check_circle_outline_rounded),
+            tooltip: 'Marquer comme terminée',
+            onPressed: _marquerTerminee,
+          ),
+        ],
+        bottom: _pdfPages > 0
+            ? PreferredSize(
+                preferredSize: const Size.fromHeight(4),
+                child: LinearProgressIndicator(value: (_pdfCurrent + 1) / _pdfPages, minHeight: 4, backgroundColor: Colors.white24),
+              )
+            : null,
+      ),
+      body: Column(
+        children: [
+          Expanded(child: _buildPdfZone(context, lecon)),
+          if (precedente != null || suivante != null) _buildBarreNavigation(context, precedente, suivante),
+        ],
+      ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+      floatingActionButton: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          YkFab(
+            icon: Icons.psychology_rounded,
+            label: 'Yéki IA',
+            variant: YkFabVariant.small,
+            backgroundColor: _accent,
+            onPressed: () => context.pushNamed(
+              AppRoute.iaChat,
+              pathParameters: {'coursId': widget.coursId.toString()},
+              queryParameters: {
+                'coursTitre': widget.coursTitre,
+                'sourceInitiale': 'lecon',
+                'sourceId': lecon.id.toString(),
+                'sourceTitreInit': lecon.titre,
+              },
+            ),
+          ),
+          SizedBox(height: YkSpacing.sm),
+          YkFab(
+            icon: Icons.forum_rounded,
+            label: 'Forum',
+            variant: YkFabVariant.small,
+            backgroundColor: YkColors.info,
+            onPressed: () => ouvrirPreoccupation(
+              context: context,
+              source: 'lecon',
+              leconId: lecon.id,
+              leconTitre: lecon.titre,
+              coursId: widget.coursId,
+              coursTitre: widget.coursTitre,
+              coursColor: widget.coursColor,
+            ),
           ),
         ],
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
+    );
+  }
+
+  Widget _buildPdfZone(BuildContext context, LeconItem lecon) {
+    if (!lecon.hasPdf) {
+      return YkEmptyState(
+        icon: Icons.picture_as_pdf_outlined,
+        title: 'Pas de support PDF',
+        message: lecon.description.isNotEmpty ? lecon.description : 'Cette leçon ne propose pas de support PDF.',
+      );
+    }
+    if (_pdfLoading) {
+      return Center(child: YkProgress(shape: YkProgressShape.circular, color: _accent));
+    }
+    if (_pdfError != null || _pdfPath == null) {
+      return YkEmptyState(
+        icon: Icons.error_outline_rounded,
+        title: 'Erreur de chargement',
+        message: _pdfError ?? 'Réessayez.',
+        actionLabel: 'Réessayer',
+        onAction: _chargerPdf,
+      );
+    }
+    return YkPdfViewer(
+      filePath: _pdfPath!,
+      watermarkText: _watermark ?? 'Yéki',
+      onPageChanged: _onPdfPageChanged,
+    );
+  }
+
+  Widget _buildBarreNavigation(BuildContext context, LeconItem? precedente, LeconItem? suivante) {
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: YkSpacing.sm, vertical: YkSpacing.xs),
+      decoration: BoxDecoration(
+        color: YkColors.surface(context),
+        border: Border(top: BorderSide(color: YkColors.border(context))),
+      ),
+      child: Row(
         children: [
-          isLoading
-              ? const Center(child: CircularProgressIndicator())
-              : HtmlWidget(contenu.replaceAll('\n', '<br>')),
-          const SizedBox(height: 24),
-
-          // --- Poser une question ---
-          Center(
-            child: ElevatedButton.icon(
-              icon: const Icon(Icons.question_answer),
-              label: const Text("Poser une question"),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.orange,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 14,
-                ),
-              ),
-              onPressed: _showQuestionModal,
-            ),
+          Expanded(
+            child: precedente == null
+                ? const SizedBox.shrink()
+                : TextButton.icon(
+                    onPressed: () => _changerLecon(precedente),
+                    icon: const Icon(Icons.chevron_left_rounded),
+                    label: Text(precedente.titre, maxLines: 1, overflow: TextOverflow.ellipsis),
+                  ),
           ),
-
-          const SizedBox(height: 40),
+          Expanded(
+            child: suivante == null
+                ? const SizedBox.shrink()
+                : TextButton(
+                    onPressed: () => _changerLecon(suivante),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        Flexible(child: Text(suivante.titre, maxLines: 1, overflow: TextOverflow.ellipsis)),
+                        const Icon(Icons.chevron_right_rounded),
+                      ],
+                    ),
+                  ),
+          ),
         ],
       ),
     );

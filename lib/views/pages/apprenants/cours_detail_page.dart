@@ -1,1346 +1,422 @@
-import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
-import 'package:flutter_sound/flutter_sound.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:permission_handler/permission_handler.dart';
-import 'dart:async';
-import 'detail_devoir_page.dart';
-import 'detail_lecon_page.dart';
-import 'dart:typed_data';
-import 'package:flutter/services.dart' show rootBundle;
+// lib/views/pages/apprenants/cours_detail_page.dart
+//
+// Refondu en P11.3 (rituel P5.0) : le glassmorphism fait main et le
+// dégradé `YekiGradients.mainBackground` cèdent la place aux tokens `Yk*`.
+// Le verrou Premium (`_buildPremiumLock`) avait ses 2 prix figés en dur
+// (13000F/1500F, règle 3) — pas de prix fiable disponible ici, le verrou
+// affiche donc un message générique plutôt qu'en inventer un. `isPremium`
+// (en réalité `estAccessible`, dérivé de `DepartementItem.estAccessible`)
+// n'est plus figé à `true` partout depuis P11.4 : certains appelants
+// (`formation_detail_page.dart`, `concours_detail_page.dart`) transmettent
+// désormais une vraie valeur — ce verrou PEUT donc réellement s'afficher.
+//
+// Phase 2 (refonte écran 4/N, `docs/ecarts/p2_cours_detail_entete.md`) :
+// en-tête restylé sur la maquette (« 09 · Détail cours », qui attribue
+// explicitement cet en-tête à ce fichier). Le bouton répétiteur a quitté
+// l'en-tête (doublon avec celui déjà posé au bas de l'onglet Leçons,
+// P11.7 — seul emplacement de cette action dans la maquette) au profit
+// d'un bouton favori local à la session (même précédent déjà écrit dans
+// `detail_lecon_page.dart._onFavorite`, aucun favori persistant côté
+// backend). Le sous-titre affiche désormais le nombre de leçons et le
+// pourcentage complété, calculés depuis `CoursRepository.modules()`
+// (mêmes données que `lecons_cours.dart` affiche déjà par leçon).
 
-Uint8List? _imageBytes;
+import 'dart:ui';
+
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/material.dart';
+
+import 'package:yeki/core/design/components/components.dart';
+import 'package:yeki/core/design/tokens/tokens.dart';
+import 'package:yeki/core/router/auth_state.dart';
+import 'package:yeki/repositories/paiement_repository.dart';
+import 'package:yeki/features/devoirs_cours/presentation/devoirs_cours_page.dart';
+import 'package:yeki/features/exercices_cours/presentation/exercices_cours_page.dart';
+import 'package:yeki/features/paiement/presentation/ouvrir_abonnement.dart';
+import 'package:yeki/repositories/cours_repository.dart';
+import 'package:yeki/views/pages/apprenants/forum_page.dart';
+import 'package:yeki/views/pages/apprenants/lecon_models.dart';
+import 'package:yeki/views/pages/apprenants/lecons_cours.dart';
 
 class CoursDetailTabs extends StatefulWidget {
-  const CoursDetailTabs({super.key});
+  final String coursId;
+  final String titre;
+  final int coursColor;
+  final bool isPremium;
+  final int initialTab;
+  final int? scrollToQuestionId;
+  final int? moduleId;
+  final int? leconId;
+
+  const CoursDetailTabs({
+    super.key,
+    required this.coursId,
+    required this.titre,
+    required this.coursColor,
+    this.isPremium = true,
+    this.initialTab = 0,
+    this.scrollToQuestionId,
+    this.moduleId,
+    this.leconId,
+  });
 
   @override
   State<CoursDetailTabs> createState() => _CoursDetailTabsState();
 }
 
-class _CoursDetailTabsState extends State<CoursDetailTabs>
-    with SingleTickerProviderStateMixin {
+class _CoursDetailTabsState extends State<CoursDetailTabs> with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  late Color _courseColor;
+  final _coursRepo = CoursRepository();
 
-  final TextEditingController _messageController = TextEditingController();
-  final List<Map<String, dynamic>> _messages = [];
-  final FlutterSoundRecorder _recorder = FlutterSoundRecorder();
-  final FlutterSoundPlayer _player = FlutterSoundPlayer();
-  bool isRecording = false;
-  bool isPlaying = false;
-  String? recordedPath;
+  // Favori local à la session — aucun favori persistant côté backend
+  // (précédent déjà établi dans `detail_lecon_page.dart._onFavorite`,
+  // règle 3 : pas de fonctionnalité persistée qui n'existe pas).
+  bool _favori = false;
 
-  int niveauActuel = 1;
-  bool soumis = false;
-  num score = 0;
-  bool chronoActive = false;
-  int secondes = 0;
-  Duration dureeRestante = const Duration(minutes: 10); // Par défaut 10 min
-  Timer? timer;
-  
+  // Sous-titre d'en-tête — `null` tant que non chargé, repli sur le
+  // texte générique dans ce cas (voir `_sousTitre`).
+  int? _totalLecons;
+  int? _leconsCompletees;
+  String? _niveau;
+  String? _enseignantNom;
+  String? _enseignantAvatarUrl;
 
-  final lecons = [
-    {
-      "titre": "Introduction aux fonctions",
-      "statut": "fait",
-      'resume': "Les bases de l'électricité en physique.",
-      'videoUrl': "https://sample-videos.com/video123/mp4/720/big_buck_bunny_720p_1mb.mp4",
-      'documentUrl': "assets/pdfs/Chap1.docx",
-    },
-    {
-      "titre": "Fonctions affines",
-      "statut": "en cours",
-      'resume': "Les bases de l'électricité en physique.",
-      'videoUrl': "https://sample-videos.com/video123/mp4/720/big_buck_bunny_720p_1mb.mp4",
-      'documentUrl': "assets/pdfs/Chap2.docx",
-    },
-    {
-      "titre": "Fonctions polynômes",
-      "statut": "à faire",
-      'resume': "Les bases de l'électricité en physique.",
-      'videoUrl': "https://sample-videos.com/video123/mp4/720/big_buck_bunny_720p_1mb.mp4",
-      'documentUrl': "assets/pdfs/Chap1.docx",
-    },
-  ];
+  int? _forumScrollToId;
+  String? _forumPreoccupationContenu;
+  String? _forumPreoccupationSource;
+  int? _forumPreoccupationLeconId;
+  String? _forumPreoccupationLeconTitre;
+  int? _forumPreoccupationExerciceId;
+  String? _forumPreoccupationExerciceTitre;
+  int? _forumPreoccupationDevoirId;
+  String? _forumPreoccupationDevoirTitre;
 
-  final devoirs = [
-    {"titre": "Devoir 1 : Fonctions", "date": "24 Juin"},
-    {"titre": "Quiz : Fonctions affines", "date": "26 Juin"},
-  ];
-
-  final forum = [
-    {
-      "auteur": "Donald",
-      "question": "Pourquoi une fonction affine est-elle linéaire ?",
-      "reponse": "Car sa courbe est une droite non horizontale."
-    },
-    {
-      "auteur": "Claire",
-      "question": "Comment déterminer le signe d'une fonction ?",
-      "reponse": "En utilisant un tableau de signes."
-    },
-  ];
-
-  final enseignants = [
-    {
-      "nom": "Mr. Talla Jean",
-      "role": "principal",
-      "image": "assets/images/user.jpg"
-    },
-    {
-      "nom": "Mme Carole Ndongo",
-      "role": "assistant",
-      "image": "assets/images/user.jpg"
-    },
-    {
-      "nom": "M. Jules Kamtchoum",
-      "role": "assistant",
-      "image": "assets/images/user.jpg"
-    },
-  ];
-
-  //juste pour le test
-  Future<Uint8List> loadAssetImage(String path) async {
-    final data = await rootBundle.load(path);
-    return data.buffer.asUint8List();
-  }
+  // Filtre de l'onglet Exercices — initialisé depuis les paramètres de
+  // route, puis modifiable en place depuis l'onglet Leçons (voir
+  // `_naviguerVersExercicesAvecFiltre`, P3.3 §6).
+  int? _exercicesModuleIdFiltre;
+  int? _exercicesLeconIdFiltre;
 
   @override
   void initState() {
     super.initState();
-    // Ajout de messages d'exemple
-    Future<void> _loadInitialMessages() async {
-      final bytes = await loadAssetImage('assets/images/image1.jpeg');
+    _courseColor = Color(widget.coursColor);
+    _exercicesModuleIdFiltre = widget.moduleId;
+    _exercicesLeconIdFiltre = widget.leconId;
+    _tabController = TabController(length: 4, vsync: this, initialIndex: widget.initialTab);
+    _tabController.addListener(() {
+      if (!_tabController.indexIsChanging) setState(() {});
+    });
+    _chargerProgression();
+    if (kIsWeb && authState.value.role == 'apprenant') _verifierAbonnementWeb();
+  }
 
-      setState(() {
-        _messages.addAll([
-          {
-            'text': "Bonjour à tous, bienvenue dans ce cours.",
-            'image': null,
-            'audio': null,
-            'sender': 'Mme Essomba',
-            'role': 'enseignant',
-            'isOnline': true,
-            'timestamp': DateTime.now().subtract(const Duration(minutes: 5)),
-          },
-          {
-            'text': "Merci madame, on commence par quel chapitre ?",
-            'image': null,
-            'audio': null,
-            'sender': 'Samuel',
-            'role': 'élève',
-            'isOnline': true,
-            'timestamp': DateTime.now().subtract(const Duration(minutes: 4)),
-          },
-          {
-            'text': "Voici le schéma du premier exercice.",
-            'image': bytes, // Remplace par un chemin valide
-            'audio': null,
-            'sender': 'Samuel',
-            'role': 'élève',
-            'isOnline': true,
-            'timestamp': DateTime.now().subtract(const Duration(minutes: 3)),
-          },
-          {
-            'text': "",
-            'image': null,
-            'audio':
-                'assets/audio/exemple.aac', // Remplace par un chemin valide
-            'sender': 'Mme Essomba',
-            'role': 'enseignant',
-            'isOnline': true,
-            'timestamp': DateTime.now().subtract(const Duration(minutes: 2)),
-          },
-        ]);
-      });
+  /// Version web : les cours sont réservés aux apprenants abonnés au
+  /// département (décision produit — pas de téléchargement possible sur
+  /// le web, donc rien à consulter une fois l'abonnement terminé).
+  /// `null` tant que non vérifié, ou si la vérification échoue (le serveur
+  /// protège de toute façon les contenus Premium).
+  bool? _abonneWeb;
+
+  Future<void> _verifierAbonnementWeb() async {
+    try {
+      final statut = await PaiementRepository().statutAbonnement(int.parse(widget.coursId));
+      if (mounted) setState(() => _abonneWeb = statut.actif);
+    } catch (_) {
+      // Vérification impossible (réseau) : pas de blocage côté interface.
     }
+  }
 
-    _recorder.openRecorder();
-    _player.openPlayer();
-    _tabController = TabController(length: 4, vsync: this);
-    _loadInitialMessages();
+  Future<void> _chargerProgression() async {
+    try {
+      final coursId = int.parse(widget.coursId);
+      final resultats = await Future.wait([_coursRepo.modules(coursId), _coursRepo.detail(coursId)]);
+      final modules = resultats[0] as List<ModuleAvecLecons>;
+      final detail = resultats[1] as CoursDetailInfo;
+      final lecons = modules.expand((m) => m.lecons).toList();
+      if (!mounted) return;
+      setState(() {
+        _totalLecons = lecons.length;
+        _leconsCompletees = lecons.where((l) => l.estTerminee).length;
+        _niveau = detail.niveau;
+        _enseignantNom = detail.enseignantNom;
+        _enseignantAvatarUrl = detail.enseignantAvatarUrl;
+      });
+    } catch (_) {
+      // Échec silencieux — repli sur le texte générique (`_sousTitre`),
+      // aucune valeur inventée affichée à la place.
+    }
+  }
+
+  String get _sousTitre {
+    final total = _totalLecons;
+    final completees = _leconsCompletees;
+    if (total == null || total == 0) return "Espace d'apprentissage";
+    final pourcentage = (completees! / total * 100).round();
+    final niveau = _niveau;
+    if (niveau != null && niveau.isNotEmpty) return '$niveau · $total leçons · $pourcentage% complété';
+    return '$total leçons · $pourcentage% complété';
   }
 
   @override
   void dispose() {
-    _recorder.closeRecorder();
-    _player.closePlayer();
+    _tabController.dispose();
     super.dispose();
   }
 
-  Future<void> _pickImage() async {
-  final picker = ImagePicker();
-  final pickedFile = await picker.pickImage(source: ImageSource.gallery);
-  if (pickedFile != null) {
-    final bytes = await pickedFile.readAsBytes();
+  void naviguerVersForumAvecQuestion(int questionId) {
+    setState(() => _forumScrollToId = questionId);
+    _tabController.animateTo(3);
+  }
+
+  /// Bascule sur l'onglet Exercices avec le filtre demandé, en place —
+  /// jamais une nouvelle navigation (voir `LeconsCoursPage.onNaviguerExercices`,
+  /// P3.3 §6).
+  void _naviguerVersExercicesAvecFiltre({int? moduleId, int? leconId}) {
     setState(() {
-      _imageBytes = bytes;
+      _exercicesModuleIdFiltre = moduleId;
+      _exercicesLeconIdFiltre = leconId;
     });
-    _sendMessage(); // si tu veux envoyer automatiquement après sélection
-  }
-}
-
-
-  Future<void> _toggleRecording() async {
-    if (!isRecording) {
-      await Permission.microphone.request();
-      if (await Permission.microphone.isGranted) {
-        final dir = await getApplicationDocumentsDirectory();
-        final path =
-            '${dir.path}/audio_${DateTime.now().millisecondsSinceEpoch}.aac';
-        await _recorder.startRecorder(toFile: path);
-        setState(() {
-          isRecording = true;
-          recordedPath = path;
-        });
-      }
-    } else {
-      final path = await _recorder.stopRecorder();
-      setState(() {
-        isRecording = false;
-        recordedPath = path;
-      });
-    }
+    _tabController.animateTo(1);
   }
 
-  Future<void> _playAudio(String path) async {
-    if (isPlaying) {
-      await _player.stopPlayer();
-    } else {
-      await _player.startPlayer(
-        fromURI: path,
-        whenFinished: () => setState(() => isPlaying = false),
-      );
-    }
+  void setPreoccupationData({
+    String? contenu,
+    String? source,
+    int? leconId,
+    String? leconTitre,
+    int? exerciceId,
+    String? exerciceTitre,
+    int? devoirId,
+    String? devoirTitre,
+  }) {
     setState(() {
-      isPlaying = !isPlaying;
+      _forumPreoccupationContenu = contenu;
+      _forumPreoccupationSource = source;
+      _forumPreoccupationLeconId = leconId;
+      _forumPreoccupationLeconTitre = leconTitre;
+      _forumPreoccupationExerciceId = exerciceId;
+      _forumPreoccupationExerciceTitre = exerciceTitre;
+      _forumPreoccupationDevoirId = devoirId;
+      _forumPreoccupationDevoirTitre = devoirTitre;
     });
-  }
-
-  void _sendMessage() {
-    if (_messageController.text.trim().isNotEmpty ||
-        _imageBytes  != null ||
-        recordedPath != null) {
-      setState(() {
-        _messages.add({
-          'text': _messageController.text.trim(),
-          'image': _imageBytes ,
-          'audio': recordedPath,
-          'sender': 'M. Bodi',
-          'role': 'enseignant', // ou 'élève'
-          'isOnline': true,
-          'timestamp': DateTime.now(),
-        });
-        _messageController.clear();
-        _imageBytes  = null;
-        recordedPath = null;
-      });
-    }
+    _tabController.animateTo(3);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("Détail du cours",
-            style: TextStyle(color: Colors.white)),
-        backgroundColor: const Color(0xff008080),
-        bottom: TabBar(
-          controller: _tabController,
-          labelColor: Colors.orangeAccent,
-          unselectedLabelColor: Colors.white70,
-          indicatorColor: Colors.orangeAccent,
-          tabs: const [
-            Tab(icon: Icon(Icons.menu_book_rounded), text: "Leçons"),
-            Tab(icon: Icon(Icons.school), text: "Exercices"),
-            Tab(icon: Icon(Icons.assignment), text: "Devoirs"),
-            Tab(icon: Icon(Icons.forum), text: "Forum"),
-          ],
-        ),
-      ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          _buildLecons(),
-          _buildExercices(),
-          _buildDevoirs(),
-          _buildForum(),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildEquipeEnseignanteHorizontal() {
-  return Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      const Text(
-        "Équipe enseignante",
-        style: TextStyle(
-          fontSize: 18,
-          fontWeight: FontWeight.bold,
-          color: Colors.teal,
-        ),
-      ),
-      const SizedBox(height: 10),
-      SizedBox(
-        height: 140,
-        child: ListView.separated(
-          scrollDirection: Axis.horizontal,
-          itemCount: enseignants.length,
-          separatorBuilder: (_, __) => const SizedBox(width: 14),
-          itemBuilder: (context, index) {
-            final ens = enseignants[index];
-            final isPrincipal = ens["role"] == "principal";
-            final badgeColor = isPrincipal ? Colors.deepOrange : Colors.teal;
-
-            return Container(
-              width: 170,
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.06),
-                    blurRadius: 8,
-                    offset: const Offset(2, 4),
-                  ),
-                ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  CircleAvatar(
-                    radius: 26,
-                    backgroundImage: AssetImage(ens["image"] ?? "assets/avatar.png"),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    ens["nom"] ?? "Nom",
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 6),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: badgeColor.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(
-                      isPrincipal ? "Principal" : "Assistant",
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                        color: badgeColor,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            );
-          },
-        ),
-      ),
-    ],
-  );
-}
-
-  Widget _buildLecons() {
-  return ListView(
-    padding: const EdgeInsets.all(16),
-    children: [
-      const Text(
-        "Leçons du cours",
-        style: TextStyle(
-          fontSize: 18,
-          fontWeight: FontWeight.bold,
-          color: Colors.teal,
-        ),
-      ),
-      const SizedBox(height: 12),
-      ...lecons.map((lecon) {
-        Color color;
-        IconData icon;
-        String statut = lecon["statut"] ?? "non défini";
-
-        switch (statut) {
-          case "fait":
-            color = Colors.green;
-            icon = Icons.check_circle_outline;
-            break;
-          case "en cours":
-            color = Colors.orange;
-            icon = Icons.timelapse;
-            break;
-          default:
-            color = Colors.grey;
-            icon = Icons.circle_outlined;
-        }
-
-        final titre = lecon["titre"] ?? "Titre inconnu";
-        final description = lecon["description"] ??
-            "Cette leçon vous permettra de mieux comprendre les bases du sujet abordé.";
-            List<Lecon> autresLecons = lecons.map((map) => Lecon(id: 'id', titre: titre, resume: 'resume', videoUrl: 'videoUrl', documentUrl: 'documentUrl')).toList();
-
-        return GestureDetector(
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => DetailLeconPage(
-                  leconActuelle: Lecon(
-                    id: '5',
-                    titre: "Fonctions affines",
-                    resume: "Les bases de l'électricité en physique.",
-                    videoUrl: "https://www.youtube.com/watch?v=1H47VtVQLDM&list=RD1H47VtVQLDM&start_radio=1",
-                    documentUrl: "assets/pdfs/Chap2.docx",
-                  ),
-                  autresLecons: autresLecons,
-                ),
-              ),
-            );
-          },
-          child: Container(
-            margin: const EdgeInsets.only(bottom: 14),
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              border: Border.all(
-                color: color.withOpacity(0.3),
-                width: 1,
-              ),
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black12.withOpacity(0.04),
-                  blurRadius: 8,
-                  offset: const Offset(1, 4),
-                ),
-              ],
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Icon(icon, color: color, size: 30),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        titre,
-                        style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        description,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: Colors.grey[700],
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: color.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          statut.toUpperCase(),
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: color,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      }).toList(),
-      const SizedBox(height: 20),
-      _buildEquipeEnseignanteHorizontal(),
-    ],
-  );
-}
-
-
-  Widget _buildExercices() {
-  final niveauxDisponibles = [1, 2, 3, 4, 5];
-  int niveauActuel = 1;
-
-  final Map<String, String> reponsesDonnees = {};
-  final Map<String, String> corrections = {};
-  final Map<int, bool> evalExerciceFaite = {};
-  bool evalGlobaleFaite = false;
-
-  int scoreTotalGlobal = 0;
-  int scoreObtenuGlobal = 0;
-
-  final List<Map<String, dynamic>> historique = [
-    {
-      'niveau': 1,
-      'score': "4 / 5",
-      'date': DateTime.now().subtract(const Duration(days: 1)),
-      'reponses': {
-        "Quelle est la capitale du Cameroun ?": "Yaoundé",
-        "En quelle année le Cameroun est-il devenu indépendant ?": "1961",
-      }
-    },
-    {
-      'niveau': 1,
-      'score': "5 / 5",
-      'date': DateTime.now().subtract(const Duration(days: 2)),
-      'reponses': {
-        "Quelle est la capitale du Cameroun ?": "Yaoundé",
-        "En quelle année le Cameroun est-il devenu indépendant ?": "1960",
-      }
-    }
-  ];
-
-  final Map<int, List<Map<String, dynamic>>> exercicesParNiveau = {
-    1: [
-      {
-        'titre': 'Introduction',
-        'enonce': 'Répondez à ces questions de base.',
-        'questions': [
-          {
-            'text': 'Quelle est la capitale du Cameroun ?',
-            'type': 'qcm',
-            'choix': ['Yaoundé', 'Douala', 'Bamenda'],
-            'reponse': 'Yaoundé',
-            'points': 2,
-          },
-          {
-            'text': 'En quelle année le Cameroun est-il devenu indépendant ?',
-            'type': 'texte',
-            'reponse': '1960',
-            'points': 3,
-          }
-        ],
-      },
-    ],
-    2: [],
-    3: [],
-    4: [],
-    5: [],
-  };
-
-  void _rafraichir() {
-    reponsesDonnees.clear();
-    corrections.clear();
-    evalGlobaleFaite = false;
-    evalExerciceFaite.clear();
-    scoreObtenuGlobal = 0;
-    scoreTotalGlobal = 0;
-  }
-
-  void _poserPreoccupation(String question) {
-    final controller = TextEditingController();
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (context) {
-        return Padding(
-          padding: const EdgeInsets.all(16),
-          child: Wrap(
-            children: [
-              Text("Préoccupation : $question",
-                  style: const TextStyle(fontWeight: FontWeight.bold)),
-              const SizedBox(height: 10),
-              TextField(
-                controller: controller,
-                maxLines: 3,
-                decoration: const InputDecoration(
-                  hintText: "Votre préoccupation ici...",
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 12),
-              ElevatedButton(
-                onPressed: () {
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                    content: Text("Préoccupation envoyée"),
-                    backgroundColor: Colors.teal,
-                  ));
-                },
-                child: const Text("Envoyer"),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  void _evaluerExercice(Map exercice, int index, StateSetter setState) {
-    int score = 0;
-    int total = 0;
-
-    for (var q in exercice['questions']) {
-      final bonne = q['reponse'].toString().toLowerCase().trim();
-      final user = reponsesDonnees[q['text']]?.toLowerCase().trim() ?? '';
-      final pts = q['points'] ?? 1;
-
-      total += (pts as num).toInt();
-      if (user == bonne) score += (pts as num).toInt();
-
-      corrections[q['text']] = bonne;
-    }
-
-    evalExerciceFaite[index] = true;
-
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text("Score Exercice ${index + 1} : $score / $total"),
-      backgroundColor: Colors.teal,
-    ));
-  }
-
-  void _evaluerGlobal(StateSetter setState) {
-    scoreTotalGlobal = 0;
-    scoreObtenuGlobal = 0;
-
-    final exercices = exercicesParNiveau[niveauActuel] ?? [];
-    for (var ex in exercices) {
-      for (var q in ex['questions']) {
-        final bonne = q['reponse'].toString().toLowerCase().trim();
-        final user = reponsesDonnees[q['text']]?.toLowerCase().trim() ?? '';
-        final pts = q['points'] ?? 1;
-
-        scoreTotalGlobal += (pts as num).toInt();
-        if (user == bonne) scoreObtenuGlobal += (pts as num).toInt();
-
-        corrections[q['text']] = bonne;
-      }
-    }
-
-    evalGlobaleFaite = true;
-
-    historique.add({
-      'niveau': niveauActuel,
-      'score': "$scoreObtenuGlobal / $scoreTotalGlobal",
-      'date': DateTime.now(),
-      'reponses': Map<String, String>.from(reponsesDonnees),
-    });
-
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text("Résultat global : $scoreObtenuGlobal / $scoreTotalGlobal"),
-      backgroundColor: Colors.deepPurple,
-    ));
-
-    setState(() {});
-  }
-
-  void _showReponsesModal(Map<String, String> reponses) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) => Padding(
-        padding: const EdgeInsets.all(20),
-        child: ListView(
-          shrinkWrap: true,
-          children: [
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                margin: const EdgeInsets.only(bottom: 20),
-                decoration: BoxDecoration(
-                  color: Colors.grey[300],
-                  borderRadius: BorderRadius.circular(4),
-                ),
-              ),
-            ),
-            const Text("Réponses données",
-                style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 18,
-                    color: Color(0xFF03224C))),
-            const SizedBox(height: 14),
-            if (reponses.isEmpty)
-              const Text("Aucune réponse disponible",
-                  style: TextStyle(fontStyle: FontStyle.italic)),
-            ...reponses.entries.map((entry) => ListTile(
-                  leading: const Icon(Icons.question_answer_outlined),
-                  title: Text(entry.key),
-                  subtitle: Text("Réponse : ${entry.value}"),
-                )),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _showHistoriqueModal() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) => Padding(
-        padding: const EdgeInsets.all(20),
-        child: ListView.separated(
-          shrinkWrap: true,
-          itemCount: historique.length,
-          separatorBuilder: (_, __) => const Divider(),
-          itemBuilder: (context, index) {
-            final h = historique[index];
-            final date = h['date'] as DateTime;
-            return ListTile(
-              leading: const Icon(Icons.school, color: Colors.deepPurple),
-              title: Text("Niveau ${h['niveau']}"),
-              subtitle: Text("Score : ${h['score']}"),
-              trailing: Text(
-                "${date.day.toString().padLeft(2, '0')}/"
-                "${date.month.toString().padLeft(2, '0')} "
-                "${date.hour.toString().padLeft(2, '0')}:"
-                "${date.minute.toString().padLeft(2, '0')}",
-                style: const TextStyle(fontSize: 12),
-              ),
-              onTap: () => _showReponsesModal(h['reponses'] ?? {}),
-            );
-          },
-        ),
-      ),
-    );
-  }
-
-  return StatefulBuilder(
-    builder: (context, setState) {
-      return Column(
-        children: [
-          Container(
-            color: Colors.white,
-            padding: const EdgeInsets.all(12),
-            child: Row(
-              children: [
-                const Text("Niveau : ",
-                    style: TextStyle(fontWeight: FontWeight.bold)),
-                const SizedBox(width: 10),
-                DropdownButton<int>(
-                  value: niveauActuel,
-                  onChanged: (val) {
-                    if (val != null) {
-                      setState(() {
-                        niveauActuel = val;
-                        _rafraichir();
-                      });
-                    }
-                  },
-                  items: niveauxDisponibles
-                      .map((n) =>
-                          DropdownMenuItem(value: n, child: Text("Niveau $n")))
-                      .toList(),
-                ),
-                const Spacer(),
-                IconButton(
-                  onPressed: () {
-                    setState(() => _rafraichir());
-                  },
-                  icon: const Icon(Icons.refresh, color: Colors.teal),
-                  tooltip: "Réinitialiser",
-                ),
-                IconButton(
-                  onPressed: _showHistoriqueModal,
-                  icon: const Icon(Icons.history, color: Colors.deepPurple),
-                  tooltip: "Historique",
-                ),
-              ],
-            ),
-          ),
-          Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.all(12),
-              itemCount: exercicesParNiveau[niveauActuel]?.length ?? 0,
-              itemBuilder: (context, index) {
-                final exercice = exercicesParNiveau[niveauActuel]![index];
-                return Card(
-                  elevation: 4,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
-                  margin: const EdgeInsets.only(bottom: 16),
-                  child: Padding(
-                    padding: const EdgeInsets.all(14),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text("Exercice ${index + 1} : ${exercice['titre']}",
-                            style: const TextStyle(
-                                fontWeight: FontWeight.bold, fontSize: 16)),
-                        const SizedBox(height: 8),
-                        Text(exercice['enonce']),
-                        const Divider(),
-                        ...exercice['questions'].asMap().entries.map((entry) {
-                          final q = entry.value;
-                          final qIndex = entry.key + 1;
-                          return Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                  "Q$qIndex (${q['points']} pts) : ${q['text']}",
-                                  style: const TextStyle(
-                                      fontWeight: FontWeight.w600)),
-                              const SizedBox(height: 4),
-                              if (q['type'] == 'qcm')
-                                ...q['choix'].map<Widget>((opt) {
-                                  return RadioListTile(
-                                    value: opt,
-                                    groupValue: reponsesDonnees[q['text']],
-                                    onChanged: (val) {
-                                      setState(() {
-                                        reponsesDonnees[q['text']] = val!;
-                                      });
-                                    },
-                                    title: Text(opt),
-                                  );
-                                }).toList()
-                              else
-                                TextField(
-                                  onChanged: (val) =>
-                                      reponsesDonnees[q['text']] = val,
-                                  decoration: const InputDecoration(
-                                      hintText: "Votre réponse",
-                                      border: OutlineInputBorder()),
-                                ),
-                              if (corrections.containsKey(q['text']))
-                                Padding(
-                                  padding:
-                                      const EdgeInsets.only(top: 4, bottom: 4),
-                                  child: Text(
-                                    "Correction : ${corrections[q['text']]}",
-                                    style: const TextStyle(
-                                        color: Colors.green,
-                                        fontWeight: FontWeight.bold),
-                                  ),
-                                ),
-                              TextButton.icon(
-                                onPressed: () =>
-                                    _poserPreoccupation(q['text']),
-                                icon: const Icon(Icons.help_outline),
-                                label: const Text("Préoccupation"),
-                              ),
-                              const Divider(),
-                            ],
-                          );
-                        }),
-                        Center(
-                          child: ElevatedButton.icon(
-                            onPressed: () =>
-                                _evaluerExercice(exercice, index, setState),
-                            icon: const Icon(Icons.check_circle),
-                            label: const Text("S'auto-évaluer", style: TextStyle(color: Colors.white)),
-                            style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xff008080)),
-                          ),
-                        )
-                      ],
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            color: Colors.white,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                ElevatedButton.icon(
-                  onPressed: () => _evaluerGlobal(setState),
-                  icon: const Icon(Icons.check),
-                  label: const Text("Évaluation globale", style: TextStyle(color: Colors.white)),
-                  style:
-                      ElevatedButton.styleFrom(backgroundColor: const Color(0xff008080)),
-                ),
-                if (evalGlobaleFaite)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 8),
-                    child: Text(
-                      "Note globale : $scoreObtenuGlobal / $scoreTotalGlobal",
-                      style: const TextStyle(
-                          fontWeight: FontWeight.bold, color: Colors.teal),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        ],
-      );
-    },
-  );
-}
-
-
-  Widget _buildDevoirs() {
-  List<Map<String, dynamic>> devoirs = [
-    {
-      "matiere": "Mathématiques",
-      "titre": "Devoir 3 : Dérivées",
-      "niveau": 3,
-      "dateLimite": DateTime(2025, 6, 27),
-      "statut": "En attente",
-    },
-    {
-      "matiere": "Physique",
-      "titre": "Devoir 1 : Cinématique",
-      "niveau": 1,
-      "dateLimite": DateTime(2025, 7, 23),
-      "statut": "Corrigé",
-    },
-  ];
-
-  String? filtreMatiere;
-  String? filtreStatut;
-
-  return StatefulBuilder(
-    builder: (context, setState) {
-      List<Map<String, dynamic>> devoirsFiltres = devoirs.where((d) {
-        final byMatiere = filtreMatiere == null || d["matiere"] == filtreMatiere;
-        final byStatut = filtreStatut == null || d["statut"] == filtreStatut;
-        return byMatiere && byStatut;
-      }).toList();
-
-      return Column(
-        children: [
-          // 🔍 Filtres
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            child: Row(
-              children: [
-                Expanded(
-                  child: DropdownButtonFormField<String>(
-                    value: filtreMatiere,
-                    isExpanded: true,
-                    decoration: InputDecoration(
-                      labelText: "📚 Matière",
-                      filled: true,
-                      fillColor: Colors.grey[100],
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none,
-                      ),
-                    ),
-                    items: ["Mathématiques", "Physique"]
-                        .map((m) => DropdownMenuItem(value: m, child: Text(m)))
-                        .toList(),
-                    onChanged: (value) => setState(() => filtreMatiere = value),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: DropdownButtonFormField<String>(
-                    value: filtreStatut,
-                    isExpanded: true,
-                    decoration: InputDecoration(
-                      labelText: "📌 Statut",
-                      filled: true,
-                      fillColor: Colors.grey[100],
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none,
-                      ),
-                    ),
-                    items: ["En attente", "Corrigé"]
-                        .map((s) => DropdownMenuItem(value: s, child: Text(s)))
-                        .toList(),
-                    onChanged: (value) => setState(() => filtreStatut = value),
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // 📋 Liste des devoirs
-          Expanded(
-            child: devoirsFiltres.isEmpty
-                ? const Center(child: Text("Aucun devoir trouvé."))
-                : ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: devoirsFiltres.length,
-                    itemBuilder: (_, index) {
-                      final devoir = devoirsFiltres[index];
-                      final now = DateTime.now();
-                      final restant = devoir["dateLimite"].difference(now);
-                      final estTermine = restant.isNegative;
-
-                      return Container(
-                        margin: const EdgeInsets.only(bottom: 16),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(16),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black12.withOpacity(0.05),
-                              blurRadius: 8,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
-                          border: Border.all(color: Colors.grey.shade100),
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              // Matière + Temps restant
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Text(
-                                    devoir["matiere"],
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 16,
-                                      color: Color(0xFF03224C),
-                                    ),
-                                  ),
-                                  Text(
-                                    estTermine
-                                        ? "⏰ Terminé il y a ${restant.inDays.abs()} j"
-                                        : "⏰ ${restant.inDays} j restants",
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: estTermine
-                                          ? Colors.red
-                                          : Colors.teal.shade700,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 10),
-
-                              // Titre
-                              Text(
-                                devoir["titre"],
-                                style: const TextStyle(
-                                  fontSize: 17,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                              const SizedBox(height: 10),
-
-                              // Infos complémentaires
-                              Row(
-                                children: [
-                                  // Niveau
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 10, vertical: 4),
-                                    decoration: BoxDecoration(
-                                      color: Colors.blue.shade50,
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: Row(
-                                      children: [
-                                        const Icon(Icons.star,
-                                            color: Colors.amber, size: 16),
-                                        const SizedBox(width: 4),
-                                        Text("Niveau ${devoir["niveau"]}"),
-                                      ],
-                                    ),
-                                  ),
-                                  const SizedBox(width: 10),
-
-                                  // Date limite
-                                  Row(
-                                    children: [
-                                      const Icon(Icons.calendar_today,
-                                          size: 16, color: Colors.grey),
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        "${devoir["dateLimite"].day}/${devoir["dateLimite"].month}/${devoir["dateLimite"].year}",
-                                        style: const TextStyle(fontSize: 13),
-                                      ),
-                                    ],
-                                  ),
-                                  const Spacer(),
-
-                                  // Statut
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 10, vertical: 4),
-                                    decoration: BoxDecoration(
-                                      color: devoir["statut"] == "Corrigé"
-                                          ? Colors.green.shade100
-                                          : Colors.orange.shade100,
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: Text(
-                                      devoir["statut"],
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.bold,
-                                        color: devoir["statut"] == "Corrigé"
-                                            ? Colors.green.shade800
-                                            : Colors.orange.shade800,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 12),
-
-                              // Bouton action
-                              Align(
-                                alignment: Alignment.centerRight,
-                                child: TextButton.icon(
-                                  icon: const Icon(Icons.arrow_forward_ios, size: 16),
-                                  label: Text(
-                                    estTermine
-                                        ? "Voir les résultats"
-                                        : "Faire le devoir",
-                                    style: const TextStyle(fontWeight: FontWeight.w600),
-                                  ),
-                                  style: TextButton.styleFrom(
-                                    foregroundColor: Colors.teal,
-                                  ),
-                                  onPressed: () {
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (_) => DetailDevoirPage(
-                                          titre: devoir["titre"],
-                                          tempsFini: estTermine,
-                                          devoirRemis: false,
-                                          devoirCorrige:
-                                              devoir["statut"] == "Corrigé",
-                                          correcteur: "Mr. Mendy",
-                                        ),
-                                      ),
-                                    );
-                                  },
-                                ),
-                              )
-                            ],
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-          ),
-        ],
-      );
-    },
-  );
-}
-
-
-  Widget _buildForum() {
-  final scrollController = ScrollController();
-
-  void scrollToBottom() {
-    Future.delayed(Duration(milliseconds: 300), () {
-      if (scrollController.hasClients) {
-        scrollController.animateTo(
-          scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOut,
-        );
-      }
-    });
-  }
-
-  return Column(
-    children: [
-      Expanded(
-        child: ListView.builder(
-          controller: scrollController,
-          padding: const EdgeInsets.all(8),
-          itemCount: _messages.length,
-          itemBuilder: (context, index) {
-            final msg = _messages[index];
-            final isTeacher = msg['role'] == 'enseignant';
-            final align =
-                isTeacher ? CrossAxisAlignment.end : CrossAxisAlignment.start;
-            final backgroundColor =
-                isTeacher ? Colors.orange.shade100 : Colors.blue.shade50;
-
-            return Container(
-              margin: const EdgeInsets.symmetric(vertical: 6),
-              alignment:
-                  isTeacher ? Alignment.centerRight : Alignment.centerLeft,
-              child: Column(
-                crossAxisAlignment: align,
-                children: [
-                  Row(
-                    mainAxisAlignment: isTeacher
-                        ? MainAxisAlignment.end
-                        : MainAxisAlignment.start,
-                    children: [
-                      CircleAvatar(
-                        backgroundColor:
-                            isTeacher ? Colors.orange : Colors.blue,
-                        radius: 16,
-                        child: Text(
-                          msg['sender'][0].toUpperCase(),
-                          style: const TextStyle(color: Colors.white),
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      Column(
-                        crossAxisAlignment: isTeacher
-                            ? CrossAxisAlignment.end
-                            : CrossAxisAlignment.start,
+      backgroundColor: YkColors.background(context),
+      // Le corps défile SOUS l'en-tête (nécessaire pour que
+      // `BackdropFilter` flOute réellement le contenu qui passe dessous,
+      // comme la maquette) — chaque onglet compense avec un padding haut
+      // égal à `_headerHeight` (voir plus bas).
+      extendBodyBehindAppBar: true,
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(96),
+        // En-tête « verre dépoli » — maquette « 09 · Détail cours »
+        // (`background: var(--glass); backdrop-filter: blur(20px);
+        // border-bottom: 1px solid var(--border)`), jusqu'ici absent
+        // (fond opaque uni). Même recette de flou déjà établie par
+        // `YkCard(variant: glass)` (sigma 16 → 20 ici pour matcher le
+        // blur(20px) exact de la maquette), simplement appliquée à une
+        // barre pleine largeur (pas de coins arrondis/bordure complète,
+        // seul un liseré bas comme dans la maquette).
+        child: ClipRect(
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+            child: Container(
+              color: YkColors.surface(context).withValues(alpha: 0.75),
+              child: SafeArea(
+                child: Column(
+                  children: [
+                    Padding(
+                      padding: EdgeInsets.fromLTRB(YkSpacing.xxs, YkSpacing.xxs, YkSpacing.md, 0),
+                      child: Row(
                         children: [
-                          Text(
-                            msg['sender'],
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: isTeacher
-                                  ? Colors.deepOrange
-                                  : Colors.blueGrey,
+                          YkIconButton(
+                            icon: Icons.arrow_back_ios_new_rounded,
+                            label: 'Retour',
+                            variant: YkIconButtonVariant.outlined,
+                            iconSize: 18,
+                            onPressed: () => Navigator.pop(context),
+                          ),
+                          SizedBox(width: YkSpacing.xs),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  widget.titre,
+                                  style: YkTypography.label(context).copyWith(color: YkColors.textPrimary(context)),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                Row(
+                                  children: [
+                                    ClipOval(child: Container(width: 7, height: 7, color: _courseColor)),
+                                    SizedBox(width: YkSpacing.xxs),
+                                    Text(
+                                      _sousTitre,
+                                      style: YkTypography.caption(
+                                        context,
+                                      ).copyWith(color: YkColors.textSecondary(context)),
+                                    ),
+                                  ],
+                                ),
+                              ],
                             ),
                           ),
-                          if (isTeacher)
-                            Text(
-                              msg['isOnline'] ? "🟢 En ligne" : "⚫ Hors ligne",
-                              style: const TextStyle(
-                                  fontSize: 11, color: Colors.grey),
-                            ),
+                          SizedBox(width: YkSpacing.xs),
+                          YkIconButton(
+                            icon: _favori ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
+                            label: _favori ? 'Retirer des favoris' : 'Ajouter aux favoris',
+                            variant: _favori ? YkIconButtonVariant.tonal : YkIconButtonVariant.outlined,
+                            iconSize: 18,
+                            onPressed: () => setState(() => _favori = !_favori),
+                          ),
                         ],
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 5),
-                  Container(
-                    constraints: const BoxConstraints(maxWidth: 320),
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: backgroundColor,
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.grey.shade300,
-                          blurRadius: 4,
-                          offset: const Offset(1, 2),
-                        )
-                      ],
                     ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if ((msg['text'] as String).isNotEmpty)
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 6),
-                            child: Text(msg['text']),
-                          ),
-                        if (msg['image'] != null)
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 6),
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(8),
-                              child: Image.memory(
-                                msg['image'],
-                                height: 150,
-                                fit: BoxFit.cover,
-                              ),
-                            ),
-                          ),
-                        if (msg['audio'] != null)
-                          Row(
-                            children: [
-                              IconButton(
-                                icon: const Icon(Icons.play_circle,
-                                    color: Colors.deepOrange),
-                                onPressed: () => _playAudio(msg['audio']),
-                              ),
-                              const Text("Écouter audio"),
-                            ],
-                          ),
-                        Align(
-                          alignment: Alignment.bottomRight,
-                          child: Text(
-                            '${msg['timestamp'].hour.toString().padLeft(2, '0')}:${msg['timestamp'].minute.toString().padLeft(2, '0')}',
-                            style: const TextStyle(
-                                fontSize: 11, color: Colors.grey),
-                          ),
-                        ),
-                      ],
+                    Padding(
+                      padding: EdgeInsets.symmetric(horizontal: YkSpacing.md),
+                      child: YkTabs(
+                        controller: _tabController,
+                        activeColor: _courseColor,
+                        tabs: const [
+                          YkTabItem(label: 'Leçons'),
+                          YkTabItem(label: 'Exercices'),
+                          YkTabItem(label: 'Devoirs'),
+                          YkTabItem(label: 'Forum'),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+                    Container(height: 1, color: YkColors.border(context)),
+                  ],
+                ),
               ),
-            );
-          },
+            ),
+          ),
         ),
       ),
-      Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          border: Border(top: BorderSide(color: Colors.grey.shade300)),
+      body: _abonneWeb == false
+          ? _buildPremiumLock(
+              context,
+              titre: 'Abonnement requis',
+              message:
+                  "Sur le site web, l'accès aux cours est réservé aux abonnés de ce département. "
+                  'Abonnez-vous pour continuer.',
+            )
+          : _buildTabViews(),
+    );
+  }
+
+  /// Hauteur réelle de l'en-tête « verre dépoli » (96 + l'encoche système)
+  /// — le contenu défilable de chaque onglet en a besoin comme padding
+  /// haut, `Scaffold(extendBodyBehindAppBar: true)` ne le fait pas pour
+  /// eux automatiquement.
+  double get _headerHeight => MediaQuery.of(context).padding.top + 96;
+
+  Widget _buildTabViews() {
+    return TabBarView(
+      controller: _tabController,
+      children: [
+        LeconsCoursPage(
+          coursId: widget.coursId,
+          coursTitre: widget.titre,
+          tabController: _tabController,
+          onNaviguerForum: naviguerVersForumAvecQuestion,
+          onNaviguerExercices: _naviguerVersExercicesAvecFiltre,
+          isPremium: widget.isPremium,
+          courseColor: _courseColor,
+          enseignantNom: _enseignantNom,
+          enseignantAvatarUrl: _enseignantAvatarUrl,
+          topPadding: _headerHeight,
         ),
-        child: Row(
+        widget.isPremium
+            ? ExercicesCoursPage(
+                coursId: widget.coursId,
+                coursTitre: widget.titre,
+                onNaviguerForum: naviguerVersForumAvecQuestion,
+                courseColor: _courseColor,
+                moduleId: _exercicesModuleIdFiltre,
+                leconId: _exercicesLeconIdFiltre,
+                topPadding: _headerHeight,
+              )
+            : _buildPremiumLock(context),
+        widget.isPremium
+            ? DevoirsCoursPage(
+                coursId: widget.coursId,
+                coursTitre: widget.titre,
+                onNaviguerForum: naviguerVersForumAvecQuestion,
+                courseColor: _courseColor,
+                topPadding: _headerHeight,
+              )
+            : _buildPremiumLock(context),
+        widget.isPremium
+            ? ForumPage(
+                key: ValueKey('$_forumScrollToId$_forumPreoccupationContenu'),
+                scrollToQuestionId: _forumScrollToId,
+                preoccupationContenu: _forumPreoccupationContenu,
+                preoccupationSource: _forumPreoccupationSource,
+                preoccupationLeconId: _forumPreoccupationLeconId,
+                topPadding: _headerHeight,
+                preoccupationLeconTitre: _forumPreoccupationLeconTitre,
+                preoccupationCoursId: int.tryParse(widget.coursId),
+                preoccupationCoursTitre: widget.titre,
+                preoccupationExerciceId: _forumPreoccupationExerciceId,
+                preoccupationExerciceTitre: _forumPreoccupationExerciceTitre,
+                preoccupationDevoirId: _forumPreoccupationDevoirId,
+                preoccupationDevoirTitre: _forumPreoccupationDevoirTitre,
+                coursColor: widget.coursColor,
+              )
+            : _buildPremiumLock(context),
+      ],
+    );
+  }
+
+  Widget _buildPremiumLock(
+    BuildContext context, {
+    String titre = 'Débloquez tout le potentiel',
+    String message = 'Accédez sans limite aux exercices, devoirs et au forum de ce cours en découvrant nos offres.',
+  }) {
+    return Padding(
+      padding: EdgeInsets.only(top: _headerHeight),
+      child: Center(
+        child: SingleChildScrollView(
+          padding: EdgeInsets.all(YkSpacing.lg),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            IconButton(
-              icon: const Icon(Icons.image, color: Colors.orange),
-              onPressed: () async {
-                await _pickImage(); // fonction d'import image
-                scrollToBottom(); // 📜 descente automatique
-              },
+            Icon(Icons.workspace_premium_rounded, color: YkColors.warning, size: 64),
+            SizedBox(height: YkSpacing.md),
+            Text(
+              titre,
+              textAlign: TextAlign.center,
+              style: YkTypography.h3(context).copyWith(color: YkColors.textPrimary(context)),
             ),
-            IconButton(
-              icon: Icon(
-                isRecording ? Icons.stop_circle : Icons.mic,
-                color: isRecording ? Colors.red : Colors.green,
-              ),
-              onPressed: () {
-                _toggleRecording(); // gestion enregistrement
-                scrollToBottom();
-              },
+            SizedBox(height: YkSpacing.xs),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: YkTypography.bodySm(context).copyWith(color: YkColors.textSecondary(context)),
             ),
-            Expanded(
-              child: TextField(
-                controller: _messageController,
-                decoration: const InputDecoration(
-                  hintText: "Écrire un message...",
-                  border: InputBorder.none,
-                ),
-                onSubmitted: (_) {
-                  _sendMessage();
-                  scrollToBottom();
-                },
-              ),
-            ),
-            IconButton(
-              icon: const Icon(Icons.send, color: Colors.blue),
-              onPressed: () {
-                _sendMessage();
-                scrollToBottom();
-              },
+            SizedBox(height: YkSpacing.lg),
+            YkButton(
+              label: 'Découvrir nos offres',
+              icon: Icons.workspace_premium_rounded,
+              // Rectification (demande explicite) : `ouvrirAbonnementPremium`
+              // est déjà pleinement câblé et fonctionnel ailleurs (Devoirs,
+              // Forum, Lecture leçon) — `widget.coursId`/`widget.titre` sont
+              // déjà disponibles ici, plus de raison de rester sur un message
+              // générique.
+              onPressed: () => ouvrirAbonnementPremium(context, coursId: int.parse(widget.coursId), coursNom: widget.titre),
             ),
           ],
+          ),
         ),
-      )
-    ],
-  );
-}
-
+      ),
+    );
+  }
 }
