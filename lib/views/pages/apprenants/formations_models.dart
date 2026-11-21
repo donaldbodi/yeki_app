@@ -7,6 +7,7 @@
 import 'package:flutter/material.dart';
 import 'package:yeki/core/constants/api_constants.dart';
 import 'package:yeki/core/design/tokens/tokens.dart';
+import 'package:yeki/core/utils/prix_departement.dart' as prix_utils;
 import 'package:yeki/repositories/auth_repository.dart';
 
 const String kBaseUrl = ApiConstants.baseUrl;
@@ -81,6 +82,13 @@ class DepartementItem {
   final String couleur;
   final int prix;
   final int prixPresentiel;
+
+  /// Prix réels des abonnements (voir `prix_departement.dart`).
+  final int prixMensuel;
+  final int prixAnnuel;
+  bool get estGratuit => prix_utils.estGratuit(prixMensuel: prixMensuel, prixAnnuel: prixAnnuel, prix: prix);
+  String get libellePrix =>
+      prix_utils.libellePrixDepartement(prixMensuel: prixMensuel, prixAnnuel: prixAnnuel, prix: prix);
   final int nbCours;
   final double progressionMoyenne;
   final String statut;
@@ -121,6 +129,8 @@ class DepartementItem {
     required this.couleur,
     required this.prix,
     required this.prixPresentiel,
+    this.prixMensuel = 0,
+    this.prixAnnuel = 0,
     required this.nbCours,
     required this.progressionMoyenne,
     required this.statut,
@@ -163,6 +173,8 @@ class DepartementItem {
       couleur: json['couleur'] ?? '#2884A0',
       prix: json['prix'] ?? 0,
       prixPresentiel: json['prix_presentiel'] ?? 0,
+      prixMensuel: (json['prix_mensuel'] as num?)?.toInt() ?? 0,
+      prixAnnuel: (json['prix_annuel'] as num?)?.toInt() ?? 0,
       nbCours: json['nb_cours'] ?? 0,
       progressionMoyenne: (json['progression_moyenne'] as num?)?.toDouble() ?? 0.0,
       statut: json['statut'] ?? 'NOUVEAU',

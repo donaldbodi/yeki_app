@@ -24,6 +24,7 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:yeki/services/images_hors_ligne.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:timeago/timeago.dart' as timeago;
@@ -1013,7 +1014,7 @@ class _ForumPageState extends State<ForumPage> with TickerProviderStateMixin, Wi
         CircleAvatar(
           radius: radius,
           backgroundColor: estEnseignant ? accent.withValues(alpha: 0.12) : color.withValues(alpha: 0.08),
-          backgroundImage: hasPhoto ? NetworkImage(avatarUrl) : null,
+          backgroundImage: hasPhoto ? imageReseau(avatarUrl) : null,
           onBackgroundImageError: hasPhoto ? (_, _) {} : null,
           child: hasPhoto
               ? null

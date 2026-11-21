@@ -33,6 +33,10 @@ class ComposerDevoirController extends ChangeNotifier {
   /// PAS perdue.
   bool horsLigne = false;
 
+  /// Soumis sans réseau : les réponses sont gardées et partiront toutes
+  /// seules au retour de la connexion (`HorsLigneInterceptor`).
+  bool enAttente = false;
+
   Timer? _debounceDraft;
 
   Future<void> charger() async {
@@ -44,15 +48,21 @@ class ComposerDevoirController extends ChangeNotifier {
       try {
         tempsRestantSecondes = await _repo.demarrer(devoirId);
       } on ApiException catch (e) {
-        // Seul cas de 400 sur cet endpoint : « Vous avez déjà soumis ce
-        // devoir. » (`DemarrerDevoirView`) — rediriger vers le résultat
-        // plutôt que d'afficher un formulaire de composition vide.
-        if (e.statusCode == 400) {
-          etat = ComposerDevoirEtat.dejaSoumis;
-          notifyListeners();
-          return;
+        // Hors ligne : le devoir s'ouvre quand même avec les questions
+        // déjà consultées (gardées sur le téléphone).
+        if (e.isNetworkError) {
+          horsLigne = true;
+        } else {
+          // Seul cas de 400 sur cet endpoint : « Vous avez déjà soumis ce
+          // devoir. » (`DemarrerDevoirView`) — rediriger vers le résultat
+          // plutôt que d'afficher un formulaire de composition vide.
+          if (e.statusCode == 400) {
+            etat = ComposerDevoirEtat.dejaSoumis;
+            notifyListeners();
+            return;
+          }
+          rethrow;
         }
-        rethrow;
       }
 
       devoir = await _repo.getDetail(devoirId);
@@ -126,7 +136,11 @@ class ComposerDevoirController extends ChangeNotifier {
       final resultat = await _repo.soumettre(devoirId, _reponsesJson);
       await OfflineService.clearDevoirDraft(devoirId);
       return resultat;
-    } on ApiException catch (_) {
+    } on ApiException catch (e) {
+      if (e.isEnAttente) {
+        enAttente = true;
+        await OfflineService.clearDevoirDraft(devoirId);
+      }
       horsLigne = true;
       return null;
     } finally {

@@ -88,7 +88,8 @@ void ouvrirDepartementForm({
   var cycleNombre = ((d['cycle_nombre'] as int?) ?? 1).clamp(1, nombreMaxCycles(cycleDuree)).toInt();
   var cyclePlacement = d['cycle_placement'] as String? ?? kPlacementSuite;
   var niveauFormation = d['niveau_formation'] as String? ?? 'debutant';
-  var niveauxDisponibles = <String>[];
+  /// `null` pendant le chargement.
+  final niveauxDisponibles = ValueNotifier<List<String>?>(null);
   var niveauxFormationDisponibles = <NiveauFormation>[];
   var envoi = false;
 
@@ -96,7 +97,14 @@ void ouvrirDepartementForm({
       ? 'Modifier le département'
       : (typeParcours == 'prepa' ? 'Créer un concours' : (typeParcours == 'formation' ? 'Créer une formation' : 'Créer un département'));
 
-  FormationRepository().niveaux().then((n) => niveauxDisponibles = n).catchError((_) => <String>[]);
+  if (estModification) {
+    FormationRepository()
+        .niveauxForDepartement(d['id'] as int)
+        .then((n) => niveauxDisponibles.value = n)
+        .catchError((_) => niveauxDisponibles.value = const <String>[]);
+  } else {
+    niveauxDisponibles.value = const <String>[];
+  }
   FormationRepository().niveauxFormation().then((n) => niveauxFormationDisponibles = n).catchError((_) => <NiveauFormation>[]);
 
   bool estHybride() => typeParcours == 'formation' && mode == 'hybride';
@@ -188,12 +196,31 @@ void ouvrirDepartementForm({
       children: [
         Text('Niveaux accessibles', style: YkTypography.label(ctx).copyWith(color: YkColors.textPrimary(ctx))),
         SizedBox(height: YkSpacing.xs),
-        YkDropdown<String>(
-          label: 'Ajouter un niveau',
-          value: null,
-          items: [for (final n in niveauxDisponibles.where((n) => !niveauxSelectionnes.contains(n))) YkDropdownItem(value: n, label: n)],
-          onChanged: (v) {
-            if (v != null) setS(() => niveauxSelectionnes.add(v));
+        // Niveaux des cours déjà créés dans CE département (table Niveau
+        // filtrée) : à la création, aucun cours, donc rien à choisir.
+        ValueListenableBuilder<List<String>?>(
+          valueListenable: niveauxDisponibles,
+          builder: (ctx, disponibles, _) {
+            final restants = (disponibles ?? const <String>[]).where((n) => !niveauxSelectionnes.contains(n)).toList();
+            if (disponibles != null && disponibles.isEmpty) {
+              return Text(
+                estModification
+                    ? "Aucun cours dans ce département : créez d'abord des cours, puis choisissez parmi leurs niveaux."
+                    : 'Les niveaux accessibles se choisissent parmi ceux des cours du département : '
+                          'créez le département, ajoutez ses cours, puis revenez ici.',
+                style: YkTypography.caption(ctx).copyWith(color: YkColors.textSecondary(ctx)),
+              );
+            }
+            return YkDropdown<String>(
+              label: 'Ajouter un niveau',
+              isLoading: disponibles == null,
+              emptyMessage: 'Tous les niveaux des cours sont déjà ajoutés',
+              value: null,
+              items: [for (final n in restants) YkDropdownItem(value: n, label: n)],
+              onChanged: (v) {
+                if (v != null) setS(() => niveauxSelectionnes.add(v));
+              },
+            );
           },
         ),
         if (niveauxSelectionnes.isNotEmpty) ...[

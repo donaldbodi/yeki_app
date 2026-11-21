@@ -165,8 +165,8 @@ class _ConcoursDetailPageState extends State<ConcoursDetailPage> with SingleTick
                   SizedBox(width: YkSpacing.xs),
                   YkBadge(
                     variant: YkBadgeVariant.label,
-                    label: dept.prix == 0 ? 'Gratuit' : '${dept.prix} FCFA',
-                    color: dept.prix == 0 ? YkColors.success : YkColors.warning,
+                    label: dept.libellePrix,
+                    color: dept.estGratuit ? YkColors.success : YkColors.warning,
                   ),
                 ],
               ),
@@ -384,14 +384,14 @@ class _TabInfos extends StatelessWidget {
           title: 'Accès à la préparation',
           child: YkCard(
             variant: YkCardVariant.filled,
-            accentColor: dept.prix == 0 ? YkColors.success : YkColors.warning,
+            accentColor: dept.estGratuit ? YkColors.success : YkColors.warning,
             child: Column(
               children: [
                 Row(
                   children: [
                     Icon(
-                      dept.prix == 0 ? Icons.lock_open_outlined : Icons.lock_outline,
-                      color: dept.prix == 0 ? YkColors.success : YkColors.warning,
+                      dept.estGratuit ? Icons.lock_open_outlined : Icons.lock_outline,
+                      color: dept.estGratuit ? YkColors.success : YkColors.warning,
                       size: 28,
                     ),
                     SizedBox(width: YkSpacing.sm),
@@ -400,13 +400,13 @@ class _TabInfos extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            dept.prix == 0 ? 'Accès gratuit' : '${dept.prix} FCFA',
+                            dept.estGratuit ? 'Accès gratuit' : dept.libellePrix,
                             style: YkTypography.h4(
                               context,
-                            ).copyWith(color: dept.prix == 0 ? YkColors.success : YkColors.warning),
+                            ).copyWith(color: dept.estGratuit ? YkColors.success : YkColors.warning),
                           ),
                           Text(
-                            dept.prix == 0
+                            dept.estGratuit
                                 ? 'Cette préparation est entièrement gratuite'
                                 : (dept.estAccessible
                                     ? 'Accès déjà débloqué'

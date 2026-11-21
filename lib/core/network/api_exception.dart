@@ -26,6 +26,7 @@ class ApiErrorCodes {
 
   // Codes propres au client (pas d'enveloppe serveur à parser).
   static const String networkError = 'NETWORK_ERROR';
+  static const String enAttente = 'OFFLINE_QUEUED';
   static const String requestCancelled = 'REQUEST_CANCELLED';
   static const String unknown = 'UNKNOWN_ERROR';
 }
@@ -143,6 +144,17 @@ class ApiException implements Exception {
         message: 'Requête annulée.',
         fields: {},
       );
+
+  /// Pas de réseau, mais l'envoi (réponses d'exercice ou de devoir,
+  /// question ou réponse du forum) est gardé sur le téléphone et partira
+  /// tout seul au retour de la connexion (`HorsLigneInterceptor`).
+  factory ApiException.enAttente() => const ApiException(
+        code: ApiErrorCodes.enAttente,
+        message: "Pas de connexion : c'est enregistré et sera envoyé automatiquement dès le retour du réseau.",
+        fields: {},
+      );
+
+  bool get isEnAttente => code == ApiErrorCodes.enAttente;
 
   bool get isThrottled => code == ApiErrorCodes.throttled;
 

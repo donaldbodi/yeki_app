@@ -7,6 +7,8 @@
 // champs orientés gestion (nb_apprenants, taux_completion par cours,
 // enseignant_principal en objet) plutôt que catalogue/accès.
 
+import 'package:yeki/core/utils/prix_departement.dart' as prix_utils;
+
 class CoursCadreItem {
   const CoursCadreItem({
     required this.id,
@@ -54,6 +56,8 @@ class DepartementCadreDetail {
     required this.typeDepartement,
     required this.nbApprenants,
     required this.prix,
+    this.prixMensuel = 0,
+    this.prixAnnuel = 0,
     required this.parcours,
     required this.ville,
     required this.tauxMoyen,
@@ -66,6 +70,13 @@ class DepartementCadreDetail {
   final String typeDepartement;
   final int nbApprenants;
   final int prix;
+
+  /// Prix réels des abonnements (voir `prix_departement.dart`).
+  final int prixMensuel;
+  final int prixAnnuel;
+  bool get estGratuit => prix_utils.estGratuit(prixMensuel: prixMensuel, prixAnnuel: prixAnnuel, prix: prix);
+  String get libellePrix =>
+      prix_utils.libellePrixDepartement(prixMensuel: prixMensuel, prixAnnuel: prixAnnuel, prix: prix);
   final String parcours;
   final String ville;
   final double tauxMoyen;
@@ -80,6 +91,8 @@ class DepartementCadreDetail {
       typeDepartement: json['type_departement']?.toString() ?? 'cursus',
       nbApprenants: (json['nb_apprenants'] as num?)?.toInt() ?? 0,
       prix: (json['prix'] as num?)?.toInt() ?? 0,
+      prixMensuel: (json['prix_mensuel'] as num?)?.toInt() ?? 0,
+      prixAnnuel: (json['prix_annuel'] as num?)?.toInt() ?? 0,
       parcours: json['parcours']?.toString() ?? '',
       ville: json['ville']?.toString() ?? '',
       tauxMoyen: (json['taux_moyen'] as num?)?.toDouble() ?? 0.0,

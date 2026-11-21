@@ -224,8 +224,8 @@ class _FormationDetailPageState extends State<FormationDetailPage> with SingleTi
       (
         Icons.attach_money_rounded,
         'Accès',
-        dept.prix == 0 ? 'Gratuit' : '${dept.prix} F',
-        dept.prix == 0 ? YkColors.success : YkColors.warning,
+        dept.libellePrix,
+        dept.estGratuit ? YkColors.success : YkColors.warning,
       ),
     ];
 
@@ -684,10 +684,10 @@ class _PratiqueCard extends StatelessWidget {
       if (dept.ville.isNotEmpty) (Icons.location_on_rounded, 'Lieu', dept.ville, accentColor),
       if (dept.domaine.isNotEmpty) (Icons.category_rounded, 'Domaine', dept.domaine, YkColors.warning),
       (
-        dept.prix == 0 ? Icons.lock_open_rounded : Icons.lock_rounded,
+        dept.estGratuit ? Icons.lock_open_rounded : Icons.lock_rounded,
         'Accès',
-        dept.prix == 0 ? 'Gratuit' : '${dept.prix} FCFA',
-        dept.prix == 0 ? YkColors.success : YkColors.warning,
+        dept.libellePrix,
+        dept.estGratuit ? YkColors.success : YkColors.warning,
       ),
     ];
 

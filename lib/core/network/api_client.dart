@@ -11,6 +11,7 @@ import '../constants/api_constants.dart';
 import 'api_exception.dart';
 import 'interceptors/auth_interceptor.dart';
 import 'interceptors/error_interceptor.dart';
+import 'interceptors/hors_ligne_interceptor.dart';
 import 'interceptors/logging_interceptor.dart';
 import 'interceptors/retry_interceptor.dart';
 
@@ -52,6 +53,8 @@ class ApiClient {
       if (kDebugMode) LoggingInterceptor(),
       AuthInterceptor(),
       RetryInterceptor(_dio),
+      // Avant ErrorInterceptor : sert le cache / met en file d'attente sans réseau.
+      HorsLigneInterceptor(),
       ErrorInterceptor(),
     ]);
   }
@@ -159,18 +162,19 @@ class ApiClient {
     String path, {
     dynamic data,
     Map<String, dynamic>? query,
+    Options? options,
   }) {
     switch (method.toUpperCase()) {
       case 'GET':
-        return get(path, query: query);
+        return get(path, query: query, options: options);
       case 'POST':
-        return post(path, data: data, query: query);
+        return post(path, data: data, query: query, options: options);
       case 'PUT':
-        return put(path, data: data, query: query);
+        return put(path, data: data, query: query, options: options);
       case 'PATCH':
-        return patch(path, data: data, query: query);
+        return patch(path, data: data, query: query, options: options);
       case 'DELETE':
-        return delete(path, data: data, query: query);
+        return delete(path, data: data, query: query, options: options);
       default:
         throw ArgumentError('Méthode HTTP inconnue : $method');
     }

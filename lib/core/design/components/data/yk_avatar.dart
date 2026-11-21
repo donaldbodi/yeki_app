@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../tokens/tokens.dart';
+import 'package:yeki/services/images_hors_ligne.dart';
 
 /// Taille de [YkAvatar] — CDC_DESIGN §5.3.4.
 enum YkAvatarSize { xs, sm, md, lg, xl }
@@ -49,8 +50,9 @@ class YkAvatar extends StatelessWidget {
 
     final avatar = ClipOval(
       child: hasImage
-          ? Image.network(
-              imageUrl!,
+          ? Image(
+              // Gardée sur le téléphone : la photo reste visible hors ligne.
+              image: imageReseau(imageUrl!),
               width: diameter,
               height: diameter,
               fit: BoxFit.cover,

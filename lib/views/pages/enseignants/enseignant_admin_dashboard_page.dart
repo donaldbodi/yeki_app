@@ -16,6 +16,7 @@ import 'package:go_router/go_router.dart';
 
 import 'package:yeki/core/design/components/components.dart';
 import 'package:yeki/core/design/tokens/tokens.dart';
+import 'package:yeki/core/utils/prix_departement.dart';
 import 'package:yeki/core/router/route_names.dart';
 import 'package:yeki/repositories/dashboard_repository.dart';
 import 'package:yeki/views/pages/enseignants/dashboard_skeleton.dart';
@@ -295,7 +296,6 @@ class _EnseignantAdminDashboardPageState extends State<EnseignantAdminDashboardP
 
   Widget _deptCard(BuildContext context, Map<String, dynamic> dept) {
     final typeDept = dept['type_dept'] as String? ?? 'normal';
-    final prix = dept['prix'] as int? ?? 0;
     final cadre = dept['cadre'] as Map?;
     final couleur = _couleurTypeDept(context, typeDept);
     final niveauFormation = dept['niveau_formation'] as String?;
@@ -324,10 +324,11 @@ class _EnseignantAdminDashboardPageState extends State<EnseignantAdminDashboardP
                       spacing: YkSpacing.xs,
                       children: [
                         YkBadge(variant: YkBadgeVariant.label, label: _typeDeptLabels[typeDept] ?? 'Département', color: couleur),
-                        if (prix > 0)
-                          YkBadge(variant: YkBadgeVariant.label, label: '$prix FCFA', color: YkColors.accent(context))
-                        else
-                          YkBadge(variant: YkBadgeVariant.label, label: 'Gratuit', color: YkColors.success),
+                        YkBadge(
+                          variant: YkBadgeVariant.label,
+                          label: libellePrixDepuisJson(dept),
+                          color: estGratuitDepuisJson(dept) ? YkColors.success : YkColors.accent(context),
+                        ),
                         if (typeDept == 'metier' && niveauFormation != null) YkBadge(variant: YkBadgeVariant.label, label: 'Niv. $niveauFormation', color: YkColors.warning),
                       ],
                     ),

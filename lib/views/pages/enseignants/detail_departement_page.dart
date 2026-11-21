@@ -208,8 +208,8 @@ class _DetailDepartementPageState extends State<DetailDepartementPage> with Sing
           _infoBarItem(context, Icons.route_rounded, dept.parcours.isNotEmpty ? dept.parcours : 'Non défini', 'Parcours', accent),
           _infoBarItem(
             context,
-            dept.prix == 0 ? Icons.lock_open_rounded : Icons.lock_rounded,
-            dept.prix == 0 ? 'Gratuit' : '${dept.prix} FCFA',
+            dept.estGratuit ? Icons.lock_open_rounded : Icons.lock_rounded,
+            dept.libellePrix,
             'Accès',
             accent,
           ),

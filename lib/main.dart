@@ -19,7 +19,10 @@ import 'package:yeki/core/design/theme/yeki_theme.dart';
 import 'package:yeki/firebase_options.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:yeki/services/ads_service.dart';
+import 'package:yeki/services/cache_api_service.dart';
 import 'package:yeki/services/cache_manager.dart';
+import 'package:yeki/services/images_hors_ligne.dart';
+import 'package:yeki/services/reseau_service.dart';
 import 'package:yeki/services/notification_service.dart';
 import 'package:yeki/services/offline_service.dart';
 import 'package:yeki/services/push_notification_service.dart';
@@ -79,6 +82,11 @@ void _bootstrap() async {
   if (!kIsWeb) {
     await OfflineService.init();
     await CacheManager().init();
+    // Hors ligne « comme WhatsApp » : réponses du serveur et photos gardées
+    // sur le téléphone, envois en attente renvoyés au retour du réseau.
+    await CacheApiService.init();
+    await ImagesHorsLigne.init();
+    unawaited(ReseauService.demarrer());
     SyncService().startAutoSync();
   } else {
     // Web : pas d'écran de démarrage dans l'app (le chargement du site

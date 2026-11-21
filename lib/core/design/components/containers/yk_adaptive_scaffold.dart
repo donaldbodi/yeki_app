@@ -6,6 +6,7 @@ import '../../nav/yk_nav_destination.dart';
 import '../../tokens/tokens.dart';
 import '../feedback/yk_snack.dart';
 import '../media/yk_brand_logo.dart';
+import 'package:yeki/services/images_hors_ligne.dart';
 import 'yk_app_bar.dart';
 
 /// Le composant pivot de toute la navigation — CDC_DESIGN §4.2.
@@ -605,7 +606,7 @@ class _Avatar extends StatelessWidget {
   Widget build(BuildContext context) {
     final initial = userName.isNotEmpty ? userName[0].toUpperCase() : '?';
     if (avatarUrl != null && avatarUrl!.isNotEmpty) {
-      return CircleAvatar(radius: 18, backgroundImage: NetworkImage(avatarUrl!));
+      return CircleAvatar(radius: 18, backgroundImage: imageReseau(avatarUrl!));
     }
     return CircleAvatar(
       radius: 18,

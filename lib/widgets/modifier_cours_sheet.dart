@@ -9,6 +9,7 @@ import 'package:yeki/core/design/components/components.dart';
 import 'package:yeki/core/design/tokens/tokens.dart';
 import 'package:yeki/core/network/api_exception.dart';
 import 'package:yeki/repositories/cours_repository.dart';
+import 'package:yeki/repositories/formation_repository.dart';
 import 'package:yeki/utils/color_utils.dart';
 import 'package:yeki/utils/cours_icons.dart';
 
@@ -36,6 +37,27 @@ class _ModifierCoursSheetState extends State<ModifierCoursSheet> {
   // '#008080' (hors palette backend — voir creer_cours_sheet.dart).
   late Color _couleurSelectionnee = couleurDepuisHex(widget.cours['color_code'] as String?, const Color(0xFF2E7CAD));
 
+  /// Niveaux de la table Niveau ; le niveau actuel du cours est toujours
+  /// proposé, même s'il n'y figure pas (ancien cours).
+  List<String> _niveaux = const [];
+  bool _chargementNiveaux = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _chargerNiveaux();
+  }
+
+  Future<void> _chargerNiveaux() async {
+    try {
+      final niveaux = await FormationRepository().niveaux();
+      if (mounted) setState(() => _niveaux = niveaux);
+    } catch (_) {
+    } finally {
+      if (mounted) setState(() => _chargementNiveaux = false);
+    }
+  }
+
   @override
   void dispose() {
     _titreCtrl.dispose();
@@ -46,6 +68,10 @@ class _ModifierCoursSheetState extends State<ModifierCoursSheet> {
 
   Future<void> _sauvegarder() async {
     if (!_formKey.currentState!.validate()) return;
+    if (_niveauCtrl.text.trim().isEmpty) {
+      YkSnack.error(context, 'Le niveau est obligatoire.');
+      return;
+    }
     setState(() => _envoi = true);
     try {
       await _repo.modifierCours(
@@ -95,7 +121,17 @@ class _ModifierCoursSheetState extends State<ModifierCoursSheet> {
 
               YkTextField(controller: _titreCtrl, label: 'Titre du cours *', hint: 'Ex : Mathématiques Terminale', validator: (v) => v == null || v.trim().isEmpty ? 'Champ requis' : null),
               SizedBox(height: YkSpacing.sm),
-              YkTextField(controller: _niveauCtrl, label: 'Niveau *', hint: 'Ex : Terminale, Licence 1…', validator: (v) => v == null || v.trim().isEmpty ? 'Champ requis' : null),
+              YkDropdown<String>(
+                label: 'Niveau *',
+                isLoading: _chargementNiveaux,
+                emptyMessage: 'Liste des niveaux indisponible',
+                value: _niveauCtrl.text.isEmpty ? null : _niveauCtrl.text,
+                items: [
+                  for (final n in {if (_niveauCtrl.text.isNotEmpty) _niveauCtrl.text, ..._niveaux})
+                    YkDropdownItem(value: n, label: n),
+                ],
+                onChanged: (v) => setState(() => _niveauCtrl.text = v ?? _niveauCtrl.text),
+              ),
               SizedBox(height: YkSpacing.sm),
               YkTextField(controller: _descCtrl, label: 'Description courte', hint: 'Description brève du cours', type: YkTextFieldType.multiline, maxLines: 2),
 

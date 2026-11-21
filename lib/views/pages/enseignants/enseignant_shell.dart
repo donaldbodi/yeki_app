@@ -14,9 +14,11 @@
 // ═══════════════════════════════════════════════════════════════════════════
 
 import 'package:flutter/material.dart';
+import 'package:yeki/services/images_hors_ligne.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:yeki/widgets/bandeau_hors_ligne.dart';
 
 import 'package:yeki/core/design/components/containers/yk_brand_app_bar.dart';
 import 'package:yeki/core/design/components/media/yk_brand_logo.dart';
@@ -66,7 +68,7 @@ class _Avatar extends StatelessWidget {
     final avatar = CircleAvatar(
       radius: radius,
       backgroundColor: backgroundColor ?? YkColors.accent(context).withValues(alpha: 0.1),
-      backgroundImage: imageUrl != null && imageUrl!.isNotEmpty ? NetworkImage(imageUrl!) : null,
+      backgroundImage: imageUrl != null && imageUrl!.isNotEmpty ? imageReseau(imageUrl!) : null,
       child: imageUrl == null || imageUrl!.isEmpty
           ? Text(
               initials ?? '?',
@@ -178,7 +180,13 @@ class _EnseignantShellPageState extends ConsumerState<EnseignantShellPage> {
         extendBody: true,
         backgroundColor: YkColors.background(context),
         appBar: isDesktop ? null : _buildBrandAppBar(context),
-        body: isDesktop ? _buildDesktopLayout(context) : _buildMobileLayout(context),
+        // Bandeau « hors ligne » sous l'en-tête (mobile, sans réseau).
+        body: Column(
+          children: [
+            const BandeauHorsLigne(),
+            Expanded(child: isDesktop ? _buildDesktopLayout(context) : _buildMobileLayout(context)),
+          ],
+        ),
         bottomNavigationBar: isMobile || isTablet ? _buildFloatingNav(context) : null,
       ),
     );

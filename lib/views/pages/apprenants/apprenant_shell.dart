@@ -22,6 +22,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:yeki/widgets/bandeau_hors_ligne.dart';
 
 import 'package:yeki/core/design/components/components.dart';
 import 'package:yeki/core/providers/current_user_provider.dart';
@@ -105,7 +106,8 @@ class ApprenantShellPage extends ConsumerWidget {
         onSettings: () => context.pushNamed(AppRoute.settings),
         onLogout: () => authState.logout(),
       ),
-      body: navigationShell,
+      // Bandeau « hors ligne » sous l'en-tête (mobile, sans réseau).
+      body: Column(children: [const BandeauHorsLigne(), Expanded(child: navigationShell)]),
     );
   }
 }

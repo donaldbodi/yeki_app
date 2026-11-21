@@ -32,6 +32,10 @@ class PasserExerciceController extends ChangeNotifier {
   /// tentative n'est PAS perdue (exigence explicite du ticket).
   bool horsLigne = false;
 
+  /// Soumis sans réseau : les réponses sont gardées et partiront toutes
+  /// seules au retour de la connexion (`HorsLigneInterceptor`).
+  bool enAttente = false;
+
   Timer? _debounceDraft;
 
   Future<void> charger() async {
@@ -44,12 +48,16 @@ class PasserExerciceController extends ChangeNotifier {
       try {
         demarrage = await _repo.demarrer(exerciceId);
       } on ApiException catch (e) {
-        // 403 recouvre 2 cas distincts côté backend : tentatives épuisées
-        // (corps `{tentatives_epuisees: true, ...}`, hors enveloppe
-        // standard) et accès Premium refusé (`AccesMatricePermission`,
-        // aucune clé `tentatives_epuisees`) — ne pas les confondre, sinon
-        // un apprenant non-Premium voit à tort « tentatives épuisées ».
-        if (e.statusCode == 403 && e.fields['tentatives_epuisees'] == true) {
+        // Hors ligne : l'exercice s'ouvre quand même avec les questions
+        // déjà consultées (gardées sur le téléphone).
+        if (e.isNetworkError) {
+          horsLigne = true;
+        } else if (e.statusCode == 403 && e.fields['tentatives_epuisees'] == true) {
+          // 403 recouvre 2 cas distincts côté backend : tentatives épuisées
+          // (corps `{tentatives_epuisees: true, ...}`, hors enveloppe
+          // standard) et accès Premium refusé (`AccesMatricePermission`,
+          // aucune clé `tentatives_epuisees`) — ne pas les confondre, sinon
+          // un apprenant non-Premium voit à tort « tentatives épuisées ».
           tentativesEpuisees = true;
         } else {
           rethrow;
@@ -112,7 +120,11 @@ class PasserExerciceController extends ChangeNotifier {
       final resultat = await _repo.evaluer(exerciceId, reponses);
       await OfflineService.clearExerciceDraft(exerciceId);
       return resultat;
-    } on ApiException catch (_) {
+    } on ApiException catch (e) {
+      if (e.isEnAttente) {
+        enAttente = true;
+        await OfflineService.clearExerciceDraft(exerciceId);
+      }
       // Coupure réseau (ou autre échec) : le brouillon est déjà
       // sauvegardé en continu (`repondre`) — la tentative n'est pas
       // perdue, l'apprenant pourra réessayer.

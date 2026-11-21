@@ -17,6 +17,7 @@ import 'package:go_router/go_router.dart';
 
 import 'package:yeki/core/design/components/components.dart';
 import 'package:yeki/core/design/tokens/tokens.dart';
+import 'package:yeki/core/utils/prix_departement.dart';
 import 'package:yeki/core/network/api_exception.dart';
 import 'package:yeki/core/router/route_names.dart';
 import 'package:yeki/features/olympiades/presentation/widgets/creer_olympiade_sheet.dart';
@@ -345,10 +346,11 @@ class _CadreDashboardPageState extends State<CadreDashboardPage> with SingleTick
             children: [
               YkBadge(variant: YkBadgeVariant.label, label: '${dept['nb_apprenants'] ?? 0} apprenants', color: YkColors.accent(context)),
               if ((dept['ville'] as String?)?.isNotEmpty == true) YkBadge(variant: YkBadgeVariant.label, label: dept['ville'], color: YkColors.info),
-              if ((dept['prix'] as num? ?? 0) > 0)
-                YkBadge(variant: YkBadgeVariant.label, label: '${dept['prix']} FCFA', color: YkColors.warning)
-              else
-                YkBadge(variant: YkBadgeVariant.label, label: 'Gratuit', color: YkColors.success),
+              YkBadge(
+                variant: YkBadgeVariant.label,
+                label: libellePrixDepuisJson(dept),
+                color: estGratuitDepuisJson(dept) ? YkColors.success : YkColors.warning,
+              ),
               if (accesRestreint) YkBadge(variant: YkBadgeVariant.label, label: 'Sur demande', color: YkColors.accent(context)),
             ],
           ),

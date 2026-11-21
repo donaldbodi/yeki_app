@@ -152,7 +152,13 @@ class _ComposerDevoirPageState extends State<ComposerDevoirPage>
     if (!mounted) return;
 
     if (resultat == null) {
-      if (_controller.horsLigne) {
+      if (_controller.enAttente) {
+        // Comme un message WhatsApp en attente : envoyé au retour du réseau.
+        YkSnack.info(context, 'Pas de connexion : votre devoir partira automatiquement dès le retour du réseau.');
+        // `pop` et non `maybePop` : la confirmation de sortie (PopScope)
+        // renverrait les réponses une seconde fois.
+        Navigator.of(context).pop();
+      } else if (_controller.horsLigne) {
         YkSnack.warning(context, 'Pas de connexion — vos réponses sont sauvegardées, réessayez.');
       }
       return;

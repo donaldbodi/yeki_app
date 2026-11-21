@@ -2,12 +2,14 @@
 // Version avec méthodes statiques - Support Web
 
 import 'dart:async';
+import 'package:dio/dio.dart' show Options;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:hive/hive.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:yeki/core/network/api_client.dart';
 import 'package:yeki/core/network/api_exception.dart';
+import 'package:yeki/core/network/interceptors/hors_ligne_interceptor.dart';
 import 'package:yeki/services/download_manager.dart';
 import 'package:yeki/services/offline_encryption_service.dart';
 
@@ -353,6 +355,8 @@ class OfflineService {
             failed.add(key);
           }
         }
+      } on _ToujoursHorsLigne {
+        break; // Le réseau n'est pas revenu : on réessaiera plus tard.
       } catch (e) {
         action.retryCount++;
         await _pendingActions.put(key, action);
@@ -381,9 +385,20 @@ class OfflineService {
     if (!supportedMethods.contains(method)) return false;
 
     try {
-      await ApiClient().request(method, action.endpoint, data: action.data);
+      await ApiClient().request(
+        method,
+        action.endpoint,
+        data: action.data,
+        // Un échec de ce renvoi ne doit pas remettre l'action une deuxième
+        // fois en file d'attente (`HorsLigneInterceptor`).
+        options: Options(extra: {HorsLigneInterceptor.sansFileAttente: true}),
+      );
       return true;
-    } on ApiException {
+    } on ApiException catch (e) {
+      // Bug corrigé : sans réseau, chaque essai comptait comme un échec et
+      // l'action (réponses de l'apprenant) était supprimée au 5e. Sans
+      // réseau, on arrête la synchronisation sans rien compter.
+      if (e.isNetworkError) throw const _ToujoursHorsLigne();
       return false;
     }
   }
@@ -561,4 +576,9 @@ class PendingActionAdapter extends TypeAdapter<PendingAction> {
     writer.writeString(obj.createdAt.toIso8601String());
     writer.writeInt(obj.retryCount);
   }
+}
+/// Le réseau n'est toujours pas revenu : la synchronisation s'arrête sans
+/// compter d'échec (voir `_executeAction`).
+class _ToujoursHorsLigne implements Exception {
+  const _ToujoursHorsLigne();
 }

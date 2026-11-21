@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:yeki/core/network/api_exception.dart';
 import 'package:yeki/repositories/auth_repository.dart';
 import 'package:yeki/repositories/notification_repository.dart';
+import 'package:yeki/services/cache_api_service.dart';
 
 /// Photographie de l'état d'authentification, lue synchroniquement par
 /// `guards.dart` à chaque navigation. `bootstrapped` distingue « pas
@@ -177,6 +178,8 @@ class AuthStateNotifier extends ValueNotifier<YekiAuthSnapshot> {
       } catch (_) {}
     }
     await _deleteSecureToken();
+    // Données hors ligne propres au compte : effacées à la déconnexion.
+    await CacheApiService.vider();
     await prefs.remove(_kToken);
     await prefs.remove(_kRole);
     await prefs.remove(_kFcmToken);

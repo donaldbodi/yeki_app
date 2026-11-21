@@ -76,8 +76,8 @@ class _ConcoursPageState extends State<ConcoursPage> {
           d.nomConcours.toLowerCase().contains(q) ||
           d.niveauxCibles.toLowerCase().contains(q);
       final matchFiltre = switch (_filtre) {
-        'Gratuit' => d.prix == 0,
-        'Payant' => d.prix > 0,
+        'Gratuit' => d.estGratuit,
+        'Payant' => !d.estGratuit,
         'En cours' => d.progressionMoyenne > 0 && d.progressionMoyenne < 100,
         _ => true,
       };

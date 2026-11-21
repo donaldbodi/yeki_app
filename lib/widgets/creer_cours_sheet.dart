@@ -21,14 +21,9 @@ import 'package:yeki/core/design/tokens/tokens.dart';
 import 'package:yeki/core/network/api_exception.dart';
 import 'package:yeki/repositories/cours_repository.dart';
 import 'package:yeki/repositories/dashboard_repository.dart';
+import 'package:yeki/repositories/formation_repository.dart';
 import 'package:yeki/utils/color_utils.dart';
 import 'package:yeki/utils/cours_icons.dart';
-
-const List<String> _niveaux = [
-  'Terminale', '1ère', '2nde', '3ème',
-  'Licence 1', 'Licence 2', 'Licence 3',
-  'Master 1', 'Master 2', 'Autre',
-];
 
 class CreerCoursSheet extends StatefulWidget {
   final int departementId;
@@ -62,10 +57,26 @@ class _CreerCoursSheetState extends State<CreerCoursSheet> {
   List<Map<String, dynamic>> _enseignants = [];
   bool _chargementEP = true;
 
+  /// Niveaux de la table Niveau (6ème → Master 2, francophone et
+  /// anglophone, général et technique), chargés depuis le serveur.
+  List<String> _niveaux = const [];
+  bool _chargementNiveaux = true;
+
   @override
   void initState() {
     super.initState();
     _chargerEnseignants();
+    _chargerNiveaux();
+  }
+
+  Future<void> _chargerNiveaux() async {
+    try {
+      final niveaux = await FormationRepository().niveaux();
+      if (mounted) setState(() => _niveaux = niveaux);
+    } catch (_) {
+    } finally {
+      if (mounted) setState(() => _chargementNiveaux = false);
+    }
   }
 
   @override
@@ -147,6 +158,8 @@ class _CreerCoursSheetState extends State<CreerCoursSheet> {
             SizedBox(height: YkSpacing.sm),
             YkDropdown<String>(
               label: 'Niveau *',
+              isLoading: _chargementNiveaux,
+              emptyMessage: 'Liste des niveaux indisponible',
               value: _niveau,
               items: [for (final n in _niveaux) YkDropdownItem(value: n, label: n)],
               onChanged: (v) => setState(() => _niveau = v),

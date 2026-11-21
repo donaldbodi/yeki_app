@@ -18,6 +18,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:yeki/repositories/paiement_repository.dart';
 import 'package:yeki/services/download_manager.dart';
+import 'package:yeki/services/offline_service.dart';
 
 class AccesHorsLigneService {
   AccesHorsLigneService._();
@@ -51,13 +52,16 @@ class AccesHorsLigneService {
       } catch (_) {
         return; // Hors ligne : on garde les dates déjà connues.
       }
+      if (!OfflineService.isOnline) return;
     }
   }
 
   /// Enregistre la fin d'abonnement connue pour [coursId] et note la
   /// connexion (appelé aussi à chaque consultation du statut d'abonnement).
   static Future<void> enregistrerStatut(int coursId, {String? finIso}) async {
-    if (kIsWeb) return;
+    // Hors ligne, le statut vient du cache du téléphone : ce n'est pas une
+    // connexion, et la date de fin n'est pas nouvelle.
+    if (kIsWeb || !OfflineService.isOnline) return;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_cleDerniereConnexion, DateTime.now().toIso8601String());
     if (finIso != null && DateTime.tryParse(finIso) != null) {

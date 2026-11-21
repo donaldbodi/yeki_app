@@ -6,6 +6,7 @@
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:yeki/services/images_hors_ligne.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:yeki/core/design/components/components.dart';
@@ -254,7 +255,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
               child: _avatar != null
                   ? Image.memory(_avatar!.bytes, fit: BoxFit.cover)
                   : (avatarUrlActuel != null && avatarUrlActuel.isNotEmpty
-                      ? Image.network(avatarUrlActuel, fit: BoxFit.cover)
+                      ? Image(image: imageReseau(avatarUrlActuel), fit: BoxFit.cover)
                       : YkAvatar(fallbackText: _firstNameCtrl.text.isNotEmpty ? _firstNameCtrl.text : '?', size: YkAvatarSize.lg)),
             ),
           ),
